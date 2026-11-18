@@ -656,7 +656,7 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
       detail: step.detail,
       why:
         step.kind === "memory"
-          ? "Played without the page, it stays."
+          ? "The page fades in steps; a clean pass schedules a later review."
           : step.kind === "join"
             ? "Seams are where tunes fall apart; this one crosses a seam."
             : step.kind === "tune"

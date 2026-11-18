@@ -124,6 +124,14 @@ keeping the current beat marker and readable state.
 - **Echo.** Seeded calls include duration variation, rests and repeated notes at higher tiers. The
   response remains at the player's own pace. A goal's BPM names the call tempo; success never
   claims the response was performed at that BPM.
+- **Memory.** Existing section memory cards start with the page, move to the first note of each
+  bar, then hide the notes. Each automatic fade follows a complete steady pass at the visit's
+  target and starts a fresh pass/count-in. Chord symbols remain; pitch-revealing labels, links,
+  automatic melody support and wrong-note overlays do not. Restore the page with its button or
+  hold low E for the menu, then D. Hear again remains an explicit option. A previously successful
+  card due on a later day starts hidden only for the same known arrangement. Same-day rehearsal
+  stays repeated exposure; restoring help stays visible/faded provenance for the whole visit.
+  This is a later section review, not an independent retention or alternate-start transfer claim.
 - **Comping.** A section's or cadence's voicings struck on 2 and 4, then the Charleston, with the
   bass. Every hit must be struck again.
 - **Improvising.** Any notes over a section; the chord's notes are lit, a chord tone on one and

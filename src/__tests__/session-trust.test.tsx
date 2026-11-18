@@ -9,15 +9,18 @@ import { parseTuneEntry } from "../tunes/library";
 import { buildTimeline } from "../tunes/order";
 import { STARTER_ENTRY } from "../tunes/starter";
 import type { PassScore } from "../tunes/usePlayback";
+import { loadStore, today } from "../song/leitner";
+import * as followerHook from "../follow/useFollower";
 
 const playback = vi.hoisted(() => ({
   playing: false, counting: 0, beat: null, activeTarget: -1, activeSlot: -1,
   results: [], wrong: [], lastPass: null as PassScore | null, drift: null,
   play: vi.fn(async () => undefined), stop: vi.fn(),
 }));
+const playbackMix = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
 vi.mock("tone", () => ({ start: async () => undefined }));
 vi.mock("../audio/context", () => ({ ensureAudio: () => undefined }));
-vi.mock("../tunes/usePlayback", () => ({ usePlayback: () => playback }));
+vi.mock("../tunes/usePlayback", () => ({ usePlayback: (_tl: unknown, mix: Record<string, unknown>) => { playbackMix.current = mix; return playback; } }));
 vi.mock("../song/cues", () => ({ bassHint() {}, chime() {}, glint() {}, hintNote() {}, hush() {}, padChord() {}, say() {} }));
 
 describe("session assessment trust", () => {
@@ -31,6 +34,7 @@ describe("session assessment trust", () => {
   const deck = buildDeck(sheet, tl);
   const card = deck.cards.find((candidate) => candidate.family === "scales" && !candidate.run)!;
   const run = deck.cards.find((candidate) => candidate.run)!;
+  const memory = deck.cards.find((candidate) => candidate.memory && candidate.family === "melody")!;
   function Harness() {
     session = useSession(deck, [sheet.id], input, options);
     return null;
@@ -43,6 +47,22 @@ describe("session assessment trust", () => {
       bpm: session.bpm, tempoStable: true, ...details,
     };
     await render();
+  };
+  const dueMemory = async (rehearsed = false) => {
+    const day = today();
+    const earlier = today(new Date(Date.now() - 2 * 86400000));
+    const store = loadStore(sheet.id);
+    store.cards[memory.id] = { box: 2, due: day, bpm: memory.bpm, seen: 1, clean: 1, last: "clean" };
+    const previous = { id: memory.id, day: earlier, result: "clean" as const, bpm: memory.bpm, share: 1, secs: 60, from: 0, to: 2, arrangementFingerprint: "memory-score" };
+    store.history = rehearsed ? [previous, { ...previous, id: "mel:section:0-7", day }] : [previous];
+    localStorage.setItem(`guitar-song-deck:${sheet.id}`, JSON.stringify(store));
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    await render();
+    input.status = "listening";
+    await act(async () => session.begin([memory.id]));
+    await act(async () => session.go("time"));
+    await act(async () => vi.advanceTimersByTime(950));
   };
 
   beforeEach(async () => {
@@ -58,7 +78,7 @@ describe("session assessment trust", () => {
     });
     playback.lastPass = null;
     playback.playing = false;
-    options = {};
+    options = { arrangementFingerprint: "memory-score" };
     input = {
       status: "idle", deviceId: null, error: null, devices: [], paused: false,
       level: { current: 0 }, subscribe: () => () => undefined,
@@ -72,6 +92,7 @@ describe("session assessment trust", () => {
   afterEach(async () => {
     await act(async () => root.unmount());
     host.remove();
+    vi.restoreAllMocks();
     vi.useRealTimers();
     vi.unstubAllGlobals();
   });
@@ -161,4 +182,129 @@ describe("session assessment trust", () => {
     expect(session.outcome).toMatchObject({ result: "clean", bpm: before + 4 });
     expect(session.store.cards[card.id].bestCleanBpm).toBe(before + 4);
   });
+
+  it("fades new memory work only after full steady passes and schedules its later review", async () => {
+    input.status = "listening";
+    await act(async () => session.updateSettings({ guide: true }));
+    await act(async () => session.begin([memory.id]));
+    await act(async () => session.go("time"));
+    await act(async () => vi.advanceTimersByTime(950));
+    expect(session.memoryStage).toBe("page");
+    expect(playbackMix.current).toMatchObject({ melody: false, shadow: null, guide: false });
+    await pass(memory, { at: memory.tl.targets.map(() => null) });
+    expect(session.memoryStage).toBe("page");
+    await pass(memory);
+    expect(session.memoryStage).toBe("landmarks");
+    expect(session.store.history ?? []).toHaveLength(0);
+    await act(async () => vi.advanceTimersByTime(300));
+    await pass(memory);
+    expect(session.memoryStage).toBe("hidden");
+    expect(session.store.history ?? []).toHaveLength(0);
+    await act(async () => vi.advanceTimersByTime(300));
+    await pass(memory);
+    expect(session.outcome?.conditions).toMatchObject({ notation: "faded", exposure: "repeated", support: "none" });
+    expect(session.store.cards[memory.id]).toMatchObject({ box: 2, due: today(new Date(Date.now() + 86400000)) });
+  });
+
+  for (const rehearsed of [false, true]) {
+    it(`starts a due memory review hidden and records ${rehearsed ? "same-day rehearsal" : "its first attempt"}`, async () => {
+      await dueMemory(rehearsed);
+      expect(session.memoryReview).toBe(true);
+      expect(session.memoryStage).toBe("hidden");
+      await pass(memory);
+      expect(session.outcome?.conditions).toMatchObject({ notation: "hidden", exposure: rehearsed ? "repeated" : "first", support: "none" });
+    });
+  }
+
+  for (const arrangementFingerprint of [undefined, "changed-arrangement"]) {
+    it(`starts with the page when the current arrangement is ${arrangementFingerprint ? "changed" : "unknown"}`, async () => {
+      options = { arrangementFingerprint };
+      await dueMemory();
+      expect(session.memoryReview).toBe(false);
+      expect(session.memoryStage).toBe("page");
+    });
+  }
+
+  it("counts a heard then skipped card as rehearsal before a later review", async () => {
+    await dueMemory();
+    await act(async () => session.exit());
+    const source = deck.cards.find((candidate) => candidate.family === "melody" && !candidate.memory)!;
+    await act(async () => session.begin([source.id, memory.id]));
+    await act(async () => session.hear());
+    await act(async () => session.next());
+    await act(async () => session.next());
+    expect(session.card?.id).toBe(memory.id);
+    await act(async () => session.go("time"));
+    await act(async () => vi.advanceTimersByTime(950));
+    await pass(memory);
+    expect(session.outcome?.conditions).toMatchObject({ notation: "hidden", exposure: "repeated" });
+  });
+
+  it("keeps a revealed memory review assisted even after the page is hidden again", async () => {
+    await dueMemory();
+    await act(async () => session.toggleMemoryPage());
+    expect(session.memoryStage).toBe("page");
+    await act(async () => session.toggleMemoryPage());
+    expect(session.memoryStage).toBe("landmarks");
+    await act(async () => vi.advanceTimersByTime(300));
+    await pass(memory);
+    expect(session.memoryStage).toBe("hidden");
+    await act(async () => vi.advanceTimersByTime(300));
+    await pass(memory);
+    expect(session.outcome?.conditions).toMatchObject({ notation: "faded", exposure: "repeated", uninterrupted: false });
+  });
+
+  it("does not schedule a new memory card when finishing after its visible pass", async () => {
+    input.status = "listening";
+    await act(async () => session.begin([memory.id]));
+    await act(async () => session.go("time"));
+    await act(async () => vi.advanceTimersByTime(950));
+    await act(async () => session.finishAfterPass());
+    await pass(memory);
+    expect(session.outcome?.result).toBe("skip");
+    expect(session.store.cards[memory.id]).toBeUndefined();
+    expect(session.store.history ?? []).toHaveLength(0);
+  });
+
+  it("keeps a due memory review due when finishing after a revealed pass", async () => {
+    await dueMemory();
+    const before = { ...session.store.cards[memory.id] };
+    const history = session.store.history;
+    await act(async () => session.toggleMemoryPage());
+    await act(async () => vi.advanceTimersByTime(300));
+    await act(async () => session.finishAfterPass());
+    await pass(memory);
+    expect(session.outcome?.result).toBe("skip");
+    expect(session.store.cards[memory.id]).toEqual(before);
+    expect(session.store.history).toEqual(history);
+  });
+
+  it("does not reschedule memory when finishing an own-pace take", async () => {
+    await dueMemory();
+    const before = { ...session.store.cards[memory.id] };
+    const follower = { ...session.follow, done: false, results: memory.tl.targets.slice(memory.first, memory.last + 1).map(() => "hit" as const), restart() {} };
+    await act(async () => root.unmount());
+    vi.spyOn(followerHook, "useFollower").mockReturnValue(follower);
+    root = createRoot(host);
+    await render();
+    await act(async () => session.begin([memory.id]));
+    await act(async () => session.go("pace"));
+    await act(async () => session.finishAfterPass());
+    follower.done = true;
+    await render();
+    await act(async () => vi.advanceTimersByTime(1200));
+    expect(session.outcome?.result).toBe("skip");
+    expect(session.store.cards[memory.id]).toEqual(before);
+  });
+
+  for (const leave of ["next", "finish"] as const) {
+    it(`does not certify a hidden review when using ${leave} before completing it`, async () => {
+      await dueMemory();
+      const before = { ...session.store.cards[memory.id] };
+      const history = session.store.history;
+      await act(async () => session[leave]());
+      expect(session.store.cards[memory.id]).toEqual(before);
+      expect(session.store.history).toEqual(history);
+    });
+  }
 });

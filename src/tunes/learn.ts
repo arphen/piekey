@@ -106,7 +106,7 @@ export function buildPlan(sheet: LeadSheet, tl: Timeline): Step[] {
     if (group.length > 1 || anyNew) {
       steps.push({ kind: "section", from, to, section, title: `${section} in time`, detail: `The whole of ${section}, repeats and endings included.`, listen: true, read: false, pass: PASS.section });
       if (anyNew)
-        steps.push({ kind: "memory", from, to, section, title: `${section} from memory`, detail: "Notes hidden, chords showing. Each note appears once you've played it.", listen: false, read: false, pass: PASS.memory });
+        steps.push({ kind: "memory", from, to, section, title: `${section} from memory`, detail: "Page, bar-start landmarks, then hidden notes. Chords remain; the page can return at any time.", listen: false, read: false, pass: PASS.memory });
     }
   }
   if (tl.slots.length)

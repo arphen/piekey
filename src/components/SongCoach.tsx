@@ -548,11 +548,15 @@ function SongCoachSession({ sheet, tl, input, onClose, tunes = [], onTune, other
     const slot = c.tl.targets[Math.max(c.first, Math.min(c.last, session.active))]?.slot ?? c.from;
     session.spotAt(slot, slot);
   };
+  const memoryPageControl = Boolean(session.memoryStage && !session.spot);
   const padPages: { title: string; rows: PadRow[]; fire: (() => void)[] }[] = [
     {
       title: `${session.card?.title ?? ""} · ♩ ${session.bpm}`,
-      rows: [{ label: "Return to playing" }, { label: "Restart exercise" }, { label: "Hear again" }, { label: "Slower", value: "−4 bpm" }, { label: "Faster", value: "+4 bpm" }, { label: "Session controls" }],
-      fire: [() => closePad(), () => (session.again(), closePad()), () => (closePad(false), session.hear()), () => session.tempo(-4), () => session.tempo(4), () => setPad(1)],
+      rows: [{ label: "Return to playing" }, { label: "Restart exercise" }, { label: memoryPageControl ? session.memoryStage === "page" ? "Use landmarks" : "Reveal page" : "Hear again" }, { label: "Slower", value: "−4 bpm" }, { label: "Faster", value: "+4 bpm" }, { label: "Session controls" }],
+      fire: [() => closePad(), () => (session.again(), closePad()), () => {
+        if (memoryPageControl) { session.toggleMemoryPage(); closePad(); }
+        else { closePad(false); session.hear(); }
+      }, () => session.tempo(-4), () => session.tempo(4), () => setPad(1)],
     },
     {
       title: "Session",
@@ -560,7 +564,7 @@ function SongCoachSession({ sheet, tl, input, onClose, tunes = [], onTune, other
         { label: "Exercise controls" },
         { label: session.selfGuided ? "Done practising" : "Next exercise" },
         { label: "Click", value: session.click ? "on" : "off" },
-        { label: "Support melody", value: session.settings.guide ? "always" : "when needed" },
+        { label: session.memoryStage ? "Hear again" : "Support melody", value: session.memoryStage ? "on request" : session.settings.guide ? "always" : "when needed" },
         { label: session.spot ? "Return to the piece" : "Practise this bar" },
         { label: "Sound & setup" },
       ],
@@ -568,7 +572,7 @@ function SongCoachSession({ sheet, tl, input, onClose, tunes = [], onTune, other
         () => setPad(0),
         () => (closePad(false), session.next()),
         () => session.setClick((c) => !c),
-        () => session.updateSettings({ guide: !session.settings.guide }),
+        () => session.memoryStage ? (closePad(false), session.hear()) : session.updateSettings({ guide: !session.settings.guide }),
         () => (closePad(false), barAlone()),
         () => setPad(2),
       ],
@@ -1059,6 +1063,13 @@ function Running({
             {card.detail} {s.box === 0 ? card.why : ""}
           </p>
         )}
+        {s.memoryStage ? (
+          <div className="ss-memory-aid">
+            <span aria-live="polite">{s.memoryReview ? "Later review" : "Memory practice"} · {s.memoryStage === "page" ? "page shown" : s.memoryStage === "landmarks" ? "bar-start notes" : "notes hidden"} · chords remain</span>
+            <button type="button" onClick={s.toggleMemoryPage} disabled={s.phase === "result" || Boolean(s.spot)}>{s.memoryStage === "page" ? "Use landmarks" : "Reveal page"}</button>
+            <small>hold low E for the menu, then D</small>
+          </div>
+        ) : null}
       </header>
 
       <div className="ss-stage">
@@ -1480,6 +1491,7 @@ function MelodyStage({ card, session: s, sheet: source }: { card: Card; session:
   // only the bars in play are on the page; everything below counts notes and bars from its start
   const cut = useMemo(() => excerptOf(sheet, bars), [sheet, bars]);
   const local = useMemo(() => bars.map((b) => b - cut.from), [bars, cut.from]);
+  const memoryBars = useMemo(() => cut.exercise.bars.map((_, index) => index), [cut]);
   const gaps = local.length < cut.exercise.bars.length; // bars in between that this card doesn't play
   const labels = useMemo(() => {
     const degrees = over.degree.slice(cut.offset, cut.offset + cut.count);
@@ -1521,12 +1533,13 @@ function MelodyStage({ card, session: s, sheet: source }: { card: Card; session:
           autoScroll
           playingBar={playingBar}
           focusBars={gaps ? local : null}
-          hideBars={card.memory ? local : null}
-          noteLabels={labels}
+          hideBars={s.memoryStage ? s.memoryStage === "page" ? null : memoryBars : card.memory ? local : null}
+          noteVisibility={s.memoryStage === "landmarks" ? "landmarks" : s.memoryStage === "hidden" ? "hidden" : "played"}
+          noteLabels={s.memoryStage && s.memoryStage !== "page" ? null : labels}
           cursor
           cursorPulse={s.nudge}
         />
-        <ScoreShadows host={host} wrong={wrong} keySignature={cut.exercise.keySignature} />
+        {!s.memoryStage || s.memoryStage === "page" ? <ScoreShadows host={host} wrong={wrong} keySignature={cut.exercise.keySignature} /> : null}
       </div>
       {card.spot ? <SpotNeck card={card} session={s} /> : null}
     </div>

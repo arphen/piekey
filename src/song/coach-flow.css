@@ -238,6 +238,9 @@
 .ss .ss-menu-access button { justify-self: start; color: var(--ink-soft); font-size: 12px; }
 .ss .ss-menu-access button:hover { color: var(--ink); }
 .ss-menu-access small { color: var(--ink-faint); font-size: 10px; white-space: nowrap; }
+.ss-memory-aid { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 7px 14px; margin-top: 12px; font: 400 12px/1.5 var(--font-ui); color: var(--ink-soft); }
+.ss .ss-memory-aid button { color: var(--fam); text-decoration: underline; text-underline-offset: 3px; }
+.ss-memory-aid small { font-size: 10px; color: var(--ink-faint); }
 .ss-tempo-cluster { display: inline-flex; align-items: center; gap: 7px; }
 .ss-tempo-cluster > em { color: var(--ink-faint); font-size: 10px; font-style: normal; }
 .ss-tempo-cluster.is-own { color: var(--fam); }

@@ -32,6 +32,7 @@ interface ScoreProps {
   playingBar?: number; // printed bar under the playhead
   focusBars?: number[] | null; // notes outside these bars fade back
   hideBars?: number[] | null; // notes in these bars stay hidden until played (from memory)
+  noteVisibility?: "played" | "landmarks" | "hidden"; // concealed bars: reveal results, bar starts only, or no notes
   noteLabels?: (string | null)[] | null; // a label under each note, e.g. its degree over the chord
   cursor?: boolean; // a lit column behind the active note: where the eyes come back to
   cursorPulse?: number; // changes when the cursor should call for attention
@@ -142,6 +143,7 @@ export function Score({
   playingBar = -1,
   focusBars = null,
   hideBars = null,
+  noteVisibility = "played",
   noteLabels = null,
   cursor = false,
   cursorPulse = 0,
@@ -299,8 +301,10 @@ export function Score({
       const beams = Beam.generateBeams(notes, { maintain_stem_directions: false });
       new Formatter().joinVoices([voice]).format([voice], Math.max(40, x + w - stave.getNoteStartX() - 16));
       voice.draw(ctx, stave);
+      ctx.openGroup("score-note-links");
       beams.forEach((b) => b.setContext(ctx).draw());
       tuplets.forEach((t) => t.setContext(ctx).draw());
+      ctx.closeGroup();
 
       // Chord symbols above the staff, at their beat: over the note starting there, or in
       // proportion between notes (a chord can change under a held note). Never overlapping.
@@ -366,6 +370,7 @@ export function Score({
     };
     const openSlurs = new Map<number, (typeof drawn)[number]>();
     let openVibrato: (typeof drawn)[number] | null = null;
+    ctx.openGroup("score-note-links");
     drawn.forEach((d, k) => {
       const next = drawn[k + 1];
       const nextOnLine = next && next.line === d.line ? next.sn : null;
@@ -384,6 +389,7 @@ export function Score({
         openVibrato = null;
       }
     });
+    ctx.closeGroup();
 
     els.forEach((el, i) => el.setAttribute("data-note", String(i))); // for overlays drawn by the host
     noteEls.current = els;
@@ -409,15 +415,20 @@ export function Score({
     const active = new Set(activeKey.split(",").map(Number));
     const focus = focusKey ? new Set(focusKey.split(",").map(Number)) : null;
     const hide = hideKey ? new Set(hideKey.split(",").map(Number)) : null;
+    const firstInBar = new Map<number, number>();
+    noteBars.current.forEach((bar, i) => { if (!firstInBar.has(bar)) firstInBar.set(bar, i); });
     noteEls.current.forEach((el, i) => {
       const bar = noteBars.current[i];
       el.classList.toggle("is-active", active.has(i));
       el.classList.toggle("is-hit", results[i] === "hit");
       el.classList.toggle("is-miss", results[i] === "miss");
       el.classList.toggle("is-dim", focus !== null && !focus.has(bar));
-      el.classList.toggle("is-hidden", hide !== null && hide.has(bar) && !results[i]);
+      const concealed = noteVisibility === "played" ? !results[i] : noteVisibility === "hidden" || firstInBar.get(bar) !== i;
+      el.classList.toggle("is-hidden", hide !== null && hide.has(bar) && concealed);
     });
-  }, [activeKey, focusKey, hideKey, results, exercise, width, barsPerLine, showFingering, noteLabels]);
+    // Beams, ties and slurs can disclose hidden pitches even without their noteheads.
+    hostRef.current?.querySelectorAll(".vf-score-note-links").forEach((el) => el.setAttribute("opacity", hide !== null && noteVisibility !== "played" ? "0" : "1"));
+  }, [activeKey, focusKey, hideKey, noteVisibility, results, exercise, width, barsPerLine, showFingering, noteLabels]);
 
   // The cursor slides to the active note; it is moved, never redrawn.
   useEffect(() => {

@@ -24,6 +24,7 @@ import { assignNoteKeys, usedMidis } from "./notekeys";
 import { createTrouble, spotCard, spotOf, type Spot } from "./spot";
 import { meanShare } from "./stats";
 import { useChordFollower } from "./useChordFollower";
+import { isShared, tuneOf } from "./ids";
 
 // Runs a practice session without touching the computer. Each card goes
 //   intro → (listen) → (at your own pace) → in time with the band → result
@@ -49,6 +50,7 @@ import { useChordFollower } from "./useChordFollower";
 // counting time) until a note wakes it. Losing the audio input pauses it; it resumes on its own.
 
 export type Phase = "intro" | "listen" | "pace" | "time" | "result";
+type MemoryStage = "page" | "landmarks" | "hidden";
 
 const INTRO_NEW_MS = 3400;
 const INTRO_MS = 2200;
@@ -161,6 +163,9 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
   const [run, setRun] = useState(0); // notes landed in a row, right now
   const [nudge, setNudge] = useState(0); // times the app has spoken up in a silence, this card
   const [spotState, setSpot] = useState<(Spot & { key: string }) | null>(null); // a part of this card, taken out
+  const [memoryStage, setMemoryStage] = useState<MemoryStage>("page");
+  const memorySeen = useRef(new Set<MemoryStage>());
+  const memoryVisit = useRef("");
   const [spotted, setSpotted] = useState(0); // times that happened, this card
   const spotFrom = useRef<"pace" | "time">("time"); // where the piece carries on after it
   const logRef = useRef<Outcome[]>([]);
@@ -191,6 +196,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
   const spot = spotState && spotState.key === cardKey ? spotState : null;
   // the exercise in front of the player: all of it, or the part taken out
   const card = useMemo(() => (whole && spot ? spotCard(whole, spot) : whole), [whole, spot]);
+  const memoryExercise = Boolean(whole?.memory && whole.family === "melody" && whole.view === "score");
   const trouble = useMemo(() => (whole ? createTrouble(whole) : null), [cardKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const state = card ? store.cards[card.id] : undefined;
   const box = state?.box ?? 0; // 0: new
@@ -202,6 +208,19 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
   const minTempo = tempoBounds?.minBpm ?? MIN_BPM;
   const maxTempo = tempoBounds?.targetBpm ?? MAX_BPM;
   const arrangementFor = (id: string) => options.arrangementFingerprints?.get(id) ?? (id === tuneIds[0] ? options.arrangementFingerprint : undefined);
+  const initialMemory = useMemo(() => {
+    const day = today();
+    const previous = [...(storeRef.current.history ?? [])].reverse().find((attempt) => attempt.id === whole?.id && attempt.result !== "skip");
+    const arrangement = whole && arrangementFor(whole.tuneId);
+    const review = Boolean(memoryExercise && whole && previous && (previous.result === "clean" || previous.result === "ok")
+      && previous.day < day && Boolean(arrangement && previous.arrangementFingerprint === arrangement)
+      && (storeRef.current.cards[whole.id]?.due ?? "9999") <= day);
+    const practisedToday = (storeRef.current.history ?? []).some((attempt) => attempt.day === day && attempt.result !== "skip" && !isShared(attempt.id) && (tuneOf(attempt.id) ?? boxes.current[0]) === whole?.tuneId);
+    // A heard/read card can have been skipped without creating a saved attempt.
+    const visitedThisSession = logRef.current.some((attempt) => !isShared(attempt.id) && byId.get(attempt.id)?.tuneId === whole?.tuneId);
+    const rehearsed = memoryExercise && (practisedToday || visitedThisSession);
+    return { stage: review ? "hidden" as const : "page" as const, review, rehearsed };
+  }, [cardKey]); // a visit's starting evidence stays fixed while it runs
 
   const updateSettings = useCallback(
     (patch: Partial<Settings>) => {
@@ -262,19 +281,19 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
   const restartFollow = follow.restart;
   const restartChords = chords.restart;
 
-  const guideMelody = settings.guide && card?.family === "melody";
+  const guideMelody = settings.guide && card?.family === "melody" && !memoryExercise;
   // the notes under the player in time: silent while they land, fading in where they don't
   const shadow = useMemo(() => (whole ? createSupport(whole.tl.targets.map((t) => t.t)) : null), [whole]);
   const mix = {
     bpm,
     melody: phase === "listen" || (phase === "time" && guideMelody),
-    shadow: phase === "time" && card?.kind !== "improv" ? shadow : null, // nothing written to support when improvising
+    shadow: phase === "time" && card?.kind !== "improv" && !memoryExercise ? shadow : null,
     fill: phase === "listen" || phase === "time",
     chords: true,
     click: phase === "time" && (Boolean(card?.click) || card?.family === "scales") && click,
     countIn: true,
     bass: true,
-    guide: true,
+    guide: !memoryExercise || phase === "listen",
   };
   // a gap: the band drops out for a couple of bars and comes back; the notes in between are still judged
   const gapped = Boolean(card && !spot && !card.run && card.view !== "chords" && card.family !== "ear" && (options.gap?.has(card.id) || (box >= GAP_BOX && (card.family === "scales" || card.family === "melody"))));
@@ -285,11 +304,30 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
 
   const conditionsFor = (tempo: AttemptConditions["tempo"]): AttemptConditions => ({
     v: 1, source: selfGuided ? "self" : "measured", confidence: "unknown", tempo,
-    support: phase === "time" ? guideMelody || card?.tl.guide?.length ? "guide" : mix.shadow ? "adaptive" : "none" : nudge ? "adaptive" : "none",
-    notation: card?.view === "score" ? card.memory ? "faded" : "visible" : undefined,
+    support: phase === "time" ? guideMelody || (mix.guide && card?.tl.guide?.length) ? "guide" : mix.shadow ? "adaptive" : "none" : nudge ? "adaptive" : "none",
+    notation: card?.view === "score" ? memoryExercise
+      ? memorySeen.current.size === 1 && memorySeen.current.has("hidden") ? "hidden"
+        : memorySeen.current.size === 1 && memorySeen.current.has("page") ? "visible" : "faded"
+      : card.memory ? "faded" : "visible" : undefined,
     exposure: exposed.current || follow.take > 1 ? "repeated" : "first",
     uninterrupted: selfGuided ? undefined : !interrupted.current && follow.take <= 1,
   });
+
+  /** A changed page starts a fresh pass; its earlier help remains part of this visit's evidence. */
+  const changeMemoryStage = useCallback((next: MemoryStage, requested = false) => {
+    if (!memoryExercise || phase === "result") return;
+    memorySeen.current.add(next);
+    exposed.current = true;
+    if (requested && (phase === "pace" || phase === "time")) interrupted.current = true;
+    setMemoryStage(next);
+    stop();
+    restartFollow();
+    restartChords();
+    setLastTake(null);
+    setTakes({ clean: 0, unclean: 0 });
+    if (phase === "time") setLoopKey((value) => value + 1);
+    clock.current.event = performance.now();
+  }, [memoryExercise, phase, stop, restartFollow, restartChords]);
 
   // ---------- moving through the session ----------
 
@@ -384,7 +422,11 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     rhythmMisses.current = 0;
     returnTo.current = null;
     ownTempo.current = null;
-    exposed.current = false;
+    memoryVisit.current = cardKey;
+    setMemoryStage(initialMemory.stage);
+    memorySeen.current = new Set(memoryExercise ? [initialMemory.stage] : []);
+    // A later-day task is still rehearsed if this tune has already been practised today.
+    exposed.current = initialMemory.rehearsed;
     interrupted.current = false;
     assessment.current = undefined;
     assessedBpm.current = undefined;
@@ -453,6 +495,9 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
   const conclude = useCallback(
     (result: Result, share: number | null = null, recordingId?: string) => {
       if (!card) return;
+      // A finished visible/own-pace pass is still part of learning this memory task.
+      // Ending, skipping or taking a spot must not defer its later hidden review.
+      if (!selfGuided && memoryExercise && (phase !== "time" || memoryStage !== "hidden" || spot)) result = "skip";
       stop();
       const before = storeRef.current;
       const prev = before.cards[card.id];
@@ -490,7 +535,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
       if (result === "fail" && !queue.slice(pos + 1).includes(card.id) && queue.filter((id) => id === card.id).length < 2)
         setQueue((q) => [...q.slice(0, pos + 4), card.id, ...q.slice(pos + 4)]);
     },
-    [card, bpm, saveStore, stop, queue, pos, deck, spotted, evidence, selfGuided, phase, guideMelody, nudge, follow.take, mix.shadow, options.arrangementFingerprint, options.arrangementFingerprints, tuneIds],
+    [card, bpm, saveStore, stop, queue, pos, deck, spotted, evidence, selfGuided, phase, memoryExercise, memoryStage, spot, guideMelody, nudge, follow.take, mix.shadow, options.arrangementFingerprint, options.arrangementFingerprints, tuneIds],
   );
 
   // ---------- a part taken out ----------
@@ -510,8 +555,9 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
       clock.current.event = performance.now();
       clock.current.nudges = 0;
       setPhase("listen");
+      if (memoryExercise) memorySeen.current.add("page");
     },
-    [stop, cardKey],
+    [stop, cardKey, memoryExercise],
   );
 
   /** Back into the piece, where it was left. */
@@ -779,6 +825,10 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     if (score >= card.pass && onTime) {
       missRun.current = 0;
       if (assessedBpm.current >= target) {
+        if (memoryExercise && !spot && memoryStage !== "hidden") {
+          changeMemoryStage(memoryStage === "page" ? "landmarks" : "hidden");
+          return;
+        }
         conclude(slowed === 0 && backed === 0 && spotted === 0 && missed <= 1 ? "clean" : "ok", score);
         return;
       }
@@ -882,6 +932,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
       return;
     }
     if (phase !== "pace") return;
+    if (memoryExercise && !spot && memoryStage !== "page") return; // recall stays quiet until help is requested
     const c = clock.current;
     const still = now - Math.max(c.heard, c.event);
     if (c.nudges >= NUDGES) {
@@ -1165,11 +1216,15 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     beat: playback.beat,
     results,
     shadows,
-    shadow,
+    shadow: memoryExercise ? null : shadow,
     pulse,
     flow,
     run,
     nudge,
+    // Do not flash the previous card's visible page before a hidden review's reset effect runs.
+    memoryStage: memoryExercise ? spot ? "page" as const : memoryVisit.current === cardKey ? memoryStage : initialMemory.stage : null,
+    memoryReview: initialMemory.review,
+    toggleMemoryPage: () => changeMemoryStage(memoryStage === "page" ? "landmarks" : "page", true),
     keys,
     active,
     click,

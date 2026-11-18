@@ -9,6 +9,7 @@ import type { InputApi } from "../listen/useInput";
 import { buildDeck } from "../song/deck";
 import { createGoal, getGoals, GOALS_KEY } from "../song/goals";
 import { loadStore } from "../song/leitner";
+import { IDLE_BEAT } from "../song/pulse";
 import type { SessionApi } from "../song/useSession";
 import { parseTuneEntry } from "../tunes/library";
 import { buildTimeline } from "../tunes/order";
@@ -18,6 +19,7 @@ import type { ReactNode } from "react";
 const mocked = vi.hoisted(() => ({ session: undefined as unknown as SessionApi, calibrated: false }));
 
 vi.mock("../song/useSession", () => ({ useSession: () => mocked.session }));
+vi.mock("../components/Score", () => ({ Score: () => null }));
 vi.mock("../platform/PracticeWindowBoundary", () => ({ PracticeWindowBoundary: ({ children }: { children: ReactNode }) => <>{children}</> }));
 vi.mock("../listen/calibration", () => ({ loadProfile: () => mocked.calibrated ? {} : null }));
 vi.mock("../components/Calibrate", () => ({
@@ -120,6 +122,30 @@ describe("coach entry", () => {
     expect(host.querySelectorAll(".ss-ready-queue li")).toHaveLength(2);
     await act(async () => { document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); });
     expect(mocked.session.begin).toHaveBeenCalledWith([`rhythm:${source.id}`, `rhythm-context:${source.id}`]);
+  });
+
+  it("offers the same memory reveal on the page and the guitar menu's D row", async () => {
+    mocked.calibrated = true;
+    const card = buildDeck(sheet, tl).cards.find((candidate) => candidate.memory && candidate.family === "melody")!;
+    const reveal = vi.fn();
+    Object.assign(mocked.session, {
+      running: true, card, whole: card, active: -1, queue: [card.id], pos: 0, box: 2,
+      phase: "time", memoryStage: "hidden", memoryReview: true, toggleMemoryPage: reveal,
+      passes: [], log: [], results: [], shadows: [], takes: { clean: 0, unclean: 0 }, flow: 0.5, run: 0, needClean: 0, pulse: null, beat: IDLE_BEAT,
+      bpm: card.bpm, target: card.bpm, click: true,
+      playback: { playing: false, counting: 0, beat: IDLE_BEAT, activeTarget: -1, activeSlot: -1, lastPass: null, drift: null, results: [], wrong: [], async play() {}, stop() {} },
+      togglePause() {}, hear() {}, go() {}, next() {},
+    } satisfies Partial<SessionApi>);
+    await act(async () => root.render(<SongCoach sheet={sheet} tl={tl} input={inputAt("listening", "guitar")} onClose={() => undefined} />));
+    const button = [...host.querySelectorAll("button")].find((item) => item.textContent === "Reveal page")!;
+    expect(button).toBeDefined();
+    await act(async () => button.click());
+    expect(reveal).toHaveBeenCalledTimes(1);
+    await act(async () => { [...host.querySelectorAll("button")].find((item) => item.textContent === "Guitar menu")!.click(); });
+    const row = [...host.querySelectorAll('[role="menuitem"]')].find((item) => item.textContent?.includes("Reveal page"))!;
+    expect(row.querySelector(".ss-pad-note")?.textContent).toBe("D");
+    await act(async () => (row as HTMLButtonElement).click());
+    expect(reveal).toHaveBeenCalledTimes(2);
   });
 
   it("honours a calibration skip while opening, then offers calibration for a different device", async () => {
