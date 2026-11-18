@@ -1,16 +1,19 @@
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useId, useRef, type CSSProperties } from "react";
 import type { InputApi } from "../listen/useInput";
 import type { BeatSignal } from "../song/pulse";
+import { useRenderedRoom } from "../song/renderedRoom";
+import { RenderedWater } from "./RenderedWater";
 import "../song/atmosphere.css";
 
 const unit = (n: number) => Math.max(0, Math.min(1, n));
 
 /** A quiet room that opens with the player. Loudness moves it; steadiness earns the colour. */
-export function PracticeAtmosphere({ input, warmth, flow, playing }: { input: InputApi; warmth: number; flow: number; playing: boolean }) {
+export function PracticeAtmosphere({ input, warmth, flow, playing, beat, bpm }: { input: InputApi; warmth: number; flow: number; playing: boolean; beat?: BeatSignal; bpm?: number }) {
   const room = useRef<HTMLDivElement>(null);
   const state = useRef({ warmth, flow, playing });
   state.current = { warmth, flow, playing };
-  const energy = useRef({ level: 0, heard: -Infinity, played: 0 });
+  const energy = useRef<{ level: number; heard: number; played: number; wake?: () => void }>({ level: 0, heard: -Infinity, played: 0 });
+  const rendered = useRenderedRoom();
 
   useEffect(() => {
     if (input.status !== "listening" || input.paused) {
@@ -21,7 +24,10 @@ export function PracticeAtmosphere({ input, warmth, flow, playing }: { input: In
     return input.subscribe((frame) => {
       // Reuse the shared analyser; this decoration performs no pitch or spectrum analysis.
       energy.current.level = unit(Math.sqrt(frame.rms) * 2.5);
-      if (frame.rms > 0.008) energy.current.heard = performance.now();
+      if (frame.rms > 0.008) {
+        energy.current.heard = performance.now();
+        if (state.current.playing) energy.current.wake?.();
+      }
     });
   }, [input.status, input.paused, input.subscribe]);
 
@@ -63,6 +69,7 @@ export function PracticeAtmosphere({ input, warmth, flow, playing }: { input: In
       <div className="pa-water" />
       <div className="pa-water pa-water-colour" />
       <div className="pa-leaf" />
+      {rendered.enabled ? <RenderedWater playing={playing} warmth={warmth} flow={flow} beat={beat} level={energy} /> : null}
       <svg className="pa-current" viewBox="0 0 1600 1000" preserveAspectRatio="none">
         <g>
           <path d="M-140 900 C200 420 440 1150 850 680 S1400 550 1730 40" />
@@ -73,28 +80,54 @@ export function PracticeAtmosphere({ input, warmth, flow, playing }: { input: In
           <path d="M-140 1000 C250 570 540 1200 950 780 S1500 650 1730 190" />
         </g>
       </svg>
+      {beat?.active ? <div key={beat.serial} className={`pa-beat-resonance ${beat.index === 0 ? "is-downbeat" : ""}`} style={{ "--beat-decay": `${Math.min(.85, 55 / (bpm || 80))}s` } as CSSProperties}><i /><i /></div> : null}
       <div className="pa-shade" />
     </div>
   );
 }
 
-/** Each ripple starts on a heard beat; CSS never runs an independent metronome. */
+const DIAL_TICKS = Array.from({ length: 72 }, (_, i) => ({
+  angle: i * 5,
+  major: i % 6 === 0,
+  medium: i % 3 === 0,
+}));
+
+/** A weighted sweep and resonance begin on each heard beat. Nothing loops independently. */
 export function BeatPulse({ beat, bpm, compact = false }: { beat: BeatSignal; bpm?: number; compact?: boolean }) {
   const active = beat.active && beat.index >= 0;
+  const id = useId().replace(/:/g, "");
+  const duration = 60 / (bpm || 80);
   return (
     <div
       className={`beat-pulse ${compact ? "beat-pulse--compact" : ""} ${active ? "is-active" : ""} ${beat.index === 0 ? "is-downbeat" : ""}`}
-      style={{ "--beat-decay": `${Math.min(0.55, 48 / (bpm || 80))}s` } as CSSProperties}
+      style={{ "--beat-decay": `${Math.min(.8, duration * .95)}s`, "--beat-duration": `${duration}s`, "--swing-from": `${beat.serial % 2 ? -58 : 58}deg`, "--swing-to": `${beat.serial % 2 ? 58 : -58}deg` } as CSSProperties}
       role="img"
       aria-label={`${bpm ? `${bpm} beats per minute` : "Waiting for a tempo"}${active ? `, ${beat.beats} beats per bar${beat.counting ? ", count-in" : ""}` : ", pulse resting"}`}
     >
       <div className="beat-pulse-face" aria-hidden="true">
-        {active ? <i className="beat-pulse-wave" key={beat.serial} /> : null}
+        <svg className="beat-pulse-dial" viewBox="0 0 320 320" fill="none">
+          <defs>
+            <linearGradient id={`${id}-metal`} x1="24" y1="14" x2="286" y2="306" gradientUnits="userSpaceOnUse"><stop stopColor="#dbd7bc" stopOpacity=".65" /><stop offset=".34" stopColor="#9cae94" stopOpacity=".1" /><stop offset=".7" stopColor="#a8b89b" stopOpacity=".28" /><stop offset="1" stopColor="#d3ae7a" stopOpacity=".5" /></linearGradient>
+            <radialGradient id={`${id}-pool`}><stop stopColor="#afc49d" stopOpacity=".05" /><stop offset=".8" stopColor="#afc49d" stopOpacity=".01" /><stop offset="1" stopColor="#afc49d" stopOpacity=".06" /></radialGradient>
+          </defs>
+          <circle cx="160" cy="160" r="128" fill={`url(#${id}-pool)`} stroke={`url(#${id}-metal)`} strokeWidth=".65" />
+          <circle cx="160" cy="160" r="147" stroke={`url(#${id}-metal)`} strokeWidth=".55" />
+          <circle cx="160" cy="160" r="151" stroke={`url(#${id}-metal)`} strokeWidth=".3" opacity=".4" />
+          <g className="beat-pulse-index">
+            {DIAL_TICKS.map((tick) => <path key={tick.angle} transform={`rotate(${tick.angle} 160 160)`} d={`M160 17v${tick.major ? 11 : tick.medium ? 7 : 3}`} strokeWidth={tick.major ? .9 : .55} opacity={tick.major ? .7 : tick.medium ? .4 : .22} />)}
+          </g>
+          <path className="beat-pulse-arc" d="M42.1 86.3A139 139 0 0 1 277.9 86.3" strokeWidth="1.2" />
+          <path className="beat-pulse-horizon" d="M72 220Q160 235 248 220M87 228Q160 240 233 228M105 236Q160 243 215 236" stroke={`url(#${id}-metal)`} strokeWidth=".55" />
+          <path d="M156 259h8M160 255v8" stroke={`url(#${id}-metal)`} strokeWidth=".7" />
+        </svg>
+        {active ? <span className="beat-pulse-resonance" key={`r${beat.serial}`}><i /><i /><i /></span> : null}
+        <span className={`beat-pulse-swing ${active ? "is-moving" : ""}`} key={active ? `s${beat.serial}` : "rest"}><i /><b /></span>
+        <span className="beat-pulse-position">{active ? beat.counting ? "COUNT IN" : String(beat.index + 1).padStart(2, "0") : "TEMPO"}</span>
         <span className="beat-pulse-number">{bpm || "—"}</span>
-        <span className="beat-pulse-unit">{beat.counting && active ? "count in" : "bpm"}</span>
+        <span className="beat-pulse-unit">beats / min</span>
       </div>
       <ol className="beat-pulse-dots" aria-hidden="true">
-        {Array.from({ length: beat.beats }, (_, i) => <li key={i} className={active && i === beat.index ? "is-now" : ""}><span>{i + 1}</span></li>)}
+        {Array.from({ length: beat.beats }, (_, i) => <li key={i} className={`${active && i === beat.index ? "is-now" : ""} ${i === 0 ? "is-accent" : ""}`}><i key={active && i === beat.index ? beat.serial : "rest"} /><span>{i + 1}</span></li>)}
       </ol>
     </div>
   );

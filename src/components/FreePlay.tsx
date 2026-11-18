@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { NoteResult } from "../core/contract";
 import type { InputApi } from "../listen/useInput";
 import type { Deck } from "../song/deck";
@@ -7,8 +7,9 @@ import { makeScale, parseChord, pretty, type Chord } from "../song/harmony";
 import { cardForLoop } from "../song/progression";
 import { playedSheet } from "../song/notation";
 import { useFreePlay, type ClickMode, type FreeView } from "../song/useFreePlay";
+import { GuitarToolsRoom } from "../tools/GuitarTools";
 import { Ear } from "./Ear";
-import { GuitarPad, useSummon, type PadRow } from "./GuitarPad";
+import { GuitarPad, SUMMON_HINT, useSummon, type PadRow } from "./GuitarPad";
 import { BeatPulse, PracticeAtmosphere } from "./PracticeAtmosphere";
 import { Score } from "./Score";
 import { Glyph } from "./Glyph";
@@ -18,7 +19,7 @@ import "../song/freeplay-room.css";
 // exercise are read off it, and a click joins in by itself (see useFreePlay). How it is going is on
 // the screen as it happens: where each note sat against the grid, how long the playing has been on
 // the click, how close the next step up is. Every note can be part of the playing here, so there
-// are no note keys: the open low E, held, calls the menu.
+// are no note keys. The deliberate low-E hold/release/hold gesture calls the menu.
 
 const C_MAJOR = makeScale(0, "major");
 const NONE: NoteResult[] = [];
@@ -104,11 +105,17 @@ function Trace({ values }: { values: number[] }) {
   );
 }
 
-export function FreePlay({ input, deck, onClose, onPractise }: { input: InputApi; deck?: Deck; onClose(): void; onPractise(cardId: string): void }) {
+export function FreePlay({ input, deck, onClose, onPractise, active = true, onChooseTune, onToolsChange }: { input: InputApi; deck?: Deck; onClose(): void; onPractise(cardId: string): void; active?: boolean; onChooseTune?(): void; onToolsChange?(open: boolean): void }) {
   const [pad, setPad] = useState<number | null>(null);
-  const { view: v, nudge, cycleMode, toggleBand } = useFreePlay(input, pad === null);
-  const never = useRef(false);
-  const ring = useSummon(input, pad === null, never, () => setPad(0));
+  const [tool, setTool] = useState<"tuner" | "metronome" | null>(null);
+  useEffect(() => {
+    onToolsChange?.(tool !== null);
+    return () => onToolsChange?.(false);
+  }, [tool, onToolsChange]);
+  const roomActive = active && tool === null;
+  const { view: v, nudge, cycleMode, toggleBand } = useFreePlay(input, roomActive && pad === null);
+  const ring = useSummon(input, roomActive && pad === null, () => setPad(0));
+  const openTool = (next: "tuner" | "metronome") => { setPad(null); setTool(next); };
 
   const scale = v.key?.scale ?? null;
   // an exercise in the box for exactly this: one hold away
@@ -139,13 +146,17 @@ export function FreePlay({ input, deck, onClose, onPractise }: { input: InputApi
         { label: "Faster" },
         { label: "Click", value: MODE_LABEL[v.mode] },
         { label: "Band", value: v.band ? "playing" : v.bandOn ? "waiting for steady playing" : "off" },
-        { label: card ? "More" : "Leave free play" },
+        { label: "Instruments & more" },
       ],
-      fire: [() => setPad(null), () => nudge(-4), () => nudge(4), cycleMode, toggleBand, () => card ? setPad(1) : onClose()],
+      fire: [() => setPad(null), () => nudge(-4), () => nudge(4), cycleMode, toggleBand, () => setPad(1)],
     },
     {
-      rows: [{ label: "Back" }, { label: card ? `Practise ${card.title}` : "" }, { label: "" }, { label: "" }, { label: "" }, { label: "Leave free play" }],
-      fire: [() => setPad(0), () => card && onPractise(card.id), () => undefined, () => undefined, () => undefined, onClose],
+      rows: [{ label: "Back" }, { label: "Tuner" }, { label: "Metronome" }, { label: card ? `Practise ${card.title}` : "" }, { label: onChooseTune ? "Choose tune" : "" }, { label: "Leave free play" }],
+      fire: [() => setPad(0), () => openTool("tuner"), () => openTool("metronome"), () => card && onPractise(card.id), () => { setPad(null); onChooseTune?.(); }, () => setPad(2)],
+    },
+    {
+      rows: [{ label: "Keep playing" }, { label: "" }, { label: "" }, { label: "" }, { label: "" }, { label: "Confirm leave free play" }],
+      fire: [() => setPad(null), () => undefined, () => undefined, () => undefined, () => undefined, onClose],
     },
   ];
 
@@ -155,13 +166,18 @@ export function FreePlay({ input, deck, onClose, onPractise }: { input: InputApi
   const listening = input.status === "listening" && !input.paused;
   const flow = v.onGrid ?? 0;
   const arc = v.on && v.mode === "follows" ? Math.min(1, v.rise.have / v.rise.need) : 0; // how close the next step up is
+  if (tool !== null) return <div className="ss-free fp-room has-tools"><div className="fp-tools-overlay"><GuitarToolsRoom input={input} onClose={() => setTool(null)} initialTool={tool} initialBpm={v.bpm} /></div></div>;
   return (
     <div className={`ss-free fp-room ${arrived ? "has-playing" : "is-arriving"} ${pad !== null ? "has-menu" : ""} ${v.on ? "is-on" : ""} ${v.mood ? `is-${v.mood}` : ""} ${v.band ? "has-band" : ""}`}>
-      <PracticeAtmosphere input={input} warmth={Math.min(1, v.secs / 180)} flow={flow} playing={listening && pad === null && arrived} />
+      <PracticeAtmosphere input={input} warmth={Math.min(1, v.secs / 180)} flow={flow} playing={roomActive && listening && pad === null && arrived} beat={v.beatSignal} bpm={v.bpm} />
       <header className="fp-heading">
         {scale ? <p className="ss-kicker">Free play</p> : null}
         <h1 className="ss-display">{scale ? scale.name : "Free play"}</h1>
         {arrived && facts ? <p className="ss-sub">{facts}</p> : null}
+        <nav className="fp-instruments" aria-label="Guitar instruments">
+          <button type="button" onClick={() => openTool("tuner")} aria-label="Open tuner"><Glyph name="tools" size={19} /><span>Tuner</span></button>
+          <button type="button" onClick={() => openTool("metronome")} aria-label="Open metronome"><Glyph name="free" size={19} /><span>Metronome</span></button>
+        </nav>
       </header>
 
       {arrived ? (
@@ -203,10 +219,10 @@ export function FreePlay({ input, deck, onClose, onPractise }: { input: InputApi
 
       <footer className="fp-room-foot">
         <div className="fp-input-anchor">{arrived ? <><Ear input={input} size="small" ring={ring} /><span>{listening ? "Listening" : "Reconnect"}</span></> : null}</div>
-        <div className="fp-menu-anchor"><button type="button" onClick={() => setPad(0)} aria-label="Open free play menu"><span className="fp-menu-note">E<span>2</span></span>Menu<span aria-hidden="true">↗</span></button><span>hold low E · 1.3s</span></div>
+        <div className="fp-menu-anchor"><button type="button" onClick={() => setPad(0)} aria-label="Open free play menu"><span className="fp-menu-note">E<span>2</span></span>Menu<span aria-hidden="true">↗</span></button><span>{SUMMON_HINT}</span></div>
         <p className="fp-band-state"><i className={v.band ? "is-live" : ""} />Band {v.band ? "playing" : v.bandOn ? "listening" : "off"}</p>
       </footer>
-      {pad !== null ? <GuitarPad input={input} title={v.on ? `Free play · ♩ ${v.bpm}` : "Free play"} rows={pages[pad].rows} onFire={(i) => pages[pad].fire[i]()} /> : null}
+      {roomActive && pad !== null ? <GuitarPad input={input} title={pad === 1 ? "Instruments & more" : v.on ? `Free play · ♩ ${v.bpm}` : "Free play"} rows={pages[pad].rows} onFire={(i) => pages[pad].fire[i]()} /> : null}
     </div>
   );
 }

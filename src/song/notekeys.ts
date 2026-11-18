@@ -1,4 +1,5 @@
 import type { Card } from "./deck";
+import { mod } from "../musicTheory";
 
 // Note keys: single notes that work the app instead of the exercise. Each action has a home note
 // well outside what exercises play (the 12th fret of the high e string, the first frets of the
@@ -26,6 +27,27 @@ export function usedMidis(card: Card): number[] {
   for (const t of card.tl.targets.slice(card.first, card.last + 1)) for (const m of t.chord?.voicing ?? [t.midi]) out.add(m);
   for (const v of [...(card.tl.guide ?? []), ...(card.tl.bass ?? [])]) if (within(v.t)) out.add(v.midi);
   for (const c of card.tl.comp) if (within(c.t)) c.midis.forEach((m) => out.add(m));
+  return [...out];
+}
+
+/**
+ * A session command must also leave every accepted octave of the exercise available to play.
+ * Keep exact-note cards exact; chord goals and improvisation choices always accept pitch classes.
+ */
+export function commandMidis(card: Card): number[] {
+  const out = new Set(usedMidis(card));
+  const accepted = new Set<number>();
+  for (const target of card.tl.targets.slice(card.first, card.last + 1)) {
+    if (target.chord) {
+      // The chord scorers permit extra tones unless they clash, even when not in the shown voicing.
+      for (let pc = 0; pc < 12; pc++) if (!target.chord.clash.includes(pc)) accepted.add(pc);
+      for (const pc of target.chord.required) accepted.add(mod(pc));
+      for (const midi of target.chord.voicing) accepted.add(mod(midi));
+    } else if (target.any) {
+      for (const pc of target.any) accepted.add(mod(pc));
+    } else if (!card.exact) accepted.add(mod(target.midi));
+  }
+  for (let midi = 0; midi <= 127; midi++) if (accepted.has(mod(midi))) out.add(midi);
   return [...out];
 }
 

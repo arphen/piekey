@@ -1,0 +1,32 @@
+.ss-tune-picker {
+  position: absolute;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  padding: 48px 24px;
+  background: var(--night, #0d0c0f);
+  color: var(--ink);
+  text-align: left;
+}
+.ss-tune-picker-body { width: min(100%, 680px); }
+.ss-tune-picker h1 { margin: 18px 0 24px; font: 400 clamp(36px, 6vw, 64px)/1.05 var(--font-display); letter-spacing: -0.035em; }
+.ss-tune-picker p { line-height: 1.65; }
+.ss-tune-picker .ss-kicker { color: var(--ink-faint); }
+.ss-tune-select { display: grid; gap: 9px; margin: 28px 0 12px; color: var(--ink-soft); font-size: 12px; }
+.ss-tune-select select { width: 100%; min-height: 48px; padding: 10px 12px; color: var(--ink); background: var(--night, #0d0c0f); border: 1px solid var(--line); border-radius: 7px; font: 400 18px/1.4 var(--font-display); }
+.ss-tune-picker-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.ss .ss-tune-picker button { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 10px; min-height: 44px; padding: 10px 14px; color: var(--ink); border: 1px solid var(--line); border-radius: 7px; background: transparent; font: 400 13px/1.4 var(--font-ui); text-align: left; }
+.ss-tune-picker button small { color: var(--ink-faint); }
+.ss-tune-picker button:disabled { opacity: .4; }
+.ss-tune-picker .ss-tune-primary { border-color: var(--ink-soft); }
+.ss-tune-picker .ss-tune-picker-detail { margin-top: 20px; color: var(--ink-faint); font-size: 12px; }
+.ss-tune-picker .ss-tune-picked { margin: 28px 0; font: 400 32px/1.25 var(--font-display); }
+.ss-tune-picker .ss-tune-picker-error { color: var(--warn); }
+.ss-tune-picker-status { margin: 28px 0; font-size: 17px; }
+.ss-tune-matches { display: grid; gap: 12px; margin: 24px 0; padding: 0; list-style: none; }
+.ss-tune-matches li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 18px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.ss-tune-matches strong { font-weight: 400; }
+.ss-tune-matches span { color: var(--ink-faint); font-size: 12px; }
+@media (max-width: 560px) { .ss-tune-picker { padding: 32px 20px; place-items: start center; } .ss-tune-picker-actions > button { flex: 1 1 160px; } }

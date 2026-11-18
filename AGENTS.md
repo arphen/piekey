@@ -46,9 +46,17 @@ exact phrases in `SongCoach`; do not restore an inline Learn flow. Ear (`src/ear
     Mount the boundary before any practice/quiz/tools writer hook. `src/tools/` reuses input/playback.
 13. `src/agent/brief.ts` — pure, versioned, bounded practice-brief projection for explicit user
     export. Keep score/audio contents, device secrets and raw storage/journal data out of it.
-14. `src/song/goalEvidence.ts` / `useGoalEvidence.ts` — display-only, bounded journal goal checks.
-    Replay a complete tune transaction group with the existing projector; capped, unavailable or
-    conflicted history is unknown. Never replace stores or scheduling with an archive query.
+14. `src/song/practiceHistory.ts` / `usePracticeHistory.ts` and `goalEvidence.ts` — display-only,
+    bounded journal exercise history and goal checks. Replay a complete tune transaction group
+    with the existing projector; capped, unavailable or conflicted history is unknown. Shared
+    scale history is outside the tune query. Never replace stores or scheduling with an archive query.
+15. `src/tunes/passage.ts` — explicit playing-order passage bounds, occurrence labels and stable
+    arrangement-qualified IDs. Custom passages join the existing deck only for an explicit launch.
+16. `src/song/theme.ts` / `useThemePicker.ts` — explicitly armed opening matching; candidates
+    never navigate or change a tune before separate review and confirmation.
+17. `src/tools/GuitarTools.tsx` — shared `GuitarToolsRoom` inside the existing practice boundary.
+    Suspend the host engine while instruments own the input. `PracticeAtmosphere` owns decorative
+    output-clock resonance; optional `RenderedWater` is capped GPU presentation, never a clock.
 
 ## Repository map and project docs (read this second)
 
@@ -152,6 +160,11 @@ component tests run under jsdom. No CI configuration is committed; `make check` 
 - The practice session (`src/song/`, `SongCoach`) is operated from the guitar and reacts to the
   player rather than instructing them; read `docs/PRACTICE_SESSION.md` before changing its
   gestures, tempo rules or card box. Any new action there needs a played gesture, shown on screen.
+  Whole-tune cards (`step.kind === "tune"` as well as `run`) and improvisation reserve notes for
+  music. Command allocation reserves every octave the scorer accepts. Low-E menu summon needs
+  hold/release/hold. Tune changes retain the outer practice boundary and never exit fullscreen.
+  Modal suspension blocks scoring, playback and automatic wake/reconnect until the modal closes;
+  resume only a pause owned by that modal. Renderer preferences are device-local and default off.
 - Outside sessions the shell is played too (`src/nav/`, notes from fret 12 up): keep controls real
   `button`/`select` elements so the cursor reaches them, and mark decoration `data-nav-skip`.
 - TypeScript is strict. Avoid `any`; prefer the contract types. Keep `npm run typecheck` green.

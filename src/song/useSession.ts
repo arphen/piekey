@@ -20,7 +20,7 @@ import { finishTake, record } from "../audio/recorder";
 import { keepPracticeWrite } from "../platform/practiceWindow";
 import { createEvidence, type EvidenceLog } from "./evidence";
 import { applyResult, carryOver, headStart, loadStores, logAttempt, planExtra, planSession, saveStores, today, type AttemptConditions, type Result, type Settings, type Store } from "./leitner";
-import { assignNoteKeys, usedMidis } from "./notekeys";
+import { assignNoteKeys, commandMidis } from "./notekeys";
 import { createTrouble, spotCard, spotOf, type Spot } from "./spot";
 import { meanShare } from "./stats";
 import { useChordFollower } from "./useChordFollower";
@@ -121,6 +121,7 @@ function barShares(card: Card, results: readonly NoteResult[]): { bar: number; s
 }
 
 export interface SessionOptions {
+  suspended?: boolean; // a modal owns the shared input; do not wake or advance the session beneath it
   gap?: ReadonlySet<string>; // exercises to play in time with gaps in the band whatever their box (a focus on time)
   arrangementFingerprint?: string;
   arrangementFingerprints?: ReadonlyMap<string, string>;
@@ -129,6 +130,13 @@ export interface SessionOptions {
 
 /** `tuneIds`: the tune the session belongs to, then any others whose exercises are mixed in. */
 export function useSession(deck: Deck, tuneIds: string[], input: InputApi, options: SessionOptions = {}) {
+  const suspended = options.suspended === true;
+  const suspendedRef = useRef(suspended);
+  suspendedRef.current = suspended;
+  const sessionSubscribe = useCallback<InputApi["subscribe"]>((receive) => input.subscribe((frame) => {
+    if (!suspendedRef.current) receive(frame);
+  }), [input.subscribe]);
+  const sessionInput = useMemo(() => ({ ...input, subscribe: sessionSubscribe }), [input, sessionSubscribe]);
   const boxes = useRef(tuneIds);
   boxes.current = tuneIds;
   const boxesKey = tuneIds.join("|");
@@ -144,6 +152,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
   const [ending, setEnding] = useState(false);
   const [phase, setPhase] = useState<Phase>("intro");
   const [paused, setPaused] = useState(false);
+  const inactive = paused || suspended;
   const [away, setAway] = useState(false); // resting after a long silence: a note wakes it
   const [waiting, setWaiting] = useState(false); // the band stopped: play to bring it back
   const [bpm, setBpm] = useState(80);
@@ -266,17 +275,18 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
   const doListen = Boolean(card?.listen && (level <= 1 || card.family === "ear")); // an echo is always heard first
 
   // notes that work the session instead of the exercise: never heard as part of it
-  const keys = useMemo(() => assignNoteKeys(KEY_IDS, card ? usedMidis(card) : []), [card]);
-  const ignore = useMemo(() => new Set(Object.values(keys).filter((m): m is number => m !== null)), [keys]);
+  const keys = useMemo(() => assignNoteKeys(KEY_IDS, card ? commandMidis(card) : []), [card]);
+  const directKeys = Boolean(card && !card.run && card.step?.kind !== "tune" && card.kind !== "improv");
+  const ignore = useMemo(() => new Set(directKeys ? Object.values(keys).filter((m): m is number => m !== null) : []), [keys, directKeys]);
 
   const midis = useMemo(() => (card && card.view !== "chords" ? card.tl.targets.slice(card.first, card.last + 1).map((t) => t.midi) : []), [card]);
   const goals = useMemo(
     () => (card && card.view === "chords" ? card.tl.targets.slice(card.first, card.last + 1).map((t) => t.chord ?? { required: [], clash: [] }) : []),
     [card],
   );
-  const pacing = phase === "pace" && !paused && Boolean(card) && !selfGuided;
-  const follow = useFollower(midis, input, pacing && card?.view !== "chords", !card?.exact, ignore);
-  const chords = useChordFollower(goals, input, pacing && card?.view === "chords");
+  const pacing = phase === "pace" && !inactive && Boolean(card) && !selfGuided;
+  const follow = useFollower(midis, sessionInput, pacing && card?.view !== "chords", !card?.exact, ignore);
+  const chords = useChordFollower(goals, sessionInput, pacing && card?.view === "chords");
   // both hand out a new object every render; these two are the same functions throughout
   const restartFollow = follow.restart;
   const restartChords = chords.restart;
@@ -299,8 +309,14 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
   const gapped = Boolean(card && !spot && !card.run && card.view !== "chords" && card.family !== "ear" && (options.gap?.has(card.id) || (box >= GAP_BOX && (card.family === "scales" || card.family === "melody"))));
   const barBeats = card?.tl.slots[card.from]?.beats ?? 4;
   const gap = gapped ? { on: GAP_BARS * barBeats, off: (box >= 5 ? 2 : 1) * GAP_BARS * barBeats } : null;
-  const playback = usePlayback(card?.tl ?? EMPTY, { ...mix, gap }, input, phase === "time" && listening && !selfGuided, !card?.exact, ignore);
+  const playback = usePlayback(card?.tl ?? EMPTY, { ...mix, gap }, sessionInput, phase === "time" && listening && !selfGuided && !suspended, !card?.exact, ignore);
   const { play, stop } = playback;
+  useEffect(() => {
+    if (!suspended) return;
+    if (phase === "pace" || phase === "time") interrupted.current = true;
+    stop();
+    hush();
+  }, [suspended, phase, stop]);
 
   const conditionsFor = (tempo: AttemptConditions["tempo"]): AttemptConditions => ({
     v: 1, source: selfGuided ? "self" : "measured", confidence: "unknown", tempo,
@@ -582,29 +598,30 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
 
   // intro → first phase
   useEffect(() => {
-    if (phase !== "intro" || !card || paused) return;
+    if (phase !== "intro" || !card || inactive) return;
     const id = window.setTimeout(() => nextPhase("intro"), box === 0 ? INTRO_NEW_MS : INTRO_MS);
     return () => window.clearTimeout(id);
-  }, [phase, card, paused, box, nextPhase]);
+  }, [phase, card, inactive, box, nextPhase]);
 
   // listen: hear it once
   const heard = useRef(false);
   useEffect(() => {
-    if (phase !== "listen" || !card || paused) return;
+    if (phase !== "listen" || !card || inactive) return;
     exposed.current = true;
     heard.current = false;
     void play(card.from, card.to, false);
-  }, [phase, card, paused, play, listenKey]);
+  }, [phase, card, inactive, play, listenKey]);
   useEffect(() => {
-    if (phase !== "listen" || paused) return;
+    if (phase !== "listen" || inactive) return;
     if (playback.playing) heard.current = true;
     else if (heard.current) {
       heard.current = false;
       nextPhase("listen");
     }
-  }, [playback.playing, phase, paused, nextPhase]);
+  }, [playback.playing, phase, inactive, nextPhase]);
 
   // at your own pace: count finished takes; starting over mid-take is free
+  const afterTake = useRef<(() => void) | null>(null);
   useEffect(() => {
     if (phase !== "pace" || !card || card.view === "chords" || !follow.done) return;
     assessment.current = conditionsFor("own-pace");
@@ -627,7 +644,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
       evidence.notes(card.tl.targets.map((t) => t.midi), card.steps, abs, heardAt, card.first, card.last);
     }
     const sp = !spot && !clean && follow.takeStart === 0 && spotted < MAX_SPOTS ? trouble?.pass(abs) ?? null : null;
-    const id = window.setTimeout(() => {
+    afterTake.current = () => {
       if (ending) {
         if (clean) conclude("ok", takeShare(follow.results).hit / Math.max(1, follow.total));
         else finish();
@@ -647,8 +664,8 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
       }
       else if (sp) startSpot(sp, "pace");
       else follow.restart();
-    }, NEXT_TAKE_MS);
-    return () => window.clearTimeout(id);
+    };
+    return () => { afterTake.current = null; };
   }, [phase, follow.done]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -658,15 +675,22 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     exposed.current = true;
     setTakes((t) => ({ ...t, clean: t.clean + 1 }));
     glint();
-    const id = window.setTimeout(() => ending ? conclude("ok", 1) : enterTime(), NEXT_TAKE_MS);
-    return () => window.clearTimeout(id);
+    afterTake.current = () => ending ? conclude("ok", 1) : enterTime();
+    return () => { afterTake.current = null; };
   }, [phase, chords.done]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keep the completed take, but defer its next action while a menu owns the guitar.
+  useEffect(() => {
+    if (phase !== "pace" || inactive || !(card?.view === "chords" ? chords.done : follow.done)) return;
+    const id = window.setTimeout(() => afterTake.current?.(), NEXT_TAKE_MS);
+    return () => window.clearTimeout(id);
+  }, [phase, inactive, card?.view, follow.done, chords.done]);
 
   // the harmony under your own-pace playing: a soft chord whenever it changes
   const lastPad = useRef("");
   const paceIndex = card?.view === "chords" ? chords.index : follow.index;
   useEffect(() => {
-    if (phase !== "pace" || !card || paused) {
+    if (phase !== "pace" || !card || inactive) {
       lastPad.current = "";
       return;
     }
@@ -687,7 +711,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
       padChord([40 + mod((c.bass ?? c.root) - 40), low, low + c.fifth - third, low + (c.seventh ?? 12) - third]);
     }
     lastPad.current = sym;
-  }, [phase, card, paused, paceIndex, follow.take]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [phase, card, inactive, paceIndex, follow.take]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // At their own pace there is no tempo, until the player has one: once the notes come evenly,
   // that tempo is known. It is not clicked back at them (a click that follows the player teaches
@@ -696,7 +720,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
   const [pulse, setPulse] = useState<number | null>(null);
   useEffect(() => {
     const b = beat.current;
-    if (phase !== "pace" || !card || card.view === "chords" || paused) {
+    if (phase !== "pace" || !card || card.view === "chords" || inactive) {
       beat.current = { index: -1, at: 0, ms: [] };
       setPulse(null);
       return;
@@ -721,11 +745,11 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     const steady = sorted.length === PULSE_NOTES && (sorted[sorted.length - 1] - sorted[0]) / mid < PULSE_SPREAD && mid > 250 && mid < 2000;
     if (steady) ownTempo.current = Math.round(60000 / mid);
     setPulse(steady ? Math.round(60000 / mid) : null);
-  }, [phase, card, paused, follow.index, follow.take]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [phase, card, inactive, follow.index, follow.take]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // a run-through is recorded (audio/recorder.ts): a take left unfinished is not kept
   const take = useRef<{ stop(): Promise<Blob | null> } | null>(null);
-  const runNow = phase === "time" && Boolean(card?.run) && !paused;
+  const runNow = phase === "time" && Boolean(card?.run) && !inactive;
   useEffect(() => {
     if (!runNow) return;
     const stream = input.stream?.();
@@ -740,20 +764,20 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
 
   // in time: loop with the band
   useEffect(() => {
-    if (phase !== "time" || !card || paused || waiting) return;
+    if (phase !== "time" || !card || inactive || waiting) return;
     const id = window.setTimeout(() => {
       manualTempoChanged.current = false;
       void play(card.from, card.to, true);
     }, timeStarts.current++ === 0 ? START_TIME_MS : 250);
     return () => window.clearTimeout(id);
-  }, [phase, card, paused, waiting, loopKey, play]);
+  }, [phase, card, inactive, waiting, loopKey, play]);
 
   // each note scored in time feeds the estimate of how it is going
   const scored = useRef<NoteResult[]>([]);
   useEffect(() => {
     const before = scored.current;
     scored.current = playback.results;
-    if (phase !== "time" || selfGuided) return;
+    if (phase !== "time" || selfGuided || suspended) return;
     let fed = false;
     playback.results.forEach((r, i) => {
       if (r && !before[i]) {
@@ -766,7 +790,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
 
   useEffect(() => {
     const p = playback.lastPass;
-    if (phase !== "time" || !p || !card || !p.total) return;
+    if (phase !== "time" || !p || !card || !p.total || suspended) return;
     if (selfGuided) return;
     const stableTempo = p.tempoStable === true && !manualTempoChanged.current;
     manualTempoChanged.current = false;
@@ -865,9 +889,9 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
   }, [playback.lastPass]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // the band waits: any steady note brings it back in
-  const { subscribe } = input;
+  const subscribe = sessionSubscribe;
   useEffect(() => {
-    if (!waiting || paused) return;
+    if (!waiting || inactive) return;
     let run = 0;
     let last: number | null = null;
     return subscribe((f) => {
@@ -880,11 +904,11 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
         setLoopKey((k) => k + 1);
       }
     });
-  }, [waiting, paused, subscribe]);
+  }, [waiting, inactive, subscribe]);
 
   // result → next card
   useEffect(() => {
-    if (phase !== "result" || paused) return;
+    if (phase !== "result" || inactive) return;
     const id = window.setTimeout(
       () => {
         if (ending) finish();
@@ -894,7 +918,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
       outcome?.result === "skip" ? SKIPPED_MS : RESULT_MS,
     );
     return () => window.clearTimeout(id);
-  }, [phase, paused, pos, queue.length, finish, outcome, ending]);
+  }, [phase, inactive, pos, queue.length, finish, outcome, ending]);
 
   // ---------- reacting to silence, absence and a lost input ----------
 
@@ -913,16 +937,16 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
   }, [card, phase, stop]);
 
   useEffect(() => {
-    if (!running || finished) return;
+    if (!running || finished || suspended) return;
     return subscribe((f) => {
       // a pitch, or (strummed chords often have none) simply sound
       if (midiOf(f) !== null || f.rms > SOUND_RMS) clock.current.heard = f.now;
     });
-  }, [running, finished, subscribe]);
+  }, [running, finished, suspended, subscribe]);
 
   const everySecond = useRef<(now: number, quiet: number) => void>(() => undefined);
   everySecond.current = (now, quiet) => {
-    if (!card || paused) return;
+    if (!card || inactive) return;
     if (selfGuided) return;
     if (quiet >= AWAY_MS && (phase === "pace" || phase === "time")) {
       stop();
@@ -955,8 +979,8 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
       }
     }
   };
-  const live = useRef({ paused, playing: playback.playing });
-  live.current = { paused, playing: playback.playing };
+  const live = useRef({ paused: inactive, playing: playback.playing });
+  live.current = { paused: inactive, playing: playback.playing };
   useEffect(() => {
     if (!running || finished) return;
     let last = performance.now();
@@ -978,7 +1002,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
 
   // resting: a steady note wakes the session
   useEffect(() => {
-    if (!away) return;
+    if (!away || suspended) return;
     let run = 0;
     let last: number | null = null;
     return subscribe((f) => {
@@ -991,11 +1015,11 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
       setPaused(false);
       setLoopKey((k) => k + 1);
     });
-  }, [away, subscribe]);
+  }, [away, suspended, subscribe]);
 
   // the input went away (unplugged, switched off): hold still, and carry on when it is back
   useEffect(() => {
-    if (!running || finished || selfGuided) return;
+    if (!running || finished || selfGuided || suspended) return;
     if (!listening && !paused) {
       lostInput.current = true;
       interrupted.current = true;
@@ -1008,7 +1032,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
       setPaused(false);
       setLoopKey((k) => k + 1);
     }
-  }, [listening, running, finished, selfGuided]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [listening, running, finished, selfGuided, suspended]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------- by hand: note keys on the guitar, the pad, keys or a pedal ----------
 

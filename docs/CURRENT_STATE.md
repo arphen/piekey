@@ -16,10 +16,10 @@ broken. Update it when a feature's status changes; wishes belong in [BACKLOG.md]
 
 | Check | Result | Detail |
 | --- | --- | --- |
-| `make check` | **PASS** | Typecheck, repository map freshness and 31 suites / 374 tests passed. |
+| `make check` | **PASS** | Typecheck, repository map freshness and 31 suites / 406 tests passed. Existing suites were extended; no new test suite was added in this continuation. |
 | `npm run build:quiet` | **PASS** | Production build passed; Vite retains its existing >500 kB chunk-size warning. |
 | Focused iteration checks | **PASS** | Typecheck plus storage, goal/planner, session trust, recording, platform, scheduler, archive and mounted score-browsing suites passed while integrating. Full gate below supersedes individual iteration counts. |
-| Current browser preview | **PASS, bounded** | Reviewed the development app at authorized `localhost:5173` in the in-app browser at 320×844, 390×844 and 1440×1000. First Listen, score phrase selection, exact-phrase launch, self-guided entry/exit, saved accompaniment goal/Next/Progress, Tools entry and metronome count-in/pulse/subdivision/stop worked. No console warnings/errors observed. This is viewport emulation, not a physical phone or instrument test. |
+| Current browser preview | **PASS, bounded** | Prior review covered 320×844, 390×844 and 1440×1000. This continuation reviewed the guitar room/instruments at 1280×720 and 390×844: GPU water initialized, meter/count-in/pulse/subdivision/stop and tuner switching worked; manual tune choice moved Free play into the selected tune without showing the shell, and Ready opened embedded instruments. A fresh final load reported no console warnings/errors. Earlier intermediate HMR errors were resolved before this check. Viewport emulation is not a physical phone or instrument test. |
 | Offline shell / physical sync | **Code-verified; runtime-unverified** | Worker generation includes local fonts/lazy assets. Actual phone HTTPS, install/offline/update, cross-network/TURN and active-window handoff remain unverified. |
 | Audio / mic / devices | **Runtime-unverified** | No physical guitar, routing, reconnect, audible balance, recording, tuner, microphone scoring or audio/visual alignment was tested. See [SUPPORTED_SETUPS.md](SUPPORTED_SETUPS.md), whose outcomes remain NOT RUN. |
 
@@ -27,6 +27,9 @@ Continuation review also exercised brief preparation/Copy, selected period, orig
 and the checked goal counter on desktop and at 390px. No console warnings/errors were observed.
 Memory transitions and recording controls were checked in mounted tests, without synthetic
 practice/recordings being inserted into the live browser library.
+Continuation browser checks also exercised empty tune archives, repeated-bar passage listening
+and exact launch. GPU appearance/initialization was observed; battery drain, microphone tuning,
+audible click quality and hardware audio/visual alignment were not measured.
 
 ## What the app is
 
@@ -42,26 +45,30 @@ There are **three primary views**, with the existing focused modes under Practic
 | Surface | Component | Role |
 | --- | --- | --- |
 | Practice (`tutor`) | `OverviewView` → `useSongSummaries` | Current music, goals, Next, Explore, original first-use studies. |
-| Songs (`tunes`) | `TuneView` → `SongCoach` | Score-centered listening and selected-phrase practice; Library tools. |
-| Progress | `ProgressView` | Current goal evidence, historical milestones, bounded cross-tune observations and retained audio comparison. |
+| Songs (`tunes`) | `TuneView` → `SongCoach` | Score-centered listening, phrases and exact passage practice; Library tools. |
+| Progress | `ProgressView` | Current goals, captured per-exercise history, bounded cross-tune observations and retained audio comparison. |
 | Changes / Reading | `FocusView` → `SongCoach` | Same session narrowed to the tune's chord/harmony or reading cards. |
 | Scales | `ScalesView` → `FocusView` / `ShapesView` | Tune scale cards and existing shape explorer. |
 | Ear | `EarHub` → `FocusView` / `EarView` | Tune echoes and the original chord quiz. |
 | Free play | `FreePlayView` | Existing adaptive engine without requiring a tune. |
-| Tools | `GuitarTools` | Shared-input chromatic tuner; shared-clock metronome, tap/count-in/subdivisions. |
+| Instruments | `GuitarTools` / `GuitarToolsRoom` | Shared-input A440 tuner and heard-clock metronome, embedded in the guitar room or opened from shell Tools. |
 
 The header keeps real icon-labelled buttons and the existing played cursor. This hierarchy is an
 implemented design proposal; improved task finding has not been demonstrated with students.
-`App` owns Devices/Tools visibility and unmounts the current feature while either is open, then
-remounts saved projections on close. Practice, Free play, the Ear quiz, Tools, Devices and JSON
+`App` owns shell Devices/Tools visibility and unmounts the current feature while either is open,
+then remounts saved projections on close. Embedded tuner/metronome retain the current guitar
+room and its boundary, suspend its engine and return to it. Practice, Free play, the Ear quiz, Tools, Devices and JSON
 restore acquire the same exclusive origin-scoped Web Lock before mounting writer hooks. Handoff
 waits for async saves and pending recovery; unsupported browsers keep browsing but cannot start
 protected operations. Hardware and installed-window behavior still require the
 [declared setup checks](SUPPORTED_SETUPS.md).
 
 The browser review fixed overlapping Tools/Devices phone targets and moved selected-phrase
-actions into the sticky score transport, where selecting a bar exposes them immediately. Tools
-uses the same quiet typography/palette as browsing with a larger centered metronome pulse.
+actions into the sticky score transport, where selecting a bar exposes them immediately.
+The shared instrument room now uses the practice textures, an engraved weighted metronome dial,
+chromatic tuning rail and guitar-operated controls. Optional default-off GPU water is capped at
+30 fps and 1,000 pixels on its long edge, pauses in hidden/inactive pages and stays still for
+reduced motion. This is a bounded rendering budget, not a measured battery-life claim.
 An initial unconfirmed busy lock now stays in Checking while a previous local owner finishes;
 the review no longer showed a false claim that another window was practising. Real multi-window
 handoff remains a separate hardware/lifecycle check. Progress recordings now have real Play/Pause,
@@ -96,6 +103,11 @@ cleanup and late-start cancellation have mounted coverage; physical audio remain
   deterministic duration variation, rests and repeated pitches at higher tiers.
 - Progress owns take comparison and observed patterns, with task/tempo/arrangement/help context.
   These are app observations on played material, not an overall guitar-level grade.
+- Exercise history reads the complete captured tune journal, beyond the recent 800-attempt view.
+  Its dated clean-tempo observations and attempt details keep score versions and assistance
+  inspectable. Self-guided, skipped, own-pace and unknown legacy work cannot become timed proof.
+  Shared scale history is outside this tune-specific view. The journal cannot restore attempts
+  already absent when transaction recording began.
 - Memory sections fade through page, bar-start landmarks and hidden notes after complete steady
   passes. Due later-day reviews of the same known arrangement start hidden. Restore-page and Hear
   remain available from the guitar; help/exposure provenance stays conservative for the whole
@@ -304,9 +316,12 @@ dedicated "play the progression" card exists yet; a tune with no chord symbols h
 - Browsing playback (`tunes/order.ts` + `tunes/usePlayback.ts`) expands repeats, endings,
   D.C./D.S., To Coda and Fine into a `Timeline`; supports count-in, phrase loops,
   melody/chords/click mix and tempo changes. Listening does not score the microphone.
-- Clicking a printed bar or phrase selects its existing melody phrase. An explicit toolbar
-  offers Listen/Loop, full-screen practice or one-note rhythm isolation, with printed and
-  playing-order positions shown. Returning from practice restores the browse scroll position. The primary action starts the daily plan. No inline Learn,
+- Clicking a printed bar or phrase selects its existing melody phrase. **Select passage** offers
+  exact start/end choices with printed bar, occurrence and playing-order position. Selection is
+  reversible and does not autoplay. Listen/Loop and full-screen Practice use those bounds;
+  generated phrases also offer one-note rhythm isolation. Custom passage identities include the
+  arrangement and do not join the daily introduction or expand goal requirements. Returning from
+  practice restores the browse scroll position. The primary action starts the daily plan. No inline Learn,
   Play along or Wait for me mode competes with the full-screen session.
 - Full-screen **Practice session** (`SongCoach`) with multi-tune exercise mixing, free play,
   settings, calibration, input/output device choice, and the done-screen summary.
@@ -430,15 +445,24 @@ session started this way may not go full screen until the page has been clicked 
 | `F2` (or assigned pace key) | Exercise | Your pace |
 | `G2` (or assigned time key) | Exercise | In time |
 | `G♯2` (or assigned next key) | Exercise | Next exercise |
-| Open low E held ~1.3 s | Exercise / free play | Six-string menu (tempo, click, output, free play, shuffle, calibration, finish) |
+| Low E hold 1.3 s → quiet release → fresh hold 0.6 s | Exercise / free play / instruments | Six-string menu (tempo, click, tuner, output and session controls) |
 | `C3` | Done screen | Carry on |
 | `D3` | Done screen | Free play · metronome |
 | `C♯3` | Done screen | Settings |
-| `F3` | Done screen | Next tune (if the library has more) |
+| `F3` | Done screen | Choose tune, then review and confirm inside the room |
 | `F♯3` | Done screen | Toggle shuffle |
 
-Action notes are shown beside their labels. Note keys avoid notes the exercise or its band sounds;
-see `song/notekeys.ts`. The done-screen mapping is `SessionSummary.tsx` (`KEYS`).
+Action notes are shown beside their labels. Commands reserve all octave equivalents accepted by
+the scorer, plus band pitches. Whole-tune cards (`run` and `step.kind === "tune"`) and improvisation
+disable direct held/double-tap shortcuts; the deliberate menu gesture remains. Free play has a
+separate confirmation before Leave. The done-screen mapping is `SessionSummary.tsx` (`KEYS`).
+
+Choose tune works from ready, summary, the live menu and Free play without changing the outer
+practice boundary or calling fullscreen exit. Optional opening matching must be armed, needs
+six fresh attacks/three pitch classes, and preserves ambiguous matches. Review and separate
+confirmation precede any change; pending practice saves drain first. Menus, instruments and the
+picker suspend scoring/playback/automatic wake and reconnect. Physical guitar and native
+fullscreen behavior remain unverified.
 
 ### Tempo, scoring and reactions
 
@@ -484,11 +508,12 @@ see `song/notekeys.ts`. The done-screen mapping is `SessionSummary.tsx` (`KEYS`)
   sparkline and verdict; carried relatives listed separately.
 - A 14-session "clean exercises per session" trend line.
 - The skill tree, lit for cards touched this session.
-- Guitar actions (carry on, free play, settings, next tune, shuffle) and an interlude played under
+- Guitar actions (carry on, free play, settings, choose tune, shuffle) and an interlude played under
   the screen.
 
 This is a v1 of the `todo` done-screen vision: movement, axes (tune × family), stats and guitar
-actions exist. Long-term per-exercise history and a configurable axis model do not.
+actions exist. Captured tune-specific per-exercise history is now available in Progress; a
+configurable axis model and shared-scale archive browser remain absent.
 
 ## Free play
 
@@ -523,6 +548,7 @@ card. Progressions are not logged to `guitar-freeplay` or the map yet.
 | `guitar-skills` | `song/leitner.ts` | Shared scale card states and credit. |
 | `guitar-freeplay` | `song/freeplay.ts` | Free-play log (`FreeEntry[]`), capped. |
 | `guitar-freeplay-prefs` | `song/useFreePlay.ts` | Band on/off. |
+| `guitar-rendered-room` | `song/renderedRoom.ts` | Optional GPU room preference, default off and device-local; excluded from sync/backup. |
 | `guitar-output` | `audio/output.ts` | Chosen output device id. |
 | `guitar-input` | `listen/useInput.ts` | Chosen input device id. |
 | `guitar-calibration` | `listen/calibration.ts` | Per-string detector profile bound to input device/sample rate. |
@@ -664,8 +690,10 @@ failure paths use controlled test doubles. There is no Playwright/CI configurati
 1. **Docs and map can drift.** The map has been regenerated, but docs must be kept current.
 2. **The chord quiz is still its own engine** (`ear/*`, `guitar-ear-v1`); it does not share boxes
    or stats with the tune session. Echo cards already use the shared deck.
-3. **Progress remains bounded.** Progress reads cross-tune observations and retained takes;
-   there is no long-term per-exercise chart or validated overall ability model.
+3. **Progress remains bounded.** Tune-specific exercise history can recover captured journal
+   attempts beyond the recent view, within the archive query caps. Shared scale archive browsing,
+   planner archive integration and a validated overall ability model remain absent. Cross-tune
+   observations and agent briefs still use retained recent stores.
 4. **Free play chord recognition is untested on a real acoustic**: strum detection and naming are
    unit-tested on pitch-class sets only.
 5. **String attribution is inferred, not heard.** `song/fingering.ts` chooses a position and

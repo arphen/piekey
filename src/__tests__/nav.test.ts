@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, createElement, useRef, useState } from "react";
+import { act, createElement, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { GuitarPad, useSummon } from "../components/GuitarPad";
 import * as pitch from "../listen/pitch";
@@ -60,7 +60,7 @@ describe("guitar navigation", () => {
     expect(change).toHaveBeenCalledTimes(2);
   });
 
-  it("keeps the summon sustain out of the menu, then accepts a changed or released string at 600ms", async () => {
+  it("requires a low-E hold, quiet release and fresh hold before music can become menu controls", async () => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     const read = vi.spyOn(pitch, "midiOf").mockImplementation((frame) => frame.buf[0] < 0 ? null : frame.buf[0]);
     const listeners = new Set<(frame: InputFrame) => void>();
@@ -72,8 +72,7 @@ describe("guitar navigation", () => {
     const fire = vi.fn();
     function Menu() {
       const [open, setOpen] = useState(false);
-      const blocked = useRef(false);
-      useSummon(input, !open, blocked, () => setOpen(true));
+      useSummon(input, !open, () => setOpen(true));
       return open ? createElement(GuitarPad, { input, title: "Menu", rows: Array.from({ length: 6 }, (_, i) => ({ label: String(i) })), onFire: fire }) : null;
     }
     const root = createRoot(document.body.appendChild(document.createElement("div")));
@@ -81,16 +80,24 @@ describe("guitar navigation", () => {
     try {
       await act(async () => root.render(createElement(Menu)));
       await act(async () => { emit(40, 0); emit(40, 1300); });
+      expect(document.querySelector('[role="menu"]')).toBeNull();
+      await act(async () => { emit(64, 1400); emit(64, 2100); });
+      expect(document.querySelector('[role="menu"]')).toBeNull();
+      await act(async () => { emit(40, 2300); emit(40, 3600); emit(40, 5000); });
+      expect(document.querySelector('[role="menu"]')).toBeNull();
+      await act(async () => { emit(null, 5025); emit(null, 5200); emit(40, 5300); emit(40, 5899); });
+      expect(document.querySelector('[role="menu"]')).toBeNull();
+      await act(async () => emit(40, 5900));
       expect(document.querySelector('[role="menu"]')).toBeTruthy();
-      await act(async () => { emit(40, 1325); emit(40, 2000); emit(40, 2500); });
+      await act(async () => { emit(40, 5925); emit(40, 6600); });
       expect(fire).not.toHaveBeenCalled();
 
-      await act(async () => { emit(64, 2600); emit(64, 3199); });
+      await act(async () => { emit(64, 6700); emit(64, 7299); });
       expect(fire).not.toHaveBeenCalled();
-      await act(async () => { emit(64, 3200); });
+      await act(async () => { emit(64, 7300); });
       expect(fire.mock.calls).toEqual([[5]]);
 
-      await act(async () => { emit(null, 3400); emit(null, 3600); emit(40, 3700); emit(40, 4300); });
+      await act(async () => { emit(null, 7500); emit(null, 7700); emit(40, 7800); emit(40, 8400); });
       expect(fire.mock.calls).toEqual([[5], [0]]);
     } finally {
       await act(async () => root.unmount());

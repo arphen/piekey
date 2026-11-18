@@ -10,6 +10,7 @@ import { cachedSong, useSongSummaries } from "../overview/useSongSummaries";
 import { relativeDay } from "../overview/visual";
 import { Glyph } from "./Glyph";
 import { GoalChooser } from "./GoalChooser";
+import { PracticeHistory } from "./PracticeHistory";
 import "../overview/overview.css";
 import "../overview/progress.css";
 
@@ -182,6 +183,7 @@ export function ProgressView({ onOpenSong, onStartPractice }: { onOpenSong(tuneI
         <p className="progress-caption">Historical task records can include earlier score versions or help that was not recorded. A fresh goal check tracks the current arrangement. Review boxes schedule practice; related-exercise credit is preparation.</p>
         {music ? <GoalChooser key={music.sheet.id} sheet={music.sheet} deck={music.deck} /> : null}
       </section>
+      <PracticeHistory key={current.tuneId} tuneId={current.tuneId} music={music} />
       <section className="tutor-section" aria-labelledby="progress-listen"><div className="tutor-section-head"><h3 id="progress-listen"><Glyph name="ear" size={18} />Listen back</h3></div><Takes key={current.tuneId} tuneId={current.tuneId} day={day} /></section>
     </>}
     {!loading ? <Playing day={day} /> : null}

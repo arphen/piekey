@@ -12,7 +12,7 @@ the application’s foundation.
 | Trust the result | Visible recording outcomes; retry/download of pending audio; read errors distinguished from an empty library | Failure-path tests; no real quota or microphone recording test |
 | Keep music recoverable | Healthy scores remain available beside named repair issues; replacement preserves identity; explicit removal preserves history | Storage tests, including missing XML and migration races |
 | First musical visit | Listen without a file or mic; existing original demos remain playable when saving fails; no-mic practice in the same coach | Mounted score/entry tests and browser Listen/self-guided entry; audible balance and student usability unverified |
-| Score-centered Songs | Select a generated phrase from a bar, see printed/playing-order positions, use immediately visible sticky listen/loop/practice controls, return to the browse position | Mounted selection/play/launch tests; browser review at 320/390/1440px with Blue Hour; long-score/physical-phone checks remain |
+| Score-centered Songs | Select a phrase or exact start/end in playing order, identify repeated-bar occurrences, listen/loop/practise the passage and return to the browse position | Mounted selection/play/launch and boundary tests; long-score/physical-phone checks remain |
 | A personal destination | Immutable arrangement-bound melody/accompaniment/echo/reading/improvisation goals; personal tempos; goal-aware plan and Next | Goal/planner/projection tests; authored teaching quality still needs review |
 | Honest assessment | Optional support/notation/tempo/exposure/confidence/interruption context, arrangement fingerprint, actual stable assessed-pass BPM | Focused session/scheduler tests; confidence remains unknown |
 | A difficult day | Self-guided activity without scoring; no automatic review/kinship/accuracy/speed credit; graceful finish at a musical boundary | Mounted ready/session tests; guitar gesture comfort unverified |
@@ -20,9 +20,11 @@ the application’s foundation.
 | Memory in stages | Page → first note of each bar → hidden, explicit reveal/Hear, same-arrangement due later reviews, visit-wide help provenance | Session/score/entry tests; guitar comfort, alternate-start transfer and independent retention unverified |
 | Edited original studies | Separated First Steps chord pulses and Blue Hour shell accompaniment; optional fingering/listening/easier/creative study notes | Parser/duration/range/voicing checks; 390px notes review; musical listening and play-testing remain |
 | Stronger echo calls | Seeded duration variation, rests and repeated pitches in higher tiers; response remains own pace | Musical invariant tests; call pacing needs a real guitar |
-| Everyday tools | Chromatic 440 Hz tuner, tap tempo, count-in, subdivisions and a centered output-clock beat pulse | Signal/tap/scheduler tests; browser count-in/pulse/subdivision/stop; physical tuning accuracy and sound unverified |
+| Everyday instruments | Chromatic A440 tuner and 2–7 beat metronome inside the guitar room; tap/count-in/subdivision, heard-clock weighted dial, optional default-off GPU water | Signal/tap/scheduler/modal tests; browser visuals and controls; physical tuning accuracy, sound and battery use unverified |
+| Keep the guitar in hand | Music-safe command allocation, deliberate hold/release/hold menu, whole-tune shortcut isolation, in-room tune chooser with optional opening matching and separate confirmation | Mounted chooser/input/suspension and host tests; physical guitar comfort and native fullscreen behavior remain unverified |
 | Useful Progress | Goals, historical task records, bounded cross-tune observations; one routed recording player with played-cursor Play/Pause/Restart/seek | Mounted playback/cleanup/late-start tests; physical sound and subjective comparison UX unverified |
 | Durable goal evidence | Complete indexed tune-journal projection beyond the display-history cap; explicit unknown on incomplete/capped/conflicting reads | Upgrade/reset/retention/cap/conflict tests; planning still uses bounded retained history |
+| Inspectable exercise history | Captured tune-journal attempts by exercise, dated clean-tempo dots and condition/version details; self-guided and unknown work stay distinct | Projection/reset/dedup/stale-read tests; shared scale archive and independent ability claims remain outside scope |
 | One active writer | Origin-scoped Web Lock before practice/quiz/tools/Devices; explicit handoff waits for cleanup and save recovery; JSON restore uses idle lock | Controlled competing-window/lifecycle tests; real installed/browser suspension unverified |
 | Consistent portability | Goals and assessment metadata journal/transfer; independent first goals union; hardware/calibration stay local in new and legacy backups | Merge, archive and restore tests; real laptop/phone exchange unverified |
 | Offline presentation | Observable preparation/ready/error/update status; safe update boundary; local OFL font assets | State tests and production build; offline installation/update cycle unverified |
@@ -46,8 +48,11 @@ records remain visible with that limitation; lifetime best settings are not upgr
 of the current arrangement. GoalChooser checks a complete indexed tune-journal group with the
 existing projector, retaining proof after the 800-row display trim. The check is limited to 5,000
 transactions and 8,388,608 serialized before/after characters. Incomplete, capped, unavailable or
-conflicted history is unknown, not zero. Planning and brief summaries still use bounded retained
-history and can suggest extra review. This is a goal check, not a long-term per-exercise browser.
+conflicted history is unknown, not zero. The exercise browser uses the same validated tune-store
+projection to inspect captured attempts beyond the recent limit. Its history begins with whatever
+was available when transaction recording began; it cannot recover earlier discarded attempts.
+Shared scale IDs belong to a separate cross-tune store and are excluded. Planning and brief
+summaries still use bounded retained history and can suggest extra review.
 
 Goals union by immutable ID on exchange, including independent first saves. Only active selection
 uses deterministic transaction order. Reusing an unchanged goal preserves its creation date and
@@ -95,10 +100,11 @@ generation rather than ordinary practice events.
    notes. Generated cards alone do not supply an edited curriculum.
 4. **Observe the design.** Check readability, task finding, played gestures and stand distance with
    students on laptop and phone. The three-surface hierarchy is implemented but its usability
-   advantage has not been measured. Arbitrary drag-to-select score ranges remain unimplemented.
-5. **Deepen evidence carefully.** Long-term per-exercise views, comparable uninterrupted checks
-   and useful retention/transfer evidence remain. The bounded journal goal check is delivered;
-   planning still uses recent history. Do not infer
+   advantage has not been measured. Exact start/end passage choices are implemented; direct
+   dragging and more compact display of noncontiguous printed bars remain unimplemented.
+5. **Deepen evidence carefully.** Tune-specific captured exercise history is inspectable;
+   shared scale archive browsing, comparable uninterrupted checks and useful retention/transfer
+   evidence remain. Planning still uses recent history. Do not infer
    an overall guitar level from detector percentages or a review box.
 6. **Improve musical depth from observations.** Memory fading and two edited accompaniment parts
    are implemented; alternate memory starts, expressive rhythm, richer comping,

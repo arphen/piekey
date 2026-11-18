@@ -9,6 +9,7 @@ import { analyze, makeScale, parseChord } from "../song/harmony";
 import { applyResult, planSession, type Store } from "../song/leitner";
 import { seeded } from "../song/rand";
 import { isolateRhythm, rhythmSheet } from "../song/rhythm";
+import { parsePassageId, passageId, passageLabel, passageOccurrences, passageTimeline } from "../tunes/passage";
 
 const note = (midi: number, startBeat: number): ReadingNote => ({
   rest: false,
@@ -37,6 +38,62 @@ function sheet(): LeadSheet {
   }));
   return { id: "test", title: "Test", composer: "", keySignature: "Am", timeSignature: "4/4", tempo: 100, bars, barNumbers: chords.map((_, i) => String(i + 1)), comp: [], chordsFromVoicings: false };
 }
+
+describe("selected passages", () => {
+  it("keeps exact repeated-bar occurrences outside the daily deck, with arrangement-qualified identity", () => {
+    const s = sheet();
+    s.bars = s.bars.slice(0, 3);
+    s.barNumbers = ["1", "2", "3"];
+    s.bars[0].repeatStart = true;
+    s.bars[1].repeatEnd = 2;
+    const tl = buildTimeline(s);
+    const range = { start: 1, end: 2 };
+    const id = passageId(s, range);
+    const normal = buildDeck(s, tl);
+    const explicit = buildDeck(s, tl, { passageFrom: id });
+    const card = explicit.cards.find((item) => item.id === id)!;
+    expect(tl.slots.map((slot) => slot.bar)).toEqual([0, 1, 0, 1, 2]);
+    expect(passageOccurrences(s, tl).map((item) => item.occurrence)).toEqual([1, 1, 2, 2, 1]);
+    expect(passageLabel(s, tl, range)).toBe("Bar 2 · occurrence 1 → bar 1 · occurrence 2 · playing order 2–3");
+    expect(card).toMatchObject({ from: 1, to: 2, memory: false, run: false, family: "melody", view: "score" });
+    expect(card.title).toBe("Bar 2 → bar 1 · playing order 2–3");
+    expect(card.tl.slots).toBe(tl.slots);
+    expect(card.tl.targets.slice(card.first, card.last + 1).map((target) => target.slot)).toEqual([1, 1, 1, 1, 2, 2, 2, 2]);
+    expect(explicit.intro).toEqual(normal.intro);
+    expect(normal.cards.some((item) => item.id === id)).toBe(false);
+    expect(passageId(s, range)).toBe(id);
+    const changed = { ...s, bars: s.bars.map((bar, index) => index ? bar : { ...bar, notes: bar.notes.map((n) => ({ ...n, midi: n.midi + 1 })) }) };
+    expect(passageId(changed, range)).not.toBe(id);
+    expect(buildDeck(changed, buildTimeline(changed), { passageFrom: id }).cards.some((item) => item.id === id)).toBe(false);
+    expect(parsePassageId(id)?.start).toBe(1);
+    for (const invalid of ["mel:passage:bad:1-2", id.replace(":1-2", ":2-1"), id.replace(":1-2", ":0-4000"), `${id}:extra`]) expect(parsePassageId(invalid)).toBeNull();
+  });
+
+  it("rearticulates a held start and clips every voice at the exact end without mutating the source", () => {
+    const s = sheet();
+    s.bars = s.bars.slice(0, 3);
+    s.barNumbers = ["1", "2", "3"];
+    s.bars[0].notes = [{ ...note(60, 0), duration: "w", durationBeats: 4, tieToNext: true }];
+    s.bars[1].notes = [{ ...note(60, 4), duration: "w", durationBeats: 4, tieToNext: true }];
+    s.bars[2].notes = [{ ...note(60, 8), duration: "h", durationBeats: 2 }, { ...note(62, 10), duration: "h", durationBeats: 2 }];
+    s.comp = [{ bar: 0, beat: 0, dur: 12, midis: [48, 52, 55] }];
+    const tl = { ...buildTimeline(s), bass: [{ t: 0, dur: 12, midi: 36 }], guide: [{ t: 0, dur: 12, midi: 60 }] };
+    const before = JSON.stringify(tl);
+    const range = { start: 1, end: 1 };
+    const selected = passageTimeline(s, tl, range);
+    expect(selected.targets[0]).toMatchObject({ slot: 1, bar: 1, t: 4, dur: 4, notes: [1] });
+    for (const voice of [selected.comp, selected.bass!, selected.guide!]) expect(voice[0]).toMatchObject({ t: 4, dur: 4 });
+    const card = buildDeck(s, tl, { passageFrom: passageId(s, range) }).cards.find((item) => item.id.startsWith("mel:passage:"))!;
+    expect(card).toMatchObject({ from: 1, to: 1, first: 0, last: 0 });
+    expect(card.tl.targets[0]).toMatchObject({ t: 4, dur: 4 });
+    expect(JSON.stringify(tl)).toBe(before);
+    expect(() => passageTimeline(s, tl, { start: 2, end: 1 })).toThrow("Choose a passage");
+    s.bars[1].notes = [{ ...note(0, 4), rest: true, duration: "w", durationBeats: 4 }];
+    s.bars[0].notes[0].tieToNext = false;
+    const rests = buildTimeline(s);
+    expect(buildDeck(s, rests, { passageFrom: passageId(s, range) }).cards.some((item) => item.id.startsWith("mel:passage:"))).toBe(false);
+  });
+});
 
 describe("chord symbols", () => {
   it("reads qualities and what must ring", () => {

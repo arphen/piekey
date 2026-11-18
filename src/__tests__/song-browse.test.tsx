@@ -7,6 +7,7 @@ import type { TuneEntry } from "../tunes/library";
 import type { LeadSheet } from "../tunes/musicxml";
 import { STARTER_ENTRY } from "../tunes/starter";
 import { BLUE_HOUR_ENTRY } from "../tunes/demos";
+import { parsePassageId } from "../tunes/passage";
 import { TuneView } from "../components/TuneView";
 
 const browser = vi.hoisted(() => ({
@@ -17,6 +18,7 @@ const browser = vi.hoisted(() => ({
   stop: vi.fn(),
   audioStart: vi.fn(async () => undefined),
   openPractice: vi.fn(),
+  nextTune: "",
 }));
 
 vi.mock("tone", () => ({ start: browser.audioStart }));
@@ -40,18 +42,18 @@ vi.mock("../components/GoalChooser", () => ({ GoalChooser: () => null }));
 vi.mock("../components/Score", () => ({
   Score: ({ exercise, onBarClick, marked }: {
     exercise: LeadSheet;
-    onBarClick: (bar: number, extend: boolean) => void;
+    onBarClick?: (bar: number, extend: boolean) => void;
     marked: { start: number; end: number } | null;
   }) => (
     <div data-score={exercise.id} data-marked={JSON.stringify(marked)}>
-      {exercise.bars.map((_, bar) => <button key={bar} onClick={() => onBarClick(bar, false)}>Score bar {bar + 1}</button>)}
+      {exercise.bars.map((_, bar) => <button key={bar} onClick={() => onBarClick?.(bar, false)}>Score bar {bar + 1}</button>)}
     </div>
   ),
 }));
 vi.mock("../components/SongCoach", () => ({
   openPractice: browser.openPractice,
-  SongCoach: ({ sheet, initialCardId }: { sheet: LeadSheet; initialCardId?: string }) => (
-    <div data-coach={sheet.id} data-card={initialCardId} />
+  SongCoach: ({ sheet, initialCardId, onClose, onTune }: { sheet: LeadSheet; initialCardId?: string; onClose(): void; onTune?(id: string): void }) => (
+    <div data-coach={sheet.id} data-card={initialCardId}><button onClick={onClose}>Return to Songs</button><button onClick={() => onTune?.(browser.nextTune)}>Choose another tune</button></div>
   ),
 }));
 
@@ -75,6 +77,7 @@ beforeEach(() => {
     removeItem: (key: string) => { saved.delete(key); },
   });
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
   host = document.createElement("div");
   document.body.append(host);
 });
@@ -94,6 +97,15 @@ async function press(label: string) {
   const button = [...host.querySelectorAll("button")].find((item) => (item.getAttribute("aria-label") ?? item.textContent)?.trim() === label);
   expect(button, `Button ${label} is available`).toBeTruthy();
   await act(async () => button!.click());
+}
+
+async function choose(label: string, value: number) {
+  const field = [...host.querySelectorAll("label")].find((item) => item.firstChild?.textContent === label)?.querySelector("select");
+  expect(field, `Select ${label} is available`).toBeTruthy();
+  await act(async () => {
+    field!.value = String(value);
+    field!.dispatchEvent(new Event("change", { bubbles: true }));
+  });
 }
 
 it("selects a score phrase without autoplay, listens to its range, and launches that exact phrase", async () => {
@@ -130,6 +142,65 @@ it("listens to a bundled demo when the library cannot save it", async () => {
   expect(browser.audioStart).toHaveBeenCalled();
   expect(browser.play).toHaveBeenCalledWith(0, undefined, false);
   expect(host.querySelector('[role="status"]')?.textContent).toMatch(/not been saved/i);
+  expect(host.querySelector("[data-coach]")).toBeNull();
+});
+
+it("keeps the coach host mounted when choosing another tune", async () => {
+  browser.library = [STARTER_ENTRY, BLUE_HOUR_ENTRY];
+  browser.nextTune = BLUE_HOUR_ENTRY.id;
+  await mount();
+  await press("Practice piece");
+  const coach = host.querySelector("[data-coach]");
+  await press("Choose another tune");
+  expect(host.querySelector("[data-coach]")).toBe(coach);
+  expect(coach?.getAttribute("data-coach")).toBe(BLUE_HOUR_ENTRY.id);
+  expect(host.querySelector("[data-score]")).toBeNull();
+});
+
+it("selects exact repeat occurrences, cancels edits, and preserves the range after practice", async () => {
+  browser.library = [BLUE_HOUR_ENTRY];
+  await mount();
+  await press("Select passage");
+  await choose("Start", 10);
+  await choose("End", 13);
+  expect(host.querySelector('[aria-label="Choose passage"]')?.textContent).toContain("Bar 2 · occurrence 2 · playing order 14");
+  expect(browser.play).not.toHaveBeenCalled();
+  await press("Use passage");
+  const description = "Bar 11 · occurrence 1 → bar 2 · occurrence 2 · playing order 11–14";
+  expect(host.querySelector('[aria-label="Selected passage"]')?.textContent).toContain(description);
+  expect(host.querySelector("[data-score]")?.getAttribute("data-marked")).toBe("null"); // no false contiguous highlight across the return
+  await press("Listen to passage");
+  expect(browser.play).toHaveBeenLastCalledWith(10, 13, false);
+  await press("Loop");
+  await press("Listen to passage");
+  expect(browser.play).toHaveBeenLastCalledWith(10, 13, true);
+  await press("Select passage");
+  await choose("Start", 14);
+  await press("Cancel");
+  expect(document.activeElement?.getAttribute("aria-controls")).toBe("song-passage-picker");
+  expect(host.querySelector('[aria-label="Selected passage"]')?.textContent).toContain(description);
+  await press("Practise passage");
+  expect(browser.openPractice).toHaveBeenCalledWith(input);
+  expect(parsePassageId(host.querySelector<HTMLElement>("[data-coach]")?.dataset.card)).toMatchObject({ start: 10, end: 13 });
+  await press("Return to Songs");
+  expect(host.querySelector('[aria-label="Selected passage"]')?.textContent).toContain(description);
+  await press("Listen to passage");
+  expect(browser.play).toHaveBeenLastCalledWith(10, 13, true);
+  await press("Clear passage selection");
+  await press("Listen to piece");
+  expect(browser.play).toHaveBeenLastCalledWith(0, undefined, false);
+});
+
+it("allows listening to an all-rest passage without launching an unrelated practice session", async () => {
+  browser.library = [{ ...STARTER_ENTRY, xml: STARTER_ENTRY.xml.replace(/<measure number="2">[\s\S]*?<\/measure>/, '<measure number="2"><note><rest/><duration>4</duration><type>whole</type></note></measure>') }];
+  await mount();
+  await press("Select passage");
+  await choose("Start", 1);
+  await press("Use passage");
+  expect([...host.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Practise passage")?.disabled).toBe(true);
+  expect(host.querySelector('[aria-label="Selected passage"]')?.textContent).toContain("no melody notes");
+  await press("Listen to passage");
+  expect(browser.play).toHaveBeenLastCalledWith(1, 1, false);
   expect(host.querySelector("[data-coach]")).toBeNull();
 });
 

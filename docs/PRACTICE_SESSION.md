@@ -10,17 +10,28 @@ does not tell them what to do.
 | --- | --- | --- |
 | A note held ~0.4 s (shown on screen next to what it works) | exercises | hear it again · your pace · in time · next exercise |
 | The same, by note name in any octave | before and after a session | carry on · free play · settings · other tune · shuffle |
-| Open low E held 1.3 s | exercises, free play | the six-string menu (tempo, click, sound output, …) |
+| Low E held 1.3 s, released into quiet, then held again 0.6 s | exercises, free play, instruments | the six-string menu (tempo, click, tuner, sound output, …) |
 | A free note tapped twice | exercises, open drawer | gear, calibration, the drawer's switches |
 | F (any octave) held | ready screen | session length: 10 / 25 / 45 minutes |
 
 Note keys (`song/notekeys.ts`) have home notes outside what exercises play (E5; F2, G2, G♯2). A
 card that sounds a key's home note, itself or through its band, gets the nearest free note
-instead, and the key's notes are never heard as part of the exercise. In free play and while
-improvising every note is music, so only the low-E menu works there.
+instead. Allocation reserves every octave accepted by the scorer, not only the score's written
+octave. In free play, whole-tune cards and improvisation every note is music; direct held-note
+and double-tap shortcuts are disabled. The deliberate low-E menu remains available.
+Its first hold only arms it; at least 150 ms of quiet and a fresh second hold within five seconds
+confirm it. A different intervening pitch cancels. One sustained musical E cannot open the menu.
 The menu waits for the opening note to stop or change before accepting a fresh string hold
 (0.6 s), so the low E that summoned it cannot immediately close it. A quiet scrim separates the
 menu from the music; its rows remain reachable on phone screens.
+
+**Choose tune** lives inside this room, including from free play. Its optional **Listen to
+opening** only listens while explicitly armed. Matching needs at least six fresh attacks and
+three pitch classes from an original-key opening; octaves may differ. It offers candidates,
+then a separate review and fresh confirmation. Recognition alone never changes music. A change
+waits for practice saves and keeps the outer writer boundary and fullscreen. Save failures stay
+in the picker for retry. Menus and pickers suspend scoring, clocks and auto wake/reconnect;
+closing one only releases a pause it owns.
 
 ## The session's shape
 
@@ -111,6 +122,21 @@ or leaving a menu open does not earn warmth. The decoration performs no extra pi
 and has no effect on scoring or tempo. Reduced motion removes drift and beat ripples while
 keeping the current beat marker and readable state.
 
+Tuner and metronome open from the visible instrument controls or the guitar menu without leaving
+the room. The current practice engine holds still; Return restores it. The tuner reuses the
+shared input at concert A440 and shows chromatic cents, a centered tuning rail and standard
+string targets. Tuning notes are music until the deliberate menu gesture is completed.
+
+The metronome uses the existing playback engine: 2–7 quarter-note beats per bar, an accented
+first beat, subdivisions, one-bar count-in and tap tempo. Changing meter stops it so the next
+Start begins a fresh bar. Its engraved dial, weighted sweep, beat markers and room resonance
+follow heard beats, including count-in; no presentation timer supplies musical time.
+**Rendered water** is an optional device-local GPU layer, off by default. It uses analytic waves
+at capped resolution (at most 1,000 pixels on the long edge) and 30 fps, with no extra audio
+analysis. It rests without active playing/click, stops in hidden pages and renders a still
+surface for reduced motion. GPU denial or context loss falls back to the photographic room.
+Colour still needs sustained active playing; enabling rendering or hearing the click earns none.
+
 ## Other kinds of exercise
 
 - **Run-through.** The whole tune once with the band; nothing stops for a wrong note and the tempo
@@ -128,7 +154,7 @@ keeping the current beat marker and readable state.
   bar, then hide the notes. Each automatic fade follows a complete steady pass at the visit's
   target and starts a fresh pass/count-in. Chord symbols remain; pitch-revealing labels, links,
   automatic melody support and wrong-note overlays do not. Restore the page with its button or
-  hold low E for the menu, then D. Hear again remains an explicit option. A previously successful
+  use the low-E hold/release/hold menu gesture, then D. Hear again remains an explicit option. A previously successful
   card due on a later day starts hidden only for the same known arrangement. Same-day rehearsal
   stays repeated exposure; restoring help stays visible/faded provenance for the whole visit.
   This is a later section review, not an independent retention or alternate-start transfer claim.

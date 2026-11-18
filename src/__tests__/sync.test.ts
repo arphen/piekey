@@ -5,6 +5,7 @@ import { compactValues, parseSyncSnapshot, unionTransactions, type SyncTransacti
 import { projectTransactions } from "../sync/merge";
 import { projectGoalEvidence } from "../song/goalEvidence";
 import { goalProgress, type Goal } from "../song/goals";
+import { projectPracticeHistory } from "../song/practiceHistory";
 
 const key = "guitar-song-deck:tune-1";
 const card = (box = 2, seen = 1, clean = 1, last = "clean") => ({ box, seen, clean, last, bpm: 84, due: "2026-11-19", bestCleanBpm: 80 });
@@ -143,6 +144,98 @@ describe("transaction replay", () => {
 });
 
 describe("durable journal and projection", () => {
+  it("refuses conflicting attempt identities before replay deduplication while retaining equal and unidentified legacy rows", () => {
+    const measured = { ...attempt("one-performance"), arrangementFingerprint: "score-v1", conditions: { v: 1, source: "measured", confidence: "unknown", tempo: "fixed" }, ev: { notes: [4, 0], leap: [0, 0], cross: [0, 0], shift: [0, 0], restarts: 0, hears: 0, wrong: [], time: { n: 4, mean: 0, spread: 10, rush: 0, drag: 0 } } };
+    const self = { ...measured, conditions: { ...measured.conditions, source: "self" } };
+    for (const history of [[measured, self], [self, measured]]) {
+      const txs = [transaction("base", 1, null, store(card(), history), { baseline: true })];
+      expect(projectPracticeHistory("tune-1", txs)).toEqual({ status: "conflicted" });
+      expect(projectGoalEvidence(evidenceGoal, txs)).toEqual({ status: "conflicted" });
+    }
+    const baseline = transaction("base", 1, null, store(card(), [measured]), { baseline: true });
+    const conflicting = transaction("writer", 1, {}, { history: [self] }, { clock: 2, context: { base: 1 } });
+    expect(projectPracticeHistory("tune-1", [baseline, conflicting])).toEqual({ status: "conflicted" });
+    expect(projectGoalEvidence(evidenceGoal, [baseline, conflicting])).toEqual({ status: "conflicted" });
+    const equal = projectPracticeHistory("tune-1", [transaction("base", 1, null, store(card(), [measured, measured]), { baseline: true })]);
+    expect(equal.status === "ready" && equal.exercises[0].attempts.length).toBe(1);
+    const { uid: _uid, ...legacy } = attempt("legacy");
+    const unknown = projectPracticeHistory("tune-1", [transaction("base", 1, null, { ...store(), history: [legacy, legacy] }, { baseline: true })]);
+    expect(unknown.status === "ready" && unknown.exercises[0].unknown.length).toBe(2);
+    const collision = transaction("base", 1, null, store(card(), [{ ...measured, uid: "writer:1:attempt:0" }]), { baseline: true });
+    const legacyAddition = transaction("writer", 1, {}, { history: [legacy] }, { clock: 2, context: { base: 1 } });
+    expect(projectPracticeHistory("tune-1", [collision, legacyAddition])).toEqual({ status: "conflicted" });
+  });
+
+  it("keeps archive checks bound to their tune and revision and retries unknown results", async () => {
+    const React = await import("react"), { createRoot } = await import("react-dom/client");
+    const journal = await import("../sync/journal");
+    const queries: { tuneId: string; resolve(value: Awaited<ReturnType<typeof journal.readPracticeTransactions>>): void }[] = [];
+    let revision = 0;
+    const listeners = new Set<() => void>();
+    vi.spyOn(journal, "getSyncState").mockImplementation(() => ({ pending: 0, error: null, transactions: 0, revision }));
+    vi.spyOn(journal, "subscribeSyncState").mockImplementation((listener) => { listeners.add(listener); return () => listeners.delete(listener); });
+    vi.spyOn(journal, "readPracticeTransactions").mockImplementation((tuneId) => new Promise((resolve) => queries.push({ tuneId, resolve })));
+    const { usePracticeHistory } = await import("../song/usePracticeHistory");
+    let current!: ReturnType<typeof usePracticeHistory>;
+    function Harness({ tuneId }: { tuneId: string }) { current = usePracticeHistory(tuneId); return null; }
+    const host = document.createElement("div");
+    document.body.append(host);
+    const root = createRoot(host);
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const render = async (tuneId: string) => { await React.act(async () => root.render(React.createElement(Harness, { tuneId }))); };
+    try {
+      await render("first");
+      await render("second");
+      expect(queries.map((query) => query.tuneId)).toEqual(["first", "second"]);
+      await React.act(async () => queries[0].resolve({ status: "ready", transactions: [] }));
+      expect(current.result.status).toBe("checking");
+      await React.act(async () => queries[1].resolve({ status: "ready", transactions: [] }));
+      expect(current.result).toMatchObject({ status: "ready", tuneId: "second", exercises: [] });
+      await React.act(async () => { revision++; listeners.forEach((listener) => listener()); });
+      expect(current.result.status).toBe("checking");
+      await React.act(async () => queries[2].resolve({ status: "too-large" }));
+      expect(current.result).toEqual({ status: "too-large" });
+      await React.act(async () => current.retry());
+      localStorage.setItem("guitar-song-deck:second", JSON.stringify(store()));
+      await React.act(async () => queries[3].resolve({ status: "ready", transactions: [] }));
+      expect(current.result).toEqual({ status: "unavailable" });
+      await React.act(async () => window.dispatchEvent(new StorageEvent("storage", { key: "guitar-song-deck:second" })));
+      expect(current.result.status).toBe("checking");
+      expect(queries).toHaveLength(5);
+    } finally {
+      await React.act(async () => root.unmount());
+      host.remove();
+    }
+    await React.act(async () => queries[4].resolve({ status: "ready", transactions: [] }));
+  });
+
+  it("groups dated tune observations without turning self, skipped, shared or unknown history into tempo proof", () => {
+    const conditions = { v: 1, source: "measured", confidence: "unknown", tempo: "fixed", support: "none", notation: "visible", exposure: "repeated", uninterrupted: true };
+    const measured = { ...attempt("measured"), day: "2026-11-17", arrangementFingerprint: "music", conditions, ev: { notes: [4, 0], leap: [0, 0], cross: [0, 0], shift: [0, 0], restarts: 0, hears: 0, wrong: [], time: { n: 4, mean: 0, spread: 10, rush: 0, drag: 0 } } };
+    const unknownContext = { ...measured, uid: "unknown-context", day: "2026-11-18", conditions: { ...conditions, support: undefined } };
+    const changed = { ...measured, uid: "changed", day: "2026-11-18", arrangementFingerprint: "other-music" };
+    const history = [changed, { ...measured, uid: "self", conditions: { ...conditions, source: "self" } },
+      { ...measured, uid: "skipped", result: "skip" }, attempt("legacy"), measured, measured,
+      { ...measured, uid: "shared", id: "scale:C" }, { ...measured, uid: "own-pace", conditions: { ...conditions, tempo: "own-pace" } },
+      { ...measured, uid: "untimed", ev: undefined }, { ...measured, uid: "undated", day: "not-a-date" }, unknownContext];
+    const result = projectPracticeHistory("tune-1", [transaction("base", 1, null, store(card(), history), { baseline: true })]);
+    expect(result.status).toBe("ready");
+    if (result.status !== "ready") throw new Error("Expected a complete archive");
+    expect(result).toMatchObject({ tuneId: "tune-1", excludesSharedSkills: true });
+    expect(result.exercises).toHaveLength(1);
+    const exercise = result.exercises[0];
+    expect(exercise.attempts.map((row) => row.uid)).toEqual(["self", "skipped", "measured", "own-pace", "untimed", "changed", "legacy", "unknown-context", "undated"]);
+    expect(exercise.selfGuided.map((row) => row.uid)).toEqual(["self"]);
+    expect(exercise.skipped.map((row) => row.uid)).toEqual(["skipped"]);
+    expect(exercise.unknown.map((row) => row.uid)).toEqual(["legacy"]);
+    expect(exercise.measured).toHaveLength(6);
+    expect(exercise.tempo.map((point) => point.attempt.uid)).toEqual(["measured", "changed", "unknown-context"]);
+    expect(exercise.tempo[0].comparisonKey).toBeTruthy();
+    expect(exercise.tempo[1].comparisonKey).not.toBe(exercise.tempo[0].comparisonKey);
+    expect(exercise.tempo[2].comparisonKey).toBeNull();
+    expect(exercise.tempo[0].attempt.conditions).toEqual(conditions);
+  });
+
   it("upgrades and queries one complete practice group beyond the display cap, while honoring resets and refusing partial reads", async () => {
     const qualified = { ...attempt("qualified"), arrangementFingerprint: "score-v1", conditions: { v: 1, source: "measured", confidence: "unknown", tempo: "fixed" }, ev: { notes: [4, 0], leap: [0, 0], cross: [0, 0], shift: [0, 0], restarts: 0, hears: 0, wrong: [], time: { n: 4, mean: 0, spread: 10, rush: 0, drag: 0 } } };
     const initial = store(card(), [qualified, ...Array.from({ length: 799 }, (_, index) => attempt(`other-${index}`, "fail"))]);
@@ -170,13 +263,20 @@ describe("durable journal and projection", () => {
     if (read.status !== "ready") throw new Error("Complete target history required");
     expect(read.transactions.map((entry) => entry.id)).toEqual([baseline.id, added.id]);
     expect(projectGoalEvidence(evidenceGoal, read.transactions)).toMatchObject({ status: "ready", progress: { demonstrated: 1, total: 1 } });
+    const archive = projectPracticeHistory("tune-1", [...read.transactions, added]);
+    expect(archive).toMatchObject({ status: "ready", store: { history: expect.any(Array) } });
+    if (archive.status !== "ready") throw new Error("Expected complete history beyond the local cap");
+    expect(archive.exercises[0].attempts).toHaveLength(801);
+    expect(archive.exercises[0].tempo.map((point) => point.attempt.uid)).toEqual(["qualified"]);
     expect(projectGoalEvidence(evidenceGoal, [transaction("fragment", 1, {}, { history: [qualified] })])).toEqual({ status: "unavailable" });
+    expect(projectPracticeHistory("tune-1", [transaction("fragment", 1, {}, { history: [qualified] })])).toEqual({ status: "unavailable" });
     expect(await journal.readPracticeTransactions("tune-1", { maxTransactions: 1 })).toEqual({ status: "too-large" });
     const reset = transaction("restore", 1, trimmed, { ...trimmed, history: [] }, { reset: true, clock: 3, context: { base: 1, writer: 1 } });
     await journal.importSyncTransactions([reset]);
     const restored = await journal.readPracticeTransactions("tune-1");
     if (restored.status !== "ready") throw new Error("Complete restored history required");
     expect(projectGoalEvidence(evidenceGoal, restored.transactions)).toMatchObject({ status: "ready", progress: { demonstrated: 0 } });
+    expect(projectPracticeHistory("tune-1", restored.transactions)).toMatchObject({ status: "ready", exercises: [] });
   });
 
   it("rejects a blocked history upgrade, closes its abandoned connection, and closes stale readers on versionchange", async () => {
@@ -228,6 +328,7 @@ describe("durable journal and projection", () => {
     expect(union).toContainEqual(losingRestore);
     expect(projection.conflicts.some((conflict) => conflict.transactionIds.includes(reset.id) && conflict.transactionIds.includes(offline.id))).toBe(true);
     expect(projectGoalEvidence(evidenceGoal, union)).toEqual({ status: "conflicted" });
+    expect(projectPracticeHistory("tune-1", union)).toEqual({ status: "conflicted" });
     expect(projectTransactions(unionTransactions(union, union))).toEqual(projection);
   });
 

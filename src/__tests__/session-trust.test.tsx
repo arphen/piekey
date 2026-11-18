@@ -2,7 +2,8 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { InputApi } from "../listen/useInput";
+import type { InputApi, InputFrame } from "../listen/useInput";
+import * as sharedPitch from "../listen/pitch";
 import { buildDeck } from "../song/deck";
 import { useSession, type SessionApi, type SessionOptions } from "../song/useSession";
 import { parseTuneEntry } from "../tunes/library";
@@ -29,6 +30,7 @@ describe("session assessment trust", () => {
   let session: SessionApi;
   let input: InputApi;
   let options: SessionOptions;
+  const listeners = new Set<(frame: InputFrame) => void>();
   const sheet = parseTuneEntry(STARTER_ENTRY);
   const tl = buildTimeline(sheet);
   const deck = buildDeck(sheet, tl);
@@ -78,10 +80,13 @@ describe("session assessment trust", () => {
     });
     playback.lastPass = null;
     playback.playing = false;
+    playback.play.mockClear();
+    playback.stop.mockClear();
+    listeners.clear();
     options = { arrangementFingerprint: "memory-score" };
     input = {
       status: "idle", deviceId: null, error: null, devices: [], paused: false,
-      level: { current: 0 }, subscribe: () => () => undefined,
+      level: { current: 0 }, subscribe: (receive) => { listeners.add(receive); return () => { listeners.delete(receive); }; },
       setDeviceId() {}, start: vi.fn(async () => undefined), stop() {}, autoStart() {},
     };
     host = document.createElement("div");
@@ -108,6 +113,119 @@ describe("session assessment trust", () => {
     expect(session.store.history).toHaveLength(1);
     expect(session.store.history![0]).toMatchObject({ conditions: { source: "self", confidence: "unknown" }, share: null, from: 0, to: 0 });
     expect(session.store.history![0].ev).toBeUndefined();
+  });
+
+  it("hears every note when direct shortcuts are disabled for either whole-tune form or improvisation", async () => {
+    const whole = deck.cards.find((candidate) => candidate.step?.kind === "tune")!;
+    const improv = deck.cards.find((candidate) => candidate.kind === "improv")!;
+    expect(whole.run).not.toBe(true);
+    let heard: number | null = null;
+    let now = 0;
+    vi.spyOn(sharedPitch, "midiOf").mockImplementation(() => heard);
+    const feed = async (midi: number | null, frames: number) => {
+      heard = midi;
+      await act(async () => {
+        for (let i = 0; i < frames; i++) for (const receive of [...listeners]) receive({ buf: new Float32Array(0), sampleRate: 48000, now: (now += 25), rms: midi === null ? 0 : 0.02 });
+      });
+    };
+    input.status = "listening";
+    for (const selected of [whole, run, improv, card]) {
+      await act(async () => session.begin([selected.id]));
+      await act(async () => session.go("pace"));
+      const command = Object.values(session.keys).find((midi): midi is number => midi !== null);
+      expect(command, selected.title).toBeDefined();
+      await feed(null, 6);
+      await feed(command!, 8);
+      // Ordinary exercises still reserve shown command notes; whole tunes and improv hear them.
+      expect(session.follow.heard, selected.title).toBe(selected === card ? null : command);
+    }
+  });
+
+  it("keeps an away session asleep while a modal owns input, including already queued note callbacks", async () => {
+    let practiceNow = 0;
+    vi.spyOn(performance, "now").mockImplementation(() => practiceNow);
+    input.status = "listening";
+    await act(async () => session.begin([run.id]));
+    await act(async () => session.go("time"));
+    await act(async () => { practiceNow += 77000; vi.advanceTimersByTime(77000); });
+    expect(session.away).toBe(true);
+    expect(session.paused).toBe(true);
+    const queued = [...listeners];
+    const pitch = vi.spyOn(sharedPitch, "midiOf").mockReturnValue(60);
+    options = { ...options, suspended: true };
+    await render();
+    const elapsed = session.elapsed();
+    playback.play.mockClear();
+    await act(async () => {
+      for (let i = 0; i < 6; i++) {
+        const frame = { buf: new Float32Array(0), sampleRate: 48000, now: performance.now() + i * 25, rms: 0.02 };
+        for (const receive of [...queued, ...listeners]) receive(frame);
+      }
+      practiceNow += 3000;
+      vi.advanceTimersByTime(3000);
+    });
+    expect(pitch).not.toHaveBeenCalled();
+    expect(session.away).toBe(true);
+    expect(session.paused).toBe(true);
+    expect(session.elapsed()).toBe(elapsed);
+    expect(playback.play).not.toHaveBeenCalled();
+    options = { ...options, suspended: false };
+    await render();
+    await act(async () => {
+      for (let i = 0; i < 4; i++) for (const receive of [...listeners]) receive({ buf: new Float32Array(0), sampleRate: 48000, now: performance.now() + i * 25, rms: 0.02 });
+    });
+    expect(session.away).toBe(false);
+    expect(session.paused).toBe(false);
+  });
+
+  it("defers reconnect recovery until the modal closes and preserves an explicit pause", async () => {
+    input.status = "listening";
+    await act(async () => session.begin([run.id]));
+    await act(async () => session.go("time"));
+    input.status = "error";
+    await render();
+    expect(session.paused).toBe(true);
+    options = { ...options, suspended: true };
+    await render();
+    input.status = "listening";
+    await render();
+    expect(session.paused).toBe(true);
+    options = { ...options, suspended: false };
+    await render();
+    expect(session.paused).toBe(false);
+    await act(async () => session.togglePause());
+    options = { ...options, suspended: true };
+    input.status = "error";
+    await render();
+    input.status = "listening";
+    await render();
+    options = { ...options, suspended: false };
+    await render();
+    expect(session.paused).toBe(true);
+  });
+
+  it("defers a completed own-pace take's transition without counting it twice", async () => {
+    const results = card.tl.targets.slice(card.first, card.last + 1).map(() => "hit" as const);
+    const follower = { ...session.follow, done: false, results, wrongAt: results.map(() => null), total: results.length, takeStart: 0, take: 1, restart() {} };
+    await act(async () => root.unmount());
+    vi.spyOn(followerHook, "useFollower").mockReturnValue(follower);
+    root = createRoot(host);
+    await render();
+    input.status = "listening";
+    await act(async () => session.begin([card.id]));
+    await act(async () => session.go("pace"));
+    follower.done = true;
+    await render();
+    expect(session.takes.clean).toBe(1);
+    options = { ...options, suspended: true };
+    await render();
+    await act(async () => vi.advanceTimersByTime(2000));
+    expect(session.phase).toBe("pace");
+    expect(session.takes.clean).toBe(1);
+    options = { ...options, suspended: false };
+    await render();
+    await act(async () => vi.advanceTimersByTime(1200));
+    expect(session.phase).toBe("time");
   });
 
   it("records measured conditions conservatively and keeps pauses distinct from an uninterrupted pass", async () => {

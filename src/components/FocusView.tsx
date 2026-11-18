@@ -56,6 +56,13 @@ export function FocusView({ focus, input, onOpenTunes, extra }: { focus: Mode; i
   }, [entry]);
   const sheet = parsed?.sheet ?? null;
   const tl = parsed?.tl ?? null;
+  const others = useMemo(() => coach ? library.flatMap((tune) => {
+    if (tune.id === sheet?.id) return [];
+    try {
+      const score = parseTuneEntry(tune);
+      return [{ sheet: score, tl: buildTimeline(score) }];
+    } catch { return []; }
+  }) : [], [coach, library, sheet?.id]);
 
   const deck = useMemo(() => (sheet && tl ? familiesOnly(buildDeck(sheet, tl), FOCUS_FAMILIES[focus]) : null), [sheet, tl, focus]);
   const store = useMemo(() => (sheet ? loadStore(sheet.id) : null), [sheet, revision]);
@@ -84,17 +91,20 @@ export function FocusView({ focus, input, onOpenTunes, extra }: { focus: Mode; i
   if (coach && sheet && tl) {
     return (
       <SongCoach
-        key={sheet.id}
         sheet={sheet}
         tl={tl}
         input={input}
         onClose={closeCoach}
         tunes={library.map((tune) => ({ id: tune.id, title: tune.name }))}
         onTune={(id) => {
+          const target = library.find((tune) => tune.id === id);
+          if (!target) throw new Error("That tune is no longer available. Choose another tune.");
+          parseTuneEntry(target);
           setInitialCardId(undefined);
           saveCurrentTuneId(id);
           setSelected(id);
         }}
+        others={others}
         focus={focus}
         initialCardId={initialCardId}
       />

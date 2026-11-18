@@ -4,6 +4,7 @@ import { mod, pitchClassToName } from "../musicTheory";
 import { buildPlan, type Step } from "../tunes/learn";
 import type { LeadSheet } from "../tunes/musicxml";
 import type { Target, Timeline, Voice } from "../tunes/order";
+import { parsePassageId, passageId, passageLabel, passageTimeline, validPassage } from "../tunes/passage";
 import { chooseWindow, fingerLine, fitWindow, MAX_FRET, notesIn, windowAt, type Window } from "./fingering";
 import { analyze, makeScale, nice, parseChord, pretty, romanOf, spellIn, type Cadence, type Chord, type ChordEvent, type Harmony, type Scale } from "./harmony";
 import { echoOfTune, EAR_TIERS, earPhrase } from "./ear";
@@ -295,7 +296,7 @@ const RHYTHMS: Record<Rhythm, { beats: number; label: string; count: string; bpm
  * should be new (a new day, another session), `seen` says how often each has been played, which
  * decides how hard it is and which known tune comes next.
  */
-export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: number; round?: string; seen?: Record<string, number>; rhythmFrom?: string } = {}): Deck {
+export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: number; round?: string; seen?: Record<string, number>; rhythmFrom?: string; passageFrom?: string } = {}): Deck {
   const harmony = analyze(sheet, tl);
   const w = opts.window ? windowAt(opts.window) : chooseWindow(harmony.home.tonic);
   const tempo = sheet.tempo ?? 90;
@@ -1020,6 +1021,31 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
       }
       while (pos[si] < stream.length && taken.has(stream[pos[si]].id)) pos[si]++;
       if (pos[si] < stream.length) add(stream[pos[si]++]);
+    });
+  }
+
+  const passage = parsePassageId(opts.passageFrom);
+  if (passage && validPassage(tl, passage) && passageId(sheet, passage) === opts.passageFrom) {
+    const source = melodyCards.find((card) => card.step?.kind === "tune") ?? melodyCards[0];
+    const selected = passageTimeline(sheet, melodyTl, passage);
+    const fromBar = tl.slots[passage.start].bar;
+    const toBar = tl.slots[passage.end].bar;
+    const printed = (bar: number) => sheet.barNumbers[bar] ?? String(bar + 1);
+    const straight = tl.slots.slice(passage.start, passage.end + 1).every((slot, index) => slot.bar === fromBar + index);
+    const title = passage.start === passage.end ? `Bar ${printed(fromBar)}` : straight ? `Bars ${printed(fromBar)}–${printed(toBar)}` : `Bar ${printed(fromBar)} → bar ${printed(toBar)}`;
+    const first = selected.targets.findIndex((target) => target.slot >= passage.start && target.slot <= passage.end);
+    let last = -1;
+    selected.targets.forEach((target, index) => { if (target.slot >= passage.start && target.slot <= passage.end) last = index; });
+    if (source && first >= 0 && last >= first) cards.push({
+      ...source, id: opts.passageFrom!, title: `${title} · playing order ${passage.start + 1}${passage.end === passage.start ? "" : `–${passage.end + 1}`}`, where: passageLabel(sheet, tl, passage),
+      detail: "Your selected bars, at your own pace and then in time.",
+      why: "Keep this exact passage together, including its rests and returns.",
+      from: passage.start, to: passage.end, first, last, tl: selected,
+      step: undefined, needs: undefined, memory: false, run: false, listen: false, pace: true,
+      context: selected.targets.map((target) => {
+        const span = allSpans.find((item) => target.t >= item.t - 1e-6 && target.t < item.t + item.dur - 1e-6);
+        return span ? { chord: span.chord, scale: span.scale, next: span.next, roman: span.roman } : null;
+      }),
     });
   }
 

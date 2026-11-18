@@ -245,6 +245,23 @@
 .ss-tempo-cluster > em { color: var(--ink-faint); font-size: 10px; font-style: normal; }
 .ss-tempo-cluster.is-own { color: var(--fam); }
 
+.ss-instruments { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.ss .ss-instruments button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 38px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 7px; color: var(--ink-soft); font: 400 11px/1.3 var(--font-ui); background: color-mix(in srgb, var(--night) 75%, transparent); transition: color .2s, border-color .2s; }
+.ss .ss-instruments button:hover:not(:disabled) { color: var(--ink); border-color: var(--ink-faint); }
+.ss .ss-instruments button:disabled { opacity: .4; }
+.ss-instruments svg { color: var(--fam); opacity: .85; }
+.ss-instruments--ready { justify-content: center; margin-top: 18px; }
+.ss-instruments--ready .ss-nk { min-width: 22px; height: 20px; font-size: 10px; }
+.ss-instruments--running { position: absolute; top: 20px; left: clamp(18px, 3vw, 48px); z-index: 6; }
+.ss-run .ss-tempo-cluster .beat-pulse { gap: 6px; }
+.ss-run .ss-tempo-cluster .beat-pulse-face { width: 104px; gap: 4px; }
+.ss-run .ss-tempo-cluster .beat-pulse-number { font-size: 30px; }
+.ss-run .ss-tempo-cluster .beat-pulse-position { font-size: 6px; letter-spacing: .12em; }
+.ss-run .ss-tempo-cluster .beat-pulse-unit { font-size: 6px; }
+.ss-run .ss-tempo-cluster .beat-pulse-dots { gap: 6px; }
+.ss-run .ss-tempo-cluster .beat-pulse-dots li { min-width: 12px; gap: 5px; font-size: 7px; }
+.ss-run .ss-tempo-cluster .beat-pulse-dots li > i { width: 12px; height: 2px; }
+
 .ss-pause-state {
   place-content: center;
   gap: 16px;
@@ -283,6 +300,12 @@
 }
 
 @media (max-width: 560px) {
+  .ss-instruments--running { top: 15px; left: 16px; gap: 5px; }
+  .ss .ss-instruments--running button { padding: 7px 9px; gap: 6px; min-height: 36px; font-size: 10px; }
+  .ss-run .ss-tempo-cluster .beat-pulse-face { width: 78px; gap: 2px; }
+  .ss-run .ss-tempo-cluster .beat-pulse-number { font-size: 24px; }
+  .ss-run .ss-tempo-cluster .beat-pulse-position { font-size: 5px; }
+  .ss-run .ss-tempo-cluster .beat-pulse-unit { display: none; }
   .ss-phasebar { gap: 8px; margin-bottom: 12px; }
   .ss-phasebar .ss-connection { font-size: 8px; }
   .ss-phase-name { font-size: 9px; letter-spacing: 0.08em; }
@@ -293,6 +316,15 @@
   .ss .ss-trail button { flex-direction: column; gap: 7px; width: 100%; min-height: 62px; padding: 8px 3px; font-size: 9px; }
   .ss-run .ss-side { gap: 10px; }
   .ss-run .ss-aid, .ss-run .ss-side > .ss-pips { display: none; }
+}
+
+@media (max-height: 680px) and (min-width: 561px) {
+  .ss-run .ss-tempo-cluster .beat-pulse { display: flex; gap: 8px; }
+  .ss-run .ss-tempo-cluster .beat-pulse-face { width: 80px; }
+  .ss-run .ss-tempo-cluster .beat-pulse-number { font-size: 24px; }
+  .ss-run .ss-tempo-cluster .beat-pulse-dots { gap: 4px; }
+  .ss-run .ss-tempo-cluster .beat-pulse-dots li { min-width: 8px; }
+  .ss-run .ss-tempo-cluster .beat-pulse-dots li > i { width: 8px; }
 }
 
 @media (min-width: 801px) and (max-height: 740px) {

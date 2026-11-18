@@ -1,14 +1,31 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as Tone from "tone";
 import { currentInputSetup } from "../audio/setup";
-import { useInput, type InputApi } from "../listen/useInput";
+import { useInput, type InputApi, type InputFrame } from "../listen/useInput";
+import * as sharedPitch from "../listen/pitch";
+import { buildThemeCatalog } from "../song/theme";
+import { useThemePicker } from "../song/useThemePicker";
+import { FreePlay } from "../components/FreePlay";
+import { FreePlayView } from "../components/FreePlayView";
+import type { FreeView } from "../song/useFreePlay";
+import * as guitarTools from "../tools/GuitarTools";
 import { usePlayback } from "../tunes/usePlayback";
 import type { Timeline } from "../tunes/order";
 
 const { scheduledClicks } = vi.hoisted(() => ({ scheduledClicks: [] as { at: number; gain: number }[] }));
+const { freeRoom } = vi.hoisted(() => ({ freeRoom: { view: undefined as unknown as FreeView, active: [] as boolean[] } }));
+
+vi.mock("../song/useFreePlay", () => ({ useFreePlay: (_input: unknown, active: boolean) => {
+  freeRoom.active.push(active);
+  return { view: freeRoom.view, nudge() {}, cycleMode() {}, toggleBand() {} };
+} }));
+vi.mock("../components/Score", () => ({ Score: () => null }));
+vi.mock("../components/SongCoach", () => ({ SongCoachRoom: () => null }));
+vi.mock("../platform/PracticeWindowBoundary", () => ({ PracticeWindowBoundary: ({ children }: { children: ReactNode }) => <>{children}</> }));
+vi.mock("../tools/GuitarTools", () => ({ GuitarToolsRoom: ({ onClose, initialTool, initialBpm }: { onClose(): void; initialTool: string; initialBpm: number }) => <div data-tool={initialTool} data-bpm={initialBpm}><button type="button" onClick={onClose}>Return to playing</button></div> }));
 
 vi.mock("tone", () => ({
   start: vi.fn(async () => undefined),
@@ -220,5 +237,266 @@ describe("input lifecycle", () => {
     expect(playback.lastPass).toMatchObject({ bpm: 60, tempoStable: false });
     for (const time of [14.6, 15.1, 15.6, 16.1]) await hearAt(time);
     expect(playback.lastPass).toMatchObject({ bpm: 120, tempoStable: true });
+  });
+});
+
+describe("explicit opening-theme input", () => {
+  const opening = [60, 62, 64, 65, 67, 69, 71];
+  const catalog = buildThemeCatalog([{ id: "theme", title: "Opening", tl: { slots: [], comp: [], total: 7, targets: opening.map((midi, i) => ({ midi, t: i, dur: 1, notes: [i], slot: 0, bar: 0 })) } }]);
+  let picker: ReturnType<typeof useThemePicker>;
+  let controlled: InputApi;
+  let armed: boolean;
+  let detection: number | null;
+  let now: number;
+  let currentStream: MediaStream;
+  let mounted: boolean;
+  const listeners = new Set<(frame: InputFrame) => void>();
+  function ThemeHarness() { picker = useThemePicker(controlled, catalog, armed); return null; }
+  const render = async () => { await act(async () => root.render(<ThemeHarness />)); };
+  const feed = async (midi: number | null, frames = 3, sampleRate = 48000) => {
+    detection = midi;
+    await act(async () => {
+      for (let i = 0; i < frames; i++) {
+        const frame = { buf: new Float32Array(0), sampleRate, now: (now += 25), rms: midi === null ? 0 : 0.02 };
+        for (const listener of [...listeners]) listener(frame);
+      }
+    });
+  };
+  const playOpening = async () => {
+    await feed(null, 6);
+    for (const midi of opening) await feed(midi);
+  };
+
+  beforeEach(async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    vi.spyOn(sharedPitch, "midiOf").mockImplementation(() => detection);
+    armed = false;
+    detection = null;
+    now = 0;
+    mounted = true;
+    listeners.clear();
+    currentStream = {} as MediaStream;
+    controlled = {
+      status: "listening", error: null, devices: [], deviceId: "guitar", paused: false,
+      setDeviceId() {}, start: vi.fn(async () => undefined), stop() {}, autoStart() {}, level: { current: 0 },
+      subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener); }; },
+      stream: () => currentStream,
+    };
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await render();
+  });
+  afterEach(async () => {
+    if (mounted) await act(async () => root.unmount());
+    host.remove();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it("subscribes only when explicitly armed, ignores carry-over sustain, and retains a confirmed opening until reset", async () => {
+    expect(picker.status).toBe("off");
+    expect(listeners.size).toBe(0);
+    armed = true;
+    await render();
+    expect(picker.status).toBe("listening");
+    expect(controlled.start).not.toHaveBeenCalled();
+    await feed(60, 30);
+    expect(picker.heard).toEqual([]);
+    await playOpening();
+    expect(picker.candidates).toMatchObject([{ id: "theme", matchedNotes: 7 }]);
+    await feed(71, 100);
+    expect(picker.heard).toHaveLength(7);
+    await feed(63);
+    expect(picker.candidates[0].id).toBe("theme");
+    await act(async () => picker.reset());
+    expect(picker.heard).toEqual([]);
+    expect(picker.candidates).toEqual([]);
+    const stale = [...listeners][0];
+    armed = false;
+    await render();
+    expect(listeners.size).toBe(0);
+    await act(async () => stale({ buf: new Float32Array(0), sampleRate: 48000, now: ++now, rms: 0.02 }));
+    expect(picker.heard).toEqual([]);
+  });
+
+  it("clears evidence on pause, device/stream/rate changes, stop and unmount", async () => {
+    armed = true;
+    await render();
+    await playOpening();
+    expect(picker.candidates).toHaveLength(1);
+    controlled.paused = true;
+    await render();
+    expect(picker.status).toBe("waiting");
+    expect(listeners.size).toBe(0);
+    expect(picker.candidates).toEqual([]);
+    controlled.paused = false;
+    await render();
+    await playOpening();
+    controlled.deviceId = "other";
+    await render();
+    expect(picker.heard).toEqual([]);
+    expect(picker.candidates).toEqual([]);
+    await playOpening();
+    currentStream = {} as MediaStream;
+    await feed(71);
+    expect(picker.heard).toEqual([]);
+    expect(picker.candidates).toEqual([]);
+    await playOpening();
+    await feed(71, 3, 96000);
+    expect(picker.heard).toEqual([]);
+    expect(picker.candidates).toEqual([]);
+    controlled.status = "idle";
+    await render();
+    expect(listeners.size).toBe(0);
+    controlled.status = "listening";
+    await render();
+    await playOpening();
+    const stale = [...listeners][0];
+    await act(async () => root.unmount());
+    mounted = false;
+    expect(listeners.size).toBe(0);
+    expect(() => stale({ buf: new Float32Array(0), sampleRate: 48000, now: ++now, rms: 0.02 })).not.toThrow();
+  });
+});
+
+describe("Free play instruments boundary", () => {
+  const listeners = new Set<(frame: InputFrame) => void>();
+  let close: ReturnType<typeof vi.fn>;
+  const render = async () => { await act(async () => root.render(<FreePlay input={input} onClose={close} onPractise={() => undefined} />)); };
+  const click = async (selector: string) => { await act(async () => (host.querySelector(selector) as HTMLButtonElement).click()); };
+  const row = async (label: string) => {
+    const button = [...host.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((item) => item.textContent?.includes(label))!;
+    await act(async () => button.click());
+  };
+  beforeEach(async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    vi.stubGlobal("requestAnimationFrame", () => 1);
+    vi.stubGlobal("cancelAnimationFrame", () => undefined);
+    vi.stubGlobal("localStorage", { getItem: () => null, setItem() {}, removeItem() {} });
+    freeRoom.active.length = 0;
+    freeRoom.view = {
+      count: 0, written: { count: 0, midis: [] }, key: null, pattern: null, division: 2,
+      on: false, bpm: 92, mood: null, beat: -1, n: 0, beatSignal: { index: -1, serial: 0, active: false, beats: 4, counting: false },
+      change: null, mode: "follows", held: false, rise: { have: 0, need: 1 }, bars: 0, onGrid: null,
+      timing: [], alignment: null, spread: null, trace: [], best: null, record: null, beaten: false, secs: 0,
+      band: false, bandOn: true, chords: [], bar: 0, loop: null,
+    };
+    listeners.clear();
+    close = vi.fn();
+    input = {
+      status: "listening", deviceId: "guitar", paused: false, error: null, devices: [], level: { current: 0 },
+      subscribe(receive) { listeners.add(receive); return () => { listeners.delete(receive); }; },
+      setDeviceId() {}, start: vi.fn(async () => undefined), stop() {}, autoStart() {},
+    };
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await render();
+  });
+  afterEach(async () => {
+    await act(async () => root.unmount());
+    host.remove();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it("opens either instrument before or during playing, suspends background input, and resumes the same room", async () => {
+    expect(freeRoom.active.at(-1)).toBe(true);
+    await click('[aria-label="Open tuner"]');
+    expect(host.querySelector('[data-tool="tuner"]')).not.toBeNull();
+    expect(freeRoom.active.at(-1)).toBe(false);
+    expect(listeners.size).toBe(0);
+    expect(host.querySelector('[aria-label="Open free play menu"]')).toBeNull();
+    await click('[data-tool] button');
+    expect(freeRoom.active.at(-1)).toBe(true);
+    freeRoom.view = { ...freeRoom.view, count: 6, secs: 42 };
+    await render();
+    await click('[aria-label="Open metronome"]');
+    expect(host.querySelector('[data-tool="metronome"]')?.getAttribute("data-bpm")).toBe("92");
+    expect(freeRoom.active.at(-1)).toBe(false);
+    await click('[data-tool] button');
+    expect(freeRoom.active.at(-1)).toBe(true);
+    expect(freeRoom.view.count).toBe(6);
+    expect(close).not.toHaveBeenCalled();
+    expect(input.start).not.toHaveBeenCalled();
+  });
+
+  it("removes standalone host controls while instruments own the modal and restores them on return", async () => {
+    await act(async () => root.render(<FreePlayView input={input} onClose={close} />));
+    expect(host.querySelector(".fp-standalone-input")).not.toBeNull();
+    expect(host.querySelector('[aria-label="leave free play"]')).not.toBeNull();
+    await click('[aria-label="Open metronome"]');
+    expect(host.querySelector(".fp-standalone-input")).toBeNull();
+    expect(host.querySelector('[aria-label="leave free play"]')).toBeNull();
+    await click('[data-tool] button');
+    expect(host.querySelector(".fp-standalone-input")).not.toBeNull();
+    expect(host.querySelector('[aria-label="leave free play"]')).not.toBeNull();
+    expect(close).not.toHaveBeenCalled();
+  });
+
+  it("reaches tuner and metronome through the six-string menu without leaving Free play", async () => {
+    await click('[aria-label="Open free play menu"]');
+    await row("Instruments & more");
+    await row("Tuner");
+    expect(host.querySelector('[data-tool="tuner"]')).not.toBeNull();
+    await click('[data-tool] button');
+    await click('[aria-label="Open free play menu"]');
+    await row("Instruments & more");
+    await row("Metronome");
+    expect(host.querySelector('[data-tool="metronome"]')).not.toBeNull();
+    expect(close).not.toHaveBeenCalled();
+  });
+
+  it("contains focus in the real instrument room and menu, and consumes Escape before the outer room can leave", async () => {
+    const actual = await vi.importActual<typeof import("../tools/GuitarTools")>("../tools/GuitarTools");
+    vi.spyOn(guitarTools, "GuitarToolsRoom").mockImplementation(actual.GuitarToolsRoom);
+    const parentExit = vi.fn();
+    window.addEventListener("keydown", parentExit);
+    try {
+      await click('[aria-label="Open metronome"]');
+      expect(host.querySelector(".guitar-tools-metronome")).not.toBeNull();
+      const controls = [...host.querySelectorAll<HTMLButtonElement | HTMLInputElement | HTMLSelectElement>(".guitar-tools button, .guitar-tools input, .guitar-tools select")].filter((control) => !control.disabled);
+      controls[0].focus();
+      await act(async () => controls[0].dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true })));
+      expect(document.activeElement).toBe(controls.at(-1));
+      await click('[aria-label="Open guitar instrument controls"]');
+      const pad = host.querySelector(".ss-pad")!;
+      expect(pad.contains(document.activeElement)).toBe(true);
+      const rows = [...pad.querySelectorAll<HTMLButtonElement>("button")].filter((button) => !button.disabled);
+      rows.at(-1)!.focus();
+      await act(async () => rows.at(-1)!.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true })));
+      expect(document.activeElement).toBe(rows[0]);
+      await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+      expect(host.querySelector(".ss-pad")).toBeNull();
+      expect(host.querySelector(".guitar-tools-metronome")).not.toBeNull();
+      const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+      await act(async () => window.dispatchEvent(event));
+      expect(event.defaultPrevented).toBe(true);
+      expect(host.querySelector(".guitar-tools-metronome")).toBeNull();
+      expect(freeRoom.active.at(-1)).toBe(true);
+      expect(parentExit).not.toHaveBeenCalled();
+      expect(close).not.toHaveBeenCalled();
+    } finally { window.removeEventListener("keydown", parentExit); }
+  });
+
+  it("stops the real metronome on a meter change and uses the chosen count-in on the next explicit start", async () => {
+    const actual = await vi.importActual<typeof import("../tools/GuitarTools")>("../tools/GuitarTools");
+    vi.spyOn(guitarTools, "GuitarToolsRoom").mockImplementation(actual.GuitarToolsRoom);
+    const context = new FakeContext();
+    context.state = "running";
+    scheduledClicks.length = 0;
+    await click('[aria-label="Open metronome"]');
+    await click(".guitar-tools-start");
+    expect(host.querySelector(".guitar-tools-start")?.textContent).toContain("Stop click");
+    expect(scheduledClicks).toHaveLength(4);
+    const meter = host.querySelector<HTMLSelectElement>('[aria-label="Beats per bar"]')!;
+    await act(async () => { meter.value = "3"; meter.dispatchEvent(new Event("change", { bubbles: true })); });
+    expect(host.querySelector(".guitar-tools-start")?.textContent).toContain("Start metronome");
+    expect(scheduledClicks).toHaveLength(4);
+    await click(".guitar-tools-start");
+    expect(scheduledClicks).toHaveLength(7); // exactly three new count-in clicks from the new timeline
+    expect(freeRoom.active.at(-1)).toBe(false);
+    expect(close).not.toHaveBeenCalled();
   });
 });

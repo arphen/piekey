@@ -85,20 +85,52 @@ function useHeld(input: InputApi, enabled: boolean, ms: number, read: (midi: num
   }, [enabled, listening, subscribe, ms, fresh]);
 }
 
-/** The open low E, held: calls the pad. `blocked` is true while that note belongs to the exercise. The ring fills as it arms. */
-export function useSummon(input: InputApi, enabled: boolean, blocked: RefObject<boolean>, onSummon: () => void): RefObject<SVGCircleElement> {
+export const SUMMON_HINT = "hold low E · release · hold low E again";
+
+/** A held musical note only arms the menu. Actual silence and a second hold confirm intent. */
+export function useSummon(input: InputApi, enabled: boolean, onSummon: () => void): RefObject<SVGCircleElement> {
   const ring = useRef<SVGCircleElement>(null);
-  useHeld(
-    input,
-    enabled,
-    SUMMON_MS,
-    (m) => (m === LOW_E && !blocked.current ? 0 : null),
-    (_, p) => {
-      // the first third of the hold shows nothing: a passing low E is not a call
-      if (ring.current) ring.current.style.strokeDashoffset = String(1 - Math.max(0, (p - 0.3) / 0.7));
-    },
-    onSummon,
-  );
+  const action = useRef(onSummon);
+  action.current = onSummon;
+  const { subscribe, status, paused, deviceId } = input;
+  useEffect(() => {
+    const progress = (value: number) => { if (ring.current) ring.current.style.strokeDashoffset = String(1 - value); };
+    progress(0);
+    if (!enabled || status !== "listening" || paused) return;
+    let phase: "hold" | "release" | "confirm" = "hold";
+    let since: number | null = null;
+    let quiet: number | null = null;
+    let seen = 0;
+    let deadline = 0;
+    let rate: number | null = null;
+    const reset = () => { phase = "hold"; since = null; quiet = null; progress(0); };
+    return subscribe((frame) => {
+      if (rate !== null && rate !== frame.sampleRate) reset();
+      rate = frame.sampleRate;
+      const midi = midiOf(frame);
+      if (phase !== "hold" && frame.now > deadline) reset();
+      if (phase === "release") {
+        if (midi === null) {
+          quiet ??= frame.now;
+          if (frame.now - quiet >= 150) { phase = "confirm"; since = null; }
+        } else if (midi !== LOW_E) reset();
+        else quiet = null;
+        return;
+      }
+      if (midi === LOW_E) {
+        since ??= frame.now;
+        seen = frame.now;
+        const held = frame.now - since;
+        if (phase === "hold") {
+          progress(Math.min(0.5, held / SUMMON_MS * 0.5));
+          if (held >= SUMMON_MS) { phase = "release"; deadline = frame.now + 5000; quiet = null; }
+        } else {
+          progress(0.5 + Math.min(0.5, held / PRESS_MS * 0.5));
+          if (held >= PRESS_MS) { reset(); action.current(); }
+        }
+      } else if (midi !== null || (since !== null && frame.now - seen > GAP_MS)) reset();
+    });
+  }, [enabled, status, paused, deviceId, subscribe]);
   return ring;
 }
 

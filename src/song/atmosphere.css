@@ -70,74 +70,69 @@
     linear-gradient(180deg, #0e121275 0%, transparent 24%, transparent 75%, #0c111170 100%);
 }
 
-/* The beat is a discrete clock signal, visually independent of the slower room. */
-.beat-pulse {
-  --pulse-ink: #b9c9ae;
-  display: grid;
-  justify-items: center;
-  gap: 17px;
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
+.pa-rendered-water { inset: 0; width: 100%; height: 100%; opacity: 0; mix-blend-mode: screen; transition: opacity 1.5s; }
+.pa-rendered-water[data-renderer="ready"] { opacity: .76; }
+.pa-beat-resonance { inset: 0; overflow: hidden; }
+.pa-beat-resonance::before {
+  content: ""; position: absolute; inset: 0;
+  background: radial-gradient(ellipse at 50% 115%, #adca9a13, transparent 66%);
+  animation: room-resonance var(--beat-decay) ease-out both;
 }
-.beat-pulse-face {
-  position: relative;
-  display: grid;
-  align-content: center;
-  justify-items: center;
-  gap: 9px;
-  width: clamp(150px, 22vh, 210px);
-  aspect-ratio: 1;
-  border: 1px solid #d6e1cc24;
-  border-radius: 50%;
-  background: radial-gradient(circle, #a2c7a708, transparent 72%);
-}
-.beat-pulse-face::before {
-  content: "";
-  position: absolute;
-  inset: 7px;
-  border: 1px solid #d6e1cc0c;
-  border-radius: inherit;
-}
-.beat-pulse-wave {
-  position: absolute;
-  inset: -1px;
-  border: 1px solid var(--pulse-ink);
-  border-radius: inherit;
-  box-shadow: 0 0 25px #bfd6aa0b, inset 0 0 20px #bfd6aa0b;
-  animation: beat-breathe var(--beat-decay) ease-out both;
-}
-.is-downbeat .beat-pulse-wave { border-width: 2px; }
-.beat-pulse-number { font: 500 clamp(50px, 8vh, 78px)/1 var(--font-display); letter-spacing: -0.05em; }
-.beat-pulse-unit { color: var(--ink-faint); font: 400 9px/1 var(--font-mono); letter-spacing: 0.14em; text-transform: uppercase; }
-.beat-pulse-dots { display: flex; gap: 14px; margin: 0; padding: 0; list-style: none; }
-.beat-pulse-dots li {
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  border: 1px solid #d6e1cc26;
-  border-radius: 50%;
-  color: var(--ink-faint);
-  font: 400 8px/1 var(--font-mono);
-  transition: background 80ms, color 80ms, border-color 80ms;
-}
-.beat-pulse-dots li.is-now { border-color: var(--pulse-ink); background: var(--pulse-ink); color: #131b17; }
-.beat-pulse-dots li:first-child { border-width: 2px; }
-.beat-pulse:not(.is-active) .beat-pulse-dots { opacity: 0.4; }
-@keyframes beat-breathe { from { opacity: 0.85; transform: scale(1); } to { opacity: 0; transform: scale(1.16); } }
+.pa-beat-resonance.is-downbeat::before { background: radial-gradient(ellipse at 50% 110%, #d6be8a1c, transparent 72%); }
+.pa-beat-resonance > i { position: absolute; width: 130%; height: 80%; left: -15%; bottom: -74%; border: 1px solid #bfceb32b; border-radius: 50%; animation: room-ripple var(--beat-decay) ease-out both; }
+.pa-beat-resonance > i + i { width: 160%; left: -30%; bottom: -76%; opacity: .4; }
+@keyframes room-resonance { from { opacity: 1; } to { opacity: 0; } }
+@keyframes room-ripple { from { transform: translateY(0) scale(.96); opacity: .7; } to { transform: translateY(-7%) scale(1.08); opacity: 0; } }
 
-.beat-pulse--compact { display: flex; gap: 12px; }
-.beat-pulse--compact .beat-pulse-face { width: 40px; gap: 0; border-color: #d6e1cc14; }
-.beat-pulse--compact .beat-pulse-face::before { display: none; }
-.beat-pulse--compact .beat-pulse-number { font: 500 12px/1 var(--font-mono); letter-spacing: -0.04em; }
-.beat-pulse--compact .beat-pulse-unit { display: none; }
+/* A clocked instrument: engraved index, weighted sweep, one resonance for each heard tick. */
+.beat-pulse { --pulse-ink: #bac9ab; --pulse-accent: #d9c295; display: grid; justify-items: center; gap: 14px; color: #e8e9d9; font-variant-numeric: tabular-nums; }
+.beat-pulse-face { position: relative; display: grid; align-content: center; justify-items: center; gap: 8px; width: clamp(210px, 32vh, 310px); aspect-ratio: 1; border-radius: 50%; }
+.beat-pulse-dial { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.beat-pulse-index { stroke: #c6cdb3; }
+.beat-pulse-arc { stroke: #bfccb333; }
+.beat-pulse.is-active .beat-pulse-arc { stroke: #bfccb35c; }
+.beat-pulse-position { margin-top: 1px; color: #91a188; font: 400 9px/1 var(--font-mono); letter-spacing: .23em; }
+.beat-pulse-number { position: relative; font: 400 clamp(58px, 9vh, 94px)/.98 var(--font-display); letter-spacing: -.075em; padding-right: .07em; }
+.beat-pulse-unit { color: #86917e; font: 400 8px/1 var(--font-mono); letter-spacing: .1em; }
+.beat-pulse-swing { position: absolute; inset: 0; transform: rotate(0); pointer-events: none; }
+.beat-pulse-swing > i { position: absolute; top: 3.2%; left: 50%; width: 1px; height: 5.3%; background: linear-gradient(#d7dfc3, #d7dfc300); transform: translateX(-50%); opacity: .2; }
+.beat-pulse-swing > b { position: absolute; top: 5.3%; left: 50%; width: 5px; height: 5px; border-radius: 50%; background: #a8b69b; transform: translate(-50%, -50%); opacity: .5; }
+.beat-pulse-swing.is-moving { animation: beat-swing var(--beat-duration) cubic-bezier(.42, 0, .58, 1) both; }
+.beat-pulse-swing.is-moving > i { opacity: .85; }
+.beat-pulse-swing.is-moving > b { background: #dfe6cb; opacity: 1; box-shadow: 0 0 4px #dfedbe70, 0 0 14px #d1e6ae40; }
+.beat-pulse.is-downbeat .beat-pulse-swing.is-moving > b { background: #f0dbaa; box-shadow: 0 0 5px #efdab366, 0 0 20px #e1c08a30; }
+.beat-pulse-resonance { position: absolute; inset: 10%; border-radius: 50%; pointer-events: none; }
+.beat-pulse-resonance > i { position: absolute; inset: 0; border: 1px solid var(--pulse-ink); border-radius: 50%; opacity: 0; animation: beat-resonate var(--beat-decay) cubic-bezier(.12, .6, .4, 1) both; }
+.beat-pulse-resonance > i:nth-child(2) { inset: -4%; animation-name: beat-resonate-faint; }
+.beat-pulse-resonance > i:nth-child(3) { inset: -9%; animation-name: beat-resonate-faint; border-width: .5px; }
+.beat-pulse.is-downbeat .beat-pulse-resonance > i { border-color: var(--pulse-accent); }
+.beat-pulse-dots { display: flex; justify-content: center; gap: 15px; margin: 0; padding: 0; list-style: none; }
+.beat-pulse-dots li { position: relative; display: grid; justify-items: center; gap: 9px; min-width: 22px; color: #86917e; font: 400 9px/1 var(--font-mono); }
+.beat-pulse-dots li > i { display: block; height: 3px; width: 22px; background: #c5d0b32b; border-radius: 1px; }
+.beat-pulse-dots li.is-accent > i { background: #c6b48b55; }
+.beat-pulse-dots li.is-now { color: #d8e2c8; }
+.beat-pulse-dots li.is-now > i { background: #c4d8ad; box-shadow: 0 0 14px #d0e7aa35; animation: beat-index var(--beat-decay) ease-out both; }
+.beat-pulse-dots li.is-now.is-accent { color: #e2cc9d; }
+.beat-pulse-dots li.is-now.is-accent > i { background: #e1ca97; box-shadow: 0 0 18px #e1bf7a40; }
+@keyframes beat-swing { from { transform: rotate(var(--swing-from)); } to { transform: rotate(var(--swing-to)); } }
+@keyframes beat-resonate { from { opacity: .42; transform: scale(.99); } to { opacity: 0; transform: scale(1.21); } }
+@keyframes beat-resonate-faint { from { opacity: .14; transform: scale(.99); } to { opacity: 0; transform: scale(1.13); } }
+@keyframes beat-index { from { opacity: 1; } to { opacity: .6; } }
+
+.beat-pulse--compact { display: flex; gap: 10px; }
+.beat-pulse--compact .beat-pulse-face { width: 54px; gap: 0; }
+.beat-pulse--compact .beat-pulse-number { font: 400 15px/1 var(--font-mono); letter-spacing: -.05em; }
+.beat-pulse--compact .beat-pulse-position, .beat-pulse--compact .beat-pulse-unit, .beat-pulse--compact .beat-pulse-horizon, .beat-pulse--compact .beat-pulse-index { display: none; }
+.beat-pulse--compact .beat-pulse-swing > b { width: 3px; height: 3px; }
 .beat-pulse--compact .beat-pulse-dots { gap: 4px; }
-.beat-pulse--compact .beat-pulse-dots li { width: 5px; height: 5px; border-width: 1px; }
+.beat-pulse--compact .beat-pulse-dots li { min-width: 8px; }
+.beat-pulse--compact .beat-pulse-dots li > i { width: 8px; height: 3px; }
 .beat-pulse--compact .beat-pulse-dots span { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .practice-atmosphere > * { transform: none; }
-  .beat-pulse-wave { display: none; }
-  .beat-pulse.is-active .beat-pulse-face { border-color: #b9c9ae75; }
-  .beat-pulse-dots li { transition: none; }
+  .pa-beat-resonance, .beat-pulse-resonance { display: none; }
+  .beat-pulse-swing.is-moving { animation: none; transform: rotate(var(--swing-from)); }
+  .beat-pulse-dots li.is-now > i { animation: none; }
+  .pa-rendered-water { transition: none; }
 }

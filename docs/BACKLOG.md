@@ -32,10 +32,10 @@ Unless an item says otherwise, implement it there.
 | --- | --- | --- | --- |
 | T1 | Done-screen movement, multiple tunes/types, axes of variation | SHIPPED (v1) | Axes are fixed to tune × family; no configurable axis model. |
 | T2 | Done-screen actions playable from the guitar; instrument-navigable app | PARTIAL | Done screen is fully playable; other views have no note controller. |
-| T3 | Metrics over sessions per exercise and overall, performance over time | PARTIAL | Progress now combines goal evidence, retained audio comparison and cross-tune observations; long-term per-exercise chart remains open. |
+| T3 | Metrics over sessions per exercise and overall, performance over time | PARTIAL | Captured tune-exercise history and dated tempo observations are inspectable; shared scale archive browsing and broader totals remain open. |
 | T4 | Done-screen visual fidelity; micro/macro/mini attention design; refreshing music | SHIPPED (v1) | Subjective polish and user validation remain. |
 | T5 | AFK time should not keep counting | SHIPPED | Verify in a real browser. |
-| T6 | Learn bars 1–3 only; hide irrelevant bars | PARTIAL | Songs selects generated phrases with explicit listen/loop/practice; arbitrary drag ranges and hiding irrelevant coach bars remain open. |
+| T6 | Learn bars 1–3 only; hide irrelevant bars | PARTIAL | Exact playing-order passages have explicit listen/loop/practice; direct dragging and compact noncontiguous score excerpts remain open. |
 | T7 | Remove patronizing/AI language; react instead of instructing | PARTIAL | Modern session is neutral; LearnView/Practice/TuneView copy remains instructive. |
 | T8 | Listen again always available, triggered by a guitar note (e.g. E5) | PARTIAL | Done in SongCoach; Learn/Tune/Reading/Changes lack it. |
 | T9 | Silence guidance, playback cursor, wrong-note names in score | PARTIAL | Full treatment in SongCoach; other score views only highlight the bar. |
@@ -59,8 +59,11 @@ Unless an item says otherwise, implement it there.
 **SOL continuation (2026-11-18):** memory cards now fade page → bar-start notes → hidden with
 explicit played reveal and conservative visit-wide help/exposure. Due later-day checks require
 the same known arrangement; alternate-start transfer remains open. T3 goal counters can check a
-bounded complete journal group after the display history trims; long-term per-exercise browsing
-and planner archive integration remain open. T2 recording comparisons now have real played-cursor
+bounded complete journal group after the display history trims. Progress now browses the same
+captured tune history by exercise with dated clean-tempo dots, conditions and attempt details;
+shared scale archive browsing and planner archive integration remain open. T6 adds deliberate
+start/end choices naming repeated-bar occurrences, with arrangement-qualified exact-passage
+practice in the same coach. T2 recording comparisons now have real played-cursor
 Play/Pause/Restart/seek controls on one shared output. The original studies have playable articulated
 accompaniments and optional edited study cues. Agent briefs offer selected-tune/all-music scope,
 7/28/90-day periods, human preview and nested field allowlisting. Real instrument/phone gates stay open.
@@ -68,8 +71,8 @@ accompaniments and optional edited study cues. Agent briefs offer selected-tune/
 
 **SOL implementation (2026-11-18, code verified; hardware verification open):** Practice/Songs/
 Progress is the primary hierarchy; focus modes remain under Explore. T3 now has a dedicated
-Progress surface, comparable retained audio and sample-counted cross-tune observations, though
-long-term per-exercise history is still open. T6/T15 score browsing now selects a phrase before
+Progress surface, comparable retained audio and sample-counted cross-tune observations. Captured
+tune-exercise history is now inspectable beyond the recent cap. T6/T15 score browsing selects a phrase before
 explicit listening/loop/practice and restores browse position. T17 gains immutable, arrangement-bound
 musical goals and goal-aware planning; T16/T21 use actual stable assessed-pass tempo, excluding
 self-guided activity and varying run-throughs from clean-speed claims. T18 gains standalone tuner/
@@ -105,9 +108,9 @@ Pa Ti scores live in gitignored `tunes/staging/`.
    sight-reading tab are removed, and the shell and Ear are playable from the guitar. Remaining:
    build Ear call-and-response (**T23**, decided: the click quiz stays for now) and confirm the
    new screens in a browser with a guitar.
-2. **Build the stats layer (T3).** Add cross-tune totals and a per-exercise history view using
-   `song/stats.ts` and `allStores()`; the existing session tiles/trend are the seed. Define the
-   metrics once (notes landed, clean share, tempo, boxes, minutes) and reuse them.
+2. **Extend the stats layer (T3).** Tune-exercise archive browsing is implemented. Shared scale
+   archive browsing and broader cross-tune totals remain; preserve task/version/help context and
+   distinguish recent materialized stores from complete captured journal groups.
 3. **Extend score guidance outside SongCoach (T6, T9, T15).** Add the cursor/pulse and wrong-note
    shadow to TuneView/LearnView, and add a true "only these bars" mode to `Score` for Learn
    chunks. This directly addresses the sight-reading/keep-your-place complaints.
@@ -167,7 +170,7 @@ guitar-navigable UI.
 - `C3` → carry on (`KEYS.more = 48`)
 - `D3` → free play / metronome (`KEYS.free = 50`)
 - `C♯3` → settings (`KEYS.settings = 49`)
-- `F3` → next tune (`KEYS.tune = 53`)
+- `F3` → Choose tune (`KEYS.tune = 53`), then review and confirm inside the practice room
 - `F♯3` → shuffle (`KEYS.shuffle = 54`)
 
 The code uses **D3 and C♯3**, not the D2/C♯2 in the original note; the `NoteTag` labels show the
@@ -175,10 +178,12 @@ actual notes. Actions are also clickable, and the session itself uses note keys 
 next, the low-E six-string menu, and held-note start. The done screen arms after a short delay so
 ringing notes do not trigger actions.
 
-**What remains.** Outside `SongCoach`/`FreePlay`, the guitar is not a controller: Changes, Sight
-reading, Scale shapes, Fretboard Lab, Ear training and the legacy Practice tab have no note-key
-actions. "Switch song" is only available on the done screen, not mid-session or from other views.
-There is no global metronome toggle or global "hear again" gesture.
+**Continuation.** The shell has a played cursor. In-room tune choice now works from ready,
+summary, live guitar menus and Free play, preserving the outer practice boundary. Optional
+opening matching only suggests candidates after explicit arming; review and fresh confirmation
+precede a change. Whole-tune/direct-note isolation and deliberate menu summon protect musical
+notes. Tuner and metronome share the practice room, with played menus and an optional GPU water
+surface. Real guitar ergonomics, audio/visual alignment and physical fullscreen checks remain.
 
 **Next step.** Extract a shared command layer in `App.tsx` using the existing `GuitarPad`/note-key
 primitives. Start with two global commands that pay off everywhere: **hear again** and **metronome
@@ -197,15 +202,17 @@ session; show performance over time; show stats.
 minutes, a 14-session clean-share line, per-exercise tempo sparklines, box counts and the tree.
 `leitner.ts` stores `Attempt[]` history (capped at 800) and `SessionEntry[]` (capped at 200).
 
-**2026-11-18 update.** A dedicated Progress view now owns cross-tune observations, current goal evidence
-and retained recording comparison. **What remains.** No long-term per-exercise chart (only a 56×18 sparkline
-of the last 10 tempos); no cross-tune or all-library totals (`totals(s.store)` reads the current
-tune's store); no export; no comparison between exercise types; no "best/median/average" table.
-The data is mostly there; the presentation is not.
+**2026-11-18 update.** Progress owns cross-tune observations, current goals, retained recording
+comparison and an exercise browser over the captured tune journal. It survives the recent-history
+trim, respects reset/conflict/deduplication semantics, and offers dated clean-tempo dots plus
+inspectable assessment conditions, score versions and other attempts. Queries are bounded and
+unknown on incomplete/capped/conflicted reads; shared scales are excluded because their complete
+history belongs to `guitar-skills`. No new persistence format was added.
 
-**Next step.** Add a stats section or view that reads `allStores()` and groups by family/tune. Start
-with four numbers and one chart: notes landed over time, clean share over time, minutes, and
-tempo trend per exercise. Reuse `cardTrend`/`sessionTrend`; do not add another storage format.
+**What remains.** Shared scale archive browsing, broader cross-tune/all-library totals,
+comparison between exercise types and a useful export of selected long-term observations.
+The agent brief remains a selective recent-history export. Keep any new metrics contextual;
+do not turn BPM across different tasks or assistance into a universal score.
 
 ### T4 — Done-screen visual fidelity, attention design, refreshing music
 
@@ -250,19 +257,15 @@ bars.
 
 **Status: PARTIAL.**
 
-**Evidence.** `LearnView` computes the bars covered by the current step and passes `focusBars` to
-`Score`; `Score` toggles `is-dim` on notes outside those bars. `SongCoach`'s melody stage passes
-`focusBars={gaps ? local : null}` for gapped melodies. The score still renders the entire sheet;
-other bars are faded, not removed. Memory cards use `hideBars` to hide noteheads, not to remove
-bars.
+**Evidence (2026-11-18).** Songs supports deliberate start/end selection in expanded playing order,
+including repeated-bar occurrences, then exact Listen/Loop/Practice. Passage IDs include the
+arrangement so an edited score cannot reuse that passage's box. `SongCoach`'s melody stage cuts
+the score to the minimum/maximum printed bars in play; gaps between noncontiguous printed bars
+are dimmed. Memory cards use `hideBars` for note visibility, not layout.
 
-**What remains.** A true subset view. This needs care: bar numbers, repeats/endings, click-to-bar
-mapping, and the timeline's printed-bar indices all assume the full sheet. The clean approach is a
-`Score` prop that filters the rendered bars while preserving printed bar labels and a mapping from
-rendered index to sheet index.
-
-**Next step.** Add `onlyBars?: number[]` to `Score` (or a `RangeSheet` adapter) and use it in
-LearnView for new/review chunks. Keep `focusBars` for cases where context is useful.
+**What remains.** Direct dragging/tapping of custom boundaries and compact noncontiguous
+excerpts. Removing internal gaps needs preserved printed labels, repeat/endings and a mapping
+between rendered notes and the existing timeline. The legacy Learn view is not the active path.
 
 ### T7 — Language: stop instructing, start reacting
 

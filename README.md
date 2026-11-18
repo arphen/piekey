@@ -10,24 +10,36 @@ Source repository: [arphen/piekey](https://github.com/arphen/piekey).
 - **Practice** — the home screen: current score, a short Next list, musical goals and Explore
   shortcuts. Start the daily session, a selected exercise, or Free play without importing music.
   An empty library offers **Listen** and **Try practice** for two original studies.
-- **Songs** — browse and hear MusicXML with the score at the center. Select a printed bar or
-  phrase, listen once or loop it, then launch that phrase in the full-screen coach. The selection
-  shows both printed bars and playing-order positions. Returning preserves the browsing position.
+- **Songs** — browse and hear MusicXML with the score at the center. Select a phrase or choose
+  exact start/end bars, listen once or loop them, then practise that passage in the full-screen
+  coach. Start/end choices name each repeated-bar occurrence and its playing-order position.
+  Returning preserves the browsing position.
   Library/import/backup tools are disclosed separately.
 - **Progress** — musical goals, historical task records, observed practice patterns and recordings.
   Compare any two retained takes with tempo, task, score-version and assistance context.
+  Exercise history reads the captured tune journal beyond the recent-attempt limit, with dated
+  clean-tempo observations and inspectable attempts. Versions and help remain separate; shared
+  scale history is outside this tune-specific view, and unavailable evidence stays unknown.
 
 **Changes, Scales, Reading and Ear** remain accessible through Practice’s Explore shortcuts.
 Changes/Scales/Reading narrow the same `SongCoach` session; Ear includes tune-based echo cards and
-its existing chord quiz. Scales also has a shape explorer. The **Tools** control opens a chromatic
-440 Hz tuner and a metronome with tap tempo, count-in and subdivisions. Tools and Devices pause
-browsing audio and run outside the full-screen session.
+its existing chord quiz. Scales also has a shape explorer. The chromatic A440 tuner and metronome
+open inside the guitar room, pause its current exercise and return to it. Both are reachable from
+the guitar menu as well as the visible instrument controls. The metronome has tap tempo,
+beats-per-bar selection, count-in and subdivisions; its weighted sweep and resonances follow
+the heard output clock. **Rendered water** adds an optional GPU water surface, off by default.
+It uses a capped resolution and frame rate, rests when inactive, and stops when the page is hidden.
+The shell's **Tools** button opens the same instruments; Devices remains outside practice.
 
 The full-screen coach is played from the guitar, with ordinary buttons alongside its gestures.
 It also offers **Practise without scoring** when the microphone is unavailable or unwanted.
 Self-guided activity stays in history and never earns measured accuracy, review-box or clean-tempo
 credit. **Finish after this pass** offers a musical ending; see
 [docs/PRACTICE_SESSION.md](docs/PRACTICE_SESSION.md).
+Ordinary musical notes cannot choose another tune. **Choose tune** stays in the practice room;
+optionally enable **Listen to opening**, play at least six notes of an opening in its original
+key, review matches and confirm the choice. Ambiguous matches remain choices. The guitar menu
+uses a deliberate low-E hold, release and second hold, so one sustained low E cannot open it.
 
 Practice runs locally, with preferences/progress stored in the browser and large scores/recordings
 in IndexedDB. Optional device pairing uses a signaling service to establish an encrypted connection.

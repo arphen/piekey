@@ -13,6 +13,7 @@ import { BLUE_HOUR_ENTRY, DEMO_TUNES, getDemoStudy, type DemoTune } from "../tun
 import { MUSICXML_AGENT_PROMPT } from "../tunes/agentPrompt";
 import { retryStorageWrites } from "../storage";
 import { buildTimeline } from "../tunes/order";
+import { passageId, passageLabel, passageOccurrences, passageTimeline, validPassage, type PassageRange } from "../tunes/passage";
 import { usePlayback } from "../tunes/usePlayback";
 import type { NoteResult } from "../core/contract";
 import { buildDeck, familiesOnly, type Family } from "../song/deck";
@@ -67,7 +68,9 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
   const [click, setClick] = useState(false);
   const [countIn, setCountIn] = useState(false);
   const [bpm, setBpm] = useState(80);
-  const [range, setRange] = useState<{ start: number; end: number } | null>(null); // playing-order slots for an optional listening loop
+  const [range, setRange] = useState<PassageRange | null>(null); // inclusive playing-order slots
+  const [customPassage, setCustomPassage] = useState(false);
+  const [passageDraft, setPassageDraft] = useState<PassageRange | null>(null);
   const [looping, setLooping] = useState(false);
   const [coach, setCoach] = useState(false); // the full-screen practice session
   const [sessionLaunch, setSessionLaunch] = useState<Launch>();
@@ -77,6 +80,7 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
   const browseScroll = useRef(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const backupRef = useRef<HTMLInputElement>(null);
+  const passageToggle = useRef<HTMLButtonElement>(null);
   const repairTarget = useRef<string>();
   const libraryIssues = useSyncExternalStore(subscribeLibraryIssues, getLibraryIssues, getLibraryIssues);
 
@@ -133,6 +137,8 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
   useEffect(() => {
     setBpm(sheet?.tempo ?? 80);
     setRange(null);
+    setCustomPassage(false);
+    setPassageDraft(null);
     setLooping(false);
   }, [sheet]);
 
@@ -313,14 +319,17 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
     : [], [deck, store]);
 
   // Browsing makes sound without scoring the mic. The full-screen coach owns all practice.
-  const playback = usePlayback(tl, { bpm, melody, chords, click, countIn }, input, false, true);
+  const listeningTl = useMemo(() => sheet && range && validPassage(tl, range) ? passageTimeline(sheet, tl, range) : tl, [sheet, tl, range]);
+  const occurrences = useMemo(() => sheet ? passageOccurrences(sheet, tl) : [], [sheet, tl]);
+  const playback = usePlayback(listeningTl, { bpm, melody, chords, click, countIn }, input, false, true);
   const { play, stop } = playback;
   const playingRef = useRef(false);
   playingRef.current = playback.playing;
   const slotRef = useRef(-1);
   slotRef.current = playback.activeSlot;
   const start = useCallback((from?: number) => {
-    void play(from ?? range?.start ?? 0, range?.end, looping && Boolean(range)).catch((error: unknown) => {
+    const first = from === undefined ? range?.start ?? 0 : range ? Math.max(range.start, Math.min(range.end, from)) : from;
+    void play(first, range?.end, looping && Boolean(range)).catch((error: unknown) => {
       setLoadError(error instanceof Error ? error.message : "Playback could not start.");
     });
   }, [play, looping, range]);
@@ -394,6 +403,8 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
       pick(chosen.id);
       setBpm(chosenSheet.tempo ?? 80);
       setRange(null);
+      setCustomPassage(false);
+      setPassageDraft(null);
       setLooping(false);
       if (saved && !sameTuneContent(saved, demo.entry)) setNotice("Opened your saved version of this demo.");
       if (action === "listen") {
@@ -469,27 +480,32 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
   };
   const onBarClick = useCallback((bar: number) => {
     const phrase = phrases.find((card) => card.tl.slots.slice(card.from, card.to + 1).some((slot) => slot.bar === bar));
-    if (phrase) { stop(); setRange({ start: phrase.from, end: phrase.to }); }
+    if (phrase) { stop(); setRange({ start: phrase.from, end: phrase.to }); setCustomPassage(false); }
     else setNotice("There are no melody notes to practise in this bar.");
   }, [phrases, stop]);
-  const selectedPhrase = range ? phrases.find((card) => card.from === range.start && card.to === range.end) : undefined;
+  const selectedPhrase = !customPassage && range ? phrases.find((card) => card.from === range.start && card.to === range.end) : undefined;
+  const hasPassageNotes = Boolean(range && listeningTl.targets.some((target) => target.slot >= range.start && target.slot <= range.end));
   const playingBar = playback.playing ? tl.slots[playback.activeSlot]?.bar ?? -1 : -1;
   const barLabel = (bar: number) => sheet?.barNumbers[bar] ?? String(bar + 1);
-  const activeTarget = playback.activeTarget >= 0 ? tl.targets[playback.activeTarget] : undefined;
-  const marked = range ? {
-    start: Math.min(...tl.slots.slice(range.start, range.end + 1).map((slot) => slot.bar)),
-    end: Math.max(...tl.slots.slice(range.start, range.end + 1).map((slot) => slot.bar)),
-  } : null;
+  const activeTarget = playback.activeTarget >= 0 ? listeningTl.targets[playback.activeTarget] : undefined;
+  const selectedBars = range ? [...new Set(tl.slots.slice(range.start, range.end + 1).map((slot) => slot.bar))].sort((a, b) => a - b) : null;
+  const marked = selectedBars?.length && selectedBars.every((bar, index) => bar === selectedBars[0] + index)
+    ? { start: selectedBars[0], end: selectedBars[selectedBars.length - 1] } : null;
 
   if (coach && sheet) return (
     <SongCoach
-      key={sheet.id}
       sheet={sheet}
       tl={tl}
       input={input}
       onClose={() => { setCoach(false); setRevision((value) => value + 1); window.requestAnimationFrame(() => window.scrollTo(0, browseScroll.current)); }}
       tunes={library.map((tune) => ({ id: tune.id, title: tune.name }))}
-      onTune={(id) => { setSessionLaunch(undefined); pick(id); }}
+      onTune={(id) => {
+        const target = library.find((tune) => tune.id === id);
+        if (!target) throw new Error("That tune is no longer available. Choose another tune.");
+        parseTuneEntry(target); // Keep the current room if the next score cannot open.
+        setSessionLaunch(undefined);
+        pick(id);
+      }}
       others={others}
       initialCardId={sessionLaunch?.kind === "card" ? sessionLaunch.cardId : undefined}
     />
@@ -642,19 +658,42 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
       {sheet ? <>
         <div className="tunes-score-actions">
           <button type="button" className={`tunes-listen-button ${playback.playing ? "is-playing" : ""}`} aria-pressed={playback.playing} onClick={() => playback.playing ? stop() : start()} disabled={!tl.slots.length || loading || busy}>
-            {playback.playing ? <span className="tunes-stop" aria-hidden="true" /> : <Glyph name="play" size={17} />}{playback.playing ? "Stop" : range ? "Listen to phrase" : "Listen to piece"}
+            {playback.playing ? <span className="tunes-stop" aria-hidden="true" /> : <Glyph name="play" size={17} />}{playback.playing ? "Stop" : range ? customPassage ? "Listen to passage" : "Listen to phrase" : "Listen to piece"}
           </button>
           <button type="button" className="tunes-practice-piece" onClick={() => practice(whole?.id)} disabled={!whole || loading || busy}>Practice piece<Glyph name="arrow" size={16} /></button>
-          <span className="tunes-play-position">{playback.playing ? playback.counting ? "Count-in" : playingBar >= 0 ? `Bar ${barLabel(playingBar)}` : "" : ""}</span>
+          <button type="button" ref={passageToggle} className="tunes-passage-toggle" aria-expanded={Boolean(passageDraft)} aria-controls="song-passage-picker" onClick={() => {
+            stop();
+            setPassageDraft((draft) => draft ? null : range ?? { start: 0, end: 0 });
+          }} disabled={!tl.slots.length || loading || busy}>Select passage</button>
+          <span className="tunes-play-position">{playback.playing ? playback.counting ? "Count-in" : playingBar >= 0 ? occurrences[playback.activeSlot]?.label ?? `Bar ${barLabel(playingBar)}` : "" : ""}</span>
           <button type="button" className="tunes-sound-toggle" aria-expanded={soundOpen} aria-controls="song-sound" onClick={() => setSoundOpen((open) => !open)}><Glyph name="free" size={17} />{bpm}<span>Sound</span></button>
-        {selectedPhrase ? <div className="tunes-selection" role="group" aria-label="Selected phrase">
-          <span><strong>{selectedPhrase.where}</strong><small>Playing order {selectedPhrase.from + 1}–{selectedPhrase.to + 1}</small></span>
+        {range ? <div className="tunes-selection" role="group" aria-label={customPassage ? "Selected passage" : "Selected phrase"}>
+          <span>{customPassage ? <strong>{passageLabel(sheet, tl, range)}</strong> : <><strong>{selectedPhrase?.where}</strong><small>Playing order {range.start + 1}–{range.end + 1}</small></>}</span>
           <button type="button" aria-pressed={looping} onClick={() => { stop(); setLooping((value) => !value); }}><Glyph name="sync" size={16} />Loop</button>
-          <button type="button" onClick={() => practice(selectedPhrase.id)}><Glyph name="play" size={16} />Practise phrase</button>
-          <button type="button" onClick={() => practice(`rhythm:${selectedPhrase.id}`)}><Glyph name="free" size={16} />Rhythm on one note</button>
-          <button type="button" aria-label="Clear phrase selection" onClick={() => { stop(); setRange(null); setLooping(false); }}><Glyph name="close" size={15} /></button>
+          <button type="button" disabled={!hasPassageNotes || loading || busy} onClick={() => practice(customPassage ? passageId(sheet, range) : selectedPhrase?.id)}><Glyph name="play" size={16} />{customPassage ? "Practise passage" : "Practise phrase"}</button>
+          {selectedPhrase ? <button type="button" onClick={() => practice(`rhythm:${selectedPhrase.id}`)}><Glyph name="free" size={16} />Rhythm on one note</button> : null}
+          <button type="button" aria-label={customPassage ? "Clear passage selection" : "Clear phrase selection"} onClick={() => { stop(); setRange(null); setCustomPassage(false); setPassageDraft(null); setLooping(false); }}><Glyph name="close" size={15} /></button>
+          {!hasPassageNotes ? <small className="tunes-note">This passage has no melody notes to practise. You can still listen or loop.</small> : null}
         </div> : null}
         </div>
+        {passageDraft ? <section id="song-passage-picker" className="tunes-passage" aria-label="Choose passage">
+          <p className="tunes-note">Choose exact occurrences in playing order. Returns and repeats between them stay in the passage.</p>
+          <div className="tunes-passage-fields">
+            <label>Start<select value={passageDraft.start} onChange={(event) => {
+              const start = Number(event.target.value);
+              setPassageDraft((draft) => draft ? { start, end: Math.max(start, draft.end) } : null);
+            }}>{occurrences.map((item) => <option key={item.slot} value={item.slot}>{item.label}</option>)}</select></label>
+            <label>End<select value={passageDraft.end} onChange={(event) => {
+              const end = Number(event.target.value);
+              setPassageDraft((draft) => draft ? { ...draft, end } : null);
+            }}>{occurrences.map((item) => <option key={item.slot} value={item.slot} disabled={item.slot < passageDraft.start}>{item.label}</option>)}</select></label>
+          </div>
+          <div className="tunes-passage-actions">
+            <button type="button" onClick={() => { stop(); setRange(passageDraft); setCustomPassage(true); setPassageDraft(null); passageToggle.current?.focus(); }}>Use passage<Glyph name="arrow" size={14} /></button>
+            <button type="button" onClick={() => { setPassageDraft(null); passageToggle.current?.focus(); }}>Cancel</button>
+          </div>
+          <p className="tunes-note">A note held into the start is picked again; notes stop at the selected end.</p>
+        </section> : null}
         {soundOpen ? <div id="song-sound" className="tunes-sound" aria-label="Playback options">
           <div className="tunes-tempo" role="group" aria-label="Playback tempo"><button type="button" aria-label="Slower" onClick={() => setBpm((value) => Math.max(30, value - 5))}>−</button><span>{bpm} bpm</span><button type="button" aria-label="Faster" onClick={() => setBpm((value) => Math.min(240, value + 5))}>+</button></div>
           <button type="button" aria-pressed={melody} onClick={() => setMelody((value) => !value)}>Melody</button>
@@ -662,21 +701,23 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
           <button type="button" aria-pressed={click} onClick={() => setClick((value) => !value)}>Click</button>
           <button type="button" aria-pressed={countIn} onClick={() => setCountIn((value) => !value)}>Count-in</button>
           <button type="button" aria-pressed={showFingering} onClick={() => setShowFingering((value) => !value)}>String &amp; fret hints</button>
-          {phrases.length ? <label>Listen range<select value={range ? `${range.start}:${range.end}` : ""} onChange={(event) => {
+          {phrases.length ? <label>Quick phrases<select value={selectedPhrase ? `${selectedPhrase.from}:${selectedPhrase.to}` : customPassage ? "custom" : ""} onChange={(event) => {
             stop();
             const phrase = phrases.find((card) => `${card.from}:${card.to}` === event.target.value);
             setRange(phrase ? { start: phrase.from, end: phrase.to } : null);
+            setCustomPassage(false);
+            setPassageDraft(null);
             setLooping(Boolean(phrase));
-          }}><option value="">Whole piece</option>{phrases.map((card) => <option key={card.id} value={`${card.from}:${card.to}`}>{card.where} · playing order {card.from + 1}–{card.to + 1}</option>)}</select></label> : null}
+          }}><option value="">Whole piece</option>{customPassage ? <option value="custom" disabled>Selected passage</option> : null}{phrases.map((card) => <option key={card.id} value={`${card.from}:${card.to}`}>{card.where} · playing order {card.from + 1}–{card.to + 1}</option>)}</select></label> : null}
         </div> : null}
         <section className="tunes-manuscript" aria-label={`${sheet.title} score`}>
-          <div className="tunes-score-caption"><Glyph name="melody" size={15} /><span>Choose a bar to hear or practise its phrase</span></div>
-          <Score exercise={sheet} activeStep={activeTarget?.notes[0] ?? -1} activeNotes={activeTarget?.notes ?? []} results={NO_RESULTS} showFingering={showFingering} autoScroll onBarClick={onBarClick} marked={marked} playingBar={playingBar} />
+          <div className="tunes-score-caption"><Glyph name="melody" size={15} /><span>{passageDraft ? "Choose the start and end above" : "Choose a bar for its phrase, or select an exact passage"}</span></div>
+          <Score exercise={sheet} activeStep={activeTarget?.notes[0] ?? -1} activeNotes={activeTarget?.notes ?? []} results={NO_RESULTS} showFingering={showFingering} autoScroll onBarClick={passageDraft ? undefined : onBarClick} marked={marked} focusBars={selectedBars} playingBar={playingBar} />
         </section>
 
         {phrases.length ? <section className="tunes-phrases" aria-labelledby="song-phrases-title">
           <h3 id="song-phrases-title">Phrases</h3>
-          <div>{phrases.map((card) => <button type="button" key={card.id} aria-pressed={selectedPhrase?.id === card.id} onClick={() => { stop(); setRange({ start: card.from, end: card.to }); }} aria-label={`Select ${card.where}`}><span>{card.where}</span><Glyph name="arrow" size={14} /></button>)}</div>
+          <div>{phrases.map((card) => <button type="button" key={card.id} aria-pressed={selectedPhrase?.id === card.id} onClick={() => { stop(); setRange({ start: card.from, end: card.to }); setCustomPassage(false); setPassageDraft(null); }} aria-label={`Select ${card.where}`}><span>{card.where}</span><Glyph name="arrow" size={14} /></button>)}</div>
         </section> : null}
         {study ? <section className="tunes-study" aria-label="Study notes">
           <button type="button" className="tunes-agent-toggle" aria-expanded={studyOpen} aria-controls="song-study-notes" onClick={() => setStudyOpen((open) => !open)}><Glyph name="reading" size={17} />Study notes<Glyph name="plus" size={13} /></button>

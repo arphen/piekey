@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { InputApi } from "../listen/useInput";
 import { hush, interlude } from "../song/cues";
 import { FAMILY_LABEL, type Deck, type Family } from "../song/deck";
@@ -87,9 +87,7 @@ export function SessionSummary({
   session: s,
   input,
   title,
-  tuneId,
-  tunes,
-  onTune,
+  onChooseTune,
   onFree,
   onSettings,
   enabled,
@@ -99,9 +97,7 @@ export function SessionSummary({
   session: SessionApi;
   input: InputApi;
   title: string;
-  tuneId: string;
-  tunes: { id: string; title: string }[];
-  onTune?(id: string): void;
+  onChooseTune?(): void;
   onFree(): void;
   onSettings(): void;
   enabled: boolean; // false while a menu is open over it
@@ -114,11 +110,14 @@ export function SessionSummary({
   const played = s.log.filter((o) => o.result !== "skip");
   const home = deck.harmony.home;
   const any = played.length > 0;
+  const visible = useRef(enabled);
+  visible.current = enabled;
+  useEffect(() => { if (!enabled) hush(); }, [enabled]);
 
   useEffect(() => {
     let arm = 0;
     const music = window.setTimeout(() => {
-      const ms = any ? interlude(home.tonic, home.mode === "minor") : 0;
+      const ms = any && visible.current ? interlude(home.tonic, home.mode === "minor") : 0;
       arm = window.setTimeout(() => setArmed(true), Math.max(ARM_MS - 600, ms - 900));
     }, 600);
     const move = window.setTimeout(() => setMoved(true), MOVE_MS);
@@ -205,14 +204,12 @@ export function SessionSummary({
 
   // ---------- what a note does next ----------
 
-  const at = tunes.findIndex((t) => t.id === tuneId);
-  const nextTune = tunes.length > 1 && onTune ? tunes[(at + 1) % tunes.length] : null;
   const carryOn = () => {
     if (!s.keepGoing()) setMore(false);
   };
   const shuffle = () => s.updateSettings({ shuffle: !s.settings.shuffle });
-  const fire = [carryOn, onFree, onSettings, () => nextTune && onTune?.(nextTune.id), shuffle];
-  const held = useNoteKeys(input, enabled && armed, [more ? KEYS.more : null, KEYS.free, KEYS.settings, nextTune ? KEYS.tune : null, KEYS.shuffle], (k) => fire[k](), true);
+  const fire = [carryOn, onFree, onSettings, () => onChooseTune?.(), shuffle];
+  const held = useNoteKeys(input, enabled && armed, [more ? KEYS.more : null, KEYS.free, KEYS.settings, onChooseTune ? KEYS.tune : null, KEYS.shuffle], (k) => fire[k](), true);
 
   let row = 0;
   return (
@@ -347,11 +344,11 @@ export function SessionSummary({
               <span>settings</span>
             </button>
           </li>
-          {nextTune ? (
+          {onChooseTune ? (
             <li>
-              <button type="button" onClick={() => onTune?.(nextTune.id)}>
+              <button type="button" onClick={onChooseTune}>
                 <NoteTag midi={KEYS.tune} held={held === 3} octave={false} />
-                <span>{nextTune.title}</span>
+                <span>Choose tune</span>
               </button>
             </li>
           ) : null}

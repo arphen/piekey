@@ -6,10 +6,12 @@ import { fitsClick, guessKey, guessPattern, readGrid, restingLock, stepLock, toR
 import { cleanTake } from "../song/judge";
 import { kinship } from "../song/kin";
 import { carryOver, planSession, unlocked, type Store } from "../song/leitner";
-import { assignNoteKeys, usedMidis } from "../song/notekeys";
+import { assignNoteKeys, commandMidis, usedMidis } from "../song/notekeys";
 import { buildTree } from "../song/tree";
+import { buildThemeCatalog, initThemeCapture, rankThemeMatches, stepThemeCapture, THEME_MAX_NOTES, THEME_MAX_TUNES, type ThemeCapture } from "../song/theme";
 import type { LeadSheet } from "../tunes/musicxml";
-import { buildTimeline } from "../tunes/order";
+import { buildTimeline, type Timeline } from "../tunes/order";
+import { matchesPitch } from "../tunes/scoring";
 
 const note = (midi: number, startBeat: number): ReadingNote => ({ rest: false, midi, vexKey: "a/4", accidental: null, duration: "q", dotted: false, startBeat, durationBeats: 1, string: 0, fret: 0 });
 
@@ -21,6 +23,62 @@ function sheet(): LeadSheet {
 }
 
 const emptyStore = (): Store => ({ v: 1, cards: {}, sessions: [], settings: { newPerSession: 4, guide: false, voice: false, window: null } });
+
+describe("armed opening themes", () => {
+  const opening = [60, 60, 64, 67, 65, 62, 64, 60];
+  const timeline = (midis: number[]): Timeline => ({ slots: [], comp: [], total: midis.length, targets: midis.map((midi, i) => ({ midi, t: i, dur: 1, notes: [i], bar: 0, slot: 0 })) });
+  const source = (id: string, midis = opening) => ({ id, title: id, tl: timeline(midis) });
+
+  it("requires a strong original-key prefix, accepts any octave, and preserves shared-opening ambiguity", () => {
+    const catalog = buildThemeCatalog([source("b"), source("a", [...opening.slice(0, 6), 65, 60])]);
+    expect(rankThemeMatches(catalog, opening.slice(0, 5))).toEqual([]);
+    expect(rankThemeMatches(catalog, opening.slice(0, 6).map((m, i) => m + (i % 2 ? 12 : -12))).map((candidate) => candidate.id)).toEqual(["a", "b"]);
+    expect(rankThemeMatches(catalog, opening.slice(0, 7))).toEqual([{ id: "b", title: "b", matchedNotes: 7, confidence: 1 }]);
+    expect(rankThemeMatches(catalog, opening.map((m) => m + 2))).toEqual([]);
+    expect(rankThemeMatches(catalog, [40, 41, ...opening])).toMatchObject([{ id: "b", matchedNotes: 8 }]);
+    expect(rankThemeMatches(catalog, [60, 60, 64, 68, 65, 62])).toEqual([]);
+  });
+
+  it("bounds catalog and sequence work and leaves short, invalid or unvaried openings to manual selection", () => {
+    const large = Array.from({ length: THEME_MAX_TUNES + 20 }, (_, i) => source(`t${i}`, Array.from({ length: 100 }, (_v, n) => opening[n % opening.length])));
+    const catalog = buildThemeCatalog(large);
+    expect(catalog.themes).toHaveLength(THEME_MAX_TUNES);
+    expect(catalog.omitted).toBe(20);
+    expect(catalog.themes.every((theme) => theme.pcs.length === THEME_MAX_NOTES)).toBe(true);
+    const unsupported = buildThemeCatalog([source("short", opening.slice(0, 5)), source("one", Array(16).fill(60)), source("bad", [...opening.slice(0, 5), Number.NaN])]);
+    expect(unsupported).toEqual({ themes: [], omitted: 3 });
+    expect(rankThemeMatches(catalog, [...Array(500).fill(40), ...opening])).toHaveLength(THEME_MAX_TUNES);
+  });
+
+  it("counts fresh same-pitch picks and stable changed notes, never sustained frames or brief dropouts", () => {
+    const feed = (state: ThemeCapture, midi: number | null, frames: number, rms = 0.02) => {
+      for (let i = 0; i < frames; i++) state = stepThemeCapture(state, { midi, rms });
+      return state;
+    };
+    let state = feed(initThemeCapture(), 60, 100);
+    expect(state.heard).toEqual([]); // already ringing when the chooser opened
+    state = feed(state, null, 6, 0);
+    state = feed(state, 60, 100);
+    expect(state.heard).toEqual([60]);
+    state = feed(state, null, 1, 0);
+    state = feed(state, 60, 4);
+    expect(state.heard).toEqual([60, 60]); // a fresh rising attack after the quiet analysis frame
+    state = feed(state, 60, 100);
+    expect(state.heard).toHaveLength(2);
+    state = feed(state, null, 1, 0.02); // pitch detector dropout without an attack or gap
+    state = feed(state, 60, 4);
+    expect(state.heard).toHaveLength(2);
+    state = feed(state, 64, 3);
+    expect(state.heard).toEqual([60, 60, 64]);
+    state = feed(state, 64, 12, 0.01);
+    state = feed(state, 64, 3, 0.04);
+    expect(state.heard).toEqual([60, 60, 64, 64]);
+    for (let i = 0; i < 100; i++) state = feed(state, i % 2 ? 64 : 67, 3, 0.04);
+    expect(state.heard).toHaveLength(THEME_MAX_NOTES);
+    expect(state.levels.length).toBeLessThanOrEqual(8);
+    expect(state.runFrames).toBeLessThanOrEqual(3);
+  });
+});
 
 describe("exercises that are related", () => {
   const deck = buildDeck(sheet(), buildTimeline(sheet()));
@@ -112,6 +170,45 @@ describe("note keys", () => {
       const used = usedMidis(card);
       for (const m of Object.values(assignNoteKeys(["hear", "pace", "time", "next"], used))) expect(used).not.toContain(m);
     }
+  });
+
+  it("leaves a correct alternate-octave melody note available instead of making it a command", () => {
+    const deck = buildDeck(sheet(), buildTimeline(sheet()));
+    const card = deck.cards.find((candidate) => candidate.run)!;
+    expect(card.exact).not.toBe(true);
+    expect(card.tl.targets.some((target) => target.midi === 64)).toBe(true);
+    expect(matchesPitch(76, 64, !card.exact)).toBe(true);
+    expect(assignNoteKeys(["hear"], usedMidis(card)).hear).toBe(76); // the previously conflicting E5
+    const keys = Object.values(assignNoteKeys(["hear", "pace", "time", "next"], commandMidis(card)));
+    for (const key of keys) if (key !== null) expect(card.tl.targets.some((target) => matchesPitch(key, target.midi, !card.exact))).toBe(false);
+    const exact = { ...card, exact: true };
+    expect(assignNoteKeys(["hear"], commandMidis(exact)).hear).toBe(76);
+  });
+
+  it("uses no direct note commands when every pitch class belongs to an octave-tolerant melody", () => {
+    const card = buildDeck(sheet(), buildTimeline(sheet())).cards.find((candidate) => candidate.run)!;
+    const targets = Array.from({ length: 12 }, (_, i) => ({ ...card.tl.targets[0], midi: 60 + i, t: i }));
+    const chromatic = { ...card, first: 0, last: 11, tl: { ...card.tl, targets } };
+    expect(assignNoteKeys(["hear", "pace", "time", "next"], commandMidis(chromatic))).toEqual({ hear: null, pace: null, time: null, next: null });
+    expect(assignNoteKeys(["hear", "pace", "time", "next"], commandMidis({ ...chromatic, exact: true }))).toEqual({ hear: 76, pace: 41, time: 43, next: 44 });
+  });
+
+  it("reserves every accepted chord tone and any-note choice in every octave even on an exact card", () => {
+    const card = buildDeck(sheet(), buildTimeline(sheet())).cards.find((candidate) => candidate.run)!;
+    const allowed = [4, 5, 7, 8]; // all four usual command homes
+    for (const target of [
+      { ...card.tl.targets[0], midi: 60, any: allowed },
+      { ...card.tl.targets[0], midi: 60, chord: { required: allowed, clash: [], voicing: [64, 65, 67, 68] } },
+    ]) {
+      const choices = { ...card, exact: true, first: 0, last: 0, tl: { ...card.tl, targets: [target] } };
+      const keys = Object.values(assignNoteKeys(["hear", "pace", "time", "next"], commandMidis(choices)));
+      for (const key of keys) if (key !== null) expect(allowed).not.toContain(key % 12);
+    }
+    const target = { ...card.tl.targets[0], chord: { required: [4], clash: [1, 3], voicing: [64] } };
+    const chord = { ...card, exact: true, first: 0, last: 0, tl: { ...card.tl, targets: [target] } };
+    const keys = Object.values(assignNoteKeys(["hear", "pace", "time", "next"], commandMidis(chord)));
+    expect(keys.some((key) => key !== null)).toBe(true);
+    for (const key of keys) if (key !== null) expect(target.chord.clash).toContain(key % 12);
   });
 });
 

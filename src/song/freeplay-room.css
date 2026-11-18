@@ -10,6 +10,13 @@
 }
 .fp-standalone .ss-free.fp-room { padding-top: 90px; }
 .fp-heading { width: 100%; }
+.fp-instruments { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 20px; }
+.ss .fp-instruments button { display: inline-flex; align-items: center; gap: 9px; min-height: 44px; padding: 10px 15px; border: 1px solid #b8c5ad28; border-radius: 8px; background: #c2d0b508; color: #c8d2be; font-size: 12px; }
+.ss .fp-instruments button:hover { background: #c2d0b518; border-color: #b8c5ad65; }
+.ss .fp-instruments button:focus-visible { outline: 2px solid #cadbb7; outline-offset: 4px; }
+.fp-room.has-tools { padding: 0; }
+.fp-tools-overlay { position: fixed; inset: 0; z-index: 30; overflow-y: auto; overscroll-behavior: contain; background: #101612; }
+.fp-tools-overlay .guitar-tools { min-height: 100%; box-sizing: border-box; }
 .ss-free.fp-room .ss-display { margin: 24px 0 14px; font-size: clamp(48px, 6.8vw, 100px); line-height: 1.05; letter-spacing: -0.055em; }
 .ss-free.fp-room .ss-sub { color: #9da69a; font-size: 13px; line-height: 1.7; letter-spacing: 0; }
 .fp-room.has-playing .ss-display { margin-top: 18px; font-size: clamp(36px, 4.5vw, 64px); }
