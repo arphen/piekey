@@ -1,0 +1,164 @@
+// @vitest-environment jsdom
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { InputApi } from "../listen/useInput";
+import { buildDeck } from "../song/deck";
+import { useSession, type SessionApi, type SessionOptions } from "../song/useSession";
+import { parseTuneEntry } from "../tunes/library";
+import { buildTimeline } from "../tunes/order";
+import { STARTER_ENTRY } from "../tunes/starter";
+import type { PassScore } from "../tunes/usePlayback";
+
+const playback = vi.hoisted(() => ({
+  playing: false, counting: 0, beat: null, activeTarget: -1, activeSlot: -1,
+  results: [], wrong: [], lastPass: null as PassScore | null, drift: null,
+  play: vi.fn(async () => undefined), stop: vi.fn(),
+}));
+vi.mock("tone", () => ({ start: async () => undefined }));
+vi.mock("../audio/context", () => ({ ensureAudio: () => undefined }));
+vi.mock("../tunes/usePlayback", () => ({ usePlayback: () => playback }));
+vi.mock("../song/cues", () => ({ bassHint() {}, chime() {}, glint() {}, hintNote() {}, hush() {}, padChord() {}, say() {} }));
+
+describe("session assessment trust", () => {
+  let root: Root;
+  let host: HTMLDivElement;
+  let session: SessionApi;
+  let input: InputApi;
+  let options: SessionOptions;
+  const sheet = parseTuneEntry(STARTER_ENTRY);
+  const tl = buildTimeline(sheet);
+  const deck = buildDeck(sheet, tl);
+  const card = deck.cards.find((candidate) => candidate.family === "scales" && !candidate.run)!;
+  const run = deck.cards.find((candidate) => candidate.run)!;
+  function Harness() {
+    session = useSession(deck, [sheet.id], input, options);
+    return null;
+  }
+  const render = async () => { await act(async () => root.render(<Harness />)); };
+  const pass = async (selected = card, details: Partial<PassScore> = {}) => {
+    playback.lastPass = {
+      hit: selected.last - selected.first + 1, total: selected.last - selected.first + 1, heard: 20, offset: 0,
+      results: selected.tl.targets.map(() => "hit"), wrong: selected.tl.targets.map(() => null), at: selected.tl.targets.map(() => 0),
+      bpm: session.bpm, tempoStable: true, ...details,
+    };
+    await render();
+  };
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const saved = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => saved.get(key) ?? null,
+      setItem: (key: string, value: string) => saved.set(key, value),
+      removeItem: (key: string) => saved.delete(key),
+      key: (index: number) => [...saved.keys()][index] ?? null,
+      get length() { return saved.size; },
+    });
+    playback.lastPass = null;
+    playback.playing = false;
+    options = {};
+    input = {
+      status: "idle", deviceId: null, error: null, devices: [], paused: false,
+      level: { current: 0 }, subscribe: () => () => undefined,
+      setDeviceId() {}, start: vi.fn(async () => undefined), stop() {}, autoStart() {},
+    };
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await render();
+  });
+  afterEach(async () => {
+    await act(async () => root.unmount());
+    host.remove();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("records self-guided activity without opening a mic, scoring or changing the card box", async () => {
+    await act(async () => session.begin([card.id], true));
+    expect(session.selfGuided).toBe(true);
+    expect(session.paused).toBe(false);
+    expect(input.start).not.toHaveBeenCalled();
+    await act(async () => session.next());
+    expect(session.store.cards[card.id]).toBeUndefined();
+    expect(session.store.credit).toEqual({});
+    expect(session.store.history).toHaveLength(1);
+    expect(session.store.history![0]).toMatchObject({ conditions: { source: "self", confidence: "unknown" }, share: null, from: 0, to: 0 });
+    expect(session.store.history![0].ev).toBeUndefined();
+  });
+
+  it("records measured conditions conservatively and keeps pauses distinct from an uninterrupted pass", async () => {
+    options = { arrangementFingerprint: "main-score", arrangementFingerprints: new Map([[card.tuneId, "assessed-score"]]) };
+    input.status = "listening";
+    await render();
+    await act(async () => session.begin([card.id]));
+    await act(async () => session.go("time"));
+    await act(async () => session.togglePause());
+    await act(async () => session.togglePause());
+    await pass();
+    expect(session.store.history![0].conditions).toMatchObject({
+      v: 1, source: "measured", confidence: "unknown", support: "adaptive", tempo: "adaptive", uninterrupted: false,
+    });
+    expect(session.store.history![0].arrangementFingerprint).toBe("assessed-score");
+  });
+
+  it("queues a finish until the current measured pass completes", async () => {
+    input.status = "listening";
+    await act(async () => session.begin([card.id]));
+    await act(async () => session.go("time"));
+    await act(async () => session.finishAfterPass());
+    expect(session.ending).toBe(true);
+    expect(session.finished).toBe(false);
+    await pass();
+    expect(session.phase).toBe("result");
+    expect(session.outcome?.result).toBe("ok");
+    await act(async () => vi.advanceTimersByTime(2700));
+    expect(session.finished).toBe(true);
+  });
+
+  it("uses the learner's tempo range when restoring and adjusting an exercise", async () => {
+    options = { tempoBounds: { minBpm: 30, targetBpm: 35 } };
+    input.status = "listening";
+    await render();
+    await act(async () => session.begin([card.id]));
+    expect(session.bpm).toBe(35);
+    await act(async () => session.tempo(-100));
+    expect(session.bpm).toBe(30);
+    await act(async () => session.go("time"));
+    expect(session.bpm).toBe(30);
+    await act(async () => session.tempo(100));
+    expect(session.bpm).toBe(35);
+  });
+
+  it("cannot turn a slow run into a clean target-tempo proof with a final tempo nudge", async () => {
+    input.status = "listening";
+    await act(async () => session.begin([run.id]));
+    await act(async () => session.go("time"));
+    await act(async () => vi.advanceTimersByTime(950));
+    const playedBpm = session.bpm;
+    await act(async () => session.tempo(40));
+    expect(session.bpm).toBeGreaterThan(playedBpm);
+    // The last UI change can even arrive before the transport has scheduled a new tempo.
+    await pass(run, { bpm: playedBpm, tempoStable: true });
+    expect(session.outcome).toMatchObject({ result: "ok", bpm: playedBpm, conditions: { tempo: "adaptive", uninterrupted: false } });
+    expect(session.store.history!.at(-1)).toMatchObject({ result: "ok", bpm: playedBpm });
+    expect(session.store.cards[run.id].bestCleanBpm).toBeUndefined();
+  });
+
+  it("requires a fresh complete pass after a live lesson tempo change", async () => {
+    input.status = "listening";
+    await act(async () => session.begin([card.id]));
+    await act(async () => session.go("time"));
+    await act(async () => vi.advanceTimersByTime(950));
+    const before = session.bpm;
+    await act(async () => session.tempo(4));
+    await pass(card, { bpm: before, tempoStable: false });
+    expect(session.phase).toBe("time");
+    expect(session.store.history ?? []).toHaveLength(0);
+    await pass(card, { bpm: before + 4, tempoStable: true });
+    expect(session.outcome).toMatchObject({ result: "clean", bpm: before + 4 });
+    expect(session.store.cards[card.id].bestCleanBpm).toBe(before + 4);
+  });
+});

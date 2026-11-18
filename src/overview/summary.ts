@@ -3,6 +3,7 @@ import type { Card, Deck, Family } from "../song/deck";
 import { BOXES, boxCounts, today, unlocked, type Store } from "../song/leitner";
 import type { LeadSheet } from "../tunes/musicxml";
 import type { ReadingExercise } from "../core/contract";
+import { goalDeck, goalProgress, type Goal } from "../song/goals";
 
 // Read-only summaries for the tutor overview. Nothing here plans or mutates a session: the same
 // deck/store data the session uses is projected into "what is next" for each song.
@@ -103,7 +104,31 @@ export function nextUnits(deck: Deck, store: Store, count = 3, day = today()): U
   return picked.slice(0, count).map((id) => preview(byId.get(id)!, store, day));
 }
 
-export function summarizeSong(sheet: LeadSheet, deck: Deck, store: Store, day = today()): SongSummary {
+function goalUnits(deck: Deck, store: Store, goal: Goal, day: string): UnitPreview[] {
+  const bounded = goalDeck(deck, goal);
+  const byId = new Map(bounded.cards.map((card) => [card.id, card]));
+  const demonstrated = new Set(goalProgress(goal, store).taskIds);
+  const unfinished = goal.essentialTasks.filter((task) => !demonstrated.has(task.cardId));
+  const picked = new Set<string>();
+  const ready = (id: string, visited = new Set<string>()): string | null => {
+    const card = byId.get(id);
+    if (!card || visited.has(id)) return null;
+    visited.add(id);
+    return unlocked(card, store) ? id : card.needs ? ready(card.needs, visited) : null;
+  };
+  for (const task of unfinished.length ? unfinished : goal.essentialTasks) {
+    const id = ready(task.cardId);
+    if (id) picked.add(id);
+    if (picked.size >= 3) break;
+  }
+  return [...picked].map((id) => {
+    const card = byId.get(id)!;
+    const bpm = Math.min(card.goalBpm, Math.max(goal.tempo.minBpm, store.cards[id]?.bpm ?? card.bpm));
+    return preview({ ...card, bpm }, store, day);
+  });
+}
+
+export function summarizeSong(sheet: LeadSheet, deck: Deck, store: Store, day = today(), goal?: Goal | null): SongSummary {
   const counts = boxCounts(deck, store);
   const lastPlayed = store.sessions[store.sessions.length - 1]?.date ?? store.history?.[store.history.length - 1]?.day ?? null;
   return {
@@ -117,7 +142,7 @@ export function summarizeSong(sheet: LeadSheet, deck: Deck, store: Store, day = 
     due: counts.due,
     mastered: counts.boxes[BOXES - 1] ?? 0,
     total: deck.intro.length,
-    next: nextUnits(deck, store, 3, day),
+    next: goal ? goalUnits(deck, store, goal, day) : nextUnits(deck, store, 3, day),
     path: tunePath(deck, store),
     excerpt: { bars: sheet.bars.slice(0, 2), keySignature: sheet.keySignature, timeSignature: sheet.timeSignature },
     tempo: sheet.tempo ?? undefined,

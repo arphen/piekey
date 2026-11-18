@@ -1,6 +1,6 @@
 import type { PatternStep } from "../core/contract";
 import { OPEN_MIDI } from "../core/scales";
-import { mod } from "../musicTheory";
+import { mod, pitchClassToName } from "../musicTheory";
 import { buildPlan, type Step } from "../tunes/learn";
 import type { LeadSheet } from "../tunes/musicxml";
 import type { Target, Timeline, Voice } from "../tunes/order";
@@ -12,6 +12,7 @@ import { glue } from "./ids";
 import { arpLine, chainLine, guideLine, scaleLine, type LineNote, type ScaleDrill, type Span } from "./lines";
 import { seeded } from "./rand";
 import { freshLine, knownLine, pickKnown, vary } from "./reading";
+import { isolateRhythm } from "./rhythm";
 import { voiceChords, type Voicing } from "./voicings";
 
 // A tune turned into a deck of exercise cards that together teach it:
@@ -70,6 +71,8 @@ export interface Card {
   run?: boolean; // a run-through: once, top to bottom, nothing stops and the tempo holds
   prompts?: Prompt[]; // fretboard cards: what is asked for each note (card-relative)
   exact?: boolean; // the octave counts: the answer is one place on the neck
+  rhythmPitch?: number; // source notation is shown on this one pitch, retaining its original rhythm
+  followedBy?: string; // explicitly selected study continues with this card, outside the daily intro
 }
 
 export interface Deck {
@@ -292,7 +295,7 @@ const RHYTHMS: Record<Rhythm, { beats: number; label: string; count: string; bpm
  * should be new (a new day, another session), `seen` says how often each has been played, which
  * decides how hard it is and which known tune comes next.
  */
-export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: number; round?: string; seen?: Record<string, number> } = {}): Deck {
+export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: number; round?: string; seen?: Record<string, number>; rhythmFrom?: string } = {}): Deck {
   const harmony = analyze(sheet, tl);
   const w = opts.window ? windowAt(opts.window) : chooseWindow(harmony.home.tonic);
   const tempo = sheet.tempo ?? 90;
@@ -849,7 +852,7 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
       const id = `ear:${tier.n}`;
       const card = earCard(id, earPhrase(homeScale.pcs, home.tonic, lo, hi, tier, rand(id)), {
         title: tier.title,
-        detail: "Hear it, then play it back.",
+        detail: "Hear its notes and rhythm, then play it back.",
         why: tier.page ? "The page is there while the ear catches up." : "Only the ear. The page shows once you have played it.",
         memory: !tier.page,
         needs: tier.n > 1 ? `ear:${tier.n - 1}` : undefined,
@@ -1020,7 +1023,66 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
     });
   }
 
+  if (opts.rhythmFrom) {
+    const source = cards.find((card) => card.id === opts.rhythmFrom);
+    if (source) for (const study of rhythmStudy(source, w)) add(study);
+  }
   return { cards, harmony, window: w, intro };
+}
+
+/** Decode only the explicit rhythm route; ordinary melody launches keep the normal deck. */
+export function rhythmSourceId(id: string | undefined): string | undefined {
+  const prefix = id?.startsWith("rhythm-context:") ? "rhythm-context:" : id?.startsWith("rhythm:") ? "rhythm:" : null;
+  return prefix ? id!.slice(prefix.length) || undefined : undefined;
+}
+
+/** A selected phrase's rhythm first, then the same attacks on the original pitches with the band. */
+export function rhythmStudy(source: Card, w: Window = windowAt(source.p)): [Card, Card] | [] {
+  if (source.family !== "melody" || source.view !== "score" || source.rhythmPitch !== undefined || source.last < source.first) return [];
+  const natural = new Set([0, 2, 4, 5, 7, 9, 11]);
+  const comfortable = [2, 3].flatMap((string) => Array.from({ length: 4 }, (_, fret) => ({ string, fret: w.p + fret, midi: OPEN_MIDI[string] + w.p + fret })))
+    .filter((note) => natural.has(mod(note.midi)))
+    .sort((a, b) => Math.abs(a.midi - 60) - Math.abs(b.midi - 60) || a.fret - b.fret)[0];
+  if (!comfortable) return [];
+  const isolatedId = `rhythm:${source.id}`;
+  const contextId = `rhythm-context:${source.id}`;
+  const midi = comfortable.midi;
+  const name = `${nice(pitchClassToName(midi))}${Math.floor(midi / 12) - 1}`;
+  const isolated: Card = {
+    ...source,
+    id: isolatedId,
+    title: `${source.where} · rhythm on ${name}`,
+    detail: `The phrase's attacks, rests and ties on ${name}. Pick again only at each new note.`,
+    why: "One note leaves the picking hand and the space between attacks in focus; the original pitches follow.",
+    tl: isolateRhythm(source.tl, midi),
+    rhythmPitch: midi,
+    followedBy: contextId,
+    needs: undefined,
+    step: undefined,
+    run: false,
+    memory: false,
+    pace: false,
+    listen: true,
+    click: true,
+    exact: true,
+    steps: source.tl.targets.map((target) => ({ ...comfortable, pc: mod(midi), startBeat: target.t - source.tl.slots[source.from].start, durationBeats: target.dur })),
+    context: source.tl.targets.map(() => null),
+    voicings: [],
+  };
+  const context: Card = {
+    ...source,
+    id: contextId,
+    title: `${source.where} · original pitches`,
+    detail: "The same rhythm, now with the phrase's original pitches and accompaniment.",
+    why: "The isolated picking pattern returns to the tune immediately.",
+    needs: isolatedId,
+    followedBy: undefined,
+    run: false,
+    memory: false,
+    listen: false,
+    click: true,
+  };
+  return [isolated, context];
 }
 
 function cadenceSpans(cad: Cadence): Spanned[] {
@@ -1067,7 +1129,7 @@ export function mixDecks(main: Deck, others: { tuneId: string; deck: Deck }[]): 
       lane.push(id);
       if (have.has(id)) continue;
       have.add(id);
-      cards.push({ ...c, id, needs: c.needs ? glue(tuneId, c.needs) : undefined });
+      cards.push({ ...c, id, needs: c.needs ? glue(tuneId, c.needs) : undefined, followedBy: c.followedBy ? glue(tuneId, c.followedBy) : undefined });
     }
     const at = new Map(deck.intro.map((id, i) => [glue(tuneId, id), i]));
     lanes.push(lane.sort((a, b) => (at.get(a) ?? 0) - (at.get(b) ?? 0)));

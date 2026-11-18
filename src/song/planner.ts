@@ -1,9 +1,10 @@
 import type { Deck, Family } from "./deck";
 import { getStoredItem, removeStoredItem, setStoredItem } from "../storage";
 import { GLUE } from "./ids";
-import { chronologicalAttempts, planSession, type Store } from "./leitner";
+import { chronologicalAttempts, planSession, unlocked, type Store } from "./leitner";
 import type { Axis, MistakeClass, SkillProfile, Weakness } from "./profile";
 import { familyOf } from "./stats";
+import { GOAL_LABELS, goalProgress, type Goal } from "./goals";
 
 // A session with a shape, as a teacher would plan it: hands first (a warm-up), then the one thing
 // most worth working on (the focus), then what the box says is due (review), then something to
@@ -122,6 +123,7 @@ export interface PlanOptions {
   profile?: SkillProfile | null;
   arc?: Arc | null;
   exclude?: Set<string>;
+  goal?: Goal | null;
 }
 
 export function planBlocks(deck: Deck, store: Store, day: string, opts: PlanOptions): SessionPlan {
@@ -131,10 +133,25 @@ export function planBlocks(deck: Deck, store: Store, day: string, opts: PlanOpti
   const used = new Set(opts.exclude ?? []);
   const known = (id: string) => Boolean(store.cards[id]);
   const budget = Math.max(0, opts.minutes);
+  const goal = opts.goal?.tuneId === opts.tuneId ? opts.goal : null;
+  const relevant = new Set<string>();
+  const include = (id: string) => {
+    if (relevant.has(id) || !byId.has(id)) return;
+    relevant.add(id);
+    const needs = byId.get(id)?.needs;
+    if (needs) include(needs);
+  };
+  goal?.essentialTasks.forEach((task) => include(task.cardId));
+  const servesGoal = (id: string) => !goal || relevant.has(id);
+  const local = (id: string) => (id.startsWith(opts.tuneId + GLUE) ? id.slice(opts.tuneId.length + GLUE.length) : id);
+  const profile = goal && opts.profile ? {
+    ...opts.profile,
+    weaknesses: opts.profile.weaknesses.map((weakness) => ({ ...weakness, cards: weakness.cards.filter((id) => servesGoal(local(id))) })).filter((weakness) => weakness.cards.length),
+  } : opts.profile;
 
   // the box's own plan: warm-up scale, due cards lowest box first, a few new ones; how many new ones
   // depends on how the last sessions went (the zone where practice teaches most)
-  const base = planSession(deck, store, day, used, newCards(store));
+  const base = planSession(goal ? { ...deck, intro: deck.intro.filter(servesGoal) } : deck, store, day, used, newCards(store));
 
   // warm-up: something the hands know, never new
   const warm =
@@ -143,18 +160,17 @@ export function planBlocks(deck: Deck, store: Store, day: string, opts: PlanOpti
   const warmup: string[] = [];
 
   // focus: the arc's mistake, where it shows most
-  const arc = nextArc(opts.arc ?? null, opts.profile ?? null, day);
-  const weak: Weakness | undefined = arc ? opts.profile?.weaknesses.find((w) => w.cls === arc.cls) : undefined;
-  const local = (id: string) => (id.startsWith(opts.tuneId + GLUE) ? id.slice(opts.tuneId.length + GLUE.length) : id);
+  const arc = nextArc(opts.arc ?? null, profile ?? null, day);
+  const weak: Weakness | undefined = arc ? profile?.weaknesses.find((w) => w.cls === arc.cls) : undefined;
   let focus: string[] = [];
   let why = "";
   if (weak) {
     focus = weak.cards.map(local).filter((id) => byId.has(id) && !used.has(id)).slice(0, MAX_FOCUS);
     if (focus.length) why = weak.fact;
   }
-  if (!focus.length) {
+  if (!focus.length && (!goal || goal.kind === "melody")) {
     // the last run-through's short bars, in the smallest melody cards that hold them
-    const run = chronologicalAttempts(store.history ?? []).reverse().find((x) => x.id === "mel:run" && x.ev?.weakBars?.length && daysBetween(x.day, day) < RUN_DAYS);
+    const run = chronologicalAttempts(store.history ?? []).reverse().find((x) => x.conditions?.source !== "self" && x.id === "mel:run" && x.ev?.weakBars?.length && daysBetween(x.day, day) < RUN_DAYS);
     const weakBars = run?.ev?.weakBars ?? [];
     const barsOf = (id: string) => {
       const c = byId.get(id)!;
@@ -163,7 +179,7 @@ export function planBlocks(deck: Deck, store: Store, day: string, opts: PlanOpti
     const picked: string[] = [];
     for (const bar of weakBars) {
       const best = deck.intro
-        .filter((id) => !used.has(id) && !picked.includes(id) && byId.get(id)?.family === "melody" && !byId.get(id)?.run && byId.get(id)?.tuneId === opts.tuneId && barsOf(id).has(bar))
+        .filter((id) => servesGoal(id) && !used.has(id) && !picked.includes(id) && byId.get(id)?.family === "melody" && !byId.get(id)?.run && byId.get(id)?.tuneId === opts.tuneId && barsOf(id).has(bar))
         .sort((x, y) => barsOf(x).size - barsOf(y).size)[0];
       if (best && !picked.some((id) => barsOf(id).has(bar))) picked.push(best);
       if (picked.length >= 3) break;
@@ -173,7 +189,23 @@ export function planBlocks(deck: Deck, store: Store, day: string, opts: PlanOpti
       why = `Run-through · bar${weakBars.length > 1 ? "s" : ""} ${weakBars.slice(0, 4).map((b) => b + 1).join(", ")}`;
     }
   }
-  if (!focus.length && opts.profile) {
+  if (!focus.length && goal) {
+    const ready = (id: string, visiting = new Set<string>()): string | undefined => {
+      if (used.has(id) || visiting.has(id) || !byId.has(id)) return;
+      visiting.add(id);
+      const card = byId.get(id)!;
+      return unlocked(card, store) ? id : card.needs ? ready(card.needs, visiting) : id;
+    };
+    // Box rank and kinship can schedule a task; only an actual clean tempo can satisfy its target.
+    const demonstrated = new Set(goalProgress(goal, store).taskIds);
+    const unfinished = goal.essentialTasks.filter((item) => !demonstrated.has(item.cardId));
+    const id = (unfinished.length ? unfinished : goal.essentialTasks).map((item) => ready(item.cardId)).find(Boolean);
+    if (id) {
+      focus = [id];
+      why = `${GOAL_LABELS[goal.kind]} · ${byId.get(id)!.title}`;
+    }
+  }
+  if (!focus.length && opts.profile && !goal) {
     // nothing named: the skill left alone longest, if it has been a while
     const stale = (Object.entries(opts.profile.axes) as [Axis, SkillProfile["axes"][Axis]][])
       .filter(([, a]) => a.last && daysBetween(a.last, day) >= NEGLECT_DAYS)
@@ -189,8 +221,9 @@ export function planBlocks(deck: Deck, store: Store, day: string, opts: PlanOpti
   }
   // Reserve something from the tune before spending the budget on drills. A new player's first
   // melody chunk can close the session too. Prefer a different passage from the focus.
-  const melodies = deck.intro
-    .filter((id) => !used.has(id) && byId.get(id)?.family === "melody" && byId.get(id)?.tuneId === opts.tuneId && (known(id) || base.includes(id)))
+  const melodies = (goal ? goal.essentialTasks.map((task) => task.cardId) : deck.intro)
+    .filter((id) => !used.has(id) && byId.has(id) && byId.get(id)?.tuneId === opts.tuneId
+      && (goal ? unlocked(byId.get(id), store) : byId.get(id)?.family === "melody" && (known(id) || base.includes(id))))
     .sort((a, b) => Number(focus.includes(a)) - Number(focus.includes(b)) || (store.cards[b]?.box ?? 0) - (store.cards[a]?.box ?? 0));
   const melody = melodies.find((id) => cost(id) <= budget);
   const music: string[] = melody ? [melody] : [];
@@ -224,7 +257,7 @@ export function planBlocks(deck: Deck, store: Store, day: string, opts: PlanOpti
 
   // nothing at all due or named: the box's leftovers, so there is always a session
   if (!focus.length && !review.length && !music.length) {
-    const extra = deck.intro.filter((id) => !used.has(id) && known(id)).sort((a, b) => store.cards[a].box - store.cards[b].box);
+    const extra = deck.intro.filter((id) => servesGoal(id) && !used.has(id) && known(id)).sort((a, b) => store.cards[a].box - store.cards[b].box);
     review.push(...fit(extra, remaining));
   }
 

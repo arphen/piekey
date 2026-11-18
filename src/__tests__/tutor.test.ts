@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fitLatency } from "../audio/latency";
 import { toDrop } from "../audio/recorder";
 import type { ReadingBar, ReadingNote } from "../core/contract";
@@ -17,6 +17,7 @@ import { createEvidence, timingOf, type Evidence } from "../song/evidence";
 import type { Attempt, Store } from "../song/leitner";
 import { buildProfile } from "../song/profile";
 import { cardTrend } from "../song/stats";
+import { arrangementIdentity, createGoal, getGoals, GOALS_KEY, goalDeck, goalProgress, loadActiveGoal, saveGoal, setActiveGoal } from "../song/goals";
 
 const step = (string: number, fret: number): PatternStep => ({ string, fret, pc: 0, midi: 0, startBeat: 0, durationBeats: 1 });
 
@@ -69,6 +70,18 @@ describe("the player's profile", () => {
   it("does not name a class on too little evidence", () => {
     const p = buildProfile([attempt("mel:new:0", day, { ev: ev({ leap: [3, 3] }) })], day);
     expect(p.weaknesses).toEqual([]);
+  });
+
+  it("excludes self-reported playing from every profile judgment even with misleading evidence", () => {
+    const measured = attempt("mel:new:0", day, { ev: ev({ notes: [20, 2] }) });
+    const self = Array.from({ length: 6 }, (_, i) => attempt(`scale:self:${i}`, day, {
+      bpm: 220, goalBpm: 80, share: 1,
+      conditions: { v: 1, source: "self", confidence: "unknown" },
+      ev: ev({ notes: [20, 18], leap: [10, 9], wrong: [[70, 71]], time: { n: 40, mean: 200, spread: 100, rush: 0, drag: 40 } }),
+    }));
+    expect(buildProfile([measured, ...self], day)).toEqual(buildProfile([measured], day));
+    expect(buildProfile(self, day).weaknesses).toEqual([]);
+    expect(buildProfile(self, day).ceilings).toEqual({});
   });
 
   it("finds the same semitone slip across exercises", () => {
@@ -158,6 +171,138 @@ const store = (cards: Store["cards"] = {}): Store => ({ v: 1, cards, sessions: [
 const known = (box: number) => ({ box, due: "2026-11-01", bpm: 80, seen: 3, clean: 2, last: "clean" as const });
 const flat = { level: 0.5, trend: null, n: 0, last: null };
 const profileWith = (over: Partial<SkillProfile>): SkillProfile => ({ axes: { pitch: flat, time: flat, tempo: flat, chords: flat, reading: flat, ear: flat }, weaknesses: [], ceilings: {}, ...over });
+
+describe("a learner's musical goal", () => {
+  beforeEach(() => {
+    const kept = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => kept.get(key) ?? null,
+      setItem: (key: string, value: string) => { kept.set(key, value); },
+      removeItem: (key: string) => { kept.delete(key); },
+      key: (index: number) => [...kept.keys()][index] ?? null,
+      get length() { return kept.size; },
+    });
+  });
+  afterEach(() => { vi.unstubAllGlobals(); });
+  const make = (kind: "melody" | "accompaniment" | "ear" | "reading" | "improv" = "melody") => {
+    const s = sheet();
+    const deck = buildDeck(s, buildTimeline(s));
+    const goal = { ...createGoal(s, deck, { kind, minBpm: 60, targetBpm: 84 }), createdAt: "2026-11-17T10:00:00.000Z" };
+    return { s, deck, goal };
+  };
+
+  it("keeps a fixed route and personal tempo without changing the imported score or deck", () => {
+    const { s, deck, goal } = make();
+    const before = deck.cards.map((card) => [card.bpm, card.goalBpm]);
+    const bounded = goalDeck(deck, goal);
+    expect(goal.essentialTasks.length).toBeGreaterThan(0);
+    expect(goal.essentialTasks.length).toBeLessThanOrEqual(12);
+    expect(goal.essentialTasks.some((task) => task.cardId === "mel:run")).toBe(true);
+    expect(goal.essentialTasks.some((task) => task.cardId.startsWith("mel:memory:"))).toBe(false);
+    expect(bounded.cards.every((card) => card.bpm >= 60 && card.bpm <= 84 && card.goalBpm === 84)).toBe(true);
+    expect(deck.cards.map((card) => [card.bpm, card.goalBpm])).toEqual(before);
+    expect(s.tempo).toBe(100);
+    const fixed = JSON.stringify(goal.essentialTasks);
+    goalDeck({ ...deck, cards: [...deck.cards, { ...deck.cards[0], id: "optional:new-variant" }] }, goal);
+    expect(JSON.stringify(goal.essentialTasks)).toBe(fixed);
+  });
+
+  it("invalidates changed music while preserving goals across display/fingering choices", () => {
+    const { s, deck, goal } = make();
+    localStorage.removeItem(GOALS_KEY);
+    expect(saveGoal(goal)).toBe(true);
+    const moved = { ...s, title: "Renamed", bars: s.bars.map((bar) => ({ ...bar, notes: bar.notes.map((note) => ({ ...note, string: 3, fret: 9 })) })) };
+    expect(arrangementIdentity(moved)).toEqual(goal.arrangement);
+    expect(loadActiveGoal(moved, buildDeck(moved, buildTimeline(moved), { window: 7 }))?.id).toBe(goal.id);
+    const changed = { ...s, bars: s.bars.map((bar, i) => i ? bar : { ...bar, notes: bar.notes.map((note, j) => j ? note : { ...note, midi: note.midi + 1 }) }) };
+    expect(loadActiveGoal(changed, deck)).toBeNull();
+    expect(getGoals().byTune[s.id].goals[goal.id]).toEqual(goal);
+    localStorage.removeItem(GOALS_KEY);
+  });
+
+  it("stores independent immutable goals and refuses to overwrite unreadable saved data", () => {
+    const { s, deck, goal } = make();
+    localStorage.removeItem(GOALS_KEY);
+    expect(saveGoal(goal)).toBe(true);
+    expect(getGoals()).toBe(getGoals());
+    const blockedRead = vi.spyOn(localStorage, "getItem").mockImplementationOnce(() => { throw new Error("Storage temporarily unavailable"); });
+    expect(getGoals().byTune).toEqual({});
+    blockedRead.mockRestore();
+    expect(getGoals().byTune.t.goals[goal.id]).toEqual(goal);
+    expect(saveGoal({ ...goal, tempo: { minBpm: 60, targetBpm: 100 } })).toBe(false);
+    const second = createGoal(s, deck, { kind: "ear", minBpm: 50, targetBpm: 80 });
+    expect(saveGoal(second)).toBe(true);
+    expect(Object.keys(getGoals().byTune.t.goals)).toHaveLength(2);
+    expect(setActiveGoal(s.id, goal.id)).toBe(true);
+    expect(loadActiveGoal(s, deck)?.id).toBe(goal.id);
+    localStorage.setItem(GOALS_KEY, "{broken");
+    expect(saveGoal(second)).toBe(false);
+    expect(localStorage.getItem(GOALS_KEY)).toBe("{broken");
+    localStorage.removeItem(GOALS_KEY);
+    getGoals();
+    const imported = Object.fromEntries(Array.from({ length: 13 }, (_, index) => {
+      const id = `${goal.id}-${index}`;
+      return [id, { ...goal, id }];
+    }));
+    const importedId = Object.keys(imported)[0];
+    localStorage.setItem(GOALS_KEY, JSON.stringify({ v: 1, byTune: { t: { activeId: importedId, goals: imported } } }));
+    expect(Object.keys(getGoals().byTune.t.goals)).toHaveLength(13);
+    expect(setActiveGoal("t", Object.keys(imported)[12])).toBe(true);
+    expect(saveGoal(second)).toBe(false); // Exchange history has headroom; local creations stay bounded.
+    expect(Object.keys(getGoals().byTune.t.goals)).toHaveLength(13);
+    localStorage.removeItem(GOALS_KEY);
+    getGoals();
+  });
+
+  it("counts exact measured takes since creation, excluding old arrangements, self reports and box credit", () => {
+    const { goal } = make();
+    const id = goal.essentialTasks[0].cardId;
+    const checked = { ...attempt(id, "2026-11-17", { bpm: 84, at: Date.parse("2026-11-17T11:00:00Z"), ev: ev({ time: { n: 20, mean: 0, spread: 10, rush: 0, drag: 0 } }) }),
+      conditions: { v: 1 as const, source: "measured" as const, confidence: "unknown" as const, tempo: "adaptive" as const }, arrangementFingerprint: goal.arrangement.fingerprint };
+    const old = { ...checked, at: Date.parse("2026-11-16T11:00:00Z") };
+    const wrong = { ...checked, arrangementFingerprint: "earlier-score" };
+    const self = { ...checked, conditions: { ...checked.conditions, source: "self" as const } };
+    const ownPace = { ...checked, conditions: { ...checked.conditions, tempo: "own-pace" as const } };
+    const noTiming = { ...checked, ev: ev({}) };
+    const state = { ...store({ [id]: { ...known(5), bestCleanBpm: 200 } }), credit: { [id]: 5 }, history: [old, wrong, self, ownPace, noTiming] };
+    expect(goalProgress(goal, state).demonstrated).toBe(0);
+    expect(goalProgress(goal, { ...state, history: [...state.history, checked] })).toMatchObject({ demonstrated: 1, total: goal.essentialTasks.length, taskIds: [id] });
+    const { goal: earGoal } = make("ear");
+    const echo = { ...ownPace, id: earGoal.essentialTasks[0].cardId, bpm: 40, arrangementFingerprint: earGoal.arrangement.fingerprint };
+    expect(goalProgress(earGoal, { ...store(), history: [echo] })).toMatchObject({ demonstrated: 1, evidenceKind: "echo" });
+  });
+
+  it("prefers a goal-relevant weakness and closes on that goal within every session budget", () => {
+    const { deck, goal } = make("accompaniment");
+    const cards = Object.fromEntries(deck.intro.map((id) => [id, known(2)]));
+    const melody = deck.cards.find((card) => card.family === "melody")!;
+    const relevant = goal.essentialTasks[0].cardId;
+    const profile = profileWith({ weaknesses: [
+      { cls: "leaps", strength: .9, n: 40, cards: [`t::${melody.id}`], fact: "Unrelated leaps" },
+      { cls: "unsteady", strength: .4, n: 40, cards: [`t::${relevant}`], fact: "Relevant beat" },
+    ] });
+    for (const minutes of [10, 25, 45]) {
+      const plan = planBlocks(goalDeck(deck, goal), store(cards), "2026-11-17", { minutes, tuneId: "t", goal, profile });
+      expect(plan.why).toBe("Relevant beat");
+      expect(plan.arc?.cls).toBe("unsteady");
+      expect(plan.ids).not.toContain(melody.id);
+      expect(plan.blocks[plan.blocks.length - 1]?.role).toBe("music");
+      expect(plan.blocks[plan.blocks.length - 1]?.cards.every((id) => goal.essentialTasks.some((task) => task.cardId === id))).toBe(true);
+      expect(plan.minutes).toBeLessThanOrEqual(minutes);
+      expect(new Set(plan.ids).size).toBe(plan.ids.length);
+    }
+  });
+
+  it("prepares an improvisation goal with its guide tones without enlarging the frozen route", () => {
+    const { deck, goal } = make("improv");
+    const fixed = JSON.stringify(goal.essentialTasks);
+    const plan = planBlocks(deck, store(), "2026-11-17", { minutes: 10, tuneId: "t", goal });
+    expect(plan.ids.length).toBeGreaterThan(0);
+    expect(plan.ids.every((id) => id.endsWith(":guides"))).toBe(true);
+    expect(plan.why).toContain("Improvise over the changes");
+    expect(JSON.stringify(goal.essentialTasks)).toBe(fixed);
+  });
+});
 
 describe("a session with a shape", () => {
   const s = sheet();

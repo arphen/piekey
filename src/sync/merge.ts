@@ -1,5 +1,5 @@
 import type { TuneEntry } from "../tunes/library";
-import { addedRows, canonical, isRecord, parseValue, unionTransactions, validTune, type SyncConflict, type SyncTransaction } from "./model";
+import { addedRows, canonical, isRecord, parseValue, unionTransactions, validGoalData, validTune, type SyncConflict, type SyncTransaction } from "./model";
 
 type Obj = Record<string, unknown>;
 type Path = string[];
@@ -71,6 +71,26 @@ function unionRows(left: unknown, right: unknown): unknown[] {
   return [...rows(left), ...addedRows(rows(left), rows(right))];
 }
 
+/** Goals are immutable identities, including independently created first writes. Only the
+ * active selection uses transaction order; replacing the collection requires an explicit reset. */
+function goals(current: unknown, before: unknown, after: unknown): unknown {
+  const byTune = clone(obj(obj(current).byTune));
+  const previous = obj(obj(before).byTune);
+  for (const [tuneId, raw] of Object.entries(obj(obj(after).byTune))) {
+    const bucket = obj(raw), old = obj(previous[tuneId]), have = obj(byTune[tuneId]);
+    const entries = { ...obj(have.goals) };
+    for (const [id, goal] of Object.entries(obj(bucket.goals))) {
+      if (owns(entries, id) && !equal(entries[id], goal))
+        throw new Error("Two devices have different content for the same musical goal. Their transactions are retained; export both devices before repairing the goal.");
+      entries[id] = clone(goal);
+    }
+    const activeId = owns(bucket, "activeId") && !equal(old.activeId, bucket.activeId)
+      ? bucket.activeId : have.activeId ?? null;
+    byTune[tuneId] = { activeId, goals: entries };
+  }
+  return { v: 1, byTune };
+}
+
 /** Legacy aggregates cannot prove whether devices share an ancestor. Keep evidence and flag it. */
 function baselineMerge(left: unknown, right: unknown, path: Path = []): unknown {
   if (equal(left, right)) return clone(left);
@@ -102,7 +122,8 @@ function practice(current: unknown, before: unknown, after: unknown, tx: SyncTra
   const next = obj(patch(c, omit(b), omit(a), tx, resets));
   const cards = { ...obj(c.cards) }, credit = { ...obj(c.credit) };
   const additions = addedRows(rows(b.history), rows(a.history));
-  for (const id of new Set([...Object.keys(obj(b.cards)), ...Object.keys(obj(a.cards))])) {
+  const selfOnly = !tx.baseline && !tx.reset && additions.length > 0 && additions.every((row) => obj(obj(row).conditions).source === "self");
+  for (const id of selfOnly ? [] : new Set([...Object.keys(obj(b.cards)), ...Object.keys(obj(a.cards))])) {
     // The same scale snapshot is written into many tune stores. Only guitar-skills owns it.
     if (tx.key !== "guitar-skills" && id.startsWith("scale:")) continue;
     const path = ["cards", id];
@@ -117,7 +138,7 @@ function practice(current: unknown, before: unknown, after: unknown, tx: SyncTra
     state.clean = num(have.clean) + clean;
     state.bestCleanBpm = Math.max(num(have.bestCleanBpm), num(local.bestCleanBpm));
     if (!state.bestCleanBpm) delete state.bestCleanBpm;
-    const attempts = additions.filter((row) => obj(row).id === id).map(obj);
+    const attempts = additions.filter((row) => obj(row).id === id && obj(obj(row).conditions).source !== "self").map(obj);
     let box = num(have.box, 1);
     if (attempts.length) {
       for (const attempt of attempts) box = attempt.result === "fail" ? 1 : attempt.result === "clean" ? Math.min(5, box + 1) : box;
@@ -134,7 +155,7 @@ function practice(current: unknown, before: unknown, after: unknown, tx: SyncTra
     }
     cards[id] = state;
   }
-  for (const id of new Set([...Object.keys(obj(b.credit)), ...Object.keys(obj(a.credit))])) {
+  for (const id of selfOnly ? [] : new Set([...Object.keys(obj(b.credit)), ...Object.keys(obj(a.credit))])) {
     if (tx.key !== "guitar-skills" && id.startsWith("scale:")) continue;
     if (blocked(tx, ["cards", id], resets)) continue;
     if (!owns(obj(a.credit), id)) { delete credit[id]; continue; }
@@ -278,7 +299,8 @@ export function projectTransactions(input: readonly SyncTransaction[]): Projecti
       const baseline = parseValue(tx.after), identity = canonical(baseline);
       if (unique.has(identity)) continue;
       if (unique.size && kind === "storage") conflicts.push({ kind: "legacy", key, message: "Both devices already had different history before transaction recording. Original snapshots are retained; overlapping legacy totals need review.", transactionIds: baselines.map((entry) => entry.id) });
-      value = value === null ? clone(baseline) : baselineMerge(value, baseline);
+      value = key === "guitar-goals-v1" ? goals(value, null, baseline)
+        : value === null ? clone(baseline) : baselineMerge(value, baseline);
       unique.add(identity);
     }
     for (const tx of group.filter((entry) => !entry.baseline)) {
@@ -295,12 +317,17 @@ export function projectTransactions(input: readonly SyncTransaction[]): Projecti
       else if (key.startsWith("guitar-song-deck:") || key === "guitar-skills") value = practice(value, before, after, tx, resets);
       else if (key === "guitar-freeplay") value = freeplay(value, before, after);
       else if (key === "guitar-ear-v1") value = ear(value, before, after, tx, resets);
+      else if (key === "guitar-goals-v1") value = goals(value, before, after);
       else if (key.startsWith("guitar-learn:")) {
         value = patch(value, before, after, tx, resets);
         if (isRecord(value)) value.done = unionRows(obj(value).done, obj(after).done);
       } else value = patch(value, before, after, tx, resets);
     }
-    if (kind === "storage") storage.set(key, value === null ? null : typeof value === "string" ? value : canonical(value));
+    if (kind === "storage") {
+      if (key === "guitar-goals-v1" && value !== null && !validGoalData(value))
+        throw new Error("The combined musical goals exceed the supported limits or need repair. No goals were discarded. Export both devices before changing their goals.");
+      storage.set(key, value === null ? null : typeof value === "string" ? value : canonical(value));
+    }
     else {
       if (validTune(value)) tunes.set(key, value);
       const edits = group.filter((tx) => !tx.baseline);

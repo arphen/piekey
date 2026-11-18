@@ -41,7 +41,7 @@ export interface MergeResult {
   revision: number;
 }
 
-const SETTINGS = new Set(["guitar-key", "guitar-tune", "guitar-arc", "guitar-freeplay", "guitar-freeplay-prefs", "guitar-ear-v1", "guitar-skills"]);
+const SETTINGS = new Set(["guitar-key", "guitar-tune", "guitar-arc", "guitar-freeplay", "guitar-freeplay-prefs", "guitar-ear-v1", "guitar-skills", "guitar-goals-v1"]);
 const reserved = (key: string) => key === "prototype" || Object.prototype.hasOwnProperty.call(Object.prototype, key);
 export function syncableStorageKey(key: string): boolean {
   return SETTINGS.has(key) || key.startsWith("guitar-song-deck:") || key.startsWith("guitar-learn:");
@@ -82,6 +82,16 @@ const optional = (value: unknown, check: (entry: unknown) => boolean) => value =
 const fraction = (value: unknown) => finite(value) && value >= 0 && value <= 1;
 const result = (value: unknown) => typeof value === "string" && ["clean", "ok", "fail", "skip"].includes(value);
 const tally = (value: unknown) => Array.isArray(value) && value.length === 2 && value.every(count) && value[1] <= value[0];
+export function validAttemptConditions(value: unknown): boolean {
+  const oneOf = (entry: unknown, choices: string[]) => typeof entry === "string" && choices.includes(entry);
+  return isRecord(value) && value.v === 1 && oneOf(value.source, ["measured", "self"])
+    && oneOf(value.confidence, ["unknown", "limited", "usable"])
+    && optional(value.support, (entry) => oneOf(entry, ["none", "guide", "adaptive"]))
+    && optional(value.notation, (entry) => oneOf(entry, ["visible", "hidden", "faded"]))
+    && optional(value.tempo, (entry) => oneOf(entry, ["own-pace", "adaptive", "fixed"]))
+    && optional(value.exposure, (entry) => oneOf(entry, ["first", "repeated"]))
+    && optional(value.uninterrupted, (entry) => typeof entry === "boolean");
+}
 function evidence(value: unknown): boolean {
   return isRecord(value) && [value.notes, value.leap, value.cross, value.shift].every(tally)
     && count(value.restarts) && count(value.hears) && Array.isArray(value.wrong)
@@ -96,7 +106,9 @@ function attempt(value: unknown): boolean {
     && optional(value.uid, (id) => typeof id === "string" && id.length > 0)
     && optional(value.at, (at) => finite(at) && at >= 0) && optional(value.goalBpm, (bpm) => finite(bpm) && bpm > 0)
     && optional(value.share, (share) => share === null || fraction(share)) && optional(value.from, count) && optional(value.to, count)
-    && optional(value.timingMeasured, (flag) => typeof flag === "boolean") && optional(value.ev, evidence);
+    && optional(value.timingMeasured, (flag) => typeof flag === "boolean") && optional(value.ev, evidence)
+    && optional(value.conditions, validAttemptConditions)
+    && optional(value.arrangementFingerprint, (entry) => typeof entry === "string" && entry.length > 0 && entry.length <= 128);
 }
 function session(value: unknown): boolean {
   return isRecord(value) && typeof value.date === "string" && finite(value.minutes) && value.minutes >= 0
@@ -130,6 +142,27 @@ function validSettings(value: unknown): boolean {
     && [value.guide, value.voice, value.shuffle, value.mix].every((flag) => optional(flag, (entry) => typeof entry === "boolean"))
     && optional(value.window, (fret) => fret === null || count(fret))
     && optional(value.length, (length) => typeof length === "string" && ["short", "normal", "long"].includes(length));
+}
+
+function validGoal(value: unknown, tuneId: string, id: string): boolean {
+  const text = (entry: unknown, limit: number) => typeof entry === "string" && entry.length > 0 && entry.length <= limit;
+  const bpm = (entry: unknown): entry is number => finite(entry) && entry >= 30 && entry <= 240;
+  return isRecord(value) && value.v === 1 && value.id === id && text(id, 512) && value.tuneId === tuneId
+    && typeof value.kind === "string" && ["melody", "accompaniment", "ear", "reading", "improv"].includes(value.kind)
+    && isRecord(value.arrangement) && value.arrangement.version === 1 && text(value.arrangement.fingerprint, 128)
+    && isRecord(value.tempo) && bpm(value.tempo.minBpm) && bpm(value.tempo.targetBpm) && value.tempo.minBpm <= value.tempo.targetBpm
+    && typeof value.createdAt === "string" && value.createdAt.length <= 40 && Number.isFinite(Date.parse(value.createdAt))
+    && Array.isArray(value.essentialTasks) && value.essentialTasks.length > 0 && value.essentialTasks.length <= 12
+    && new Set(value.essentialTasks.map((task) => isRecord(task) ? task.cardId : null)).size === value.essentialTasks.length
+    && value.essentialTasks.every((task) => isRecord(task) && text(task.cardId, 1024) && bpm(task.targetBpm));
+}
+
+export function validGoalData(value: unknown): boolean {
+  return isRecord(value) && value.v === 1 && isRecord(value.byTune) && Object.keys(value.byTune).length <= 128
+    && Object.entries(value.byTune).every(([tuneId, bucket]) => tuneId.length > 0 && tuneId.length <= 512
+      && isRecord(bucket) && isRecord(bucket.goals) && Object.keys(bucket.goals).length <= 256
+      && (bucket.activeId === null || (typeof bucket.activeId === "string" && Object.prototype.hasOwnProperty.call(bucket.goals, bucket.activeId)))
+      && Object.entries(bucket.goals).every(([id, goal]) => validGoal(goal, tuneId, id)));
 }
 
 function validFreeEntry(value: unknown): boolean {
@@ -167,6 +200,7 @@ function validPayload(tx: SyncTransaction, raw: string | null): boolean {
     return Object.values(value.cards).every(validCard);
   }
   if (tx.key === "guitar-freeplay") return Array.isArray(value) && value.every(validFreeEntry);
+  if (tx.key === "guitar-goals-v1") return validGoalData(value);
   if (tx.key === "guitar-ear-v1") return validEar(value);
   if (tx.key.startsWith("guitar-learn:")) return isRecord(value) && count(value.step) && Array.isArray(value.done) && value.done.every(count);
   return true;

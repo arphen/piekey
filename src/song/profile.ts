@@ -53,6 +53,7 @@ export function allAttempts(stores: { tuneId: string; store: Store }[]): Attempt
 
 /** The skills an attempt says something about. */
 export function axesOf(a: Attempt): Axis[] {
+  if (a.conditions?.source === "self") return [];
   const out: Axis[] = [];
   switch (familyOf(a.id)) {
     case "scales":
@@ -116,6 +117,7 @@ function scoreOf(axis: Axis, a: Attempt): number | null {
 
 /** Keep the old calibration argument/API; play-along calibration does not isolate hardware latency. */
 export function buildProfile(attempts: Attempt[], day: string, _measured = true): SkillProfile {
+  attempts = attempts.filter((attempt) => attempt.conditions?.source !== "self");
   const axes = {} as Record<Axis, AxisLevel>;
   for (const axis of AXES) {
     const scored = attempts.filter((a) => axesOf(a).includes(axis)).flatMap((a) => {

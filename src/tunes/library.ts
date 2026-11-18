@@ -1,7 +1,7 @@
 import { clearStorageError, getStoredItem, reportStorageError, setStoredItem } from "../storage";
 import { readTuneXml, writeTuneXml } from "./database";
 import { parseMusicXml, type LeadSheet } from "./musicxml";
-import { recordLibraryChange } from "../sync/journal";
+import { recordLibraryChange, recordLibraryRemoval } from "../sync/journal";
 
 // Entry IDs belong to the library, never to mutable title/key/arrangement metadata. Existing IDs
 // remain untouched so every saved card box and take keeps its owner.
@@ -19,6 +19,13 @@ interface StoredTuneEntry extends Omit<TuneEntry, "xml"> {
   xmlRef?: string;
 }
 
+export interface LibraryIssue {
+  id: string;
+  name: string;
+  kind: "missing" | "invalid";
+  message: string;
+}
+
 const LIBRARY_STORAGE = "guitar-tunes-v2";
 const CURRENT_STORAGE = "guitar-tune";
 const OLD_LIBRARY = "guitar-tunes";
@@ -27,6 +34,25 @@ const files = new Map<string, string>();
 let saves = Promise.resolve(true);
 let pendingOperations = 0;
 const operationListeners = new Set<() => void>();
+let libraryIssues: readonly LibraryIssue[] = [];
+const issueListeners = new Set<() => void>();
+
+export const getLibraryIssues = (): readonly LibraryIssue[] => libraryIssues;
+export function subscribeLibraryIssues(listener: () => void): () => void {
+  issueListeners.add(listener);
+  return () => { issueListeners.delete(listener); };
+}
+
+function publishLibraryIssues(next: LibraryIssue[]) {
+  if (JSON.stringify(next) !== JSON.stringify(libraryIssues)) {
+    libraryIssues = next;
+    issueListeners.forEach((listener) => listener());
+  }
+  if (next.length) {
+    const names = next.slice(0, 3).map((issue) => issue.name).join(", ");
+    reportStorageError("tune-library-read", null, `Scores need repair: ${names}${next.length > 3 ? ` and ${next.length - 3} more` : ""}. Healthy tunes remain available. Open Song's library to re-import or remove these entries.`);
+  } else clearStorageError("tune-library-read");
+}
 
 export const isLibraryBusy = () => pendingOperations > 0;
 export function subscribeLibraryOperations(listener: () => void): () => void {
@@ -59,40 +85,74 @@ export function writeStored(key: string, value: unknown): void {
 }
 
 function storedEntries(): StoredTuneEntry[] {
-  const raw = readStored<unknown>(LIBRARY_STORAGE, []);
-  if (!Array.isArray(raw)) return [];
-  return raw.filter(
+  const stored = getStoredItem(LIBRARY_STORAGE);
+  const raw: unknown = stored === null ? [] : JSON.parse(stored);
+  if (!Array.isArray(raw) || !raw.every(
     (entry): entry is StoredTuneEntry =>
       Boolean(entry) &&
       typeof entry === "object" &&
       typeof (entry as TuneEntry).id === "string" &&
-      typeof (entry as TuneEntry).name === "string" &&
-      (typeof (entry as StoredTuneEntry).xml === "string" || typeof (entry as StoredTuneEntry).xmlRef === "string"),
-  );
+      Boolean((entry as TuneEntry).id) &&
+      typeof (entry as TuneEntry).name === "string",
+  ) || new Set(raw.map((entry: StoredTuneEntry) => entry.id)).size !== raw.length)
+    throw new Error("The saved tune library index is unreadable. Restore a backup before changing it.");
+  return raw;
+}
+
+function cachedXml(entry: StoredTuneEntry): string | undefined {
+  return typeof entry.xml === "string" ? entry.xml : typeof entry.xmlRef === "string" ? files.get(entry.xmlRef) : undefined;
+}
+
+function usableEntries(stored: StoredTuneEntry[]): { entries: TuneEntry[]; issues: LibraryIssue[] } {
+  const entries: TuneEntry[] = [];
+  const issues: LibraryIssue[] = [];
+  for (const saved of stored) {
+    const xml = cachedXml(saved);
+    if (xml === undefined) {
+      issues.push({ id: saved.id, name: saved.name, kind: "missing", message: "The saved score file could not be read. Re-import it to keep this tune's identity and practice history." });
+      continue;
+    }
+    const { xmlRef: _ref, ...metadata } = saved;
+    const entry: TuneEntry = { ...metadata, xml };
+    try {
+      parseTuneEntry(entry);
+      entries.push(entry);
+    } catch (error) {
+      issues.push({ id: saved.id, name: saved.name, kind: "invalid", message: error instanceof Error ? error.message : "The saved score is unreadable." });
+    }
+  }
+  return { entries, issues };
 }
 
 /** Immediate cached snapshot. Await loadLibraryAsync before editing a library after a reload. */
 export function loadLibrary(): TuneEntry[] {
-  return storedEntries().flatMap(({ xmlRef, xml: inline, ...entry }) => {
-    const xml = inline ?? (xmlRef ? files.get(xmlRef) : undefined);
-    return xml === undefined ? [] : [{ ...entry, xml }];
-  });
+  try { return usableEntries(storedEntries()).entries; }
+  catch (error) {
+    reportStorageError("tune-library-read", error, "The tune library index could not be opened. Your saved data is unchanged; restore a backup before changing the library.");
+    return [];
+  }
 }
 
 export async function loadLibraryAsync(): Promise<TuneEntry[]> {
   try {
     const originalIndex = getStoredItem(LIBRARY_STORAGE);
     const stored = storedEntries();
-    const entries = await Promise.all(stored.map(async ({ xmlRef, xml: inline, ...entry }) => {
-      const xml = inline ?? (xmlRef ? files.get(xmlRef) ?? await readTuneXml(xmlRef) : undefined);
-      if (xml === undefined) throw new Error("A score could not be read.");
-      if (xmlRef) files.set(xmlRef, xml);
-      return { ...entry, xml };
+    await Promise.all(stored.map(async (entry) => {
+      if (cachedXml(entry) !== undefined || typeof entry.xmlRef !== "string") return;
+      try {
+        const xml = await readTuneXml(entry.xmlRef);
+        if (typeof xml === "string") files.set(entry.xmlRef, xml);
+      } catch { /* Keep this entry and its reference available for repair; other tunes can open. */ }
     }));
-    clearStorageError("tune-library-read");
     // A failed migration leaves the entire old localStorage entry intact and usable.
     if (getStoredItem(LIBRARY_STORAGE) !== originalIndex) return loadLibraryAsync();
-    if (stored.some((entry) => entry.xml && entry.xml.length >= LARGE_TUNE_CHARS)) await saveLibrary(entries, originalIndex);
+    const { entries, issues } = usableEntries(stored);
+    publishLibraryIssues(issues);
+    if (stored.some((entry) => typeof entry.xml === "string" && entry.xml.length >= LARGE_TUNE_CHARS)) {
+      await saveLibrary(entries, originalIndex);
+      // A queued edit can finish while migration waits. Return the same current index it saved.
+      if (getStoredItem(LIBRARY_STORAGE) !== originalIndex) return loadLibraryAsync();
+    }
     return entries;
   } catch (error) {
     reportStorageError("tune-library-read", error, "The tune library could not be opened. Your saved library is unchanged; reopen it or restore a backup.");
@@ -100,18 +160,33 @@ export async function loadLibraryAsync(): Promise<TuneEntry[]> {
   }
 }
 
+/** Complete exports and device exchange must never silently omit an unreadable score. */
+export async function loadCompleteLibraryAsync(): Promise<TuneEntry[]> {
+  await loadLibraryAsync();
+  // Validate and return one snapshot; another read/save may have updated the published issues.
+  const { entries, issues } = usableEntries(storedEntries());
+  publishLibraryIssues(issues);
+  if (issues.length) throw new Error(`Repair or remove these scores in Song's library before exporting or exchanging the complete library: ${issues.map((issue) => issue.name).join(", ")}. Healthy tunes are still available for practice.`);
+  return entries;
+}
+
 export function saveLibrary(entries: TuneEntry[], expectedIndex?: string | null, journal = true): Promise<boolean> {
+  return saveLibrarySnapshot(entries, expectedIndex, journal);
+}
+
+function saveLibrarySnapshot(entries: TuneEntry[], expectedIndex?: string | null, journal = true, removedIds: ReadonlySet<string> = new Set()): Promise<boolean> {
   const snapshot = entries.map((entry) => ({ ...entry }));
   const save = async () => {
     try {
       // An obsolete hydration/migration must not overwrite a newer user edit queued before it.
       if (expectedIndex !== undefined && getStoredItem(LIBRARY_STORAGE) !== expectedIndex) return true;
       const previous = storedEntries();
-      const previousFull = loadLibrary();
-      if (previous.some((entry) => entry.xmlRef && !files.has(entry.xmlRef) && !snapshot.some((next) => next.id === entry.id)))
-        throw new Error("Open the saved library before changing it.");
+      const { entries: previousFull, issues } = usableEntries(previous);
+      const unavailable = new Set(issues.map((issue) => issue.id));
       if (new Set(snapshot.map((entry) => entry.id)).size !== snapshot.length) throw new Error("Duplicate tune identities cannot be saved.");
-      const next: StoredTuneEntry[] = [];
+      for (const entry of snapshot) parseTuneEntry(entry);
+      // A healthy-only read is never permission to delete an unreadable file/reference.
+      const next: StoredTuneEntry[] = previous.filter((entry) => unavailable.has(entry.id) && !removedIds.has(entry.id) && !snapshot.some((item) => item.id === entry.id));
       for (const { xml, ...entry } of snapshot) {
         if (xml.length < LARGE_TUNE_CHARS) {
           next.push({ ...entry, xml });
@@ -127,7 +202,11 @@ export function saveLibrary(entries: TuneEntry[], expectedIndex?: string | null,
         next.push({ ...entry, xmlRef });
       }
       const saved = setStoredItem(LIBRARY_STORAGE, JSON.stringify(next));
-      if (saved && expectedIndex === undefined && journal) recordLibraryChange(previousFull, snapshot);
+      if (saved && expectedIndex === undefined && journal) {
+        recordLibraryChange(previousFull, snapshot);
+        for (const id of removedIds) if (unavailable.has(id)) recordLibraryRemoval(id);
+      }
+      publishLibraryIssues(usableEntries(next).issues);
       if (saved) clearStorageError("tune-library-save");
       return saved;
     } catch (error) {
@@ -138,6 +217,14 @@ export function saveLibrary(entries: TuneEntry[], expectedIndex?: string | null,
   saves = saves.then(save, save);
   const pendingSave = saves;
   return withLibraryOperation(() => pendingSave);
+}
+
+/** Explicit removal is separate from saving the usable portion of a damaged library. */
+export async function removeLibraryEntry(id: string): Promise<boolean> {
+  return withLibraryOperation(async () => {
+    const entries = await loadLibraryAsync();
+    return saveLibrarySnapshot(entries.filter((entry) => entry.id !== id), undefined, true, new Set([id]));
+  });
 }
 
 export function newTuneId(): string {

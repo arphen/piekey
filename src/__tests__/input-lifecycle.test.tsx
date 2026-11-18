@@ -8,6 +8,8 @@ import { useInput, type InputApi } from "../listen/useInput";
 import { usePlayback } from "../tunes/usePlayback";
 import type { Timeline } from "../tunes/order";
 
+const { scheduledClicks } = vi.hoisted(() => ({ scheduledClicks: [] as { at: number; gain: number }[] }));
+
 vi.mock("tone", () => ({
   start: vi.fn(async () => undefined),
   getContext: () => ({ rawContext: FakeContext.instances[FakeContext.instances.length - 1] }),
@@ -18,7 +20,10 @@ vi.mock("tone", () => ({
   },
 }));
 vi.mock("../audio/context", () => ({ ensureAudio() {} }));
-vi.mock("../audio/samples", () => ({ clickBuffer() {}, OneShots: class { play() {} stopAll() {} } }));
+vi.mock("../audio/samples", () => ({ clickBuffer() {}, OneShots: class {
+  play(_buffer: unknown, _out: unknown, at: number, gain: number) { scheduledClicks.push({ at, gain }); }
+  stopAll() {}
+} }));
 
 class FakeContext {
   static instances: FakeContext[] = [];
@@ -54,8 +59,8 @@ let getUserMedia: ReturnType<typeof vi.fn>;
 let playback: ReturnType<typeof usePlayback>;
 const timeline: Timeline = { slots: [{ bar: 0, pass: 1, run: 0, start: 0, beats: 4 }], targets: [], comp: [], total: 4 };
 
-function PlaybackHarness({ bpm = 120 }: { bpm?: number }) {
-  playback = usePlayback(timeline, { bpm, melody: false, chords: false, click: true, countIn: true }, input, false, false);
+function PlaybackHarness({ bpm = 120, division = 1, countIn = true, scoring = false }: { bpm?: number; division?: 1 | 2 | 3 | 4; countIn?: boolean; scoring?: boolean }) {
+  playback = usePlayback(timeline, { bpm, melody: false, chords: false, click: true, countIn, clickSubdivision: division }, input, scoring, false);
   return null;
 }
 
@@ -69,6 +74,7 @@ describe("input lifecycle", () => {
     vi.useFakeTimers();
     vi.stubGlobal("localStorage", { getItem: () => null });
     FakeContext.instances = [];
+    scheduledClicks.length = 0;
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     vi.stubGlobal("AudioContext", FakeContext);
     getUserMedia = vi.fn(async () => stream().value);
@@ -183,5 +189,36 @@ describe("input lifecycle", () => {
     await act(async () => playback.stop());
     await act(async () => { wake(); await opening; });
     expect(playback.playing).toBe(false);
+  });
+
+  it("schedules quiet subdivisions on the audio clock while the pulse follows heard quarter notes", async () => {
+    const ctx = new FakeContext();
+    ctx.state = "running";
+    await act(async () => root.render(<PlaybackHarness division={2} countIn={false} />));
+    await act(async () => playback.play(0, 0, true));
+    await act(async () => { ctx.currentTime = 10.35; vi.advanceTimersByTime(25); });
+    const firstBeat = playback.beat.serial;
+    expect(playback.beat.index).toBe(0);
+    expect(scheduledClicks.some((click) => Math.abs(click.at - 10.4) < 1e-6 && click.gain < 0.3)).toBe(true);
+    await act(async () => { ctx.currentTime = 10.55; vi.advanceTimersByTime(25); });
+    expect(playback.beat.serial).toBe(firstBeat); // the heard eighth-note click is between visual beats
+    await act(async () => { ctx.currentTime = 10.8; vi.advanceTimersByTime(25); });
+    expect(playback.beat.index).toBe(1);
+    await act(async () => playback.stop());
+  });
+
+  it("reports the completed pass tempo rather than the latest playback setting", async () => {
+    const ctx = new FakeContext();
+    ctx.state = "running";
+    await act(async () => root.render(<PlaybackHarness bpm={60} countIn={false} scoring />));
+    await act(async () => playback.play(0, 0, true));
+    const hearAt = async (time: number) => { await act(async () => { ctx.currentTime = time; vi.advanceTimersByTime(25); }); };
+    for (const time of [10.5, 11, 11.5, 12, 12.5, 13, 13.5]) await hearAt(time);
+    await act(async () => root.render(<PlaybackHarness bpm={120} countIn={false} scoring />));
+    await hearAt(13.6);
+    await hearAt(14.1);
+    expect(playback.lastPass).toMatchObject({ bpm: 60, tempoStable: false });
+    for (const time of [14.6, 15.1, 15.6, 16.1]) await hearAt(time);
+    expect(playback.lastPass).toMatchObject({ bpm: 120, tempoStable: true });
   });
 });

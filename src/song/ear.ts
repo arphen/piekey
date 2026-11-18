@@ -20,8 +20,6 @@ export const EAR_TIERS: EarTier[] = [
   { n: 4, notes: 5, leap: 3, page: false, title: "Echo · five notes, wider steps" },
 ];
 
-const BEATS = 1; // a quarter each, the last note held to the end of its bar
-
 /** Every note of the scale (pitch classes `pcs`) between `lo` and `hi`, lowest first. */
 export function scaleNotes(pcs: number[], lo: number, hi: number): number[] {
   const out: number[] = [];
@@ -31,8 +29,9 @@ export function scaleNotes(pcs: number[], lo: number, hi: number): number[] {
 
 /**
  * One phrase in the scale. It starts on the tonic, 3rd or 5th near the middle of the range, moves
- * by at most `tier.leap` scale steps (never standing still, turning at the edges) and ends on a
- * tonic, 3rd or 5th so it sounds finished. Same `rand`, same phrase.
+ * by at most `tier.leap` scale steps and ends on a tonic, 3rd or 5th so it sounds finished.
+ * From tier two an adjacent pair repeats: the rhythm, not a changed pitch, marks its fresh attack.
+ * Dotted and eighth-note groups give the call a rhythm of its own. Same `rand`, same phrase.
  */
 export function earPhrase(pcs: number[], tonic: number, lo: number, hi: number, tier: EarTier, rand: () => number): LineNote[] {
   const pool = scaleNotes(pcs, lo, hi);
@@ -43,7 +42,9 @@ export function earPhrase(pcs: number[], tonic: number, lo: number, hi: number, 
   const starts = pool.map((_, i) => i).filter((i) => isStable(i) && Math.abs(i - mid) <= 3);
   let at = (starts.length ? starts : [mid])[Math.floor(rand() * Math.max(1, starts.length))];
   const idx = [at];
+  const repeatAt = tier.n >= 2 && tier.notes >= 4 ? 1 + Math.floor(rand() * (tier.notes - 2)) : -1;
   for (let k = 1; k < tier.notes; k++) {
+    if (k === repeatAt) { idx.push(at); continue; }
     const last = k === tier.notes - 1;
     const moves: number[] = [];
     for (let d = 1; d <= tier.leap; d++) moves.push(d, -d);
@@ -64,9 +65,18 @@ export function earPhrase(pcs: number[], tonic: number, lo: number, hi: number, 
     at = pick;
     idx.push(at);
   }
-  const notes = idx.map((i, k) => ({ midi: pool[i], t: k * BEATS, dur: BEATS }));
+  const rhythms: number[][] = tier.notes === 3 ? [[1.5, 0.5, 2], [0.5, 1.5, 2]]
+    : tier.notes === 4 ? [[1, 0.5, 0.5, 2], [0.5, 0.5, 1, 2], [1.5, 0.5, 1, 1]]
+      : tier.notes === 5 ? [[0.5, 0.5, 1, 1, 1], [1, 0.5, 0.5, 1, 1], [0.5, 1, 0.5, 1, 1]] : [Array(tier.notes).fill(1) as number[]];
+  const durations = rhythms[Math.floor(rand() * rhythms.length)];
+  let t = 0;
+  const notes = idx.map((i, k) => {
+    const note = { midi: pool[i], t, dur: durations[k] };
+    t += note.dur;
+    return note;
+  });
   const lastNote = notes[notes.length - 1];
-  lastNote.dur = Math.max(BEATS, Math.ceil((lastNote.t + BEATS) / 4 - 1e-9) * 4 - lastNote.t);
+  lastNote.dur = Math.max(lastNote.dur, Math.ceil((lastNote.t + lastNote.dur) / 4 - 1e-9) * 4 - lastNote.t);
   return notes;
 }
 

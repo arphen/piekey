@@ -178,6 +178,12 @@ export function recordLibraryChange(before: readonly TuneEntry[], after: readonl
   enqueue(changes);
 }
 
+/** Explicitly remove an unreadable score without inventing score contents for its history. */
+export function recordLibraryRemoval(id: string): void {
+  if (suppressed) return;
+  enqueue([{ kind: "tune", key: id, before: null, after: null, label: "Remove unavailable score" }]);
+}
+
 export function bootstrapStorage(key: string, value: string): void {
   if (syncableStorageKey(key)) enqueue([{ kind: "storage", key, before: null, after: value, baseline: true, label: "Existing practice" }]);
 }

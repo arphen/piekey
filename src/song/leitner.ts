@@ -38,6 +38,17 @@ export interface Settings {
 }
 
 /** One time through an exercise, for the numbers over time. */
+export interface AttemptConditions {
+  v: 1;
+  source: "measured" | "self";
+  support?: "none" | "guide" | "adaptive";
+  notation?: "visible" | "hidden" | "faded";
+  tempo?: "own-pace" | "adaptive" | "fixed";
+  exposure?: "first" | "repeated";
+  confidence: "unknown" | "limited" | "usable";
+  uninterrupted?: boolean;
+}
+
 export interface Attempt {
   uid?: string; // immutable performance identity across devices
   id: string;
@@ -52,6 +63,8 @@ export interface Attempt {
   from: number; // box before (0: new)
   to: number;
   ev?: Evidence; // where it went wrong (older attempts have none)
+  conditions?: AttemptConditions;
+  arrangementFingerprint?: string; // interpreted musical version observed in this performance
 }
 
 export interface SessionEntry {
@@ -112,7 +125,7 @@ function retainCleanTempos(store: Store): Store {
   const cards = { ...store.cards };
   for (const a of store.history ?? []) {
     const state = cards[a.id];
-    if (state && a.result === "clean" && Number.isFinite(a.bpm) && a.bpm > (state.bestCleanBpm ?? 0))
+    if (state && a.conditions?.source !== "self" && a.result === "clean" && Number.isFinite(a.bpm) && a.bpm > (state.bestCleanBpm ?? 0))
       cards[a.id] = { ...state, bestCleanBpm: a.bpm };
   }
   return { ...store, cards };

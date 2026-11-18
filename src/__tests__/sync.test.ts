@@ -63,6 +63,37 @@ describe("transaction replay", () => {
     expect(merged.credit["scale:C"]).toBe(0.2);
   });
 
+  it("unions independent first goals, keeps selection deterministic and honors an explicit restore", () => {
+    const goalKey = "guitar-goals-v1";
+    const goal = (id: string) => ({ v: 1, id, tuneId: "tune-1", kind: "melody", arrangement: { version: 1, fingerprint: "score-v1" }, tempo: { minBpm: 60, targetBpm: 100 }, essentialTasks: [{ cardId: "mel:one", targetBpm: 100 }], createdAt: "2026-11-18T10:00:00Z" });
+    const first = (id: string) => ({ v: 1, byTune: { "tune-1": { activeId: id, goals: { [id]: goal(id) } } } });
+    const a = transaction("a", 1, null, first("goal-a"), { key: goalKey });
+    const b = transaction("b", 1, null, first("goal-b"), { key: goalKey });
+    const union = parseSyncSnapshot(envelope([b, a, a])).transactions;
+    const merged = valueAt(union, goalKey);
+    expect(Object.keys(merged.byTune["tune-1"].goals)).toEqual(["goal-a", "goal-b"]);
+    expect(merged.byTune["tune-1"].activeId).toBe("goal-b");
+    expect(projectTransactions([a, b, b])).toEqual(projectTransactions(union));
+    const deselected = { ...first("goal-a"), byTune: { "tune-1": { ...first("goal-a").byTune["tune-1"], activeId: null } } };
+    const selection = transaction("a", 2, first("goal-a"), deselected, { key: goalKey, clock: 2, context: { a: 1 } });
+    expect(valueAt([...union, selection], goalKey).byTune["tune-1"]).toMatchObject({ activeId: null, goals: merged.byTune["tune-1"].goals });
+    const restore = transaction("restore", 1, merged, first("restored"), { key: goalKey, reset: true, clock: 3, context: { a: 2, b: 1 } });
+    expect(valueAt([...union, selection, restore], goalKey)).toEqual(first("restored"));
+    const changed = first("goal-a");
+    changed.byTune["tune-1"].goals["goal-a"].tempo.targetBpm = 120;
+    expect(() => projectTransactions([a, transaction("c", 1, null, changed, { key: goalKey })])).toThrow("same musical goal");
+  });
+
+  it("retains self-guided activity without promoting review boxes or kinship credit", () => {
+    const initial = store();
+    const self = { ...attempt("self"), conditions: { v: 1, source: "self", confidence: "unknown" } };
+    const after = { ...store(card(5, 2, 2), [...initial.history]), credit: { "mel:one": 1 }, history: [...initial.history, self] };
+    const merged = valueAt([transaction("base", 1, null, initial, { baseline: true }), transaction("a", 1, initial, after, { clock: 2, context: { base: 1 } })]);
+    expect(merged.cards).toEqual(initial.cards);
+    expect(merged.credit).toEqual(initial.credit);
+    expect(merged.history.at(-1)).toMatchObject({ uid: "self", conditions: { source: "self" } });
+  });
+
   it("replays Ear mastery with both devices' actual responses instead of merging EMA snapshots", () => {
     const progress = { stage: 0, mastery: { I: { score: 0.5, attempts: 0 } }, confusion: {}, recent: [] as number[] };
     const initial = { track: "pop", mode: "chords", settings: { instrument: "keys", pace: 1, length: 4, randomKey: true, fixedKey: 0 }, progress: { pop: progress }, stats: { rounds: 0, streak: 0, best: 0, names: { right: 0, total: 0 } } };
@@ -85,6 +116,9 @@ describe("transaction replay", () => {
     expect(merged.tunes).toHaveLength(1);
     expect(merged.tunes[0]).toMatchObject({ id: "tune-1~b-1", name: "Offline edit (other device)", xml });
     expect(merged.conflicts[0].kind).toBe("tune");
+    // A damaged local XML file can still be explicitly removed by identity alone.
+    const unavailable = { ...deletion, before: null, label: "Remove unavailable score" };
+    expect(projectTransactions([baseline, unavailable]).tunes).toEqual([]);
   });
 
   it("compacts retained histories and rejects malformed rows, hardware keys and changed transaction identities", () => {
@@ -95,6 +129,10 @@ describe("transaction replay", () => {
     expect(compact.after!.length).toBeLessThan(500);
     expect(() => parseSyncSnapshot(envelope([transaction("a", 1, null, { ...initial, history: [null] })]))).toThrow("invalid practice data");
     expect(() => parseSyncSnapshot(envelope([transaction("a", 1, null, "interface-id", { key: "guitar-input" })]))).toThrow("invalid transaction");
+    const conditions = { v: 1, source: "measured", confidence: "unknown", support: "adaptive", notation: "visible", tempo: "fixed", exposure: "repeated", uninterrupted: true };
+    const assessed = { ...initial, history: [{ ...attempt("context"), conditions }] };
+    expect(valueAt(parseSyncSnapshot(envelope([transaction("context", 1, null, assessed)])).transactions).history[0].conditions).toEqual(conditions);
+    expect(() => parseSyncSnapshot(envelope([transaction("context", 1, null, { ...assessed, history: [{ ...assessed.history[0], conditions: { ...conditions, confidence: "perfect" } }] })]))).toThrow("invalid practice data");
     expect(() => parseSyncSnapshot(envelope([transaction("constructor", 1, null, initial)]))).toThrow("invalid transaction");
     const first = transaction("a", 1, null, initial);
     expect(() => unionTransactions([first], [{ ...first, at: 999 }])).toThrow("different content");

@@ -23,7 +23,7 @@ export interface TunePath {
 export function tunePath(deck: Deck, store: Store): TunePath {
   const cards = deck.cards.filter((c) => c.family === "melody");
   const achieved = (card: Card) => (store.cards[card.id]?.bestCleanBpm ?? 0) >= card.goalBpm * FINISH_TEMPO
-    || (store.history ?? []).some((a) => a.id === card.id && a.result === "clean" && Number.isFinite(a.bpm) && a.bpm >= card.goalBpm * FINISH_TEMPO);
+    || (store.history ?? []).some((a) => a.id === card.id && a.conditions?.source !== "self" && a.result === "clean" && Number.isFinite(a.bpm) && a.bpm >= card.goalBpm * FINISH_TEMPO);
   const sections = cards.filter((c) => c.step?.kind === "section");
   const whole = cards.filter((c) => c.step?.kind === "tune");
   const memory = cards.filter((c) => c.step?.kind === "memory");
@@ -32,7 +32,7 @@ export function tunePath(deck: Deck, store: Store): TunePath {
   const milestones: TuneMilestone[] = [];
   if (sections.length) milestones.push({ id: "sections", label: "Sections connected", ready: playedWhole || sections.every(achieved) });
   if (whole.length) milestones.push({ id: "whole", label: "Whole tune", ready: playedWhole });
-  if (memory.length) milestones.push({ id: "memory", label: "From memory", ready: memory.every(achieved) });
+  if (memory.length) milestones.push({ id: "memory", label: "Memory task", ready: memory.every(achieved) });
   if (run.length) milestones.push({ id: "run", label: "Run-through", ready: run.some(achieved) });
   const ready = milestones.filter((m) => m.ready).length;
   return { ready, total: milestones.length, share: milestones.length ? ready / milestones.length : 0, milestones };

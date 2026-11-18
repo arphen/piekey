@@ -10,6 +10,7 @@ import type { Store } from "../song/leitner";
 import type { LeadSheet } from "../tunes/musicxml";
 import { buildTimeline } from "../tunes/order";
 import { buildPracticeBrief } from "../agent/brief";
+import { createGoal } from "../song/goals";
 
 const note = (midi: number, startBeat: number): ReadingNote => ({
   rest: false,
@@ -81,7 +82,16 @@ describe("tutor overview", () => {
     store.sessions = [{ uid: "SESSION_UID", date: "2026-11-17", minutes: 10, cards: 1, clean: 1 }, { date: "2026-09-01", minutes: 99, cards: 1, clean: 1 }];
     const brief = buildPracticeBrief({ ...input, stores: [...input.stores, { tuneId: "two", store: { ...emptyStore(), history: store.history } }] });
     expect(brief.overall.recent).toMatchObject({ attemptCount: 1, sessionCount: 1, sessionActiveMinutes: 10, attemptActiveMinutes: 1.5, noteChecks: { judged: 4, missed: 1, matchedShare: 0.75 }, timing: { onsetSamples: 4, pooledWithinAttemptSpreadMs: 10, referenceAlignmentMeanMs: 95 } });
-    expect(brief.selectedTune?.cleanTempos).toEqual([{ exerciseId: "mel:new:0-1", titleData: null, scope: "tune", bpm: 80, observedOn: "2026-11-17", source: "retained-history" }]);
+    expect(brief.selectedTune?.cleanTempos).toEqual([{ exerciseId: "mel:new:0-1", titleData: null, scope: "tune", bpm: 80, observedOn: "2026-11-17", source: "retained-history", conditions: null, tempoBasis: "historical-unknown" }]);
+    const self = { ...store.history[0], uid: "self", bpm: 200, conditions: { v: 1 as const, source: "self" as const, confidence: "unknown" as const } };
+    const withSelf = buildPracticeBrief({ ...input, stores: [{ tuneId: "one", store: { ...store, history: [...store.history, self] } }] });
+    expect(withSelf.selectedTune?.recent).toMatchObject({ attemptCount: 2, noteChecks: { judged: 4 }, assessmentConditions: { selfReported: 1, legacyUnknown: 1 } });
+    expect(withSelf.selectedTune?.cleanTempos[0].bpm).toBe(80);
+    const call = { ...self, id: "ear:1", uid: "call", conditions: { ...self.conditions, source: "measured" as const, tempo: "own-pace" as const } };
+    const callStore = { ...store, cards: { ...store.cards, "ear:1": { box: 2, due: "2026-11-20", bpm: 200, bestCleanBpm: 200, seen: 1, clean: 1, last: "clean" as const } }, history: [...store.history, call] };
+    const withCall = buildPracticeBrief({ ...input, stores: [{ tuneId: "one", store: callStore }] });
+    expect(withCall.selectedTune?.cleanTempos.some((record) => record.exerciseId === "ear:1")).toBe(false);
+    expect(withCall.definitions.goal).toContain("call/reference tempo");
     const serialized = JSON.stringify(brief);
     for (const secret of ["SCORE_SECRET", "MATERIAL_XML_SECRET", "AUDIO_SECRET", "PAIRING_SECRET", "JOURNAL_SECRET", "DEVICE_SECRET", "CALIBRATION_SECRET", "INTERNAL_UID", "SESSION_UID"]) expect(serialized).not.toContain(secret);
     expect(serialized).not.toContain('"wrong":');
@@ -119,6 +129,12 @@ describe("tutor overview", () => {
     });
     expect(summary.boxes.reduce((n, count) => n + count, 0) + summary.fresh).toBe(summary.total);
     expect(summary.next).toHaveLength(3);
+    const goal = createGoal(s, deck, { kind: "accompaniment", minBpm: 50, targetBpm: 64 });
+    store.cards[goal.essentialTasks[0].cardId] = { box: 2, due: "2026-11-20", bpm: 180, seen: 1, clean: 1, last: "clean" };
+    const goalSummary = summarizeSong(s, deck, store, "2026-11-16", goal);
+    expect(goalSummary.next.length).toBeGreaterThan(0);
+    expect(goalSummary.next.every((unit) => unit.family === "chords")).toBe(true);
+    expect(goalSummary.next.every((unit) => unit.bpm >= 50 && unit.bpm <= 64)).toBe(true);
   });
 
   it("mixes the current song with other songs without repeating a card", () => {
@@ -163,9 +179,10 @@ describe("tutor overview", () => {
         const at = notes.map((n) => pool.indexOf(n.midi));
         expect(at.every((i) => i >= 0)).toBe(true); // in the scale and the range
         for (let k = 1; k < at.length; k++) {
-          expect(at[k]).not.toBe(at[k - 1]);
+          if (tier.n < 2) expect(at[k]).not.toBe(at[k - 1]);
           expect(Math.abs(at[k] - at[k - 1])).toBeLessThanOrEqual(tier.leap);
         }
+        if (tier.n >= 2) expect(at.some((value, k) => k > 0 && value === at[k - 1])).toBe(true);
         expect([9, 0, 4]).toContain(notes[notes.length - 1].midi % 12); // A, C or E
       }
     const again = (n: number) => earPhrase(aMinor, 9, 52, 76, EAR_TIERS[1], seeded(`same:${n}`)).map((x) => x.midi);

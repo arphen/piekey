@@ -1,6 +1,8 @@
 import { clearStorageError, getStoredItem, pendingStorageWrites, removeStoredItem, reportStorageError, setStoredItem, storedKeys } from "../storage";
-import { loadLibrary, loadLibraryAsync, parseTuneEntry, saveLibrary, withLibraryOperation, type TuneEntry } from "./library";
+import { loadCompleteLibraryAsync, loadLibraryAsync, parseTuneEntry, saveLibrary, withLibraryOperation, type TuneEntry } from "./library";
 import { recordLibraryChange, recordStorageChange } from "../sync/journal";
+import { syncableStorageKey, validAttemptConditions, validGoalData } from "../sync/model";
+import { whilePracticeIdle } from "../platform/practiceWindow";
 
 const LIBRARY = "guitar-tunes-v2";
 const FORMAT = "fretboard-focus-backup";
@@ -44,7 +46,9 @@ function validAttempt(value: unknown): boolean {
     && optional(value.share, (number) => number === null || share(number))
     && optional(value.from, count) && optional(value.to, count)
     && optional(value.at, (at) => finite(at) && at >= 0)
-    && optional(value.goalBpm, (bpm) => finite(bpm) && bpm > 0) && optional(value.ev, validEvidence);
+    && optional(value.goalBpm, (bpm) => finite(bpm) && bpm > 0) && optional(value.ev, validEvidence)
+    && optional(value.conditions, validAttemptConditions)
+    && optional(value.arrangementFingerprint, (entry) => typeof entry === "string" && entry.length > 0 && entry.length <= 128);
 }
 
 function validSession(value: unknown): boolean {
@@ -72,15 +76,15 @@ function validPracticeStore(value: unknown, shared = false): boolean {
 
 /** The score XML travels in the file, never as a machine-local IndexedDB reference. */
 export async function createBackup(): Promise<PracticeBackup> {
-  const tunes = await loadLibraryAsync();
+  const tunes = await loadCompleteLibraryAsync();
   const storage: Record<string, string> = {};
   for (const key of storedKeys()) {
-    if (!key?.startsWith("guitar-") || key === LIBRARY) continue;
+    if (!syncableStorageKey(key)) continue;
     const value = getStoredItem(key);
     if (value !== null) storage[key] = value;
   }
   for (const [key, value] of pendingStorageWrites()) {
-    if (!key.startsWith("guitar-") || key === LIBRARY) continue;
+    if (!syncableStorageKey(key)) continue;
     if (value === null) delete storage[key];
     else storage[key] = value;
   }
@@ -101,21 +105,42 @@ export function parseBackup(raw: string): PracticeBackup {
     ids.add(entry.id);
     parseTuneEntry(entry); // reject a broken score before touching any saved state
   }
+  const portable: Record<string, string> = {};
   for (const [key, entry] of Object.entries(backup.storage)) {
     if (!key.startsWith("guitar-") || key === LIBRARY || typeof entry !== "string") throw new Error("The backup contains an invalid setting.");
-    // Device choices and the scale key are plain strings; practice stores are structured JSON.
+    // Older JSON backups included hardware setup. Read them compatibly, while preserving the
+    // receiving browser's input, output, calibration and latency rather than restoring those.
+    if (!syncableStorageKey(key)) continue;
+    portable[key] = entry;
     if (key.startsWith("guitar-song-deck:") || key === "guitar-skills") {
       let store: unknown;
       try { store = JSON.parse(entry); } catch { throw new Error("A practice history in the backup is not readable."); }
       if (!validPracticeStore(store, key === "guitar-skills"))
         throw new Error("A practice history in the backup is invalid.");
     }
+    if (key === "guitar-goals-v1") {
+      let goals: unknown;
+      try { goals = JSON.parse(entry); } catch { throw new Error("The musical goals in the backup are not readable."); }
+      if (!validGoalData(goals)) throw new Error("The musical goals in the backup are invalid.");
+    }
   }
-  return { format: FORMAT, version: 1, createdAt: typeof backup.createdAt === "string" ? backup.createdAt : "", recordings: "excluded", tunes: backup.tunes, storage: backup.storage };
+  return { format: FORMAT, version: 1, createdAt: typeof backup.createdAt === "string" ? backup.createdAt : "", recordings: "excluded", tunes: backup.tunes, storage: portable };
 }
 
 /** Merge tunes; replace matching IDs/settings only. Roll back all local writes on a failure. */
-export function restoreBackup(backup: PracticeBackup): Promise<boolean> {
+export async function restoreBackup(backup: PracticeBackup): Promise<boolean> {
+  let restored = false;
+  try {
+    const idle = await whilePracticeIdle(async () => { restored = await restoreBackupData(backup); });
+    if (!idle) reportStorageError("backup-restore", new Error("Another writer is active"), "Finish practice or close Devices in other app windows before restoring. A browser with Web Locks is required for safe restore.");
+    return idle && restored;
+  } catch (error) {
+    reportStorageError("backup-restore", error, "The backup could not be opened safely. Keep the file and try again after closing other app windows.");
+    return false;
+  }
+}
+
+function restoreBackupData(backup: PracticeBackup): Promise<boolean> {
   return withLibraryOperation(async () => {
     const before = new Map<string, string | null>();
     let previousTunes: TuneEntry[] = [];
@@ -125,7 +150,7 @@ export function restoreBackup(backup: PracticeBackup): Promise<boolean> {
       const checked = parseBackup(JSON.stringify(backup));
       // A complete backup can recover missing IndexedDB files too. The save guard still refuses
       // to drop any unreadable score that the backup does not replace.
-      const current = await loadLibraryAsync().catch(() => loadLibrary());
+      const current = await loadLibraryAsync();
       const incoming = new Set(checked.tunes.map((entry) => entry.id));
       const merged = [...current.filter((entry) => !incoming.has(entry.id)), ...checked.tunes];
       previousTunes = current;

@@ -1,6 +1,7 @@
-import { readAllTakes, storeTransferredTake, type TakeMeta } from "../audio/recorder";
+import { readAllTakes, readExportableTakes, retryPendingTakes, storeTransferredTake, type TakeMeta } from "../audio/recorder";
 import { captureSnapshot, mergeSnapshot } from "./state";
-import { canonical, parseSyncSnapshot, type MergeResult, type SyncSnapshot } from "./model";
+import { canonical, parseSyncSnapshot, validAttemptConditions, type MergeResult, type SyncSnapshot } from "./model";
+import type { AttemptConditions } from "../song/leitner";
 import type { SyncConnection } from "./transport";
 
 const MAX_RECORDING = 128 * 1024 * 1024;
@@ -40,12 +41,16 @@ export function parseRecordingManifest(value: unknown): RecordingDescriptor[] {
       || typeof raw.tuneId !== "string" || raw.tuneId.length > 512 || typeof raw.cardId !== "string" || raw.cardId.length > 1024
       || typeof raw.day !== "string" || !finite(raw.at) || !finite(raw.bpm) || raw.bpm <= 0
       || !(raw.share === null || (finite(raw.share) && raw.share >= 0 && raw.share <= 1))
+      || (raw.conditions !== undefined && !validAttemptConditions(raw.conditions))
+      || (raw.arrangementFingerprint !== undefined && (typeof raw.arrangementFingerprint !== "string" || !raw.arrangementFingerprint || raw.arrangementFingerprint.length > 128))
       || !Number.isSafeInteger(raw.size) || (raw.size as number) < 0 || (raw.size as number) > MAX_RECORDING
       || typeof raw.mime !== "string" || raw.mime.length > 256 || typeof raw.hash !== "string" || !/^[a-f0-9]{64}$/.test(raw.hash))
       throw new Error("The exchange contains invalid recording metadata.");
     ids.add(raw.id);
     return { id: raw.id, tuneId: raw.tuneId, cardId: raw.cardId, day: raw.day, at: raw.at, bpm: raw.bpm,
-      share: raw.share, size: raw.size as number, mime: raw.mime, hash: raw.hash };
+      share: raw.share, size: raw.size as number, mime: raw.mime, hash: raw.hash,
+      ...(raw.conditions !== undefined ? { conditions: raw.conditions as AttemptConditions } : {}),
+      ...(typeof raw.arrangementFingerprint === "string" ? { arrangementFingerprint: raw.arrangementFingerprint } : {}) };
   });
 }
 
@@ -55,9 +60,9 @@ export async function recordingHash(blob: Blob): Promise<string> {
   return [...new Uint8Array(hash)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-async function inventory(progress?: Progress) {
+async function inventory(progress?: Progress, includePending = false) {
   const snapshot = await captureSnapshot();
-  const takes = await readAllTakes();
+  const takes = await (includePending ? readExportableTakes() : readAllTakes());
   const recordings: RecordingDescriptor[] = [];
   for (const [index, { blob, ...meta }] of takes.entries()) {
     progress?.({ message: "Checking recordings", done: index, total: takes.length });
@@ -89,6 +94,9 @@ async function saveRecording(meta: RecordingDescriptor, blob: Blob): Promise<voi
 
 /** Both sides exchange only missing transactions and immutable audio files, then acknowledge durable writes. */
 export async function exchangeState(connection: SyncConnection, progress?: Progress): Promise<ExchangeResult> {
+  // An advertised ID is also a promise that this device already has a durable copy. A file
+  // export may rescue unsaved audio; a paired exchange must not acknowledge that audio as saved.
+  if (!await retryPendingTakes()) throw new Error("A recording is still waiting to save. Retry saving, or export a full .fretpack file from Devices to keep it before exchanging.");
   const local = await inventory(progress);
   progress?.({ message: "Comparing changes", done: 0, total: 0 });
   await connection.sendJson(local.manifest);
@@ -145,7 +153,7 @@ export async function exchangeState(connection: SyncConnection, progress?: Progr
 
 /** A portable fallback carries the same immutable journal and audio as a paired exchange. */
 export async function createTransferFile(progress?: Progress): Promise<Blob> {
-  const local = await inventory(progress);
+  const local = await inventory(progress, true);
   const content = { snapshot: local.snapshot, recordings: local.manifest.recordings };
   const checksum = await recordingHash(new Blob([canonical(content)]));
   const header = new TextEncoder().encode(JSON.stringify({ format: "fretboard-focus-transfer", version: 1, checksum, ...content }));

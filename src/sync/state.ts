@@ -1,5 +1,5 @@
 import { getStoredItem, removeStoredItem, retryStorageWrites, setStoredItem, storedKeys } from "../storage";
-import { loadLibraryAsync, parseTuneEntry, saveLibrary } from "../tunes/library";
+import { loadCompleteLibraryAsync, parseTuneEntry, saveLibrary } from "../tunes/library";
 import { bootstrapLibrary, bootstrapStorage, flushSyncJournal, getSyncState, importSyncTransactions, readSyncJournal, syncableStorageKey, withSyncSuppressed } from "./journal";
 import { canonical, isRecord, parseSyncSnapshot, parseValue, unionTransactions, type MergeResult, type SyncSnapshot } from "./model";
 import { projectTransactions, type Projection } from "./merge";
@@ -20,7 +20,7 @@ export function initializeSyncJournal(): Promise<void> {
       const value = getStoredItem(key);
       if (value !== null) bootstrapStorage(key, value);
     }
-    bootstrapLibrary(await loadLibraryAsync());
+    bootstrapLibrary(await loadCompleteLibraryAsync());
     await flushSyncJournal();
   })().catch((error: unknown) => { initializing = undefined; throw error; });
   return initializing;
@@ -28,6 +28,9 @@ export function initializeSyncJournal(): Promise<void> {
 
 export async function captureSnapshot(): Promise<SyncSnapshot> {
   await initializeSyncJournal();
+  // Hydration may have succeeded earlier, before a score was lost or damaged. A full-state
+  // export must recheck the current library rather than silently exporting only its journal.
+  await loadCompleteLibraryAsync();
   const { device, transactions } = await readSyncJournal();
   return parseSyncSnapshot({ format: "fretboard-focus-sync", version: 1, device, createdAt: new Date().toISOString(), transactions });
 }
@@ -55,6 +58,7 @@ function validateProjection(projection: Projection) {
 
 async function applySnapshot(incoming: SyncSnapshot): Promise<MergeResult> {
   await initializeSyncJournal();
+  await loadCompleteLibraryAsync();
   const local = await readSyncJournal();
   validateProjection(projectTransactions(unionTransactions(local.transactions, incoming.transactions)));
   const committed = await importSyncTransactions(incoming.transactions);
@@ -73,7 +77,7 @@ async function applySnapshot(incoming: SyncSnapshot): Promise<MergeResult> {
       if (!(next === null ? removeStoredItem(key, false) : setStoredItem(key, next, false))) throw new Error("The exchange was saved, but practice could not be updated. Free browser storage and retry.");
       changes++;
     }
-    const current = await loadLibraryAsync();
+    const current = await loadCompleteLibraryAsync();
     const sorted = [...current].sort((a, b) => a.id.localeCompare(b.id));
     if (canonical(sorted) !== canonical(projection.tunes)) {
       if (!await saveLibrary(projection.tunes, undefined, false)) throw new Error("The incoming scores are in the exchange history, but the library could not be updated. Retry when browser storage is available.");

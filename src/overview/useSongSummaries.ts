@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { buildDeck, type Deck } from "../song/deck";
 import { loadStore } from "../song/leitner";
-import { loadCurrentTuneId, loadLibraryAsync, parseTuneEntry } from "../tunes/library";
+import { getLibraryIssues, loadCurrentTuneId, loadLibraryAsync, parseTuneEntry, type LibraryIssue } from "../tunes/library";
 import type { LeadSheet } from "../tunes/musicxml";
 import { buildTimeline } from "../tunes/order";
 import { summarizeSong, type SongSummary } from "./summary";
+import { loadActiveGoal } from "../song/goals";
+import { useGoals } from "../song/useGoals";
 
 // Building a deck is the expensive part of reading a song. Keep the parsed sheet and deck for the
 // life of the tab; only the box/store is re-read, so a practice session shows up on return.
@@ -15,6 +17,11 @@ interface CachedDeck {
 }
 
 const cache = new Map<string, CachedDeck>();
+
+/** Reuse the exact interpreted score/deck that produced a rendered summary. */
+export function cachedSong(tuneId: string): Readonly<Pick<CachedDeck, "sheet" | "deck">> | undefined {
+  return cache.get(tuneId);
+}
 
 function stampOf(id: string, name: string, xml: string): string {
   let hash = 0;
@@ -27,10 +34,12 @@ export interface SongSummaries {
   currentTuneId: string | null;
   loading: boolean;
   error: string | null;
+  issues: readonly LibraryIssue[];
 }
 
 export function useSongSummaries(): SongSummaries {
-  const [state, setState] = useState<SongSummaries>({ songs: [], currentTuneId: null, loading: true, error: null });
+  const [state, setState] = useState<SongSummaries>({ songs: [], currentTuneId: null, loading: true, error: null, issues: [] });
+  const goals = useGoals();
 
   useEffect(() => {
     let gone = false;
@@ -49,18 +58,18 @@ export function useSongSummaries(): SongSummaries {
             cached = { stamp, sheet, deck: buildDeck(sheet, buildTimeline(sheet)) };
             cache.set(entry.id, cached);
           }
-          songs.push(summarizeSong(cached.sheet, cached.deck, loadStore(cached.sheet.id)));
+          songs.push(summarizeSong(cached.sheet, cached.deck, loadStore(cached.sheet.id), undefined, loadActiveGoal(cached.sheet, cached.deck)));
         } catch {
           // One unreadable import should not hide the rest of the library.
         }
       }
 
-      setState({ songs, currentTuneId: loadCurrentTuneId(), loading: false, error: null });
+      setState({ songs, currentTuneId: loadCurrentTuneId(), loading: false, error: null, issues: getLibraryIssues() });
     }).catch(() => {
-      if (!gone) setState({ songs: [], currentTuneId: null, loading: false, error: "Your saved library could not be opened. It has not been changed." });
+      if (!gone) setState({ songs: [], currentTuneId: null, loading: false, error: "Your saved library could not be opened. It has not been changed.", issues: getLibraryIssues() });
     });
     return () => { gone = true; };
-  }, []);
+  }, [goals]);
 
   return state;
 }

@@ -1,5 +1,6 @@
-import type { Store, Attempt, SessionEntry } from "../song/leitner";
+import type { Store, Attempt, AttemptConditions, SessionEntry } from "../song/leitner";
 import { isShared } from "../song/ids";
+import type { Goal } from "../song/goals";
 
 export interface BriefMaterial {
   tuneId: string;
@@ -15,6 +16,7 @@ export interface PracticeBriefInput {
   materials: readonly BriefMaterial[];
   stores: readonly { tuneId: string; store: Store }[];
   selectedExercises?: readonly { id: string; title: string }[];
+  selectedGoal?: Goal | null;
 }
 
 interface MaterialData {
@@ -36,6 +38,19 @@ interface RecentEvidence {
   timing: { onsetSamples: number; attemptSamples: number; spreadOnsetSamples: number; pooledWithinAttemptSpreadMs: number | null; referenceAlignmentMeanMs: number | null };
   assistance: "unknown";
   detectionConfidence: "unknown";
+  assessmentConditions: {
+    recorded: number;
+    legacyUnknown: number;
+    measured: number;
+    selfReported: number;
+    guideOrAdaptive: number;
+    scoreHidden: number;
+    fixedTempo: number;
+    firstExposure: number;
+    confidenceUsable: number;
+    confidenceLimited: number;
+    confidenceUnknown: number;
+  };
 }
 
 interface CleanTempo {
@@ -45,6 +60,8 @@ interface CleanTempo {
   bpm: number;
   observedOn: string | null;
   source: "retained-best" | "retained-history";
+  conditions: AttemptConditions | null;
+  tempoBasis: "timed-pass" | "historical-unknown";
 }
 
 export interface PracticeBrief {
@@ -56,7 +73,7 @@ export interface PracticeBrief {
   dataNotice: string;
   overall: { materialCounts: { inLibrary: number; withSavedProgress: number }; recent: RecentEvidence };
   materials: { items: MaterialData[]; total: number; omitted: number };
-  selectedTune: { material: MaterialData; recent: RecentEvidence; cleanTempos: CleanTempo[]; omittedCleanTempos: number } | null;
+  selectedTune: { material: MaterialData; recent: RecentEvidence; cleanTempos: CleanTempo[]; omittedCleanTempos: number; goal: Pick<Goal, "kind" | "tempo" | "arrangement" | "essentialTasks" | "createdAt"> | null } | null;
   definitions: Record<string, string>;
   limitations: string[];
   questionsToAsk: string[];
@@ -100,6 +117,7 @@ function recentEvidence(attempts: readonly Attempt[], sessions: readonly Session
   let spreadSum = 0;
   let offsetSum = 0;
   for (const a of recent) {
+    if (a.conditions?.source === "self") continue;
     const notes = a.ev?.notes;
     if (notes && finite(notes[0]) && finite(notes[1]) && notes[0] > 0 && notes[1] <= notes[0]) {
       judged += notes[0];
@@ -134,19 +152,37 @@ function recentEvidence(attempts: readonly Attempt[], sessions: readonly Session
     },
     assistance: "unknown",
     detectionConfidence: "unknown",
+    assessmentConditions: {
+      recorded: recent.filter((a) => a.conditions).length,
+      legacyUnknown: recent.filter((a) => !a.conditions).length,
+      measured: recent.filter((a) => a.conditions?.source === "measured").length,
+      selfReported: recent.filter((a) => a.conditions?.source === "self").length,
+      guideOrAdaptive: recent.filter((a) => a.conditions?.support === "guide" || a.conditions?.support === "adaptive").length,
+      scoreHidden: recent.filter((a) => a.conditions?.notation === "hidden").length,
+      fixedTempo: recent.filter((a) => a.conditions?.tempo === "fixed").length,
+      firstExposure: recent.filter((a) => a.conditions?.exposure === "first").length,
+      confidenceUsable: recent.filter((a) => a.conditions?.confidence === "usable").length,
+      confidenceLimited: recent.filter((a) => a.conditions?.confidence === "limited").length,
+      confidenceUnknown: recent.filter((a) => !a.conditions || a.conditions.confidence === "unknown").length,
+    },
   };
 }
 
 function cleanTempos(store: Store | undefined, titles: Map<string, string>): CleanTempo[] {
   const records = new Map<string, CleanTempo>();
-  const record = (id: string, bpm: number, day: string | null, source: CleanTempo["source"]) => {
+  const record = (id: string, bpm: number, day: string | null, source: CleanTempo["source"], conditions: AttemptConditions | null = null, timingEvidence = false) => {
     if (!Number.isFinite(bpm) || bpm <= 0) return;
     const previous = records.get(id);
     if (previous && (previous.bpm > bpm || (previous.bpm === bpm && (previous.observedOn ?? "") >= (day ?? "")))) return;
-    records.set(id, { exerciseId: id, titleData: text(titles.get(id)), scope: isShared(id) ? "shared-skill" : "tune", bpm, observedOn: day, source });
+    const timed = timingEvidence && conditions?.source === "measured" && (conditions.tempo === "fixed" || conditions.tempo === "adaptive");
+    records.set(id, { exerciseId: id, titleData: text(titles.get(id)), scope: isShared(id) ? "shared-skill" : "tune", bpm, observedOn: day, source, conditions, tempoBasis: timed ? "timed-pass" : "historical-unknown" });
   };
-  for (const [id, state] of Object.entries(store?.cards ?? {})) if (state.bestCleanBpm !== undefined) record(id, state.bestCleanBpm, null, "retained-best");
-  for (const a of store?.history ?? []) if (a.result === "clean") record(a.id, a.bpm, validDay(a.day) ? a.day : null, "retained-history");
+  for (const [id, state] of Object.entries(store?.cards ?? {})) if (state.bestCleanBpm !== undefined) {
+    const matching = (store?.history ?? []).filter((attempt) => attempt.id === id && attempt.result === "clean" && attempt.bpm === state.bestCleanBpm);
+    if (matching.length && matching.every((attempt) => attempt.conditions?.source === "self" || attempt.conditions?.tempo === "own-pace")) continue;
+    record(id, state.bestCleanBpm, null, "retained-best");
+  }
+  for (const a of store?.history ?? []) if (a.result === "clean" && a.conditions?.source !== "self" && a.conditions?.tempo !== "own-pace") record(a.id, a.bpm, validDay(a.day) ? a.day : null, "retained-history", a.conditions ?? null, (a.ev?.time?.n ?? 0) > 0);
   return [...records.values()].sort((a, b) => (b.observedOn ?? "").localeCompare(a.observedOn ?? "") || a.exerciseId.localeCompare(b.exerciseId));
 }
 
@@ -178,6 +214,10 @@ export function buildPracticeBrief(input: PracticeBriefInput): PracticeBrief {
       recent: recentEvidence(selectedStore?.history ?? [], selectedStore?.sessions ?? [], start, input.day),
       cleanTempos: tempos.slice(0, TEMPO_LIMIT),
       omittedCleanTempos: Math.max(0, tempos.length - TEMPO_LIMIT),
+      goal: input.selectedGoal?.tuneId === selected.id ? {
+        kind: input.selectedGoal.kind, tempo: { ...input.selectedGoal.tempo }, arrangement: { ...input.selectedGoal.arrangement },
+        essentialTasks: input.selectedGoal.essentialTasks.map((task) => ({ ...task })), createdAt: input.selectedGoal.createdAt,
+      } : null,
     } : null,
     definitions: {
       recent: "The 28 recorded local calendar days ending on window.endDay. No retained observations is insufficient evidence, not zero ability or failure.",
@@ -186,11 +226,13 @@ export function buildPracticeBrief(input: PracticeBriefInput): PracticeBrief {
       noteChecks: "Aggregated retained evidence counts across judged takes/passes. matchedShare=(judged-missed)/judged, or null without observations. These are detector outcomes, not verified technique or complete musical accuracy.",
       timingSpread: "Sample-weighted root mean square of within-attempt stored onset spreads, using attempts with at least two onsets. Attempt means are excluded from spread; different setup offsets must not become player inconsistency.",
       referenceAlignment: "Sample-weighted stored mean offset from the app grid, positive after and negative before it, with whatever compensation applied then. This is reference alignment, not a diagnosis of rushing or dragging.",
-      cleanTempos: "Selected tune's highest retained app-marked clean BPM per exercise, over all retained history, including shared skills where present. Suggested next BPM, due boxes and cross-exercise credit are not proof. Date is null when the retained best lacks a matching dated attempt.",
+      cleanTempos: "Selected tune's highest retained app-marked clean task BPM per exercise, including shared skills where present. timed-pass means measured fixed/adaptive playing; it does not establish independence. historical-unknown is an unknown historical task setting, possibly call/reference tempo, never demonstrated playing speed. Known own-pace and self-reported results are omitted. Suggested BPM, due boxes and cross-exercise credit are not proof. Date is null without a matching dated attempt.",
       scope: "Overall includes stored progress for removed tunes. Selected statistics belong to that tune's store; mixed-session minutes belong to the session's primary tune. Shared-skill records can originate with another tune. Material and clean-tempo lists are capped; aggregates are not capped.",
+      assessmentConditions: "Counts use the same non-skipped visits as attemptCount. Conditions are recorded for new attempts; missing legacy fields stay unknown. First exposure describes that exercise visit before a model/rehearsal, not proof that a phrase was unfamiliar. Self-reported practice contributes activity, never measured note/timing results or clean-tempo records.",
+      goal: "An explicitly chosen musical outcome and frozen task list for a particular arrangement. Null means no valid selected goal was supplied; ask the user rather than infer one. A target tempo is an intention, not a demonstrated performance. For ear goals, BPM is the call/reference tempo; successful echoes are checked at the player's own pace and never establish response speed.",
     },
     limitations: [
-      "Microphone/detector reliability and per-attempt assistance are not recorded, so their confidence is unknown. Current settings cannot establish how an earlier attempt was played.",
+      "Detector confidence remains unknown unless explicitly recorded. Older attempts lack assistance/assessment provenance; current settings cannot establish how they were played. Assistance counts describe retained conditions, not equivalent independent performances.",
       "Play-along latency compensation includes the player's calibration performance; route changes and detector lag can affect alignment. Do not infer absolute timing ability from these offsets.",
       "No inference of actual string/fret, picking direction, articulation, tone quality, pain, physical technique or overall guitar level is justified by this brief.",
       "Only retained local practice observations are represented. Empty or missing evidence does not establish absence of practice or skill.",

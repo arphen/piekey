@@ -30,6 +30,7 @@ export interface PlaybackMix {
   chords: boolean;
   click: boolean;
   countIn: boolean;
+  clickSubdivision?: 1 | 2 | 3 | 4; // optional quiet divisions between quarter-note beats
   bass?: boolean; // the timeline's bass line, when it has one (default on)
   guide?: boolean; // the timeline's unscored guide melody (default on)
   fill?: boolean; // a quiet click on the beats where no chord sounds, so the time is never lost
@@ -45,6 +46,8 @@ export interface PassScore {
   results: NoteResult[]; // the pass note by note, parallel to the timeline's targets
   wrong: (number | null)[]; // what sounded instead of a missed note, parallel to the targets
   at: (number | null)[]; // each landed note's offset from its beat, ms, parallel to the targets
+  bpm?: number; // slowest tempo actually scheduled in this pass, never the current UI setting
+  tempoStable?: boolean; // every scheduled part of this pass used the same tempo
 }
 
 const LOOKAHEAD_S = 0.25;
@@ -208,9 +211,12 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
 
       const out = new Tone.Volume(-4).toDestination();
       const shots = new OneShots();
-      for (let k = 0; k < countBeats; k++) shots.play(clickBuffer(k === 0), out, t0 - (countBeats - k) * spb0, 0.6);
+      const countDivision = mixRef.current.clickSubdivision ?? 1;
+      for (let k = 0; k < countBeats; k++) for (let part = 0; part < countDivision; part++)
+        shots.play(clickBuffer(k === 0 && part === 0), out, t0 - (countBeats - k - part / countDivision) * spb0, part === 0 ? 0.6 : 0.22);
 
       const blank = () => t.targets.map((): NoteResult => null);
+      const scheduledTempos = new Map<number, { min: number; max: number }>();
       const startPerf = performance.now() + (t0 - ctx.currentTime) * 1000;
       const s: Session = {
         out,
@@ -275,7 +281,11 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
         });
         if (m.chords) for (const c of t.comp) if (inRange(c.t, lo, hi) && !quiet(c.t)) for (const midi of c.midis) shots.play(keysBuffer(midi), out, at(c.t), 0.2, c.dur * spb, 0.15);
         if (m.click) {
-          for (const c of clicks) if (inRange(c.t, lo, hi) && !quiet(c.t)) shots.play(clickBuffer(c.accent), out, at(c.t), c.accent ? 0.5 : 0.35);
+          const division = m.clickSubdivision ?? 1;
+          for (const c of clicks) for (let part = 0; part < division; part++) {
+            const when = c.t + part / division;
+            if (inRange(when, lo, hi) && !quiet(when)) shots.play(clickBuffer(part === 0 && c.accent), out, at(when), part ? 0.18 : c.accent ? 0.5 : 0.35);
+          }
         } else if (m.fill)
           for (const c of clicks)
             if (inRange(c.t, lo, hi) && !quiet(c.t) && ![...t.comp, ...(t.bass ?? [])].some((x) => x.t <= c.t + 1e-9 && c.t < x.t + x.dur - 1e-9)) shots.play(clickBuffer(c.accent), out, at(c.t), c.accent ? 0.4 : 0.26);
@@ -292,9 +302,11 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
       const heardSince = (since: number) => samples.current.filter((x) => x.t >= since && (x.midi !== null || x.pcs?.length)).length;
 
       const tally = (pass: Pass, whole: boolean) => {
+        const tempo = scheduledTempos.get(pass.iter);
+        scheduledTempos.delete(pass.iter);
         if (!scoringRef.current) return;
         const counted = whole ? ranged : ranged.filter((i) => pass.results[i] !== null);
-        setLastPass({ hit: counted.filter((i) => pass.results[i] === "hit").length, total: counted.length, heard: heardSince(pass.start), offset: median(pass.offsets), results: pass.results, wrong: pass.wrong, at: pass.at });
+        setLastPass({ hit: counted.filter((i) => pass.results[i] === "hit").length, total: counted.length, heard: heardSince(pass.start), offset: median(pass.offsets), results: pass.results, wrong: pass.wrong, at: pass.at, bpm: tempo ? Math.round(tempo.min * 1e6) / 1e6 : undefined, tempoStable: Boolean(tempo && Math.abs(tempo.max - tempo.min) < 1e-6) });
       };
 
       /** Was this note played? And if not, what sounded instead; if so, how it sat against the beat. */
@@ -390,6 +402,10 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
         while (s.nextR < horizon && (s.loop || s.nextR < s.length)) {
           const iterStart = Math.floor(s.nextR / s.length) * s.length;
           const segEnd = Math.min(horizon, iterStart + s.length);
+          const iter = Math.floor(iterStart / s.length);
+          const scheduledBpm = 60 / segAt(s.nextR).spb;
+          const tempo = scheduledTempos.get(iter);
+          scheduledTempos.set(iter, tempo ? { min: Math.min(tempo.min, scheduledBpm), max: Math.max(tempo.max, scheduledBpm) } : { min: scheduledBpm, max: scheduledBpm });
           schedule(s.from + s.nextR - iterStart, s.from + segEnd - iterStart, iterStart);
           s.nextR = segEnd;
         }

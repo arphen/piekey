@@ -4,9 +4,9 @@ import type { SyncSnapshot, SyncTransaction } from "../sync/model";
 import type { StoredTake } from "../audio/recorder";
 import type { SyncConnection } from "../sync/transport";
 
-const persistence = vi.hoisted(() => ({ capture: vi.fn(), merge: vi.fn(), recordings: vi.fn(), saveRecording: vi.fn() }));
+const persistence = vi.hoisted(() => ({ capture: vi.fn(), merge: vi.fn(), recordings: vi.fn(), exportable: vi.fn(), retry: vi.fn(), saveRecording: vi.fn() }));
 vi.mock("../sync/state", () => ({ captureSnapshot: persistence.capture, mergeSnapshot: persistence.merge }));
-vi.mock("../audio/recorder", () => ({ readAllTakes: persistence.recordings, storeTransferredTake: persistence.saveRecording }));
+vi.mock("../audio/recorder", () => ({ readAllTakes: persistence.recordings, readExportableTakes: persistence.exportable, retryPendingTakes: persistence.retry, storeTransferredTake: persistence.saveRecording }));
 
 function transaction(seq: number): SyncTransaction {
   return { v: 1, id: `desktop:${seq}`, device: "desktop", seq, clock: seq, at: seq, context: {}, kind: "storage", key: "guitar-key", before: null, after: "C" };
@@ -15,7 +15,9 @@ function snapshot(transactions: SyncTransaction[] = []): SyncSnapshot {
   return { format: "fretboard-focus-sync", version: 1, device: "desktop", createdAt: "2026-11-18T00:00:00Z", transactions };
 }
 function take(id: string): StoredTake {
-  return { id, tuneId: "tune", cardId: "card", day: "2026-11-18", at: 1, bpm: 80, share: 0.8, blob: new Blob([id], { type: "audio/webm" }) };
+  return { id, tuneId: "tune", cardId: "card", day: "2026-11-18", at: 1, bpm: 80, share: 0.8,
+    conditions: { v: 1, source: "measured", confidence: "unknown", tempo: "fixed", uninterrupted: true },
+    arrangementFingerprint: "score-version-1", blob: new Blob([id], { type: "audio/webm" }) };
 }
 async function descriptor({ blob, ...meta }: StoredTake) {
   return { ...meta, size: blob.size, mime: blob.type, hash: await recordingHash(blob) };
@@ -38,11 +40,25 @@ beforeEach(() => {
   vi.clearAllMocks();
   persistence.capture.mockResolvedValue(snapshot());
   persistence.recordings.mockResolvedValue([]);
+  persistence.exportable.mockImplementation(() => persistence.recordings());
+  persistence.retry.mockResolvedValue(true);
   persistence.merge.mockResolvedValue({ received: 0, added: 0, changes: 0, conflicts: [], revision: 0 });
   persistence.saveRecording.mockResolvedValue(undefined);
 });
 
 describe("durable occasional exchanges", () => {
+  it("rescues pending audio in a full file while refusing to advertise it as durable in pairing", async () => {
+    const pending = take("unsaved");
+    persistence.exportable.mockResolvedValue([pending]);
+    persistence.retry.mockResolvedValue(false);
+    const peer = channel([], true);
+    await expect(exchangeState(peer.connection)).rejects.toThrow("still waiting to save");
+    expect(peer.sent).toEqual([]);
+    const file = await createTransferFile();
+    await importTransferFile(file);
+    expect(persistence.saveRecording).toHaveBeenCalledWith(expect.objectContaining({ id: pending.id, conditions: pending.conditions, arrangementFingerprint: pending.arrangementFingerprint }));
+  });
+
   it("rejects an omitted advertised transaction before projecting or acknowledging it", async () => {
     const peer = channel([
       { kind: "inventory", version: 1, transactions: ["desktop:1"], recordings: [] },
