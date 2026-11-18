@@ -83,7 +83,7 @@ With the matcher, free play can recognise a strummed progression:
   keep the best match above a confidence floor.
 - A repeated sequence of 2–4 chords becomes a **progression**; map it to Roman numerals in the
   estimated key.
-- If the deck has a changes card for that progression (or a tune contains it), the low-E menu offers
+- If the deck has a changes card for that progression (or a tune contains it), the guitar menu offers
   it, as it does for scales today. The free-play log records progressions and the map shows them.
 
 ### 6. Arpeggio ↔ voicing link

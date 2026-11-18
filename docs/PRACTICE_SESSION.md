@@ -10,20 +10,34 @@ does not tell them what to do.
 | --- | --- | --- |
 | A note held ~0.4 s (shown on screen next to what it works) | exercises | hear it again · your pace · in time · next exercise |
 | The same, by note name in any octave | before and after a session | carry on · free play · settings · other tune · shuffle |
-| Low E held 1.3 s, released into quiet, then held again 0.6 s | exercises, free play, instruments | the six-string menu (tempo, click, tuner, sound output, …) |
+| D♯5 (high e, fret 11) held 1.3 s, released into quiet, then held again 0.6 s | exercises, free play, instruments | the six-string menu (tempo, click, tuner, sound output, …) |
 | A free note tapped twice | exercises, open drawer | gear, calibration, the drawer's switches |
 | F (any octave) held | ready screen | session length: 10 / 25 / 45 minutes |
 
 Note keys (`song/notekeys.ts`) have home notes outside what exercises play (E5; F2, G2, G♯2). A
 card that sounds a key's home note, itself or through its band, gets the nearest free note
-instead. Allocation reserves every octave accepted by the scorer, not only the score's written
-octave. In free play, whole-tune cards and improvisation every note is music; direct held-note
-and double-tap shortcuts are disabled. The deliberate low-E menu remains available.
-Its first hold only arms it; at least 150 ms of quiet and a fresh second hold within five seconds
-confirm it. A different intervening pitch cancels. One sustained musical E cannot open the menu.
-The menu waits for the opening note to stop or change before accepting a fresh string hold
-(0.6 s), so the low E that summoned it cannot immediately close it. A quiet scrim separates the
-menu from the music; its rows remain reachable on phone screens.
+instead. Allocation reserves every octave of what the player plays: chord tones, improvisation
+choices and, unless the card is exact, melody notes. Tones a chord scorer only tolerates stay
+free, so chord cards keep their keys; tone keys use the same pitch classes. In free play,
+whole-tune cards and improvisation every note is music; direct held-note and double-tap
+shortcuts are disabled. The deliberate guitar menu remains available.
+It is called with D♯5 (`SUMMON_NOTE`, high e fret 11): fretted and above the default fret-10
+range, because open strings ring on and get tuned. No note key or tone key uses it, and the
+coach ignores it while the current or previous target can sound it. Its first hold only arms
+it; at least 150 ms of quiet and a fresh second hold within five seconds confirm it. A
+different intervening pitch cancels. One sustained musical note cannot open the menu. The menu
+waits for the opening note to stop or change before accepting a fresh row hold (0.6 s). Its six
+rows are the first fret of each string (F, A♯, D♯, G♯, C, F; any octave, F split by register);
+the tune chooser uses the same six notes. A quiet scrim separates the menu from the music; its
+rows remain reachable on phone screens.
+
+No command anywhere sits on an open-string pitch class (E, A, D, G, B): open strings ring on and
+get tuned. Ready uses A♯ free play, C♯ settings, G♯ mix, F length, E♭ without scoring, F♯ tune
+and C instruments (the metronome is a switch inside); the summary uses C, A♯, C♯, F and F♯. On
+Ready, any other fretted note held 0.7 s begins; exact open-string pitches never do, including
+the fretted unisons that sound the same (for example A2 at the fifth fret of the low E string).
+Double taps are off while the six-row menu is open; the paused drawer prefers the card's own
+notes to open strings.
 
 **Choose tune** lives inside this room, including from free play. Its optional **Listen to
 opening** only listens while explicitly armed. Matching needs at least six fresh attacks and
@@ -44,7 +58,7 @@ cruising brings more.
 
 The opening three exercises are visible before starting. Input status and connection/reconnect
 actions sit beside the held-note start gesture; the option notes are shown separately. During a
-session the phase and exercise number stay visible. The displayed note actions and low-E menu
+session the phase and exercise number stay visible. The displayed note actions and guitar menu
 also work as buttons.
 
 All blocks, including focus work, fit the selected estimated budget; a melody is reserved for
@@ -154,7 +168,7 @@ Colour still needs sustained active playing; enabling rendering or hearing the c
   bar, then hide the notes. Each automatic fade follows a complete steady pass at the visit's
   target and starts a fresh pass/count-in. Chord symbols remain; pitch-revealing labels, links,
   automatic melody support and wrong-note overlays do not. Restore the page with its button or
-  use the low-E hold/release/hold menu gesture, then D. Hear again remains an explicit option. A previously successful
+  use the D♯5 hold/release/hold menu gesture, then D. Hear again remains an explicit option. A previously successful
   card due on a later day starts hidden only for the same known arrangement. Same-day rehearsal
   stays repeated exposure; restoring help stays visible/faded provenance for the whole visit.
   This is a later section review, not an independent retention or alternate-start transfer claim.
@@ -184,11 +198,11 @@ Exercises live in a five-box card box per tune (`song/leitner.ts`). On top of th
 
 ## Free play
 
-The Tutor tile opens free play directly without a tune. It runs the same engine and low-E menu
+The Tutor tile opens free play directly without a tune. It runs the same engine and guitar menu
 as free play inside a session; tune-specific exercise suggestions appear only with a tune's deck.
 It opens with a listening invitation and input control. Notation appears after three notes;
 timing and best-tempo measures appear once measured. Enabling a steady click from the menu shows
-its pulse before any notes are played. The shared pulse follows the heard click. The low-E menu
+its pulse before any notes are played. The shared pulse follows the heard click. The guitar menu
 remains visible as a button, reports whether the band is playing,
 waiting or off, and offers Leave on its first page when there is no matching exercise.
 

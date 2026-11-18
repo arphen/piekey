@@ -260,8 +260,8 @@ independent from practice. `song/renderedRoom.ts` stores its default-off prefere
 device only; it is outside the portable-state allowlist. `song/coach-flow.css` owns Ready/Running
 layout and action affordances; `song/freeplay-room.css` owns the free-play invitation and gradual
 reveal of notation/measurements. The presentation reuses the existing engines and gestures.
-`useSummon` requires low E held 1.3 s, at least 150 ms of quiet and a fresh 600 ms low-E hold
-within five seconds. Another pitch cancels the arm. `GuitarPad` primes held-string input after the opening note stops or changes, then accepts a
+`useSummon` requires `SUMMON_NOTE` (D♯5, high e fret 11) held 1.3 s, at least 150 ms of quiet
+and a fresh 600 ms hold within five seconds; the coach blocks it while the music sounds that note. Another pitch cancels the arm. `GuitarPad` primes held-string input after the opening note stops or changes, then accepts a
 fresh 600 ms row hold. Its scrim and responsive rows are shared; free play fixes the overlay to
 the viewport so it remains reachable while the room scrolls.
 
@@ -680,7 +680,7 @@ remain unverified until tested on devices.
 ### Add a guitar gesture
 
 1. Use `useNoteKeys` for a note-by-name action, `useToneKeys` for a double-tapped pitch-class action,
-   `useSummon` for the low-E menu, or `useHold` for a held-note "yes".
+   `useSummon` for the guitar menu, or `useHold` for a held-note "yes".
 2. Assign notes outside the exercise's pitch classes with `toneKeysFor`/`drawerToneKeys`; never
    steal a note the player must play.
 3. Show the note on screen with `NoteTag`/`ToneTag`.

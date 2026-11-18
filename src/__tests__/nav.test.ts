@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, createElement, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { GuitarPad, useSummon } from "../components/GuitarPad";
+import { SUMMON_NOTE } from "../song/notekeys";
 import * as pitch from "../listen/pitch";
 import type { InputApi, InputFrame } from "../listen/useInput";
 import { NAV_KEYS, press, pressables, step } from "../nav/useGuitarNav";
@@ -60,7 +61,7 @@ describe("guitar navigation", () => {
     expect(change).toHaveBeenCalledTimes(2);
   });
 
-  it("requires a low-E hold, quiet release and fresh hold before music can become menu controls", async () => {
+  it("requires a menu-note hold, quiet release and fresh hold before music can become menu controls", async () => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     const read = vi.spyOn(pitch, "midiOf").mockImplementation((frame) => frame.buf[0] < 0 ? null : frame.buf[0]);
     const listeners = new Set<(frame: InputFrame) => void>();
@@ -79,25 +80,25 @@ describe("guitar navigation", () => {
     const emit = (midi: number | null, now: number) => listeners.forEach((hear) => hear({ buf: Float32Array.of(midi ?? -1), sampleRate: 48000, rms: midi === null ? 0 : 0.1, now }));
     try {
       await act(async () => root.render(createElement(Menu)));
-      await act(async () => { emit(40, 0); emit(40, 1300); });
+      await act(async () => { emit(SUMMON_NOTE, 0); emit(SUMMON_NOTE, 1300); });
       expect(document.querySelector('[role="menu"]')).toBeNull();
       await act(async () => { emit(64, 1400); emit(64, 2100); });
       expect(document.querySelector('[role="menu"]')).toBeNull();
-      await act(async () => { emit(40, 2300); emit(40, 3600); emit(40, 5000); });
+      await act(async () => { emit(SUMMON_NOTE, 2300); emit(SUMMON_NOTE, 3600); emit(SUMMON_NOTE, 5000); });
       expect(document.querySelector('[role="menu"]')).toBeNull();
-      await act(async () => { emit(null, 5025); emit(null, 5200); emit(40, 5300); emit(40, 5899); });
+      await act(async () => { emit(null, 5025); emit(null, 5200); emit(SUMMON_NOTE, 5300); emit(SUMMON_NOTE, 5899); });
       expect(document.querySelector('[role="menu"]')).toBeNull();
-      await act(async () => emit(40, 5900));
+      await act(async () => emit(SUMMON_NOTE, 5900));
       expect(document.querySelector('[role="menu"]')).toBeTruthy();
-      await act(async () => { emit(40, 5925); emit(40, 6600); });
+      await act(async () => { emit(SUMMON_NOTE, 5925); emit(SUMMON_NOTE, 6600); });
       expect(fire).not.toHaveBeenCalled();
 
-      await act(async () => { emit(64, 6700); emit(64, 7299); });
+      await act(async () => { emit(65, 6700); emit(65, 7299); });
       expect(fire).not.toHaveBeenCalled();
-      await act(async () => { emit(64, 7300); });
+      await act(async () => { emit(65, 7300); });
       expect(fire.mock.calls).toEqual([[5]]);
 
-      await act(async () => { emit(null, 7500); emit(null, 7700); emit(40, 7800); emit(40, 8400); });
+      await act(async () => { emit(null, 7500); emit(null, 7700); emit(41, 7800); emit(41, 8400); });
       expect(fire.mock.calls).toEqual([[5], [0]]);
     } finally {
       await act(async () => root.unmount());

@@ -161,8 +161,9 @@ component tests run under jsdom. No CI configuration is committed; `make check` 
   player rather than instructing them; read `docs/PRACTICE_SESSION.md` before changing its
   gestures, tempo rules or card box. Any new action there needs a played gesture, shown on screen.
   Whole-tune cards (`step.kind === "tune"` as well as `run`) and improvisation reserve notes for
-  music. Command allocation reserves every octave the scorer accepts. Low-E menu summon needs
-  hold/release/hold. Tune changes retain the outer practice boundary and never exit fullscreen.
+  music. Command allocation reserves every octave of chord tones, improvisation choices and
+  non-exact melody notes. The menu summon is D♯5 hold/release/hold; menu rows are first frets.
+  Never put a command on an open-string pitch. Tune changes retain the outer practice boundary and never exit fullscreen.
   Modal suspension blocks scoring, playback and automatic wake/reconnect until the modal closes;
   resume only a pause owned by that modal. Renderer preferences are device-local and default off.
 - Outside sessions the shell is played too (`src/nav/`, notes from fret 12 up): keep controls real

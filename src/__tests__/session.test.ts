@@ -193,7 +193,7 @@ describe("note keys", () => {
     expect(assignNoteKeys(["hear", "pace", "time", "next"], commandMidis({ ...chromatic, exact: true }))).toEqual({ hear: 76, pace: 41, time: 43, next: 44 });
   });
 
-  it("reserves every accepted chord tone and any-note choice in every octave even on an exact card", () => {
+  it("reserves every chord tone and any-note choice in every octave even on an exact card", () => {
     const card = buildDeck(sheet(), buildTimeline(sheet())).cards.find((candidate) => candidate.run)!;
     const allowed = [4, 5, 7, 8]; // all four usual command homes
     for (const target of [
@@ -204,11 +204,11 @@ describe("note keys", () => {
       const keys = Object.values(assignNoteKeys(["hear", "pace", "time", "next"], commandMidis(choices)));
       for (const key of keys) if (key !== null) expect(allowed).not.toContain(key % 12);
     }
+    // Tones the chord scorer only tolerates stay free: a chord card keeps all its note keys.
     const target = { ...card.tl.targets[0], chord: { required: [4], clash: [1, 3], voicing: [64] } };
     const chord = { ...card, exact: true, first: 0, last: 0, tl: { ...card.tl, targets: [target] } };
     const keys = Object.values(assignNoteKeys(["hear", "pace", "time", "next"], commandMidis(chord)));
-    expect(keys.some((key) => key !== null)).toBe(true);
-    for (const key of keys) if (key !== null) expect(target.chord.clash).toContain(key % 12);
+    expect(keys.every((key) => key !== null && key % 12 !== 4)).toBe(true);
   });
 });
 

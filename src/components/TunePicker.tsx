@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { InputApi } from "../listen/useInput";
 import { buildThemeCatalog, type ThemeSource } from "../song/theme";
 import { useThemePicker } from "../song/useThemePicker";
-import { NoteTag, SUMMON_HINT, useNoteKeys, useSummon } from "./GuitarPad";
+import { SUMMON_NOTE } from "../song/notekeys";
+import { NoteTag, PAD_NOTES, SUMMON_HINT, useNoteKeys, useSummon } from "./GuitarPad";
 import "../song/tune-picker.css";
 
-const KEYS = { cancel: 40, previous: 45, next: 50, review: 55, listen: 59, all: 64 };
+// The guitar menu's layout: each string's first fret, low E string back, high e on.
+const KEYS = { cancel: PAD_NOTES[0], previous: PAD_NOTES[1], next: PAD_NOTES[2], review: PAD_NOTES[3], listen: PAD_NOTES[4], all: PAD_NOTES[5] };
 
 /** An explicit practice-room action. Recognising a melody only offers choices; it never selects one. */
 export function TunePicker({ input, sources, currentTuneId, onCancel, onChoose }: {
@@ -98,7 +100,7 @@ export function TunePicker({ input, sources, currentTuneId, onCancel, onChoose }
     else allTunes();
   });
   // A separate subscription arms afresh after reviewing a choice. Neither the opening melody
-  // nor the held G that opened confirmation can also confirm the switch.
+  // nor the held G♯ that opened confirmation can also confirm the switch.
   const confirmHeld = useNoteKeys(input, stage === "confirm" && !busy, [KEYS.cancel, KEYS.all], (key) => key === 0 ? back() : void confirm());
   useSummon(input, stage === "listen", reviewMatches);
 
@@ -112,7 +114,7 @@ export function TunePicker({ input, sources, currentTuneId, onCancel, onChoose }
           <p className="ss-tune-picker-status" role="status">{input.status !== "listening" || input.paused ? "Input is not listening. The tune list is available below." : `${match.heard.length} notes heard · ${match.candidates.length ? `${match.candidates.length} possible tune${match.candidates.length === 1 ? "" : "s"}` : "waiting for a matching opening"}`}</p>
           {match.candidates.length ? <ul className="ss-tune-matches">{match.candidates.map((candidate) => <li key={candidate.id}><strong>{candidate.title}</strong><span>{candidate.matchedNotes} opening notes matched</span></li>)}</ul> : null}
           <p className="ss-tune-picker-detail">Similar openings can match more than one tune. Nothing changes until you choose and confirm.</p>
-          <button type="button" onClick={reviewMatches}><NoteTag midi={KEYS.cancel} held={false} />{match.candidates.length ? "Review matches" : "Return to tune list"}<small>{SUMMON_HINT}</small></button>
+          <button type="button" onClick={reviewMatches}><NoteTag midi={SUMMON_NOTE} held={false} />{match.candidates.length ? "Review matches" : "Return to tune list"}<small>{SUMMON_HINT}</small></button>
         </> : stage === "confirm" ? <>
           <p className="ss-tune-picked">{selected?.title ?? "This tune is no longer available. Choose another tune."}</p>
           <p>Completed practice will be kept. Any unfinished pass ends without credit.</p>
@@ -121,11 +123,11 @@ export function TunePicker({ input, sources, currentTuneId, onCancel, onChoose }
             <button type="button" onClick={back} disabled={busy}><NoteTag midi={KEYS.cancel} held={confirmHeld === 0} />Back to choices</button>
             <button type="button" className="ss-tune-primary" onClick={() => void confirm()} disabled={busy || !selected}><NoteTag midi={KEYS.all} held={confirmHeld === 1} />{busy ? "Saving practice…" : error ? "Retry change" : "Change tune"}</button>
           </div>
-          <p className="ss-tune-picker-detail">Release the last note, then hold high E to confirm.</p>
+          <p className="ss-tune-picker-detail">Release the last note, then hold F4 (high e, fret 1) to confirm.</p>
         </> : <>
           <p>{matchedIds ? "Matching openings · choose the tune you meant." : "Your library stays inside the practice room."}</p>
           <label className="ss-tune-select">Tune<select aria-label="Tune to practise" value={selected?.id ?? ""} onChange={(event) => { setSelectedId(event.target.value); setError(null); }}>{choices.map((source) => <option key={source.id} value={source.id}>{source.title}{source.id === currentTuneId ? " · current tune" : ""}</option>)}</select></label>
-          <p className="ss-tune-picker-detail">Hold the shown note for a moment. A and D move through every choice; G reviews it.</p>
+          <p className="ss-tune-picker-detail">Hold the shown note for a moment. A♯ and D♯ move through every choice; G♯ reviews it.</p>
           <div className="ss-tune-picker-actions">
             <button type="button" onClick={() => move(-1)} disabled={choices.length < 2}><NoteTag midi={KEYS.previous} held={browseHeld === 1} />Previous tune</button>
             <button type="button" onClick={() => move(1)} disabled={choices.length < 2}><NoteTag midi={KEYS.next} held={browseHeld === 2} />Next tune</button>

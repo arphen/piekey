@@ -19,7 +19,7 @@ import "../song/freeplay-room.css";
 // exercise are read off it, and a click joins in by itself (see useFreePlay). How it is going is on
 // the screen as it happens: where each note sat against the grid, how long the playing has been on
 // the click, how close the next step up is. Every note can be part of the playing here, so there
-// are no note keys. The deliberate low-E hold/release/hold gesture calls the menu.
+// are no note keys. The deliberate menu-note (D♯5) hold/release/hold gesture calls the menu.
 
 const C_MAJOR = makeScale(0, "major");
 const NONE: NoteResult[] = [];
@@ -219,7 +219,7 @@ export function FreePlay({ input, deck, onClose, onPractise, active = true, onCh
 
       <footer className="fp-room-foot">
         <div className="fp-input-anchor">{arrived ? <><Ear input={input} size="small" ring={ring} /><span>{listening ? "Listening" : "Reconnect"}</span></> : null}</div>
-        <div className="fp-menu-anchor"><button type="button" onClick={() => setPad(0)} aria-label="Open free play menu"><span className="fp-menu-note">E<span>2</span></span>Menu<span aria-hidden="true">↗</span></button><span>{SUMMON_HINT}</span></div>
+        <div className="fp-menu-anchor"><button type="button" onClick={() => setPad(0)} aria-label="Open free play menu"><span className="fp-menu-note">D♯<span>5</span></span>Menu<span aria-hidden="true">↗</span></button><span>{SUMMON_HINT}</span></div>
         <p className="fp-band-state"><i className={v.band ? "is-live" : ""} />Band {v.band ? "playing" : v.bandOn ? "listening" : "off"}</p>
       </footer>
       {roomActive && pad !== null ? <GuitarPad input={input} title={pad === 1 ? "Instruments & more" : v.on ? `Free play · ♩ ${v.bpm}` : "Free play"} rows={pages[pad].rows} onFire={(i) => pages[pad].fire[i]()} /> : null}

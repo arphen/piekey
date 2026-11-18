@@ -16,7 +16,7 @@ import { RecordingStatus } from "./RecordingStatus";
 // note does next. Nothing here needs the keyboard: each action is a note, shown beside it.
 
 // by name, in any octave: C carries on, D is free play with the metronome, C♯ the settings
-const KEYS = { more: 48, free: 50, settings: 49, tune: 53, shuffle: 54 };
+const KEYS = { more: 48, free: 46, settings: 49, tune: 53, shuffle: 54 }; // C · A♯ · C♯ · F · F♯: off the open strings
 const ARM_MS = 2500; // let the last notes ring out before a note can mean something
 const MOVE_MS = 1100; // then the exercises set off for their new boxes
 const FAMILIES: Family[] = ["scales", "melody", "harmony", "chords", "reading", "ear", "fretboard"];

@@ -39,7 +39,7 @@ credit. **Finish after this pass** offers a musical ending; see
 Ordinary musical notes cannot choose another tune. **Choose tune** stays in the practice room;
 optionally enable **Listen to opening**, play at least six notes of an opening in its original
 key, review matches and confirm the choice. Ambiguous matches remain choices. The guitar menu
-uses a deliberate low-E hold, release and second hold, so one sustained low E cannot open it.
+uses a deliberate D♯5 (high e, fret 11) hold, release and second hold, so one sustained note cannot open it.
 
 Practice runs locally, with preferences/progress stored in the browser and large scores/recordings
 in IndexedDB. Optional device pairing uses a signaling service to establish an encrypted connection.
@@ -78,7 +78,7 @@ The app remains guitar-first. The brief supports a conversation about goals and 
 there is no agent control API or automatic plan execution.
 
 Memory practice gradually removes the page, then brings due sections back hidden on a later day.
-The page can always be restored with its button or the low-E menu; recorded help stays explicit.
+The page can always be restored with its button or the guitar menu; recorded help stays explicit.
 Progress recordings have Play/Pause, Restart and seek buttons reachable by the played cursor.
 Use headphones when controlling recording playback from the guitar.
 

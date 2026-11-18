@@ -402,9 +402,10 @@ Ready screen
   trouble in the same bar.
 - Ready previews the first three planned exercises, separates input connection from starting, and
   shows the held-note gesture beside the start button. Running screens name the phase and exercise
-  number; the displayed note actions and low-E menu also have clickable buttons.
-- The six-string menu has a quiet scrim and phone-safe rows. It waits for the summoning note to
-  stop/change before accepting a fresh 0.6 s row hold; free play uses a fixed overlay.
+  number; the displayed note actions and guitar menu also have clickable buttons.
+- The six-string menu has a quiet scrim and phone-safe rows, pressed on each string's first fret
+  (never an open string). It waits for the summoning note to stop/change before accepting a fresh
+  0.6 s row hold; free play uses a fixed overlay.
 - `PracticeAtmosphere` shares a muted water/leaf background and current lines with free play.
   Existing RMS frames give it small smoothed movements; sustained playing and flow gradually
   reveal colour. It is decorative, performs no pitch analysis, and respects reduced motion.
@@ -440,14 +441,14 @@ session started this way may not go full screen until the page has been clicked 
 
 | Gesture | Where | Action |
 | --- | --- | --- |
-| Hold a note ~0.7 s | Ready | Begin (any note except the reserved action notes) |
+| Hold a fretted note ~0.7 s | Ready | Begin (any note except the reserved action notes and open-string pitches) |
 | `E5` (or assigned hear key) | Exercise | Hear it again |
 | `F2` (or assigned pace key) | Exercise | Your pace |
 | `G2` (or assigned time key) | Exercise | In time |
 | `G♯2` (or assigned next key) | Exercise | Next exercise |
-| Low E hold 1.3 s → quiet release → fresh hold 0.6 s | Exercise / free play / instruments | Six-string menu (tempo, click, tuner, output and session controls) |
+| D♯5 (high e, fret 11) hold 1.3 s → quiet release → fresh hold 0.6 s | Exercise / free play / instruments | Six-string menu (tempo, click, tuner, output and session controls) |
 | `C3` | Done screen | Carry on |
-| `D3` | Done screen | Free play · metronome |
+| `A♯` | Done screen | Free play · metronome |
 | `C♯3` | Done screen | Settings |
 | `F3` | Done screen | Choose tune, then review and confirm inside the room |
 | `F♯3` | Done screen | Toggle shuffle |
@@ -530,7 +531,7 @@ configurable axis model and shared-scale archive browser remain absent.
 - Writes the played notes to a score (`playedSheet`), logs what was practised to
   `guitar-freeplay`, tracks best tempo/record per key+pattern, and offers a matching card from the
   box when one exists.
-- Low-E menu, also a persistent button: slower/stay, faster, click mode, band and matching-card
+- Guitar menu (D♯5 gesture), also a persistent button: slower/stay, faster, click mode, band and matching-card
   practice. Leave is on the first page when no card is offered; band status distinguishes playing,
   waiting and off. Stats distinguish consecutive bars and this visit's best tempo.
 

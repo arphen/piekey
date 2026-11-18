@@ -168,14 +168,14 @@ guitar-navigable UI.
 **Evidence.** `SessionSummary.tsx` maps:
 
 - `C3` → carry on (`KEYS.more = 48`)
-- `D3` → free play / metronome (`KEYS.free = 50`)
+- `A♯` → free play / metronome (`KEYS.free = 46`; off the open strings)
 - `C♯3` → settings (`KEYS.settings = 49`)
 - `F3` → Choose tune (`KEYS.tune = 53`), then review and confirm inside the practice room
 - `F♯3` → shuffle (`KEYS.shuffle = 54`)
 
-The code uses **D3 and C♯3**, not the D2/C♯2 in the original note; the `NoteTag` labels show the
+The code uses **A♯ and C♯** (any octave; open-string pitch classes are never keys), not the D2/C♯2 in the original note; the `NoteTag` labels show the
 actual notes. Actions are also clickable, and the session itself uses note keys for hear/pace/time/
-next, the low-E six-string menu, and held-note start. The done screen arms after a short delay so
+next, the six-string guitar menu, and held-note start. The done screen arms after a short delay so
 ringing notes do not trigger actions.
 
 **Continuation.** The shell has a played cursor. In-room tune choice now works from ready,
@@ -364,7 +364,7 @@ picker in the shared header so non-session views can change it too.
 
 **Evidence.** `SongCoach` assigns `E5` (hear), `F2` (pace), `G2` (time), `G♯2` (next) via
 `assignNoteKeys`, shows them in the running footer with `NoteTag`, and `useNoteKeys` fires them. The
-same actions also exist in the low-E menu. The ready screen uses a held note to begin.
+same actions also exist in the guitar menu. The ready screen uses a held note to begin.
 
 **What remains.** Verify on real hardware that the assigned notes do not collide with the exercise
 or the band; the assignment logic already avoids used midis and has fallbacks. Consider making the
@@ -505,7 +505,7 @@ the curriculum.
 **Evidence.** `ChangesView` deals a ii–V–I, shows voicings, detects the current chord, and has a
 **Hear {chord}** button that strums the current voicing. It has no progression playback, no
 count-in, no metronome, no guitar-note controls, and no listen-again gesture. The modern `SongCoach`
-does play ii–V–I harmony cards with a band/click, has a hear key, and has a low-E menu with tempo,
+does play ii–V–I harmony cards with a band/click, has a hear key, and has a guitar menu with tempo,
 but that is a different surface.
 
 **What remains.** Make the Changes drill musical: play the progression at a chosen tempo with a
@@ -580,7 +580,7 @@ expected V–I; make next exercises accessible from the guitar.
 on mostly-wrong passes, waits after silent passes, and returns to the player's pace. `freeplay.ts`
 `stepLock` has `ahead`/`behind`/`loose` moods; clean readings raise, sustained lateness lowers,
 rushing never raises. `SongCoach` shows a beat meter ("ahead/behind/on"), pass bars, the click's
-target, and a "band comes back in on a note" message. The hear key and low-E menu make the expected
+target, and a "band comes back in on a note" message. The hear key and guitar menu make the expected
 material and next card available from the guitar. The V–I section gets `padChord`/`bassHint` cues in
 the session.
 

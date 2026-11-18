@@ -6,16 +6,21 @@ import { mod } from "../musicTheory";
 // low E string); a card that happens to use an action's home gets the next free note instead.
 // The keys are shown on screen, so the player never has to remember them.
 
-const OPEN_STRINGS = [40, 45, 50, 55, 59, 64];
+/** Open strings ring on and get tuned: they never work the app. */
+export const OPEN_STRINGS = [40, 45, 50, 55, 59, 64];
+
+/** The guitar menu's note (D♯5, high e fret 11): fretted, above the default fret-10 range, never a note key. */
+export const SUMMON_NOTE = 75;
+
 const LOWEST = 40;
 const HIGHEST = 79; // the 15th fret of the high e string
 
 /** Where each action likes to sit, best first. */
 export const KEY_HOMES: Record<string, number[]> = {
-  hear: [76, 77, 75, 78], // E5
+  hear: [76, 77, 78], // E5
   pace: [41, 78, 77], // F2
   time: [43, 79, 78], // G2
-  next: [44, 75, 79], // G♯2
+  next: [44, 79], // G♯2
 };
 
 /** Every pitch a card sounds, its own notes and the band's: none of them can be a key. */
@@ -31,16 +36,15 @@ export function usedMidis(card: Card): number[] {
 }
 
 /**
- * A session command must also leave every accepted octave of the exercise available to play.
- * Keep exact-note cards exact; chord goals and improvisation choices always accept pitch classes.
+ * A session command must also leave every octave of what the player plays available: chord tones,
+ * improvisation choices and (unless the card is exact) melody notes. Tones a chord scorer merely
+ * tolerates stay free, or a chord card would have no note keys at all.
  */
 export function commandMidis(card: Card): number[] {
   const out = new Set(usedMidis(card));
   const accepted = new Set<number>();
   for (const target of card.tl.targets.slice(card.first, card.last + 1)) {
     if (target.chord) {
-      // The chord scorers permit extra tones unless they clash, even when not in the shown voicing.
-      for (let pc = 0; pc < 12; pc++) if (!target.chord.clash.includes(pc)) accepted.add(pc);
       for (const pc of target.chord.required) accepted.add(mod(pc));
       for (const midi of target.chord.voicing) accepted.add(mod(midi));
     } else if (target.any) {
@@ -53,7 +57,7 @@ export function commandMidis(card: Card): number[] {
 
 /** A note for each action: its home when the exercise leaves it free, else the nearest free note. `null` when nothing is left. */
 export function assignNoteKeys(ids: string[], used: Iterable<number>, homes: Record<string, number[]> = KEY_HOMES): Record<string, number | null> {
-  const busy = new Set([...used, ...OPEN_STRINGS]);
+  const busy = new Set([...used, ...OPEN_STRINGS, SUMMON_NOTE]);
   const out: Record<string, number | null> = {};
   for (const id of ids) {
     const wanted = homes[id] ?? [];

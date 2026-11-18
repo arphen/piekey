@@ -39,7 +39,7 @@ These are the project's rules, restated so a plan cannot drift from them.
 1. **React, don't instruct.** Text states what was heard or what state things are in; it is empty
    while the player plays. Encouragement is ambient (warmth, glow, a quiet sound), never praise.
 2. **The guitar is the controller.** Every new action has a played gesture shown on screen. In free
-   or improvised playing every note is music, so only the low-E menu works there.
+   or improvised playing every note is music, so only the guitar menu (D♯5 hold · release · hold) works there.
 3. **Adaptive help over toggles.** The page, the neck, the guide melody, the click come and go with
    how it is going, not with a switch.
 4. **One system.** New material is a deck family or a card kind in the existing session

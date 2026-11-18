@@ -170,7 +170,7 @@ describe("coach entry", () => {
     expect(reveal).toHaveBeenCalledTimes(1);
     await act(async () => { [...host.querySelectorAll("button")].find((item) => item.textContent === "Guitar menu")!.click(); });
     const row = [...host.querySelectorAll('[role="menuitem"]')].find((item) => item.textContent?.includes("Reveal page"))!;
-    expect(row.querySelector(".ss-pad-note")?.textContent).toBe("D");
+    expect(row.querySelector(".ss-pad-note")?.textContent).toBe("D♯3");
     await act(async () => (row as HTMLButtonElement).click());
     expect(reveal).toHaveBeenCalledTimes(2);
   });
@@ -253,9 +253,9 @@ describe("coach entry", () => {
     await click("Review matches");
     expect(onChoose).not.toHaveBeenCalled();
     await click("Review choice");
-    await act(async () => { frame(64); frame(64, 700); });
+    await act(async () => { frame(65); frame(65, 700); });
     expect(onChoose).not.toHaveBeenCalled();
-    await act(async () => { quiet(); frame(64); frame(64, 700); });
+    await act(async () => { quiet(); frame(65); frame(65, 700); });
     expect(onChoose).toHaveBeenCalledTimes(1);
     expect(onChoose).toHaveBeenCalledWith("other-opening");
   });
@@ -356,7 +356,7 @@ describe("coach entry", () => {
     await click("Sound & setup");
     await click("Tune & session");
     const metronomeRow = [...host.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((item) => item.textContent?.includes("Metronome"))!;
-    expect(metronomeRow.querySelector(".ss-pad-note")?.textContent).toBe("B");
+    expect(metronomeRow.querySelector(".ss-pad-note")?.textContent).toBe("C4");
     await act(async () => metronomeRow.click());
     expect(host.querySelector('[aria-label="metronome"]')).not.toBeNull();
     expect(host.querySelector<HTMLInputElement>('[aria-label="Tempo in beats per minute"]')?.value).toBe(String(card.bpm));
@@ -381,7 +381,7 @@ describe("coach entry", () => {
     let midi: number | null = null;
     vi.spyOn(pitch, "midiOf").mockImplementation(() => midi);
     await act(async () => root.render(<SongCoach sheet={sheet} tl={tl} input={input} onClose={() => undefined} />));
-    const metronome = host.querySelector<HTMLButtonElement>('.ss-instruments--ready button[title="Hold G in any octave"]')!;
+    const metronome = host.querySelector<HTMLButtonElement>('.ss-instruments--ready button[title="Hold C for the instruments, then switch with the guitar menu"]')!;
     await act(async () => metronome.click());
     expect(mocked.suspended).toBe(true);
     await act(async () => {

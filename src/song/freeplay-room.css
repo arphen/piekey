@@ -57,7 +57,7 @@
 .fp-menu-anchor { display: grid; justify-items: center; gap: 8px; }
 .ss .fp-menu-anchor button { display: flex; align-items: center; gap: 11px; min-height: 40px; padding: 7px 14px 7px 8px; border: 1px solid #b8c5ad30; border-radius: 8px; background: #c2d0b507; color: #c5cebc; font-size: 12px; transition: background 0.2s, border-color 0.2s; }
 .ss .fp-menu-anchor button:hover { background: #c2d0b516; border-color: #b8c5ad70; }
-.fp-menu-note { display: grid; place-items: center; position: relative; width: 28px; height: 25px; border: 1px solid #b8c5ad30; border-radius: 4px; font: 400 11px/1 var(--font-mono); }
+.fp-menu-note { display: grid; place-items: center; position: relative; width: 32px; padding-right: 5px; height: 25px; border: 1px solid #b8c5ad30; border-radius: 4px; font: 400 11px/1 var(--font-mono); }
 .fp-menu-note span { position: absolute; right: 4px; bottom: 4px; font-size: 6px; }
 .fp-menu-anchor > span { color: #929c8c; font-size: 9px; }
 .fp-band-state { display: flex; align-items: center; justify-self: end; gap: 7px; margin: 0; color: #929c8c; font-size: 10px; }

@@ -8,6 +8,7 @@ import { OPEN_MIDI } from "../core/scales";
 import { midiOf } from "../listen/pitch";
 import type { InputApi } from "../listen/useInput";
 import { mod, pitchClassToName } from "../musicTheory";
+import { OPEN_STRINGS, SUMMON_NOTE } from "../song/notekeys";
 import { melodyOverChords } from "../tunes/learn";
 import type { LeadSheet } from "../tunes/musicxml";
 import { printedResults, type Timeline } from "../tunes/order";
@@ -48,8 +49,8 @@ import "../song/coach-flow.css";
 // The practice session, full screen and quiet: one exercise at a time, hands on the guitar. The
 // guitar runs it: hold a note to begin, play to move on, start over whenever. Single notes the
 // exercise doesn't use are keys (hear it again, your pace, in time, next), each shown beside
-// what it works; holding the open low E calls the menu. Everything else (settings, the card box,
-// the plan) lives behind the gear; keys and a pedal still work.
+// what it works; the menu note (D♯5: hold, release, hold) calls the menu. Everything else
+// (settings, the card box, the plan) lives behind the gear; keys and a pedal still work.
 
 interface SongCoachProps {
   sheet: LeadSheet;
@@ -68,7 +69,9 @@ const PAGE = 8; // notes of a long run shown on the fretboard at once
 const HOLD_MS = 700; // a note held this long is a "yes"
 const HOLD_GAP_MS = 160;
 const IDLE_MS = 2600; // then the corner buttons and the cursor fade
-const READY_KEYS = [50, 49, 56, 53, 51, 54, 48, 55]; // D: free · C♯: settings · G♯: mix · F: length · E♭: self · F♯: tune · C: tuner · G: metronome
+// A♯: free · C♯: settings · G♯: mix · F: length · E♭: self · F♯: tune · C: instruments. Every pitch class
+// off the open strings is in use; the metronome is one switch inside the instruments room.
+const READY_KEYS = [46, 49, 56, 53, 51, 54, 48];
 type RoomTool = "tuner" | "metronome";
 const NECK_MS = 7000; // the neck stays this long after it was called for
 const NO_TUNES: { sheet: LeadSheet; tl: Timeline }[] = [];
@@ -237,7 +240,7 @@ export function openPractice(input: InputApi) {
 
 /** The pitch classes a card plays, chords included: tone keys are picked from outside them. */
 function pitchClassesOf(card: Card): number[] {
-  return card.tl.targets.slice(card.first, card.last + 1).flatMap((t) => (t.chord ? [...t.chord.voicing, ...t.chord.required] : [t.midi])).map((m) => mod(m));
+  return card.tl.targets.slice(card.first, card.last + 1).flatMap((t) => (t.chord ? [...t.chord.voicing, ...t.chord.required] : t.any ?? [t.midi])).map((m) => mod(m));
 }
 
 /** True once the mouse has been still for a while. */
@@ -265,7 +268,7 @@ function useIdle(enabled: boolean): boolean {
   return idle;
 }
 
-/** The guitar's "yes": a note held for a moment. Fills the ring it returns while the note rings. Notes in `except` (pitch classes) mean something else. */
+/** The guitar's "yes": a fretted note held for a moment. Fills the ring it returns while the note rings. Notes in `except` (pitch classes) mean something else; open strings ring on and get tuned, so they never count. */
 function useHold(input: InputApi, enabled: boolean, onHold: () => void, except: number[] = []): RefObject<SVGCircleElement> {
   const ring = useRef<SVGCircleElement>(null);
   const cb = useRef(onHold);
@@ -287,7 +290,7 @@ function useHold(input: InputApi, enabled: boolean, onHold: () => void, except: 
     return subscribe((f) => {
       if (fired) return;
       const heard = midiOf(f);
-      const m = heard !== null && skip.current.includes(mod(heard)) ? null : heard;
+      const m = heard !== null && (skip.current.includes(mod(heard)) || OPEN_STRINGS.includes(heard)) ? null : heard;
       if (m !== null) {
         if (pc === null || mod(m) !== pc) {
           pc = mod(m);
@@ -450,7 +453,7 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
     pausedByMenu.current = false;
   };
 
-  // the pad: called from the guitar by holding the open low E, worked with the six strings
+  // the pad: called from the guitar with the menu note, worked with the six strings
   const openPad = () => {
     if (tools) return;
     if (!session.paused) {
@@ -554,12 +557,22 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
 
   const cardNow = session.card;
   const wholeTune = Boolean(cardNow?.run || cardNow?.step?.kind === "tune");
-  const summonRing = useSummon(input, inExercise && pad === null && !menu && !calib && !choosingTune && !tools, openPad);
+  const improvising = cardNow?.kind === "improv";
+  // not while the menu note is part of what is being played
+  const menuNoteInMusic = useRef(false);
+  menuNoteInMusic.current = Boolean(cardNow && session.active >= 0 && [session.active, session.active - 1].some((i) => {
+    const t = cardNow.tl.targets[i];
+    if (!t) return false;
+    if (t.chord) return [...t.chord.voicing, ...t.chord.required].some((m) => mod(m) === mod(SUMMON_NOTE));
+    if (t.any) return t.any.some((pc) => mod(pc) === mod(SUMMON_NOTE));
+    return cardNow.exact ? t.midi === SUMMON_NOTE : mod(t.midi) === mod(SUMMON_NOTE);
+  }));
+  const summonRing = useSummon(input, inExercise && pad === null && !menu && !calib && !choosingTune && !tools, openPad, menuNoteInMusic);
 
   // note keys: one note each, held for a moment, and the session does that
   const noteKeys = session.keys;
   // A whole-tune run and improvisation reserve every played note for the music.
-  const held = useNoteKeys(input, inExercise && pad === null && !menu && !calib && !choosingTune && !tools && !session.paused && !wholeTune && session.card?.kind !== "improv", [noteKeys.hear, noteKeys.pace, noteKeys.time, noteKeys.next], (key) => {
+  const held = useNoteKeys(input, inExercise && pad === null && !menu && !calib && !choosingTune && !tools && !session.paused && !wholeTune && !improvising, [noteKeys.hear, noteKeys.pace, noteKeys.time, noteKeys.next], (key) => {
     if (key === 0) session.hear();
     else if (key === 1) session.go("pace");
     else if (key === 2) session.go("time");
@@ -583,8 +596,10 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
   // the drawer's switches: click, melody under me, spoken names. Full screen is left out because
   // browsers only grant it from a real click or key press, never from a note coming in.
   const switchTones = drawerToneKeys(usedPcs, 6, toneKeys);
-  // between exercises single notes are the keys, so double taps only work the open drawer there
-  const tapped = useToneKeys(input, !calib && !free && !choosingTune && !tools && ((inExercise && !wholeTune) || menu), [...toneKeys, ...switchTones], (key) => {
+  // between exercises single notes are the keys, so double taps only work the open drawer there;
+  // whole tunes and improvisation reserve every note for the music, and the pad has its own notes
+  const tonesLive = !calib && !free && !choosingTune && !tools && pad === null && ((inExercise && !wholeTune && !improvising) || menu);
+  const tapped = useToneKeys(input, tonesLive, [...toneKeys, ...switchTones], (key) => {
     if (key === 0) (menu ? closeMenu : openMenu)();
     else if (key === 1) {
       if (!menu) openCalib();
@@ -779,7 +794,7 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
           input={input}
           labels={labels}
           ring={summonRing}
-          earTag={<ToneTag pc={wholeTune ? null : toneKeys[1]} lit={tapped === 1} />}
+          earTag={<ToneTag pc={tonesLive && !menu ? toneKeys[1] : null} lit={tapped === 1} />}
           held={held}
           onGuitarMenu={openPad}
           onTools={openTools}
@@ -788,7 +803,7 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
       {!freeInstruments ? <div className="ss-chrome">
         <button type="button" className="ss-icon" onClick={openMenu} aria-label="settings" title="Settings (S)">
           <Gear />
-          <ToneTag pc={(inExercise && !wholeTune) || menu ? toneKeys[0] : null} lit={tapped === 0} />
+          <ToneTag pc={tonesLive ? toneKeys[0] : null} lit={tapped === 0} />
         </button>
         <button type="button" className="ss-icon" onClick={close} aria-label="leave" title="Leave (Esc)">
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -829,8 +844,8 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
 
 function RoomInstruments({ onOpen, ready = false, held = null, disabled = false }: { onOpen(tool: RoomTool): void; ready?: boolean; held?: number | null; disabled?: boolean }) {
   return <nav className={`ss-instruments ${ready ? "ss-instruments--ready" : "ss-instruments--running"}`} aria-label="Practice instruments">
-    <button type="button" onClick={() => onOpen("tuner")} disabled={disabled} title={ready ? "Hold C in any octave" : "Guitar menu · Tune & session · G"}><Glyph name="tools" size={17} /><span>Tuner</span>{ready ? <NoteTag midi={READY_KEYS[6]} held={held === 6} octave={false} /> : null}</button>
-    <button type="button" onClick={() => onOpen("metronome")} disabled={disabled} title={ready ? "Hold G in any octave" : "Guitar menu · Tune & session · B"}><Glyph name="free" size={18} /><span>Metronome</span>{ready ? <NoteTag midi={READY_KEYS[7]} held={held === 7} octave={false} /> : null}</button>
+    <button type="button" onClick={() => onOpen("tuner")} disabled={disabled} title={ready ? "Hold C in any octave" : "Guitar menu · Tune & session · G♯"}><Glyph name="tools" size={17} /><span>Tuner</span>{ready ? <NoteTag midi={READY_KEYS[6]} held={held === 6} octave={false} /> : null}</button>
+    <button type="button" onClick={() => onOpen("metronome")} disabled={disabled} title={ready ? "Hold C for the instruments, then switch with the guitar menu" : "Guitar menu · Tune & session · C"}><Glyph name="free" size={18} /><span>Metronome</span></button>
   </nav>;
 }
 
@@ -880,7 +895,7 @@ function Ready({
   const byId = useMemo(() => new Map(deck.cards.map((c) => [c.id, c])), [deck]);
   // any held note begins, except the ones that mean something else here
   const ring = useHold(input, plan.length > 0 && keysOn, onBegin, READY_KEYS.map((m) => mod(m)));
-  const held = useNoteKeys(input, keysOn, [READY_KEYS[0], READY_KEYS[1], guests.length ? READY_KEYS[2] : null, READY_KEYS[3], READY_KEYS[4], onChooseTune ? READY_KEYS[5] : null, READY_KEYS[6], READY_KEYS[7]], (k) => (k === 0 ? onFree() : k === 1 ? onSettings() : k === 2 ? onMix() : k === 3 ? onLength() : k === 4 ? onSelfBegin() : k === 5 ? onChooseTune?.() : onTools(k === 6 ? "tuner" : "metronome")), true);
+  const held = useNoteKeys(input, keysOn, [READY_KEYS[0], READY_KEYS[1], guests.length ? READY_KEYS[2] : null, READY_KEYS[3], READY_KEYS[4], onChooseTune ? READY_KEYS[5] : null, READY_KEYS[6]], (k) => (k === 0 ? onFree() : k === 1 ? onSettings() : k === 2 ? onMix() : k === 3 ? onLength() : k === 4 ? onSelfBegin() : k === 5 ? onChooseTune?.() : onTools("tuner")), true);
   const from = new Set(plan.map((id) => byId.get(id)?.tune).filter(Boolean));
   const listening = input.status === "listening" && !input.paused;
   const first = byId.get(plan[0]);
@@ -933,7 +948,7 @@ function Ready({
         <p className="ss-ready-instruction">
           {unavailablePassage ? "Return to Songs to choose a passage with melody notes in this arrangement." : !plan.length
             ? deck.cards.length ? "Hold F below to choose more time, or open free play." : "Free play is always available."
-            : listening ? "Hold a note for 0.7 seconds. The circle fills as you hold." : input.paused ? "A click resumes the audio, then the guitar takes over." : "Connect an interface or allow the microphone to begin."}
+            : listening ? "Hold a fretted note for 0.7 seconds. The circle fills as you hold." : input.paused ? "A click resumes the audio, then the guitar takes over." : "Connect an interface or allow the microphone to begin."}
         </p>
         {input.error ? <p className="ss-input-detail" role="status">{input.error}</p> : null}
         <button
@@ -1161,7 +1176,7 @@ function Running({
           <div className="ss-memory-aid">
             <span aria-live="polite">{s.memoryReview ? "Later review" : "Memory practice"} · {s.memoryStage === "page" ? "page shown" : s.memoryStage === "landmarks" ? "bar-start notes" : "notes hidden"} · chords remain</span>
             <button type="button" onClick={s.toggleMemoryPage} disabled={s.phase === "result" || Boolean(s.spot)}>{s.memoryStage === "page" ? "Use landmarks" : "Reveal page"}</button>
-            <small>{SUMMON_HINT}, then D</small>
+            <small>{SUMMON_HINT}, then D♯</small>
           </div>
         ) : null}
       </header>

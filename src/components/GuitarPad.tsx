@@ -2,34 +2,38 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import { midiOf } from "../listen/pitch";
 import type { InputApi } from "../listen/useInput";
 import { mod, pitchClassToName } from "../musicTheory";
+import { SUMMON_NOTE } from "../song/notekeys";
 
-// The guitar as the controller. Six open strings are six buttons: hold one and its action
-// fires. Low E always goes back, high e always goes on, so the two outer strings are the way in
-// and out of everything. During an exercise the pad is asleep; holding the open low E calls it.
+// The guitar as the controller. The first fret of each string is a button: hold it and its
+// action fires. Open strings ring on and get tuned, so they never press anything. The low E
+// string always goes back, the high e always goes on, so the two outer strings are the way in
+// and out of everything. During an exercise the pad is asleep; a fretted D♯5 above the exercise
+// range calls it. Open strings ring on and get tuned, so they never summon anything.
 
-const LOW_E = 40;
-const SUMMON_MS = 1300; // low E held this long calls the pad: longer than any note in an exercise
+const SUMMON_MS = 1300; // the menu note held this long arms the pad: longer than any note in an exercise
 const PRESS_MS = 600; // a string held this long is a press
 const GAP_MS = 160; // dropouts shorter than this don't break a hold
 const PRIME_FRAMES = 4; // a note already ringing when controls appear is not a fresh press
-const STRING_NAMES = ["E", "A", "D", "G", "B", "e"];
+/** The pad's six buttons, low E string to high e: each string's first fret. */
+export const PAD_NOTES = [41, 46, 51, 56, 60, 65];
 const OPEN_PCS = [4, 9, 2, 7, 11]; // E A D G B: strings are played all the time, never a key
 const TAP_MS = 110; // a note sounding this long is a tap
 const TAP_GAP_MS = 100; // silence this long between two notes makes the second one a new tap
 const TWICE_MS = 900; // a second tap this soon after the first is a double tap
 
-/** Which of the six buttons a pitch presses: the open strings, in any octave (E low or high by register). */
-function stringOf(midi: number): number | null {
+/** Which of the six buttons a pitch presses: a first-fret note in any octave (F low or high by register). The menu note presses none. */
+function rowOf(midi: number): number | null {
+  if (midi === SUMMON_NOTE) return null;
   switch (mod(midi)) {
-    case 4:
+    case 5:
       return midi >= 60 ? 5 : 0;
-    case 9:
+    case 10:
       return 1;
-    case 2:
+    case 3:
       return 2;
-    case 7:
+    case 8:
       return 3;
-    case 11:
+    case 0:
       return 4;
     default:
       return null;
@@ -53,15 +57,17 @@ function useHeld(input: InputApi, enabled: boolean, ms: number, read: (midi: num
     let first: number | null = null;
     let quiet = 0;
     return subscribe((f) => {
-      const now = fns.current.read(midiOf(f));
+      const heard = midiOf(f);
+      const now = fns.current.read(heard);
       if (!primed) {
-        // The note that summoned the menu must stop or change before it can choose a row.
-        if (now === null) quiet++;
+        // The note that summoned the menu must stop or change before it can choose a row,
+        // whether or not that note is one of the keys.
+        if (heard === null) quiet++;
         else {
           quiet = 0;
-          first ??= now;
+          first ??= heard;
         }
-        if (quiet >= PRIME_FRAMES || (now !== null && now !== first)) primed = true;
+        if (quiet >= PRIME_FRAMES || (heard !== null && heard !== first)) primed = true;
         else return;
       }
       if (now !== null) {
@@ -85,10 +91,13 @@ function useHeld(input: InputApi, enabled: boolean, ms: number, read: (midi: num
   }, [enabled, listening, subscribe, ms, fresh]);
 }
 
-export const SUMMON_HINT = "hold low E · release · hold low E again";
+export const SUMMON_HINT = "hold D♯5 (high e, fret 11) · release · hold again";
 
-/** A held musical note only arms the menu. Actual silence and a second hold confirm intent. */
-export function useSummon(input: InputApi, enabled: boolean, onSummon: () => void): RefObject<SVGCircleElement> {
+/**
+ * A held musical note only arms the menu. Actual silence and a second hold confirm intent.
+ * `blocked`: the music itself is on the menu note right now, so it cannot call the menu.
+ */
+export function useSummon(input: InputApi, enabled: boolean, onSummon: () => void, blocked?: RefObject<boolean>): RefObject<SVGCircleElement> {
   const ring = useRef<SVGCircleElement>(null);
   const action = useRef(onSummon);
   action.current = onSummon;
@@ -108,16 +117,17 @@ export function useSummon(input: InputApi, enabled: boolean, onSummon: () => voi
       if (rate !== null && rate !== frame.sampleRate) reset();
       rate = frame.sampleRate;
       const midi = midiOf(frame);
+      if (blocked?.current) { if (phase !== "hold" || since !== null) reset(); return; }
       if (phase !== "hold" && frame.now > deadline) reset();
       if (phase === "release") {
         if (midi === null) {
           quiet ??= frame.now;
           if (frame.now - quiet >= 150) { phase = "confirm"; since = null; }
-        } else if (midi !== LOW_E) reset();
+        } else if (midi !== SUMMON_NOTE) reset();
         else quiet = null;
         return;
       }
-      if (midi === LOW_E) {
+      if (midi === SUMMON_NOTE) {
         since ??= frame.now;
         seen = frame.now;
         const held = frame.now - since;
@@ -134,17 +144,18 @@ export function useSummon(input: InputApi, enabled: boolean, onSummon: () => voi
   return ring;
 }
 
-/** Pitch classes for tone keys: the ones the exercise never plays, nor the open strings. `null` where there are too few. */
+/** Pitch classes for tone keys: the ones the exercise never plays, nor the open strings or the menu note. `null` where there are too few. */
 export function toneKeysFor(used: number[], count: number): (number | null)[] {
-  const busy = new Set([...used, ...OPEN_PCS].map(mod));
+  const busy = new Set([...used, ...OPEN_PCS, SUMMON_NOTE].map(mod));
   const free = Array.from({ length: 12 }, (_, pc) => pc).filter((pc) => !busy.has(pc));
   return Array.from({ length: count }, (_, i) => free[i] ?? null);
 }
 
 /**
- * Tone keys for the settings drawer, which pauses the exercise. Still prefers notes the card never
- * plays, off the open strings, then falls back to the open strings and finally the card's own notes.
- * `taken` holds the keys already in use (settings, calibration) so none of them repeats.
+ * Tone keys for the settings drawer, which pauses the exercise. Prefers notes the card never plays,
+ * then the card's own notes (paused, nothing is being played), off the open strings; open strings
+ * ring on and get tuned, so they come last. `taken` holds the keys already in use (settings,
+ * calibration) so none of them repeats.
  */
 export function drawerToneKeys(used: number[], count: number, taken: (number | null)[]): number[] {
   const busy = new Set(used.map(mod));
@@ -153,8 +164,8 @@ export function drawerToneKeys(used: number[], count: number, taken: (number | n
   const all = Array.from({ length: 12 }, (_, pc) => pc).filter((pc) => !held.has(pc));
   const rank = [
     ...all.filter((pc) => !busy.has(pc) && !open.has(pc)),
-    ...all.filter((pc) => !busy.has(pc) && open.has(pc)),
-    ...all.filter((pc) => busy.has(pc)),
+    ...all.filter((pc) => busy.has(pc) && !open.has(pc)),
+    ...all.filter((pc) => open.has(pc)),
   ];
   return rank.slice(0, count);
 }
@@ -304,14 +315,14 @@ export interface PadRow {
   value?: string;
 }
 
-/** Six strings, six actions: `rows[0]` is the low E. Hold a string (or click its row) to fire it. */
+/** Six strings, six actions: `rows[0]` is the low E string. Hold its first fret (or click its row) to fire it. */
 export function GuitarPad({ input, title, rows, onFire }: { input: InputApi; title: string; rows: PadRow[]; onFire(string: number): void }) {
   const els = useRef<(HTMLButtonElement | null)[]>([]);
   useHeld(
     input,
     true,
     PRESS_MS,
-    (m) => (m === null ? null : stringOf(m)),
+    (m) => (m === null ? null : rowOf(m)),
     (what, p) => els.current.forEach((el, i) => el?.style.setProperty("--p", i === what ? p.toFixed(3) : "0")),
     onFire,
     true,
@@ -322,7 +333,7 @@ export function GuitarPad({ input, title, rows, onFire }: { input: InputApi; tit
       <div className="ss-pad-strings">
         {[5, 4, 3, 2, 1, 0].map((i) => (
           <button key={i} type="button" role="menuitem" className={`ss-pad-row ${rows[i].label ? "" : "is-empty"}`} ref={(el) => (els.current[i] = el)} onClick={() => onFire(i)} disabled={!rows[i].label}>
-            <span className="ss-pad-note">{STRING_NAMES[i]}</span>
+            <span className="ss-pad-note"><span>{pitchClassToName(PAD_NOTES[i]).replace("#", "♯")}<small>{Math.floor(PAD_NOTES[i] / 12) - 1}</small></span></span>
             <span className="ss-pad-string" style={{ height: 1 + i * 0.5 }} />
             <span className="ss-pad-label">
               {rows[i].label}
@@ -331,7 +342,7 @@ export function GuitarPad({ input, title, rows, onFire }: { input: InputApi; tit
           </button>
         ))}
       </div>
-      <p className="ss-pad-hint">hold a string</p>
+      <p className="ss-pad-hint">hold the first fret</p>
     </div>
   );
 }

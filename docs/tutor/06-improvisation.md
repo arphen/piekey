@@ -24,7 +24,7 @@ Nothing yet asks the player to invent, or reflects on what they invented.
 
 Improvisation cards are a new family, `improv`. They run with the band over a vamp or a tune section
 and have no "right notes". The session reacts as everywhere else: the room warms when the measures
-are good, and the result screen shows a few facts. Because every note is music, only the low-E menu
+are good, and the result screen shows a few facts. Because every note is music, only the guitar menu
 works during them (same rule as free play).
 
 ### What is measured
