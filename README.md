@@ -35,9 +35,11 @@ Score imports are parsed and saved in the browser, without uploading them to the
 The library persists across browser restarts; clearing the site's browser data removes it.
 Imported scores are browser data, separate from this source repository and its production build.
 The app includes two original studies: **Blue Hour**, a 12-bar C jazz blues with accompaniment,
-and **First Steps**, an eight-bar C major melody. They remain available from Song's Library,
+and **First Steps**, an eight-bar C major melody over gentle chord pulses. They remain available from Song's Library,
 including after importing personal tunes. Listen, open the score, start practice, or download
-their MusicXML. Reopening a demo preserves its existing library identity and progress.
+their MusicXML. Study notes offer a melody fingering, a listening cue, a simpler entry and a
+creative variation. Reopening preserves saved versions and progress; updated bundled arrangements
+do not overwrite an older library copy.
 Users can also import their own MusicXML repertoire. **Create a score with your agent** provides
 a copyable prompt for an original study or a source they specify; see
 [the score-creation guide](docs/CREATE_A_SCORE.md). The app does not send sources to an agent.
@@ -51,9 +53,10 @@ stay in memory with Retry and Save audio actions. Keep the page open until they 
 
 ## With your own agent
 
-In **Song → Library → Library tools → Practice brief**, generate a saved-state JSON report,
-preview it, then copy or download it to share with your chosen agent. The bounded report includes
-recent practice counts, observed notes/timing and demonstrated clean tempos with definitions and
+In **Songs → Library → Library tools → Practice brief**, choose one tune or all saved music and
+7, 28 or 90 days. Prepare a readable summary, inspect its JSON, then copy it for your chosen agent
+or download the report. The bounded report includes
+practice counts, observed notes/timing and dated clean task tempos within that period, with definitions and
 explicit unknowns. It excludes score XML, audio, hardware/calibration settings, pairing secrets and
 the transaction journal. It includes the selected goal and bounded assessment-condition counts;
 older assistance and detector confidence remain explicitly unknown. Nothing is automatically sent to an LLM; generating a brief changes no
@@ -61,6 +64,11 @@ practice state. A public `llms.txt` describes the capabilities and boundaries fo
 
 The app remains guitar-first. The brief supports a conversation about goals and next steps;
 there is no agent control API or automatic plan execution.
+
+Memory practice gradually removes the page, then brings due sections back hidden on a later day.
+The page can always be restored with its button or the low-E menu; recorded help stays explicit.
+Progress recordings have Play/Pause, Restart and seek buttons reachable by the played cursor.
+Use headphones when controlling recording playback from the guitar.
 
 ## Devices and full transfers
 

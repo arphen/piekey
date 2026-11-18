@@ -1,6 +1,6 @@
 # Current state
 
-Updated **2026-11-18** after the first SOL implementation slices and browser review. See [SOL_IMPLEMENTATION.md](SOL_IMPLEMENTATION.md)
+Updated **2026-11-18** after SOL continuation and browser review. See [SOL_IMPLEMENTATION.md](SOL_IMPLEMENTATION.md)
 for delivered boundaries and remaining product work.
 This is the authoritative description of what exists, what is only partly built, and what is
 broken. Update it when a feature's status changes; wishes belong in [BACKLOG.md](BACKLOG.md).
@@ -16,12 +16,17 @@ broken. Update it when a feature's status changes; wishes belong in [BACKLOG.md]
 
 | Check | Result | Detail |
 | --- | --- | --- |
-| `make check` | **PASS** | Typecheck, repository map freshness and 30 suites / 354 tests passed. |
+| `make check` | **PASS** | Typecheck, repository map freshness and 31 suites / 374 tests passed. |
 | `npm run build:quiet` | **PASS** | Production build passed; Vite retains its existing >500 kB chunk-size warning. |
 | Focused iteration checks | **PASS** | Typecheck plus storage, goal/planner, session trust, recording, platform, scheduler, archive and mounted score-browsing suites passed while integrating. Full gate below supersedes individual iteration counts. |
 | Current browser preview | **PASS, bounded** | Reviewed the development app at authorized `localhost:5173` in the in-app browser at 320×844, 390×844 and 1440×1000. First Listen, score phrase selection, exact-phrase launch, self-guided entry/exit, saved accompaniment goal/Next/Progress, Tools entry and metronome count-in/pulse/subdivision/stop worked. No console warnings/errors observed. This is viewport emulation, not a physical phone or instrument test. |
 | Offline shell / physical sync | **Code-verified; runtime-unverified** | Worker generation includes local fonts/lazy assets. Actual phone HTTPS, install/offline/update, cross-network/TURN and active-window handoff remain unverified. |
 | Audio / mic / devices | **Runtime-unverified** | No physical guitar, routing, reconnect, audible balance, recording, tuner, microphone scoring or audio/visual alignment was tested. See [SUPPORTED_SETUPS.md](SUPPORTED_SETUPS.md), whose outcomes remain NOT RUN. |
+
+Continuation review also exercised brief preparation/Copy, selected period, original study notes
+and the checked goal counter on desktop and at 390px. No console warnings/errors were observed.
+Memory transitions and recording controls were checked in mounted tests, without synthetic
+practice/recordings being inserted into the live browser library.
 
 ## What the app is
 
@@ -59,8 +64,9 @@ actions into the sticky score transport, where selecting a bar exposes them imme
 uses the same quiet typography/palette as browsing with a larger centered metronome pulse.
 An initial unconfirmed busy lock now stays in Checking while a previous local owner finishes;
 the review no longer showed a false claim that another window was practising. Real multi-window
-handoff remains a separate hardware/lifecycle check. Progress recording playback still uses native
-audio controls and does not yet have played-guitar transport actions.
+handoff remains a separate hardware/lifecycle check. Progress recordings now have real Play/Pause,
+Restart and seek buttons for the played cursor, sharing one routed player per comparison. Controls,
+cleanup and late-start cancellation have mounted coverage; physical audio remains unverified.
 
 ## SOL delivery: goals, evidence and recovery (2026-11-18)
 
@@ -90,6 +96,15 @@ audio controls and does not yet have played-guitar transport actions.
   deterministic duration variation, rests and repeated pitches at higher tiers.
 - Progress owns take comparison and observed patterns, with task/tempo/arrangement/help context.
   These are app observations on played material, not an overall guitar-level grade.
+- Memory sections fade through page, bar-start landmarks and hidden notes after complete steady
+  passes. Due later-day reviews of the same known arrangement start hidden. Restore-page and Hear
+  remain available from the guitar; help/exposure provenance stays conservative for the whole
+  visit. This does not implement alternate-start transfer or establish independent retention.
+- Goal counters check a complete indexed tune journal group, so evidence can survive the 800-row
+  display-history limit. Restore/deduplication use the existing projector. Queries cap at 5,000
+  transactions and 8,388,608 serialized before/after characters; capped, unavailable, incomplete
+  or conflicting records show unknown. Planning still uses bounded retained history and can
+  offer an extra review. The read does not rewrite stores or scheduling.
 - Production offline/update states are visible; updates wait for old windows to close. Fraunces,
   Inter and JetBrains Mono are bundled locally with their separate OFL notices, removing live
   font requests. Physical cache/update/interruption and sound verification remain not run.
@@ -98,8 +113,15 @@ audio controls and does not yet have played-guitar transport actions.
 
 Two original studies are bundled in `tunes/demos.ts`: First Steps retains its existing stable ID;
 Blue Hour is a 12-bar C jazz blues at 76 BPM, with short phrases, rests, even eighths, a turnaround
-and a separate sustained-chord accompaniment part. Its downloadable MusicXML includes provenance
+and a separate articulated shell-chord accompaniment part. Its downloadable MusicXML includes provenance
 and AGPL terms; see [ASSETS.md](../ASSETS.md).
+
+First Steps has two separated chord pulses per bar. Blue Hour uses compact three-note shells,
+small upper-voice movement and deliberate gaps. Optional Study notes give each original a clear
+purpose, melody fingering, listening cue, simpler entry and creative variation. Notes appear only
+for matching bundled content/part/voice. Melody and stable IDs are preserved; opening an updated
+demo never overwrites a saved older arrangement. Automated content checks cover duration, rests,
+guitar chord shapes and voice movement; musical sound and physical comfort still need a guitarist.
 
 An empty Tutor previews Blue Hour, lets the visitor choose First Steps, and opens its score or
 practice without finding a file. Song's empty state and always-reachable Library demo shelf offer
@@ -116,15 +138,16 @@ automatically sent to another service, and no acquisition converter is part of t
 
 MusicXML parser tests verify both demo identities, melody range, bar duration, harmony,
 accompaniment and repeated playback order. First-use Blue Hour Listen and score rendering were
-exercised in the browser without a microphone prompt. Audible balance, clipboard and download
-behavior remain runtime-unverified in this pass.
+exercised in the browser without a microphone prompt. First Steps Study notes were reviewed at
+390px. Audible balance and score download behavior remain runtime-unverified in this pass.
 
 ## Agent-ready practice brief (2026-11-18)
 
-**Song → Library → Library tools → Practice brief** generates a previewable JSON snapshot for
-explicit Copy/Download. `agent/brief.ts` is a pure versioned projection: a bounded material list,
-28-day saved practice summary, observed note/timing counts, selected tune and demonstrated clean
-tempos. Its reporting window uses stored local calendar days. Missing measurements remain null;
+**Songs → Library → Library tools → Practice brief** selects one tune or all saved music and
+7/28/90 local calendar days, then prepares a readable summary and inspectable JSON for explicit
+Copy/Download. `agent/brief.ts` schema version 2 is a pure bounded projection. Scope filters inputs
+before aggregation; clean task tempos require dated retained visits within the chosen period,
+excluding undated lifetime best settings. Missing measurements remain null;
 assistance/detection confidence that was not captured remains unknown. The selected goal and
 assessment-condition counts are included; self-guided activity is excluded from measured proof. Definitions distinguish
 reference alignment, within-attempt timing scatter, scheduling and musical ability.
@@ -132,9 +155,12 @@ reference alignment, within-attempt timing scatter, scheduling and musical abili
 It excludes score XML, audio, raw attempts, device/calibration settings, pairing secrets and the
 transaction journal. No agent service, API key, inbound plan execution or private-data endpoint
 is added. `public/llms.txt` describes capabilities and boundaries; external agents need an explicit
-user-provided export to discuss private progress. One focused existing overview-suite case covers
-empty evidence, window bounds, demonstrated-versus-suggested tempo, event deduplication and excluded
-data. Browser clipboard/download behavior remains unverified.
+user-provided export to discuss private progress. Nested conditions and goal objects are explicitly
+projected because validated stored objects can still contain extra fields. Existing overview-suite
+cases cover date/scope boundaries, deduplication, tempo semantics and private-field exclusion.
+Browser preparation, one-week selected-tune preview and Copy for agent succeeded; actual external
+agent conversation and JSON download remain unverified. This summary uses retained recent stores,
+not the complete journal evidence query used by goal counters.
 
 ## Relative timing and alignment (2026-11-18)
 

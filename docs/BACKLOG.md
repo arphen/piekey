@@ -56,6 +56,15 @@ Unless an item says otherwise, implement it there.
 
 ## Recommended next steps
 
+**SOL continuation (2026-11-18):** memory cards now fade page → bar-start notes → hidden with
+explicit played reveal and conservative visit-wide help/exposure. Due later-day checks require
+the same known arrangement; alternate-start transfer remains open. T3 goal counters can check a
+bounded complete journal group after the display history trims; long-term per-exercise browsing
+and planner archive integration remain open. T2 recording comparisons now have real played-cursor
+Play/Pause/Restart/seek controls on one shared output. The original studies have playable articulated
+accompaniments and optional edited study cues. Agent briefs offer selected-tune/all-music scope,
+7/28/90-day periods, human preview and nested field allowlisting. Real instrument/phone gates stay open.
+
 
 **SOL implementation (2026-11-18, code verified; hardware verification open):** Practice/Songs/
 Progress is the primary hierarchy; focus modes remain under Explore. T3 now has a dedicated

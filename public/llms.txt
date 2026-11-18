@@ -15,8 +15,8 @@ Opening the public site does not give an external agent access to a user's brows
 
 ## User-initiated agent handoffs
 
-- Songs → Library → Library tools → Practice brief generates a previewable JSON report. The user can copy or download it and give it to an agent of their choice. Nothing is automatically sent to an LLM service.
-- Brief schema: fretboard-focus-lab/practice-brief, schemaVersion 1. Read its reporting window, definitions, sample counts, explicit unknowns and limitations before interpreting results. It is a saved-state snapshot, not live telemetry.
+- Songs → Library → Library tools → Practice brief lets the user choose one tune or all saved music and 7, 28 or 90 days, then preview a readable summary and inspect JSON. Copy for agent includes the summary and JSON; download exports JSON. Nothing is automatically sent to an LLM service.
+- Current brief schema: fretboard-focus-lab/practice-brief, schemaVersion 2. Read scope.music, its reporting window, definitions, sample counts, explicit unknowns and limitations before interpreting results. Aggregates and material identities obey the chosen tune scope; clean task tempos require dated attempts inside the period. Undated lifetime best settings are excluded. Earlier version 1 reports used a fixed 28-day activity window and could include lifetime task bests. It is a saved-state snapshot, not live telemetry.
 - The brief excludes score XML, raw audio, hardware/calibration settings, pairing secrets and the sync journal. A user may separately choose to provide music or recordings; a brief alone does not provide them.
 - Create a score with your agent supplies a separate prompt for preparing an importable MusicXML file from a source the user specifies, or composing an original study. It is not an in-app converter or a claim that arbitrary links can be transcribed.
 - Suggested practice changes remain advice. There is no agent-plan import or autonomous write API in this release.

@@ -17,13 +17,16 @@ the application’s foundation.
 | Honest assessment | Optional support/notation/tempo/exposure/confidence/interruption context, arrangement fingerprint, actual stable assessed-pass BPM | Focused session/scheduler tests; confidence remains unknown |
 | A difficult day | Self-guided activity without scoring; no automatic review/kinship/accuracy/speed credit; graceful finish at a musical boundary | Mounted ready/session tests; guitar gesture comfort unverified |
 | Rhythm from real music | One-note rendering of the selected phrase, then a return to that phrase in context | Deterministic deck/rhythm tests; not muted-string grading |
+| Memory in stages | Page → first note of each bar → hidden, explicit reveal/Hear, same-arrangement due later reviews, visit-wide help provenance | Session/score/entry tests; guitar comfort, alternate-start transfer and independent retention unverified |
+| Edited original studies | Separated First Steps chord pulses and Blue Hour shell accompaniment; optional fingering/listening/easier/creative study notes | Parser/duration/range/voicing checks; 390px notes review; musical listening and play-testing remain |
 | Stronger echo calls | Seeded duration variation, rests and repeated pitches in higher tiers; response remains own pace | Musical invariant tests; call pacing needs a real guitar |
 | Everyday tools | Chromatic 440 Hz tuner, tap tempo, count-in, subdivisions and a centered output-clock beat pulse | Signal/tap/scheduler tests; browser count-in/pulse/subdivision/stop; physical tuning accuracy and sound unverified |
-| Useful Progress | Goals, historical task records, bounded cross-tune observations and retained audio comparison with context | Data projection and recording persistence tests; subjective comparison UX unverified |
+| Useful Progress | Goals, historical task records, bounded cross-tune observations; one routed recording player with played-cursor Play/Pause/Restart/seek | Mounted playback/cleanup/late-start tests; physical sound and subjective comparison UX unverified |
+| Durable goal evidence | Complete indexed tune-journal projection beyond the display-history cap; explicit unknown on incomplete/capped/conflicting reads | Upgrade/reset/retention/cap/conflict tests; planning still uses bounded retained history |
 | One active writer | Origin-scoped Web Lock before practice/quiz/tools/Devices; explicit handoff waits for cleanup and save recovery; JSON restore uses idle lock | Controlled competing-window/lifecycle tests; real installed/browser suspension unverified |
 | Consistent portability | Goals and assessment metadata journal/transfer; independent first goals union; hardware/calibration stay local in new and legacy backups | Merge, archive and restore tests; real laptop/phone exchange unverified |
 | Offline presentation | Observable preparation/ready/error/update status; safe update boundary; local OFL font assets | State tests and production build; offline installation/update cycle unverified |
-| Agent-ready evidence | Explicit previewable brief adds selected goal and bounded conditions; self activity separated; private XML/audio/settings excluded | Existing bounded-report test; no inbound agent control or LLM service |
+| Agent-ready evidence | Version 2 brief chooses tune/all-music and 7/28/90 days, readable summary, inspectable JSON, explicit Copy/Download; nested private fields excluded | Existing report-suite scope/date/allowlist tests; browser preview/Copy; no inbound control or LLM service |
 
 ## What a goal means
 
@@ -40,10 +43,11 @@ reference tempo. Self-guided activity and related-exercise scheduling credit pro
 
 Older attempts/takes keep unknown assistance, confidence or arrangement context. Historical task
 records remain visible with that limitation; lifetime best settings are not upgraded into proof
-of the current arrangement. The bounded display history can eventually age out detailed goal
-evidence even though original transactions remain in the journal. There is no journal-wide
-assessment query yet. Retained recordings use native audio controls; played-guitar recording
-transport actions remain a gap.
+of the current arrangement. GoalChooser checks a complete indexed tune-journal group with the
+existing projector, retaining proof after the 800-row display trim. The check is limited to 5,000
+transactions and 8,388,608 serialized before/after characters. Incomplete, capped, unavailable or
+conflicted history is unknown, not zero. Planning and brief summaries still use bounded retained
+history and can suggest extra review. This is a goal check, not a long-term per-exercise browser.
 
 Goals union by immutable ID on exchange, including independent first saves. Only active selection
 uses deterministic transaction order. Reusing an unchanged goal preserves its creation date and
@@ -92,10 +96,12 @@ generation rather than ordinary practice events.
 4. **Observe the design.** Check readability, task finding, played gestures and stand distance with
    students on laptop and phone. The three-surface hierarchy is implemented but its usability
    advantage has not been measured. Arbitrary drag-to-select score ranges remain unimplemented.
-5. **Deepen evidence carefully.** Long-term per-exercise views, comparable uninterrupted checks,
-   useful retention/transfer evidence and a bounded journal-based goal query remain. Do not infer
+5. **Deepen evidence carefully.** Long-term per-exercise views, comparable uninterrupted checks
+   and useful retention/transfer evidence remain. The bounded journal goal check is delivered;
+   planning still uses recent history. Do not infer
    an overall guitar level from detector percentages or a review box.
-6. **Improve musical depth from observations.** Memory fading, expressive rhythm, richer comping,
+6. **Improve musical depth from observations.** Memory fading and two edited accompaniment parts
+   are implemented; alternate memory starts, expressive rhythm, richer comping,
    more convincing band arrangements, bends/slides/vibrato and string attribution require musical
    or signal experiments. Current one-note rhythm and echo work do not claim to solve them.
 7. **Use the agent bridge with a real conversation.** Review whether the exported bounded report

@@ -51,13 +51,24 @@ demo goes through the same durable library/parser/session boundaries as personal
 overwrites an existing entry merely to restore a demo. Shared audio is primed in the originating
 gesture before asynchronous save/selection; pending demo playback is tied to that selected score. Failed saving falls back to a labelled
 bundled preview without replacing any saved edited arrangement.
+The two original accompaniments use separated playable chord pulses; Blue Hour uses compact
+shell voicings. `getDemoStudy` returns authored notes only for matching bundled content/part/voice,
+so an edited arrangement does not inherit inappropriate fingering or teaching cues.
 
 `agent/brief.ts` is a pure, versioned, bounded projection for user-initiated export. `TuneView`
-collects saved material metadata/stores, displays the generated JSON, and only copies/downloads
-after explicit user actions. The projection whitelists observed metrics and definitions; no raw
+collects saved material metadata/stores. `PracticeBriefPanel` selects music scope and 7/28/90-day
+period, shows a readable summary and optional JSON, and copies/downloads only after explicit user
+actions. Version 2 filters inputs before aggregation and limits clean tempos to dated visits in
+the period. Nested assessment/goal fields are explicitly projected as well. No raw
 score, recording, settings or journal dump crosses this boundary. It changes no practice result.
 `public/llms.txt` documents capabilities without exposing browser-local data. The separate
 `tunes/agentPrompt.ts` is user-copyable source-creation guidance, not a live agent integration.
+
+`audio/useTakePlayback` owns one media element for a Progress comparison pair and connects its
+MediaElementSource to the existing Tone destination. Ordinary buttons expose playback to the
+played cursor. Source changes/unmount invalidate pending starts and stop media before Blob URLs
+are revoked. Unknown recording duration stays unknown; backward seeking remains available in
+heard audio and finite seek ranges enable forward seeking. Playback changes no practice state.
 
 Temporary timing alignment is fitted by `tunes/scoring.ts` and reused by Free play. Timed matching
 keeps adjacent attacks disjoint; readiness distinguishes bounded phase, residual scatter and drift.
@@ -217,6 +228,14 @@ meter and count-in).
 beat only after its scheduled output time. `useSession` forwards the playback signal. Presentation
 consumes these signals rather than starting its own metronome clock; stopped/suspended audio and
 playback gaps clear the active beat.
+
+Memory sections reuse `useSession` and existing card IDs/scheduling. A visit starts at page,
+bar-start landmarks or hidden according to its known matching-arrangement review history, then
+complete steady timed passes fade help. `Score.noteVisibility` hides pitch-disclosing links as
+well as notes; existing ear-card played-note reveal remains the default. `memorySeen` aggregates
+visual help over the visit and disables automatic melodic hints. Partial/own-pace memory exits
+skip scheduling changes; a timed hidden section may reschedule the existing card. This stores no
+new schema and makes no independent-retention claim.
 
 The shared presentation is `components/PracticeAtmosphere.tsx` + `song/atmosphere.css`.
 `PracticeAtmosphere` takes the existing input, warmth, flow and playing state; it reuses RMS frames
@@ -531,6 +550,15 @@ An initial unavailable claim stays in Checking until a peer announces ownership 
 claim confirms contention, allowing an unmounted local owner time to release without a false warning.
 JSON restore and update checks acquire the same idle lock. Physical suspension/handoff still needs
 testing; no expiring localStorage lease pretends to be an atomic lock.
+
+The journal's local IndexedDB schema 2 adds a `[kind,key]` index without changing portable format
+version 1. `readPracticeTransactions` flushes pending journal writes, then reads only one complete
+tune group with a readonly cursor, capped at 5,000 transactions / 8,388,608 before/after characters.
+It returns no partial evidence when capped. `projectGoalEvidence` validates and reuses the normal
+projector for UID deduplication, reset generations and legacy conflicts, then applies `goalProgress`.
+`useGoalEvidence` cancels stale goal/revision reads and supplies display-only GoalChooser counters;
+incomplete, conflicted or failed reads are unknown. Materialized stores, planner and brief remain
+on retained recent history, so a previously demonstrated task can still be suggested for review.
 
 Portable state includes tune XML/identities, musical goals, selected key/tune, per-tune/shared-scale progress,
 free-play and ear progress/settings, retained Learn data, and all recordings still stored locally.

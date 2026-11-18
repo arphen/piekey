@@ -7,6 +7,9 @@ export { syncableStorageKey } from "./model";
 const DB = "guitar-sync-v1";
 const TRANSACTIONS = "transactions";
 const META = "meta";
+const BY_TARGET = "by-target";
+const PRACTICE_READ_LIMIT = 5000;
+const PRACTICE_READ_CHARS = 8 * 1024 * 1024;
 const OUTBOX = "fretboard-sync-outbox-v1";
 interface Identity { device: string; seq: number; clock: number; vector: Record<string, number>; known: Record<string, boolean> }
 interface Change { kind: "storage" | "tune"; key: string; before: string | null; after: string | null; initial?: string | null; baseline?: true; delta?: true; reset?: true; label?: string }
@@ -61,18 +64,23 @@ function open(): Promise<IDBDatabase> {
   if (opening) return opening;
   opening = new Promise<IDBDatabase>((resolve, reject) => {
     if (typeof indexedDB === "undefined") return reject(new Error("This browser cannot save the exchange history. IndexedDB is unavailable."));
-    const request = indexedDB.open(DB, 1);
+    const request = indexedDB.open(DB, 2);
+    let abandoned = false;
     request.onupgradeneeded = () => {
-      request.result.createObjectStore(TRANSACTIONS, { keyPath: "id" });
-      request.result.createObjectStore(META);
+      const records = request.result.objectStoreNames.contains(TRANSACTIONS)
+        ? request.transaction!.objectStore(TRANSACTIONS)
+        : request.result.createObjectStore(TRANSACTIONS, { keyPath: "id" });
+      if (!records.indexNames.contains(BY_TARGET)) records.createIndex(BY_TARGET, ["kind", "key"]);
+      if (!request.result.objectStoreNames.contains(META)) request.result.createObjectStore(META);
     };
     request.onsuccess = () => {
       const db = request.result;
+      if (abandoned) { db.close(); return; }
       db.onversionchange = () => { db.close(); opening = undefined; };
       resolve(db);
     };
-    request.onerror = () => reject(request.error ?? new Error("The exchange history could not be opened."));
-    request.onblocked = () => reject(new Error("Close other copies of the app to open its exchange history."));
+    request.onerror = () => { abandoned = true; reject(request.error ?? new Error("The exchange history could not be opened.")); };
+    request.onblocked = () => { abandoned = true; reject(new Error("Close other copies of the app to open its exchange history.")); };
   }).catch((error: unknown) => { opening = undefined; throw error; });
   return opening!;
 }
@@ -223,6 +231,40 @@ export async function readSyncJournal(): Promise<{ device: string; transactions:
       resolve({ device: identity.device, transactions: unionTransactions([], transactions) });
     };
     tx.onerror = tx.onabort = () => reject(tx.error ?? new Error("The exchange history could not be read."));
+  });
+}
+
+export type PracticeTransactionRead = { status: "ready"; transactions: SyncTransaction[] } | { status: "too-large" };
+
+/** Read a complete tune group or no evidence at all. Truncating transactions before replay
+ * would lose reset boundaries and turn a partial archive into misleading negative proof.
+ */
+export async function readPracticeTransactions(tuneId: string, options: { maxTransactions?: number } = {}): Promise<PracticeTransactionRead> {
+  if (!tuneId || tuneId.length > 512) throw new Error("A valid tune is required.");
+  const limit = options.maxTransactions ?? PRACTICE_READ_LIMIT;
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > PRACTICE_READ_LIMIT) throw new Error("The practice history query limit is invalid.");
+  await flushSyncJournal();
+  const db = await open();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(TRANSACTIONS, "readonly");
+    const request = tx.objectStore(TRANSACTIONS).index(BY_TARGET).openCursor(IDBKeyRange.only(["storage", `guitar-song-deck:${tuneId}`]));
+    const transactions: SyncTransaction[] = [];
+    let chars = 0;
+    let capped = false;
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) return;
+      const entry = cursor.value as SyncTransaction;
+      chars += (entry.before?.length ?? 0) + (entry.after?.length ?? 0);
+      if (transactions.length >= limit || chars > PRACTICE_READ_CHARS) { capped = true; return; }
+      transactions.push(entry);
+      cursor.continue();
+    };
+    tx.oncomplete = () => {
+      try { resolve(capped ? { status: "too-large" } : { status: "ready", transactions: unionTransactions([], transactions) }); }
+      catch (error) { reject(error); }
+    };
+    tx.onerror = tx.onabort = () => reject(tx.error ?? new Error("The saved practice evidence could not be read."));
   });
 }
 

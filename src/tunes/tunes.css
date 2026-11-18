@@ -122,6 +122,18 @@
 .tunes-brief > header { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .tunes-brief h3 { margin: 0; color: var(--ink-soft); font-size: 13px; font-weight: 500; }
 .tunes-brief-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; }
+.tunes-brief-options { display: flex; align-items: end; flex-wrap: wrap; gap: 14px 22px; }
+.tunes-brief-options label { display: grid; gap: 7px; color: var(--ink-faint); font-size: 11px; }
+.tunes-brief-options select { min-height: 44px; max-width: 100%; color: var(--ink-soft); background: var(--bg); border: 1px solid var(--line-strong); padding: 8px 12px; font: inherit; }
+.tunes-brief-facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px 28px; max-width: 600px; margin: 6px 0; }
+.tunes-brief-facts dt { color: var(--ink-faint); font-size: 11px; }
+.tunes-brief-facts dd { margin: 6px 0 0; color: var(--ink); font: 400 25px var(--font-display); }
+.tunes-study { margin: 4px 0 25px; padding: 18px 0; border-bottom: 1px solid var(--line); }
+.tunes-study-body { max-width: 72ch; color: var(--ink-soft); font-size: 12px; line-height: 1.8; }
+.tunes-study-body > p { margin: 16px 0; color: var(--ink); }
+.tunes-study-body dl { display: grid; gap: 15px; margin: 0; }
+.tunes-study-body dt { color: var(--ink-faint); font: 400 10px var(--font-mono); }
+.tunes-study-body dd { margin: 4px 0 0; }
 
 @media (max-width: 900px) {
   .tunes { width: calc(100% - 56px); }
@@ -385,6 +397,7 @@
 }
 
 @media (max-width: 640px) {
+  .tunes-brief-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tunes-selection { gap: 0 14px; font-size: 11px; }
   .tunes-selection > span { flex: 1 1 calc(100% - 64px); order: -2; }
   .tunes-selection button:last-child { order: -1; justify-content: center; min-width: 44px; }

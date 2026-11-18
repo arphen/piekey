@@ -1,8 +1,8 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import type { Deck } from "../song/deck";
-import { createGoal, GOAL_LABELS, goalMatches, goalProgress, LOCAL_GOAL_LIMIT, saveGoal, setActiveGoal, type GoalKind } from "../song/goals";
-import { loadStore } from "../song/leitner";
+import { createGoal, GOAL_LABELS, goalMatches, LOCAL_GOAL_LIMIT, saveGoal, setActiveGoal, type GoalKind } from "../song/goals";
 import { useGoals } from "../song/useGoals";
+import { useGoalEvidence } from "../song/useGoalEvidence";
 import type { LeadSheet } from "../tunes/musicxml";
 import "./goal-chooser.css";
 
@@ -34,7 +34,8 @@ export function GoalChooser({ sheet, deck, onChanged }: { sheet: LeadSheet; deck
   const shown = open ? preview.goal : null;
   const atLimit = Object.keys(bucket?.goals ?? {}).length >= LOCAL_GOAL_LIMIT;
   const reusing = Boolean(active && preview.goal?.id === active.id);
-  const progress = active && !stale ? goalProgress(active, loadStore(sheet.id)) : null;
+  const evidence = useGoalEvidence(active && !stale ? active : null);
+  const progress = active && !stale && evidence.result.status === "ready" ? evidence.result.progress : null;
   const bpmChoices = [...new Set([...Array.from({ length: 211 }, (_, index) => index + 30), minBpm, targetBpm])].sort((a, b) => a - b);
 
   return <section className="goal-chooser" aria-label="Musical goal">
@@ -43,6 +44,8 @@ export function GoalChooser({ sheet, deck, onChanged }: { sheet: LeadSheet; deck
         <span className="goal-chooser-kicker">Musical goal</span>
         <p>{active ? <><strong>{GOAL_LABELS[active.kind]}</strong> · {active.kind === "ear" ? "call " : ""}{active.tempo.minBpm}–{active.tempo.targetBpm} BPM</> : "Choose what you want to be able to play."}</p>
         {progress ? <p className="goal-chooser-note">{progress.demonstrated} of {progress.total} {progress.evidenceKind === "echo" ? "echo tasks completed." : "tasks marked clean at target."}</p> : null}
+        {active && !stale && evidence.result.status !== "ready" ? <p className="goal-chooser-note" role="status">{evidence.result.status === "checking" ? "Checking saved goal evidence…" : evidence.result.status === "too-large" ? "The saved history exceeds this check’s limit. Goal progress is unknown here." : evidence.result.status === "conflicted" ? "Saved history has conflicting or overlapping records. Goal progress is unknown until that history is reviewed." : "Saved goal evidence could not be checked. Goal progress is unknown; your existing history is unchanged."}</p> : null}
+        {active && !stale && evidence.result.status === "unavailable" ? <button type="button" onClick={evidence.retry}>Check evidence again</button> : null}
       </div>
       <button type="button" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>{open ? "Close goals" : active ? "Change goal" : "Choose goal"}</button>
     </div>

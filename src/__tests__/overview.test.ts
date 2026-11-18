@@ -92,10 +92,37 @@ describe("tutor overview", () => {
     const withCall = buildPracticeBrief({ ...input, stores: [{ tuneId: "one", store: callStore }] });
     expect(withCall.selectedTune?.cleanTempos.some((record) => record.exerciseId === "ear:1")).toBe(false);
     expect(withCall.definitions.goal).toContain("call/reference tempo");
+    const withExtras = buildPracticeBrief({ ...input,
+      stores: [{ tuneId: "one", store: { ...store, history: [{ ...store.history[0], conditions: Object.assign({ v: 1 as const, source: "measured" as const, confidence: "unknown" as const }, { calibration: "PRIVATE_CONDITIONS" }) }] } }],
+      selectedGoal: { v: 1, id: "goal", tuneId: "one", kind: "melody", createdAt: "2026-11-01T00:00:00Z",
+        tempo: { minBpm: 60, targetBpm: 80, ...{ deviceId: "PRIVATE_TEMPO" } },
+        arrangement: { version: 1, fingerprint: "music", ...{ xml: "PRIVATE_ARRANGEMENT" } },
+        essentialTasks: [{ cardId: "mel:new:0-1", targetBpm: 80, ...{ audio: "PRIVATE_TASK" } }],
+      },
+    });
+    expect(withExtras.selectedTune?.cleanTempos[0].conditions).toEqual({ v: 1, source: "measured", confidence: "unknown" });
+    expect(withExtras.selectedTune?.goal?.essentialTasks).toEqual([{ cardId: "mel:new:0-1", targetBpm: 80 }]);
+    expect(JSON.stringify(withExtras)).not.toContain("PRIVATE_");
     const serialized = JSON.stringify(brief);
     for (const secret of ["SCORE_SECRET", "MATERIAL_XML_SECRET", "AUDIO_SECRET", "PAIRING_SECRET", "JOURNAL_SECRET", "DEVICE_SECRET", "CALIBRATION_SECRET", "INTERNAL_UID", "SESSION_UID"]) expect(serialized).not.toContain(secret);
     expect(serialized).not.toContain('"wrong":');
     expect(serialized).not.toContain('"goalBpm":');
+  });
+
+  it("restricts brief identities and evidence to the chosen music and calendar period", () => {
+    const store = emptyStore();
+    const visit = { id: "mel:phrase", result: "clean" as const, bpm: 70, share: 1, secs: 60, from: 1, to: 2 };
+    store.history = [{ ...visit, uid: "start", day: "2026-11-12" }, { ...visit, uid: "end", day: "2026-11-18", bpm: 76 }, { ...visit, uid: "old", day: "2026-11-11", bpm: 120 }, { ...visit, uid: "future", day: "2026-11-19", bpm: 140 }];
+    store.cards[visit.id] = { box: 5, due: "2026-11-20", bpm: 150, bestCleanBpm: 150, seen: 9, clean: 9, last: "clean" };
+    const input = { appVersion: "test", generatedAt: "2026-11-18T12:00:00Z", day: "2026-11-18", selectedTuneId: "one", materials: [{ tuneId: "one", title: "Chosen music", key: "C" }, { tuneId: "PRIVATE_OTHER_ID", title: "PRIVATE_OTHER_TITLE", key: "F" }], stores: [{ tuneId: "one", store }, { tuneId: "PRIVATE_OTHER_ID", store: { ...emptyStore(), history: [{ ...visit, day: "2026-11-18", bpm: 200 }], meta: { title: "PRIVATE_OTHER_META", key: "F" } } }] };
+    const brief = buildPracticeBrief({ ...input, scope: "selected-tune", days: 7 });
+    expect(brief).toMatchObject({ schemaVersion: 2, scope: { music: "selected-tune", tuneId: "one" }, window: { days: 7, startDay: "2026-11-12" }, overall: { materialCounts: { inLibrary: 1, withSavedProgress: 1 }, recent: { attemptCount: 2 } } });
+    expect(brief.selectedTune?.cleanTempos).toMatchObject([{ bpm: 76, observedOn: "2026-11-18" }]);
+    expect(JSON.stringify(brief)).not.toContain("PRIVATE_OTHER");
+    const all = buildPracticeBrief({ ...input, scope: "all-music", days: 90 });
+    expect(all.overall.recent.attemptCount).toBe(4);
+    expect(all.selectedTune?.cleanTempos[0].bpm).toBe(120);
+    expect(() => buildPracticeBrief({ ...input, selectedTuneId: null, scope: "selected-tune" })).toThrow("Choose a tune");
   });
 
   it("offers three unlocked next units, reviews first", () => {

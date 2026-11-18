@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import * as Tone from "tone";
 import { version as appVersion } from "../../package.json";
-import { buildPracticeBrief, type BriefMaterial, type PracticeBrief } from "../agent/brief";
+import { buildPracticeBrief, type BriefDays, type BriefMaterial, type BriefScope, type PracticeBrief } from "../agent/brief";
 import { ensureAudio } from "../audio/context";
 import type { InputApi } from "../listen/useInput";
 import { setNavMuted } from "../nav/useGuitarNav";
@@ -9,7 +9,7 @@ import { pitchClassToName } from "../musicTheory";
 import { getLibraryIssues, hasOldLibrary, loadCurrentTuneId, loadLibrary, loadLibraryAsync, newTuneId, parseTuneEntry, removeLibraryEntry, sameTuneContent, saveCurrentTuneId, saveLibrary, subscribeLibraryIssues, type TuneEntry } from "../tunes/library";
 import { loadTuneFile, parseMusicXml, type LeadSheet } from "../tunes/musicxml";
 import { createBackup, parseBackup, restoreBackup, type PracticeBackup } from "../tunes/backup";
-import { BLUE_HOUR_ENTRY, DEMO_TUNES, type DemoTune } from "../tunes/demos";
+import { BLUE_HOUR_ENTRY, DEMO_TUNES, getDemoStudy, type DemoTune } from "../tunes/demos";
 import { MUSICXML_AGENT_PROMPT } from "../tunes/agentPrompt";
 import { retryStorageWrites } from "../storage";
 import { buildTimeline } from "../tunes/order";
@@ -23,6 +23,7 @@ import { Glyph } from "./Glyph";
 import { UnitCard } from "./UnitCard";
 import { Score } from "./Score";
 import { GoalChooser } from "./GoalChooser";
+import { PracticeBriefPanel } from "./PracticeBriefPanel";
 import { openPractice, SongCoach } from "./SongCoach";
 import "../tunes/tunes.css";
 
@@ -55,6 +56,10 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
   const [soundOpen, setSoundOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [brief, setBrief] = useState<PracticeBrief | null>(null);
+  const [briefOpen, setBriefOpen] = useState(false);
+  const [briefDays, setBriefDays] = useState<BriefDays>(28);
+  const [briefScope, setBriefScope] = useState<BriefScope>("selected-tune");
+  const [studyOpen, setStudyOpen] = useState(false);
   const [revision, setRevision] = useState(0);
   const [showFingering, setShowFingering] = useState(false);
   const [melody, setMelody] = useState(true);
@@ -94,7 +99,8 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
   const selectedIssue = libraryIssues.find((issue) => issue.id === selected);
   const entry = selectedIssue ? null : library.find((t) => t.id === selected)
     ?? (demoPreview?.id === selected ? demoPreview : null) ?? library[0] ?? null;
-  useEffect(() => { setBrief(null); }, [entry, revision]);
+  useEffect(() => { setBrief(null); setStudyOpen(false); }, [entry, revision]);
+  const study = useMemo(() => entry ? getDemoStudy(entry) : undefined, [entry]);
   const parsed = useMemo((): { sheet: LeadSheet | null; error: string | null } => {
     if (!entry) return { sheet: null, error: null };
     try {
@@ -452,6 +458,8 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
         stores: allStores(),
         selectedExercises: selectedDeck?.cards.map((card) => ({ id: card.id, title: card.title })),
         selectedGoal: selectedSheet && selectedDeck ? loadActiveGoal(selectedSheet, selectedDeck) : null,
+        scope: entry ? briefScope : "all-music",
+        days: briefDays,
       }));
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "The practice brief could not be prepared.");
@@ -525,7 +533,7 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
         {library.length ? <DemoShelf library={library} disabled={loading || busy} onChoose={(demo, action) => void chooseDemo(demo, action)} onDownload={downloadDemo} /> : null}
         {toolsOpen ? <div id="song-library-tools" className="tunes-backup" aria-label="Library tools">
           <button type="button" onClick={() => void exportPractice()} disabled={loading || busy}>Export practice backup</button>
-          <button type="button" onClick={() => void generateBrief()} disabled={loading || busy}>Practice brief<Glyph name="arrow" size={15} /></button>
+          <button type="button" aria-expanded={briefOpen} onClick={() => setBriefOpen((open) => !open)} disabled={loading || busy}>Practice brief<Glyph name="arrow" size={15} /></button>
           <button type="button" onClick={() => backupRef.current?.click()} disabled={busy}>Restore backup…</button>
           <button type="button" onClick={() => {
             const saved = retryStorageWrites();
@@ -533,7 +541,9 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
           }} disabled={busy}>Retry saving</button>
           {entry ? <button type="button" className="tunes-remove" onClick={() => void remove()} disabled={loading || busy}>Remove this tune</button> : null}
           <p className="tunes-note">Backups include tunes, settings and progress · audio recordings excluded</p>
-          {brief ? <PracticeBriefPreview brief={brief} onClose={() => setBrief(null)} /> : null}
+          {briefOpen ? <PracticeBriefPanel brief={brief} scope={entry ? briefScope : "all-music"} days={briefDays} hasTune={Boolean(entry)} busy={loading || busy}
+            onScope={(scope) => { setBriefScope(scope); setBrief(null); }} onDays={(days) => { setBriefDays(days); setBrief(null); }}
+            onPrepare={() => void generateBrief()} onClose={() => setBriefOpen(false)} /> : null}
         </div> : null}
         {library.length ? <AgentScorePrompt /> : null}
       </section> : null}
@@ -668,6 +678,13 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
           <h3 id="song-phrases-title">Phrases</h3>
           <div>{phrases.map((card) => <button type="button" key={card.id} aria-pressed={selectedPhrase?.id === card.id} onClick={() => { stop(); setRange({ start: card.from, end: card.to }); }} aria-label={`Select ${card.where}`}><span>{card.where}</span><Glyph name="arrow" size={14} /></button>)}</div>
         </section> : null}
+        {study ? <section className="tunes-study" aria-label="Study notes">
+          <button type="button" className="tunes-agent-toggle" aria-expanded={studyOpen} aria-controls="song-study-notes" onClick={() => setStudyOpen((open) => !open)}><Glyph name="reading" size={17} />Study notes<Glyph name="plus" size={13} /></button>
+          {studyOpen ? <div id="song-study-notes" className="tunes-study-body">
+            <p>{study.purpose}</p>
+            <dl><div><dt>Starting point</dt><dd>{study.startingPoint}</dd></div><div><dt>Under the fingers</dt><dd>{study.fingering}</dd></div><div><dt>Listen for</dt><dd>{study.listenFor}</dd></div><div><dt>{study.easier.bars[0] === study.easier.bars[1] ? `Bar ${study.easier.bars[0]}` : `Bars ${study.easier.bars.join("–")}`}</dt><dd>{study.easier.instruction}</dd></div><div><dt>Make it yours</dt><dd>{study.transfer}</dd></div></dl>
+          </div> : null}
+        </section> : null}
         {deck ? <GoalChooser sheet={sheet} deck={deck} /> : null}
         {exercises.length ? <section className="tunes-exercises" aria-labelledby="song-exercises-title">
           <header><h3 id="song-exercises-title">Exercises</h3><button type="button" onClick={() => practice()}>Daily session<Glyph name="arrow" size={15} /></button></header>
@@ -680,45 +697,6 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
       </section> : null}
       {!entry && !loading ? <AgentScorePrompt /> : null}
     </main>
-  );
-}
-
-function PracticeBriefPreview({ brief, onClose }: { brief: PracticeBrief; onClose(): void }) {
-  const [status, setStatus] = useState("");
-  const preview = useRef<HTMLTextAreaElement>(null);
-  const json = useMemo(() => JSON.stringify(brief, null, 2), [brief]);
-  const copy = async () => {
-    try {
-      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
-      await navigator.clipboard.writeText(json);
-      setStatus("Practice brief copied.");
-    } catch {
-      setStatus("Copy is unavailable. Select the JSON below and copy it manually.");
-      preview.current?.focus();
-      preview.current?.select();
-    }
-  };
-  const download = () => {
-    try {
-      const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `fretboard-practice-brief-${brief.window.endDay}.json`;
-      link.click();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch {
-      setStatus("The download could not start. Copy the JSON below instead.");
-    }
-  };
-  return (
-    <section className="tunes-brief" aria-labelledby="song-practice-brief-title">
-      <header><h3 id="song-practice-brief-title">Practice brief</h3><button type="button" onClick={onClose}>Close preview</button></header>
-      <p className="tunes-note">{brief.selectedTune?.material.titleData ?? "Overall practice"} · last 28 days · generated {new Date(brief.generatedAt).toLocaleString()}</p>
-      <p className="tunes-note">Review this snapshot, then copy or download it for your agent. Scores and recordings stay out of the brief.</p>
-      <div className="tunes-brief-actions"><button type="button" onClick={() => void copy()}><Glyph name="copy" size={15} />Copy brief</button><button type="button" onClick={download}><Glyph name="download" size={15} />Download JSON</button></div>
-      {status ? <p className="tunes-note" role="status">{status}</p> : null}
-      <textarea ref={preview} readOnly value={json} aria-label="Practice brief JSON" spellCheck={false} />
-    </section>
   );
 }
 

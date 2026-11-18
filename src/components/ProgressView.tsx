@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { listTakes, takeAudio, type TakeMeta } from "../audio/recorder";
 import { latencyMeasured } from "../audio/latency";
+import { useTakePlayback } from "../audio/useTakePlayback";
 import { allStores, today } from "../song/leitner";
 import type { AttemptConditions } from "../song/leitner";
 import { allAttempts, buildProfile, type Axis } from "../song/profile";
@@ -14,6 +15,7 @@ import "../overview/progress.css";
 
 const AXIS_LABEL: Record<Axis, string> = { pitch: "First-try notes", time: "Timing consistency", tempo: "Clean scale tempo / goal", chords: "Chord accuracy", reading: "Reading accuracy", ear: "Echo accuracy" };
 const pct = (x: number) => `${Math.round(x * 100)} %`;
+const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
 const conditionLabel = (conditions?: AttemptConditions): string => conditions ? [
   conditions.source === "self" ? "Self-guided" : "Mic checked",
   conditions.tempo === "fixed" ? "fixed tempo" : conditions.tempo === "adaptive" ? "adaptive tempo" : conditions.tempo === "own-pace" ? "own pace" : "tempo unknown",
@@ -23,11 +25,12 @@ const conditionLabel = (conditions?: AttemptConditions): string => conditions ? 
 ].join(" · ") : "Assistance and assessment conditions unknown";
 
 /** Each player owns its object URL and releases it when the selection changes. */
-function TakePlayer({ take, tuneId, caption, day }: { take: TakeMeta; tuneId: string; caption: string; day: string }) {
+function TakePlayer({ take, tuneId, caption, day, playback }: { take: TakeMeta; tuneId: string; caption: string; day: string; playback: ReturnType<typeof useTakePlayback> }) {
   const [url, setUrl] = useState<string | null>(null);
   const [extension, setExtension] = useState("webm");
   const [error, setError] = useState(false);
   const [retry, setRetry] = useState(0);
+  const { release } = playback;
   useEffect(() => {
     let disposed = false;
     let owned: string | null = null;
@@ -40,11 +43,24 @@ function TakePlayer({ take, tuneId, caption, day }: { take: TakeMeta; tuneId: st
       owned = URL.createObjectURL(blob);
       setUrl(owned);
     }).catch(() => { if (!disposed) setError(true); });
-    return () => { disposed = true; if (owned) URL.revokeObjectURL(owned); };
-  }, [take.id, tuneId, retry]);
+    return () => { disposed = true; if (owned) { release(owned); URL.revokeObjectURL(owned); } };
+  }, [take.id, tuneId, retry, release]);
+  const active = playback.id === take.id;
+  const playing = active && (playback.phase === "playing" || playback.phase === "starting");
+  const position = active ? playback.position : 0;
+  const duration = active ? playback.duration : null;
   return <figure className="progress-take">
     <figcaption><strong>{caption}</strong><span>{relativeDay(take.day, day)} · ♩ {take.bpm}</span></figcaption>
-    {url ? <audio controls preload="none" src={url} aria-label={`${caption}, ${take.day}, ${take.bpm} bpm`} /> : <p role="status">{error ? "This recording could not be read." : "Loading recording…"}</p>}
+    {url ? <div className="progress-audio" role="group" aria-label={`${caption} recording controls`}>
+      <div className="progress-audio-actions">
+        <button type="button" className="progress-audio-play" aria-label={`${playing ? "Pause" : "Play"} ${caption.toLowerCase()} recording`} onClick={() => playing ? playback.pause() : void playback.play(take.id, url)}>{playing ? <span className="progress-audio-pause" aria-hidden="true" /> : <Glyph name="play" size={16} />}{playing ? "Pause" : "Play"}</button>
+        <button type="button" aria-label={`Restart ${caption.toLowerCase()} recording`} onClick={() => void playback.play(take.id, url, true)}>Restart</button>
+        <button type="button" aria-label={`${caption}: back 10 seconds`} disabled={!active || position <= 0} onClick={() => playback.seek(-10)}>−10 s</button>
+        <button type="button" aria-label={`${caption}: forward 10 seconds`} disabled={!active || !playback.seekEnd || position >= playback.seekEnd} onClick={() => playback.seek(10)}>+10 s</button>
+      </div>
+      <div className="progress-audio-position"><progress aria-label={`${caption} recording progress`} max={duration ?? 1} value={duration ? position : 0} /><output aria-label={`${caption} playback position`}>{clock(position)} / {duration ? clock(duration) : "—"}</output></div>
+      {active && playback.error ? <p role="alert">{playback.error}</p> : null}
+    </div> : <p role="status">{error ? "This recording could not be read." : "Loading recording…"}</p>}
     {error ? <button type="button" className="tutor-link" onClick={() => setRetry((value) => value + 1)}>Retry audio</button> : null}
     <p className="progress-caption">{conditionLabel(take.conditions)}</p>
     {url ? <a className="tutor-link" href={url} download={`guitar-take-${take.day}-${take.id.replace(/[^a-zA-Z0-9-]/g, '_')}.${extension}`}><Glyph name="download" size={14} />Save audio</a> : null}
@@ -53,6 +69,7 @@ function TakePlayer({ take, tuneId, caption, day }: { take: TakeMeta; tuneId: st
 
 /** Compare the same stored task. The original tempo and audio are preserved. */
 function Takes({ tuneId, day }: { tuneId: string; day: string }) {
+  const playback = useTakePlayback();
   const [takes, setTakes] = useState<TakeMeta[]>([]);
   const [selected, setSelected] = useState<[string, string]>(["", ""]);
   const [error, setError] = useState(false);
@@ -82,15 +99,16 @@ function Takes({ tuneId, day }: { tuneId: string; day: string }) {
   const sameArrangement = arrangementKnown && first?.arrangementFingerprint === latest?.arrangementFingerprint;
   return <div className="progress-comparison">
     <div className="progress-take-choices">
-      {([0, 1] as const).map((side) => <label key={side}>{side ? "Compare with" : "Reference"}<select value={selected[side]} onChange={(event) => setSelected((current) => side ? [current[0], event.target.value] : [event.target.value, current[1]])}>
-        {takes.map((take, index) => <option key={take.id} value={take.id}>{index === 0 ? "First · " : ""}{take.day} · {take.bpm} bpm</option>)}
+      {([0, 1] as const).map((side) => <label key={side}>{side ? "Compare with" : "Reference"}<select value={selected[side]} onChange={(event) => { playback.stop(); setSelected((current) => side ? [current[0], event.target.value] : [event.target.value, current[1]]); }}>
+        {takes.map((take, index) => <option key={take.id} value={take.id}>{index === 0 ? "First" : `Take ${index + 1}`} · {take.day} · {take.bpm} bpm</option>)}
       </select></label>)}
     </div>
     <div className="progress-take-pair">
-      {first ? <TakePlayer key={`reference:${first.id}`} take={first} tuneId={tuneId} caption="Reference" day={day} /> : null}
-      {latest && latest.id !== first?.id ? <TakePlayer key={`comparison:${latest.id}`} take={latest} tuneId={tuneId} caption="Comparison" day={day} /> : null}
+      {first ? <TakePlayer key={`reference:${first.id}`} take={first} tuneId={tuneId} caption="Reference" day={day} playback={playback} /> : null}
+      {latest && latest.id !== first?.id ? <TakePlayer key={`comparison:${latest.id}`} take={latest} tuneId={tuneId} caption="Comparison" day={day} playback={playback} /> : null}
     </div>
     <p className="progress-caption">{!sameTask ? "These recordings cover different tasks. " : ""}{first?.bpm !== latest?.bpm ? "Different tempos. " : ""}{arrangementKnown ? sameArrangement ? "Same score version. " : "Different score versions. " : "Score version unknown for an older take. "}Compare the tempo and help shown with each recording.</p>
+    <p className="progress-caption">Guitar controls work here too. Use headphones so a recording stays out of the navigation microphone.</p>
     <p className="progress-caption">The first take and ten most recent are kept on this browser. A full .fretpack export includes audio.</p>
   </div>;
 }

@@ -27,7 +27,14 @@
 .progress-take figcaption { display: flex; gap: 15px; justify-content: space-between; align-items: baseline; margin-bottom: 12px; color: var(--ink-soft); font-size: 12px; }
 .progress-take strong { font-weight: 500; }
 .progress-take figcaption span { color: var(--ink-faint); font: 10px var(--font-mono); }
-.progress-take audio { width: 100%; height: 40px; color-scheme: dark; }
+.progress-audio-actions { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.progress-audio-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; padding: 4px 0; border: 0; border-radius: 0; background: none; color: var(--ink-soft); font: inherit; font-size: 12px; }
+.progress-audio-actions .progress-audio-play { color: var(--ink); min-width: 64px; justify-content: flex-start; }
+.progress-audio-pause { width: 12px; height: 12px; margin-inline: 2px; border-inline: 3px solid currentColor; }
+.progress-audio-position { display: flex; align-items: center; gap: 14px; margin-top: 8px; }
+.progress-audio-position progress { width: 100%; min-width: 0; height: 3px; accent-color: #c1cbb0; }
+.progress-audio-position output { flex-shrink: 0; color: var(--ink-faint); font: 10px var(--font-mono); }
+.progress-audio > p { color: var(--warn); font-size: 11px; line-height: 1.7; }
 .progress-take > p { font-size: 11px; color: var(--ink-faint); }
 .progress-samples { display: block; margin-top: 4px; font-size: 9px; color: var(--ink-faint); }
 @media (max-width: 620px) {

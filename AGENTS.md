@@ -44,8 +44,11 @@ exact phrases in `SongCoach`; do not restore an inline Learn flow. Ear (`src/ear
     portable changes. Self-guided history is activity, never measured progress.
 12. `src/platform/` — exclusive writer ownership across browser windows, offline/update status.
     Mount the boundary before any practice/quiz/tools writer hook. `src/tools/` reuses input/playback.
-11. `src/agent/brief.ts` — pure, versioned, bounded practice-brief projection for explicit user
+13. `src/agent/brief.ts` — pure, versioned, bounded practice-brief projection for explicit user
     export. Keep score/audio contents, device secrets and raw storage/journal data out of it.
+14. `src/song/goalEvidence.ts` / `useGoalEvidence.ts` — display-only, bounded journal goal checks.
+    Replay a complete tune transaction group with the existing projector; capped, unavailable or
+    conflicted history is unknown. Never replace stores or scheduling with an archive query.
 
 ## Repository map and project docs (read this second)
 
@@ -136,12 +139,16 @@ component tests run under jsdom. No CI configuration is committed; `make check` 
 - Assessment conditions and arrangement fingerprints are optional on legacy attempts/takes. Keep
   unknowns explicit; self-guided activity never promotes boxes, kinship, profile or clean tempo.
   Timed claims use the actual stable assessed-pass BPM, never the final UI tempo.
+  Memory help aggregates the whole visit; restoring the page cannot produce hidden-only evidence.
+  Later hidden reviews require the same known arrangement and never imply independent retention.
 - Tutor can launch a daily session or a selected card directly, and its Free play tile opens
   the existing free-play engine without a tune. Do not add another practice or audio engine.
 - Bundled demos use stable IDs from `src/tunes/demos.ts`; preserve the existing First Steps ID
   and never overwrite a saved demo when reopening it. New distributed scores need provenance in
   `ASSETS.md`. Agent briefs are explicit read-only exports with versioned definitions and unknowns;
   never send them to an LLM automatically or execute agent-authored plans without a new boundary.
+  Brief scope/period apply before aggregation and to dated tempo records. Explicitly project nested
+  conditions and goal fields; validated persisted objects may still contain extra private fields.
 - The practice session (`src/song/`, `SongCoach`) is operated from the guitar and reacts to the
   player rather than instructing them; read `docs/PRACTICE_SESSION.md` before changing its
   gestures, tempo rules or card box. Any new action there needs a played gesture, shown on screen.

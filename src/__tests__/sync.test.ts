@@ -3,6 +3,8 @@ import { IDBFactory, IDBKeyRange } from "fake-indexeddb";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { compactValues, parseSyncSnapshot, unionTransactions, type SyncTransaction } from "../sync/model";
 import { projectTransactions } from "../sync/merge";
+import { projectGoalEvidence } from "../song/goalEvidence";
+import { goalProgress, type Goal } from "../song/goals";
 
 const key = "guitar-song-deck:tune-1";
 const card = (box = 2, seen = 1, clean = 1, last = "clean") => ({ box, seen, clean, last, bpm: 84, due: "2026-11-19", bestCleanBpm: 80 });
@@ -17,6 +19,7 @@ function transaction(device: string, seq: number, before: unknown, after: unknow
 const envelope = (transactions: SyncTransaction[]) => ({ format: "fretboard-focus-sync", version: 1, device: "test", createdAt: "", transactions });
 const valueAt = (transactions: SyncTransaction[], storageKey = key) => JSON.parse(projectTransactions(transactions).storage.get(storageKey)!);
 const outboxes = () => Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i)).filter((entry) => entry?.startsWith("fretboard-sync-outbox-v1:"));
+const evidenceGoal: Goal = { v: 1, id: "evidence-goal", tuneId: "tune-1", kind: "melody", createdAt: new Date(50).toISOString(), arrangement: { version: 1, fingerprint: "score-v1" }, tempo: { minBpm: 60, targetBpm: 80 }, essentialTasks: [{ cardId: "mel:one", targetBpm: 80 }] };
 
 beforeEach(() => {
   vi.restoreAllMocks();
@@ -140,6 +143,61 @@ describe("transaction replay", () => {
 });
 
 describe("durable journal and projection", () => {
+  it("upgrades and queries one complete practice group beyond the display cap, while honoring resets and refusing partial reads", async () => {
+    const qualified = { ...attempt("qualified"), arrangementFingerprint: "score-v1", conditions: { v: 1, source: "measured", confidence: "unknown", tempo: "fixed" }, ev: { notes: [4, 0], leap: [0, 0], cross: [0, 0], shift: [0, 0], restarts: 0, hears: 0, wrong: [], time: { n: 4, mean: 0, spread: 10, rush: 0, drag: 0 } } };
+    const initial = store(card(), [qualified, ...Array.from({ length: 799 }, (_, index) => attempt(`other-${index}`, "fail"))]);
+    const trimmed = { ...initial, history: [...initial.history.slice(1), attempt("latest", "fail")] };
+    const baseline = transaction("base", 1, null, initial, { baseline: true });
+    const added = transaction("writer", 1, initial, trimmed, { clock: 2, context: { base: 1 } });
+    // Build the shipped v1 schema: the new read must add its target index in place.
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.open("guitar-sync-v1", 1);
+      request.onupgradeneeded = () => { request.result.createObjectStore("transactions", { keyPath: "id" }); request.result.createObjectStore("meta"); };
+      request.onsuccess = () => {
+        const db = request.result;
+        const write = db.transaction("transactions", "readwrite");
+        for (const row of [baseline, added, transaction("unrelated", 1, null, store(), { key: "guitar-song-deck:other", baseline: true })]) write.objectStore("transactions").put(row);
+        write.oncomplete = () => { db.close(); resolve(); };
+        write.onerror = () => { db.close(); reject(write.error); };
+      };
+      request.onerror = () => reject(request.error);
+    });
+    localStorage.setItem(key, JSON.stringify(trimmed));
+    expect(goalProgress(evidenceGoal, JSON.parse(localStorage.getItem(key)!)).demonstrated).toBe(0);
+    const journal = await import("../sync/journal");
+    const read = await journal.readPracticeTransactions("tune-1");
+    expect(read.status).toBe("ready");
+    if (read.status !== "ready") throw new Error("Complete target history required");
+    expect(read.transactions.map((entry) => entry.id)).toEqual([baseline.id, added.id]);
+    expect(projectGoalEvidence(evidenceGoal, read.transactions)).toMatchObject({ status: "ready", progress: { demonstrated: 1, total: 1 } });
+    expect(projectGoalEvidence(evidenceGoal, [transaction("fragment", 1, {}, { history: [qualified] })])).toEqual({ status: "unavailable" });
+    expect(await journal.readPracticeTransactions("tune-1", { maxTransactions: 1 })).toEqual({ status: "too-large" });
+    const reset = transaction("restore", 1, trimmed, { ...trimmed, history: [] }, { reset: true, clock: 3, context: { base: 1, writer: 1 } });
+    await journal.importSyncTransactions([reset]);
+    const restored = await journal.readPracticeTransactions("tune-1");
+    if (restored.status !== "ready") throw new Error("Complete restored history required");
+    expect(projectGoalEvidence(evidenceGoal, restored.transactions)).toMatchObject({ status: "ready", progress: { demonstrated: 0 } });
+  });
+
+  it("rejects a blocked history upgrade, closes its abandoned connection, and closes stale readers on versionchange", async () => {
+    const old = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open("guitar-sync-v1", 1);
+      request.onupgradeneeded = () => { request.result.createObjectStore("transactions", { keyPath: "id" }); request.result.createObjectStore("meta"); };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const journal = await import("../sync/journal");
+    await expect(journal.readPracticeTransactions("tune-1")).rejects.toThrow("Close other copies");
+    old.close();
+    expect(await journal.readPracticeTransactions("tune-1")).toEqual({ status: "ready", transactions: [] });
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.open("guitar-sync-v1", 3);
+      request.onsuccess = () => { request.result.close(); resolve(); };
+      request.onblocked = () => reject(new Error("A stale evidence reader kept the database open"));
+      request.onerror = () => reject(request.error);
+    });
+  });
+
   it("honors an explicit backup restore across pairing while retaining conflicting offline transactions", async () => {
     const initial = store();
     localStorage.setItem(key, JSON.stringify(initial));
@@ -169,6 +227,7 @@ describe("durable journal and projection", () => {
     expect(union).toContainEqual(offline);
     expect(union).toContainEqual(losingRestore);
     expect(projection.conflicts.some((conflict) => conflict.transactionIds.includes(reset.id) && conflict.transactionIds.includes(offline.id))).toBe(true);
+    expect(projectGoalEvidence(evidenceGoal, union)).toEqual({ status: "conflicted" });
     expect(projectTransactions(unionTransactions(union, union))).toEqual(projection);
   });
 
