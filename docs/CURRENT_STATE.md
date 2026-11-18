@@ -111,6 +111,12 @@ tests cover symmetric fixed offsets, drift, sparse/duplicate evidence and profil
 Physical guitar timing and latency remain unverified; play-along compensation still includes the
 player's reference behavior and is not an independent hardware-latency measurement.
 
+## Product direction
+
+[SOL_OPINION.md](../SOL_OPINION.md) is the comprehensive product review and proposed roadmap. It
+separates the current engine from longer-term design, curriculum, assessment, reliability,
+platform and agent-bridge proposals. It does not mark those proposals implemented.
+
 ## Tutor layer (2026-11-17)
 
 Built from the plans in [tutor/README.md](tutor/README.md). All of it is **code-verified** (unit

@@ -44,6 +44,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `Makefile`
 - `PLAN.md`
 - `README.md`
+- `SOL_OPINION.md`
 - `THIRD_PARTY_NOTICES.md`
 - `index.html`
 - `package.json`

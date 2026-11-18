@@ -119,6 +119,9 @@ make check       # handoff gate: typecheck + repo-map freshness + tests
 
 ## Documentation
 
+- [SOL_OPINION.md](SOL_OPINION.md) — comprehensive product critique, design direction, learning
+  strategy, agent bridge, staged delivery plan and acceptance gates. Proposals are distinct from
+  implemented features.
 - [docs/CREATE_A_SCORE.md](docs/CREATE_A_SCORE.md) — using your chosen agent to prepare a personal
   MusicXML score, with import and musical verification guidance.
 - [docs/CURRENT_STATE.md](docs/CURRENT_STATE.md) — verified snapshot of what is implemented,
