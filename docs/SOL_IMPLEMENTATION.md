@@ -11,14 +11,14 @@ the application’s foundation.
 | --- | --- | --- |
 | Trust the result | Visible recording outcomes; retry/download of pending audio; read errors distinguished from an empty library | Failure-path tests; no real quota or microphone recording test |
 | Keep music recoverable | Healthy scores remain available beside named repair issues; replacement preserves identity; explicit removal preserves history | Storage tests, including missing XML and migration races |
-| First musical visit | Listen without a file or mic; existing original demos remain playable when saving fails; no-mic practice in the same coach | Mounted score/entry tests; audible balance and first-person usability unverified |
-| Score-centered Songs | Select a generated phrase from a bar, see printed/playing-order positions, listen once/loop, practise explicitly, return to the browse position | Mounted selection/play/launch tests; long-score/phone layout unverified |
+| First musical visit | Listen without a file or mic; existing original demos remain playable when saving fails; no-mic practice in the same coach | Mounted score/entry tests and browser Listen/self-guided entry; audible balance and student usability unverified |
+| Score-centered Songs | Select a generated phrase from a bar, see printed/playing-order positions, use immediately visible sticky listen/loop/practice controls, return to the browse position | Mounted selection/play/launch tests; browser review at 320/390/1440px with Blue Hour; long-score/physical-phone checks remain |
 | A personal destination | Immutable arrangement-bound melody/accompaniment/echo/reading/improvisation goals; personal tempos; goal-aware plan and Next | Goal/planner/projection tests; authored teaching quality still needs review |
 | Honest assessment | Optional support/notation/tempo/exposure/confidence/interruption context, arrangement fingerprint, actual stable assessed-pass BPM | Focused session/scheduler tests; confidence remains unknown |
 | A difficult day | Self-guided activity without scoring; no automatic review/kinship/accuracy/speed credit; graceful finish at a musical boundary | Mounted ready/session tests; guitar gesture comfort unverified |
 | Rhythm from real music | One-note rendering of the selected phrase, then a return to that phrase in context | Deterministic deck/rhythm tests; not muted-string grading |
 | Stronger echo calls | Seeded duration variation, rests and repeated pitches in higher tiers; response remains own pace | Musical invariant tests; call pacing needs a real guitar |
-| Everyday tools | Chromatic 440 Hz tuner, tap tempo, count-in, subdivisions and output-clock beat pulse | Signal/tap/scheduler tests; physical tuning accuracy and sound unverified |
+| Everyday tools | Chromatic 440 Hz tuner, tap tempo, count-in, subdivisions and a centered output-clock beat pulse | Signal/tap/scheduler tests; browser count-in/pulse/subdivision/stop; physical tuning accuracy and sound unverified |
 | Useful Progress | Goals, historical task records, bounded cross-tune observations and retained audio comparison with context | Data projection and recording persistence tests; subjective comparison UX unverified |
 | One active writer | Origin-scoped Web Lock before practice/quiz/tools/Devices; explicit handoff waits for cleanup and save recovery; JSON restore uses idle lock | Controlled competing-window/lifecycle tests; real installed/browser suspension unverified |
 | Consistent portability | Goals and assessment metadata journal/transfer; independent first goals union; hardware/calibration stay local in new and legacy backups | Merge, archive and restore tests; real laptop/phone exchange unverified |
@@ -42,7 +42,8 @@ Older attempts/takes keep unknown assistance, confidence or arrangement context.
 records remain visible with that limitation; lifetime best settings are not upgraded into proof
 of the current arrangement. The bounded display history can eventually age out detailed goal
 evidence even though original transactions remain in the journal. There is no journal-wide
-assessment query yet.
+assessment query yet. Retained recordings use native audio controls; played-guitar recording
+transport actions remain a gap.
 
 Goals union by immutable ID on exchange, including independent first saves. Only active selection
 uses deterministic transaction order. Reusing an unchanged goal preserves its creation date and

@@ -40,7 +40,7 @@ function Tools({ input, onClose }: { input: InputApi; onClose(): void }) {
   const listening = input.status === "listening" && !input.paused;
   const cents = pitch?.cents ?? 0;
   const tunerText = !listening ? "Enable the microphone to tune." : tuner.state === "quiet" ? "Quiet · pluck one string and let it ring." : tuner.state === "uncertain" ? "Pitch unclear · let one string ring on its own." : Math.abs(cents) <= 3 ? "Within 3 cents of concert pitch." : cents > 0 ? "Sharp · lower the pitch." : "Flat · raise the pitch.";
-  return <main className="guitar-tools" role="dialog" aria-modal="true" aria-labelledby="guitar-tools-title">
+  return <main className="guitar-tools" aria-labelledby="guitar-tools-title">
     <header className="guitar-tools-head"><h1 id="guitar-tools-title">Guitar tools</h1><button type="button" onClick={close} aria-label="Close guitar tools">Close</button></header>
     <nav className="guitar-tools-tabs" aria-label="guitar tools">
       <button type="button" aria-pressed={tool === "tuner"} onClick={() => { playback.stop(); setTool("tuner"); }}>Tuner</button>
@@ -54,7 +54,7 @@ function Tools({ input, onClose }: { input: InputApi; onClose(): void }) {
       <p className="guitar-tools-hint">Standard tuning, low to high: E2 · A2 · D3 · G3 · B3 · E4</p>
       <InputBar input={input} prominent />
     </section> : <section className="guitar-tools-metronome" aria-label="metronome">
-      <BeatPulse beat={playback.beat} bpm={bpm} compact />
+      <BeatPulse beat={playback.beat} bpm={bpm} />
       <div className="guitar-tools-tempo"><button type="button" aria-label="5 beats per minute slower" onClick={() => changeTempo(bpm - 5)}>−5</button><label>Tempo <input type="number" min={MIN_TOOL_BPM} max={MAX_TOOL_BPM} value={bpm} onChange={(event) => changeTempo(event.currentTarget.valueAsNumber)} /> bpm</label><button type="button" aria-label="5 beats per minute faster" onClick={() => changeTempo(bpm + 5)}>+5</button></div>
       <div className="guitar-tools-controls"><button type="button" onClick={tap}>Tap tempo</button><label>Subdivision <select value={division} onChange={(event) => setDivision(Number(event.target.value) as typeof division)}><option value={1}>Quarter notes</option><option value={2}>Eighth notes</option><option value={3}>Triplets</option><option value={4}>Sixteenth notes</option></select></label></div>
       <button type="button" className="guitar-tools-count" aria-pressed={countIn} onClick={() => setCountIn((value) => !value)}>One-bar count-in on start · {countIn ? "On" : "Off"}</button>

@@ -141,8 +141,9 @@ unknown legacy measurements are omitted rather than inferred from a box result.
 ### Modern Tunes → SongCoach
 
 `TuneView` owns score browsing/listening and import/library tools. It builds the existing deck to
-show phrase/exercise rows. Clicking a printed bar finds its melody phrase and passes that exact
-card ID to `SongCoach`; it does not create a parallel inline lesson or progress store. Listening
+show phrase/exercise rows. Clicking a printed bar selects its melody phrase and reveals actions
+inside the sticky listening transport. Practise phrase passes that exact card ID to `SongCoach`;
+it does not create a parallel inline lesson or progress store. Listening
 playback has mic scoring disabled. The primary practice action opens the daily coach plan.
 
 ```
@@ -526,6 +527,8 @@ browser supports it; projection rechecks the committed union and retries if it c
 handoff unmounts the active subtree and waits for tracked writes, recording rescue and pending
 progress before releasing ownership. BroadcastChannel/storage events request handoff; they never
 establish ownership. Unsupported browsers are conservatively blocked from protected operations.
+An initial unavailable claim stays in Checking until a peer announces ownership or a second
+claim confirms contention, allowing an unmounted local owner time to release without a false warning.
 JSON restore and update checks acquire the same idle lock. Physical suspension/handoff still needs
 testing; no expiring localStorage lease pretends to be an atomic lock.
 

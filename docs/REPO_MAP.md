@@ -250,7 +250,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/platform/PlatformStatus.tsx` — `PlatformStatus:6`
 - `src/platform/PracticeWindowBoundary.tsx` — `PracticeWindowBoundary:7`
 - `src/platform/platform.css`
-- `src/platform/practiceWindow.ts` — `PRACTICE_LOCK:5`, `PracticeWindowState:8`, `PracticeWindowSnapshot:9`, `PracticeWindowOptions:15`, `getLocalPracticeActive:29`, `subscribeLocalPractice:30`, `keepPracticeWrite:40`, `settlePracticeWrites:45`, `subscribePracticeRecovery:52`, `createPracticeWindow:65`, `practiceMessenger:174`, `whilePracticeIdle:194`
+- `src/platform/practiceWindow.ts` — `PRACTICE_LOCK:5`, `PracticeWindowState:8`, `PracticeWindowSnapshot:9`, `PracticeWindowOptions:15`, `getLocalPracticeActive:29`, `subscribeLocalPractice:30`, `keepPracticeWrite:40`, `settlePracticeWrites:45`, `subscribePracticeRecovery:52`, `createPracticeWindow:65`, `practiceMessenger:183`, `whilePracticeIdle:203`
 - `src/practice.css`
 - `src/pwa.ts` — `OfflineState:4`, `OfflineSnapshot:5`, `getOfflineSnapshot:14`, `subscribeOffline:15`, `registerOfflineShell:46`, `checkForOfflineUpdate:59`
 - `src/reading/generate.ts` — `keySpecFor:54`, `generateReading:69`, `readingToPattern:283`

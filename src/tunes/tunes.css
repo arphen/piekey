@@ -77,7 +77,7 @@
 .tunes-phrases button { display: inline-flex; align-items: center; gap: 9px; min-height: 37px; border: 0; padding: 0; background: none; color: var(--ink-faint); font-size: 11px; }
 .tunes-phrases button:hover { color: var(--ink); }
 .tunes-phrases button[aria-pressed="true"] { color: var(--ink); text-decoration: underline; text-decoration-color: #b8c4a7; text-underline-offset: 6px; }
-.tunes-selection { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 20px; margin: -8px 0 12px; padding: 14px 0; border-top: 1px solid var(--line); color: var(--ink-soft); font-size: 12px; }
+.tunes-selection { display: flex; flex: 1 0 100%; flex-wrap: wrap; align-items: center; gap: 7px 20px; margin: -3px 0 0; padding: 10px 0 0; border-top: 1px solid var(--line); color: var(--ink-soft); font-size: 12px; }
 .tunes-selection > span { margin-right: auto; }
 .tunes-selection > span small { display: block; margin-top: 4px; color: var(--ink-faint); font: 10px var(--font-mono); }
 .tunes-selection button { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding: 5px 0; border: 0; border-radius: 0; background: none; color: var(--ink-soft); font: inherit; }
@@ -382,4 +382,11 @@
   color: #1d1712;
   font-weight: 600;
   box-shadow: 0 0 0 4px var(--brass-soft);
+}
+
+@media (max-width: 640px) {
+  .tunes-selection { gap: 0 14px; font-size: 11px; }
+  .tunes-selection > span { flex: 1 1 calc(100% - 64px); order: -2; }
+  .tunes-selection button:last-child { order: -1; justify-content: center; min-width: 44px; }
+  .tunes-selection button { gap: 5px; }
 }

@@ -1,23 +1,30 @@
-.guitar-tools { width: min(42rem, calc(100% - 2rem)); margin: 3vh auto; padding: clamp(1rem, 4vw, 2rem); border: 1px solid var(--line, #34483e); border-radius: 1rem; background: var(--surface, #15241c); color: var(--ink, #e7eee7); }
-.guitar-tools-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-.guitar-tools-head h1 { font-size: 1.4rem; margin: 0; }
-.guitar-tools button, .guitar-tools select, .guitar-tools input[type="number"] { font: inherit; border: 1px solid var(--line, #506358); border-radius: .45rem; color: inherit; background: var(--bg, #0e1b14); padding: .55rem .8rem; }
+.guitar-tools { --tool-accent: #c1cbb0; width: min(760px, calc(100% - 96px)); margin: 0 auto; padding: clamp(32px, 5vw, 56px) 0 48px; color: var(--ink); }
+.guitar-tools-head { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.guitar-tools-head h1 { margin: 0; font: 500 clamp(32px, 5vw, 44px)/1.15 var(--font-display); letter-spacing: -.035em; }
+.guitar-tools button, .guitar-tools select, .guitar-tools input[type="number"] { min-height: 44px; padding: 8px 12px; border: 1px solid var(--line-strong); border-radius: 3px; color: inherit; background: var(--bg); font: inherit; }
 .guitar-tools button { cursor: pointer; }
-.guitar-tools-tabs { display: flex; gap: .6rem; margin: 1.5rem 0; }
-.guitar-tools-tabs button { flex: 1; }
-.guitar-tools-tabs [aria-pressed="true"], .guitar-tools-count[aria-pressed="true"] { border-color: var(--accent, #e0a956); color: var(--accent, #e0a956); }
+.guitar-tools button:focus-visible, .guitar-tools select:focus-visible, .guitar-tools input:focus-visible { outline: 2px solid var(--tool-accent); outline-offset: 4px; }
+.guitar-tools-head button { padding-right: 0; border: 0; background: none; color: var(--ink-soft); font-size: 12px; }
+.guitar-tools-tabs { display: flex; gap: 28px; margin: 25px 0 32px; border-bottom: 1px solid var(--line); }
+.guitar-tools-tabs button { padding: 8px 0 13px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--ink-soft); font-size: 13px; }
+.guitar-tools-tabs [aria-pressed="true"] { border-bottom-color: var(--tool-accent); color: var(--ink); }
 .guitar-tools-tuner, .guitar-tools-metronome { text-align: center; }
-.guitar-tools-note { min-height: 6rem; margin: .5rem 0 0; font-size: 4.5rem; font-weight: 600; }
-.guitar-tools-note small { font-size: 1.6rem; margin-left: .2rem; }
-.guitar-tools-cents, .guitar-tools-hint { color: var(--ink-soft, #b3c0b5); font-size: .86rem; }
-.guitar-tools-meter { position: relative; display: flex; justify-content: space-between; align-items: center; height: 2.5rem; margin: 1rem auto; max-width: 25rem; border-bottom: 1px solid var(--line, #506358); }
-.guitar-tools-meter::after { content: ""; position: absolute; left: 50%; top: .5rem; bottom: 0; border-left: 1px solid var(--accent, #e0a956); }
-.guitar-tools-meter i { position: absolute; left: var(--tuner-position); bottom: .3rem; width: .4rem; height: 1.2rem; background: var(--accent, #e0a956); opacity: 0; transform: translateX(-50%); transition: left .1s; }
+.guitar-tools-note { min-height: 120px; margin: 15px 0 0; font: 500 96px/1.2 var(--font-display); }
+.guitar-tools-note small { margin-left: 4px; font: 400 28px var(--font-mono); }
+.guitar-tools-cents, .guitar-tools-hint { color: var(--ink-soft); font-size: 12px; line-height: 1.7; }
+.guitar-tools-meter { position: relative; display: flex; justify-content: space-between; align-items: center; height: 40px; margin: 20px auto; max-width: 400px; border-bottom: 1px solid var(--line-strong); }
+.guitar-tools-meter::after { content: ""; position: absolute; left: 50%; top: 8px; bottom: 0; border-left: 1px solid var(--tool-accent); }
+.guitar-tools-meter i { position: absolute; left: var(--tuner-position); bottom: 5px; width: 6px; height: 20px; background: var(--tool-accent); opacity: 0; transform: translateX(-50%); transition: left .1s; }
 .guitar-tools-meter .is-reading { opacity: 1; }
-.guitar-tools .input-bar { justify-content: center; flex-wrap: wrap; margin-top: 1.5rem; }
-.guitar-tools-tempo, .guitar-tools-controls { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: .7rem; margin: 1rem 0; }
-.guitar-tools-tempo input { width: 5.2rem; text-align: center; }
-.guitar-tools-controls select { margin-left: .4rem; max-width: 100%; }
-.guitar-tools-count { display: block; margin: 1.3rem auto; }
-.guitar-tools .guitar-tools-start { min-width: 12rem; border-color: var(--accent, #e0a956); }
-.guitar-tools-metronome .beat-pulse { margin: 0 auto 1rem; }
+.guitar-tools .input-bar { justify-content: center; flex-wrap: wrap; margin-top: 24px; }
+.guitar-tools-tempo, .guitar-tools-controls { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 12px; margin: 20px 0; }
+.guitar-tools-tempo input { width: 78px; text-align: center; }
+.guitar-tools-controls select { margin-left: 8px; max-width: 100%; }
+.guitar-tools .guitar-tools-count { display: block; margin: 20px auto; border: 0; background: none; color: var(--ink-soft); font-size: 12px; }
+.guitar-tools .guitar-tools-count[aria-pressed="true"] { color: var(--ink); text-decoration: underline; text-decoration-color: var(--tool-accent); text-underline-offset: 6px; }
+.guitar-tools .guitar-tools-start { min-width: 190px; border-color: var(--tool-accent); color: var(--tool-accent); }
+.guitar-tools-metronome .beat-pulse { margin: 0 auto 24px; }
+.guitar-tools-metronome .beat-pulse-face { width: clamp(140px, 20vh, 185px); }
+.guitar-tools-metronome > p, .guitar-tools-tuner > p[role="status"] { color: var(--ink-soft); font-size: 12px; }
+@media (max-width: 640px) { .guitar-tools { width: calc(100% - 40px); } }
+@media (prefers-reduced-motion: reduce) { .guitar-tools-meter i { transition: none; } }

@@ -44,6 +44,20 @@ function messaging() {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); Reflect.deleteProperty(navigator, "locks"); Reflect.deleteProperty(navigator, "serviceWorker"); });
 
 describe("one practice window", () => {
+  it("keeps an unconfirmed initial busy claim in checking while an old local lock releases", async () => {
+    const locks = new Locks(); locks.held = true;
+    const changed = vi.fn();
+    const practice = createPracticeWindow({ locks, listen: messaging(), id: "remounted", changed, beforeRelease: async () => undefined });
+    practice.start(); await flush();
+    expect(practice.getSnapshot().state).toBe("checking");
+    expect(locks.held).toBe(true);
+    locks.held = false;
+    practice.poll(); await flush();
+    expect(practice.getSnapshot().state).toBe("active");
+    expect(changed.mock.calls.map(([snapshot]) => snapshot.state)).not.toContain("blocked");
+    practice.stop(); await flush();
+  });
+
   it("keeps the Ear quiz writer unmounted until ownership and preserves the echo-card exit", async () => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     const locks = new Locks(); locks.held = true;
@@ -130,7 +144,7 @@ describe("one practice window", () => {
     expect(mutate).not.toHaveBeenCalled();
     const owner = createPracticeWindow({ locks: navigator.locks, listen: messaging(), id: "practice", changed() {}, beforeRelease: async () => undefined });
     owner.start(); await flush();
-    expect(owner.getSnapshot().state).toBe("blocked");
+    expect(owner.getSnapshot().state).toBe("checking"); // an idle save has not announced a practice owner
     commit.resolve(); expect(await writing).toBe(true);
     owner.poll(); await flush();
     expect(owner.getSnapshot().state).toBe("active");

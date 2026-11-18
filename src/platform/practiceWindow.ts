@@ -67,6 +67,7 @@ export function createPracticeWindow(options: PracticeWindowOptions) {
   let stopped = false;
   let desired = true;
   let requesting = false;
+  let busyChecks = 0;
   let owner = "";
   let handoff = false;
   let held = false;
@@ -77,11 +78,15 @@ export function createPracticeWindow(options: PracticeWindowOptions) {
     snapshot = { state, message };
     if (!stopped) options.changed(snapshot);
   };
+  const blocked = () => set("blocked", owner
+    ? "Practice is open in another window. Continue here to move it to this window."
+    : "Waiting for practice to become available. Another window or a save may still be finishing. Continue here to request this window.");
   const messenger = options.listen((message) => {
     if (message.from === options.id) return;
     if (message.type === "query" && held && !releasing) messenger.send({ type: "owner", from: options.id, to: message.from });
     if (message.type === "owner" && (!message.to || message.to === options.id)) {
       owner = message.from;
+      if (busyChecks && snapshot.state === "checking") blocked();
       if (handoff) {
         handoff = false;
         messenger.send({ type: "handoff", from: options.id, to: owner });
@@ -118,10 +123,14 @@ export function createPracticeWindow(options: PracticeWindowOptions) {
         requesting = false;
         if (stopped || !desired) return;
         if (!lock) {
-          set("blocked", "Practice is open in another window. Continue here to move it to this window.");
+          // A just-unmounted local owner may still be releasing. A single unavailable
+          // claim does not establish that another window is practising.
+          busyChecks++;
+          if (owner || busyChecks > 1 || snapshot.state !== "checking") blocked();
           messenger.send({ type: "query", from: options.id });
           return;
         }
+        busyChecks = 0;
         held = true;
         presence(1);
         const hold = new Promise<void>((resolve) => { unlock = resolve; });

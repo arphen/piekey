@@ -637,6 +637,13 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
           <button type="button" className="tunes-practice-piece" onClick={() => practice(whole?.id)} disabled={!whole || loading || busy}>Practice piece<Glyph name="arrow" size={16} /></button>
           <span className="tunes-play-position">{playback.playing ? playback.counting ? "Count-in" : playingBar >= 0 ? `Bar ${barLabel(playingBar)}` : "" : ""}</span>
           <button type="button" className="tunes-sound-toggle" aria-expanded={soundOpen} aria-controls="song-sound" onClick={() => setSoundOpen((open) => !open)}><Glyph name="free" size={17} />{bpm}<span>Sound</span></button>
+        {selectedPhrase ? <div className="tunes-selection" role="group" aria-label="Selected phrase">
+          <span><strong>{selectedPhrase.where}</strong><small>Playing order {selectedPhrase.from + 1}–{selectedPhrase.to + 1}</small></span>
+          <button type="button" aria-pressed={looping} onClick={() => { stop(); setLooping((value) => !value); }}><Glyph name="sync" size={16} />Loop</button>
+          <button type="button" onClick={() => practice(selectedPhrase.id)}><Glyph name="play" size={16} />Practise phrase</button>
+          <button type="button" onClick={() => practice(`rhythm:${selectedPhrase.id}`)}><Glyph name="free" size={16} />Rhythm on one note</button>
+          <button type="button" aria-label="Clear phrase selection" onClick={() => { stop(); setRange(null); setLooping(false); }}><Glyph name="close" size={15} /></button>
+        </div> : null}
         </div>
         {soundOpen ? <div id="song-sound" className="tunes-sound" aria-label="Playback options">
           <div className="tunes-tempo" role="group" aria-label="Playback tempo"><button type="button" aria-label="Slower" onClick={() => setBpm((value) => Math.max(30, value - 5))}>−</button><span>{bpm} bpm</span><button type="button" aria-label="Faster" onClick={() => setBpm((value) => Math.min(240, value + 5))}>+</button></div>
@@ -656,13 +663,7 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
           <div className="tunes-score-caption"><Glyph name="melody" size={15} /><span>Choose a bar to hear or practise its phrase</span></div>
           <Score exercise={sheet} activeStep={activeTarget?.notes[0] ?? -1} activeNotes={activeTarget?.notes ?? []} results={NO_RESULTS} showFingering={showFingering} autoScroll onBarClick={onBarClick} marked={marked} playingBar={playingBar} />
         </section>
-        {selectedPhrase ? <div className="tunes-selection" role="group" aria-label="Selected phrase">
-          <span><strong>{selectedPhrase.where}</strong><small>Playing order {selectedPhrase.from + 1}–{selectedPhrase.to + 1}</small></span>
-          <button type="button" aria-pressed={looping} onClick={() => { stop(); setLooping((value) => !value); }}><Glyph name="sync" size={16} />Loop</button>
-          <button type="button" onClick={() => practice(selectedPhrase.id)}><Glyph name="play" size={16} />Practise phrase</button>
-          <button type="button" onClick={() => practice(`rhythm:${selectedPhrase.id}`)}><Glyph name="free" size={16} />Rhythm on one note</button>
-          <button type="button" aria-label="Clear phrase selection" onClick={() => { stop(); setRange(null); setLooping(false); }}><Glyph name="close" size={15} /></button>
-        </div> : null}
+
         {phrases.length ? <section className="tunes-phrases" aria-labelledby="song-phrases-title">
           <h3 id="song-phrases-title">Phrases</h3>
           <div>{phrases.map((card) => <button type="button" key={card.id} aria-pressed={selectedPhrase?.id === card.id} onClick={() => { stop(); setRange({ start: card.from, end: card.to }); }} aria-label={`Select ${card.where}`}><span>{card.where}</span><Glyph name="arrow" size={14} /></button>)}</div>

@@ -163,7 +163,8 @@
 
 @media (max-width: 960px) {
   .topbar { gap: 0; }
-  .brand { padding-bottom: 5px; }
+  .brand { min-height: 66px; min-width: 0; max-width: calc(100% - 100px); flex-shrink: 1; padding-bottom: 5px; }
+  .brand-mark { flex-shrink: 0; }
   .tabs { flex-basis: 100%; margin-left: 0; gap: 28px; }
   .tabs button { min-height: 48px; }
 }

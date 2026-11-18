@@ -1,6 +1,6 @@
 # Current state
 
-Updated **2026-11-18** after the first SOL implementation slices. See [SOL_IMPLEMENTATION.md](SOL_IMPLEMENTATION.md)
+Updated **2026-11-18** after the first SOL implementation slices and browser review. See [SOL_IMPLEMENTATION.md](SOL_IMPLEMENTATION.md)
 for delivered boundaries and remaining product work.
 This is the authoritative description of what exists, what is only partly built, and what is
 broken. Update it when a feature's status changes; wishes belong in [BACKLOG.md](BACKLOG.md).
@@ -16,10 +16,10 @@ broken. Update it when a feature's status changes; wishes belong in [BACKLOG.md]
 
 | Check | Result | Detail |
 | --- | --- | --- |
-| `make check` | **PASS** | Typecheck, repository map freshness and 30 suites / 353 tests passed. |
+| `make check` | **PASS** | Typecheck, repository map freshness and 30 suites / 354 tests passed. |
 | `npm run build:quiet` | **PASS** | Production build passed; Vite retains its existing >500 kB chunk-size warning. |
 | Focused iteration checks | **PASS** | Typecheck plus storage, goal/planner, session trust, recording, platform, scheduler, archive and mounted score-browsing suites passed while integrating. Full gate below supersedes individual iteration counts. |
-| Current browser preview | **BLOCKED** | Approved `127.0.0.1:5173` showed a stale blank cached shell after refresh. Automatic approval review denied the alternate `localhost:5173` origin because existing authorization covered only `127.0.0.1`; a new browser grant was requested. Current layout/interaction has not been visually verified. Earlier browser results describe a prior tree. |
+| Current browser preview | **PASS, bounded** | Reviewed the development app at authorized `localhost:5173` in the in-app browser at 320×844, 390×844 and 1440×1000. First Listen, score phrase selection, exact-phrase launch, self-guided entry/exit, saved accompaniment goal/Next/Progress, Tools entry and metronome count-in/pulse/subdivision/stop worked. No console warnings/errors observed. This is viewport emulation, not a physical phone or instrument test. |
 | Offline shell / physical sync | **Code-verified; runtime-unverified** | Worker generation includes local fonts/lazy assets. Actual phone HTTPS, install/offline/update, cross-network/TURN and active-window handoff remain unverified. |
 | Audio / mic / devices | **Runtime-unverified** | No physical guitar, routing, reconnect, audible balance, recording, tuner, microphone scoring or audio/visual alignment was tested. See [SUPPORTED_SETUPS.md](SUPPORTED_SETUPS.md), whose outcomes remain NOT RUN. |
 
@@ -53,6 +53,14 @@ restore acquire the same exclusive origin-scoped Web Lock before mounting writer
 waits for async saves and pending recovery; unsupported browsers keep browsing but cannot start
 protected operations. Hardware and installed-window behavior still require the
 [declared setup checks](SUPPORTED_SETUPS.md).
+
+The browser review fixed overlapping Tools/Devices phone targets and moved selected-phrase
+actions into the sticky score transport, where selecting a bar exposes them immediately. Tools
+uses the same quiet typography/palette as browsing with a larger centered metronome pulse.
+An initial unconfirmed busy lock now stays in Checking while a previous local owner finishes;
+the review no longer showed a false claim that another window was practising. Real multi-window
+handoff remains a separate hardware/lifecycle check. Progress recording playback still uses native
+audio controls and does not yet have played-guitar transport actions.
 
 ## SOL delivery: goals, evidence and recovery (2026-11-18)
 
@@ -107,8 +115,9 @@ selectable fallback. It describes the actual importer convention and standard-tu
 automatically sent to another service, and no acquisition converter is part of the app.
 
 MusicXML parser tests verify both demo identities, melody range, bar duration, harmony,
-accompaniment and repeated playback order. Actual first-use rendering, audible balance, clipboard
-and download behavior remain runtime-unverified in this pass: the browser connector was unavailable.
+accompaniment and repeated playback order. First-use Blue Hour Listen and score rendering were
+exercised in the browser without a microphone prompt. Audible balance, clipboard and download
+behavior remain runtime-unverified in this pass.
 
 ## Agent-ready practice brief (2026-11-18)
 

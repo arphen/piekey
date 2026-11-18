@@ -131,7 +131,7 @@ export default function App() {
                 </button>
               ))}
             </nav>
-            <button type="button" className="device-sync-trigger" onClick={() => { setDevicesOpen(false); setToolsOpen(true); }} aria-label="Guitar tools"><Glyph name="tools" size={19} /><span>Tools</span></button>
+            <button type="button" className="device-sync-trigger guitar-tools-trigger" onClick={() => { setDevicesOpen(false); setToolsOpen(true); }} aria-label="Guitar tools"><Glyph name="tools" size={19} /><span>Tools</span></button>
             <DeviceSync open={devicesOpen} onOpenChange={(open) => { setToolsOpen(false); setDevicesOpen(open); }} onUpdated={refreshState} />
           </header>
 

@@ -1,4 +1,4 @@
-.device-sync-trigger { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding: 0; margin-left: auto; background: none; border: 0; color: var(--ink-soft); font: 400 11px var(--font-ui); }
+.device-sync-trigger { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-width: 44px; min-height: 44px; padding: 0; margin-left: auto; background: none; border: 0; color: var(--ink-soft); font: 400 11px var(--font-ui); }
 .device-sync-trigger:hover { color: var(--ink); }
 .device-sync-placeholder { min-height: calc(100dvh - var(--topbar-h, 92px)); }
 .device-sync-loading { position: fixed; right: 20px; top: 74px; z-index: 80; color: var(--ink-soft); background: var(--bg); padding: 12px; }
@@ -60,7 +60,7 @@
 .device-sync-join p { max-width: 32ch; color: #b1b5a8; font-size: 12px; }
 .device-sync-dialog .device-sync-primary { background: #d4bf8f; padding: 0 16px; color: #171a17; }
 @keyframes device-spin { to { transform: rotate(360deg); } }
-@media (max-width: 960px) { .device-sync-trigger { position: absolute; top: 12px; right: 20px; } .device-sync-trigger span { display: none; } }
+@media (max-width: 960px) { .device-sync-trigger { position: absolute; top: 12px; right: 20px; } .topbar .guitar-tools-trigger { right: 68px; } .device-sync-trigger span { display: none; } }
 @media (max-width: 500px) { .device-sync-trigger { top: 6px; } }
 @media (max-width: 480px) { .device-sync-dialog { margin: auto auto 12px; padding: 23px 22px 18px; max-height: calc(100dvh - 24px); } }
 @media (prefers-reduced-motion: reduce) { .device-sync-progress svg { animation: none; } }
