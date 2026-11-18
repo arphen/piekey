@@ -1,6 +1,6 @@
 # Current state
 
-Updated **2026-11-18** after the score-centered Song, manual device exchange and offline-shell work.
+Updated **2026-11-18** after the demo repertoire, agent handoff and relative-timing work.
 This is the authoritative description of what exists, what is only partly built, and what is
 broken. Update it when a feature's status changes; wishes belong in [BACKLOG.md](BACKLOG.md).
 
@@ -15,7 +15,7 @@ broken. Update it when a feature's status changes; wishes belong in [BACKLOG.md]
 
 | Check | Result | Detail |
 | --- | --- | --- |
-| `make check` | **PASS** | Final gate: typecheck, current repository map and 25 suites / 300 tests passing. |
+| `make check` | **PASS** | Final gate: typecheck, current repository map and 25 suites / 304 tests passing. |
 | `npm run build:quiet` | **PASS** | Final production build passed with Vite's existing >500 kB chunk-size warning. |
 | `sync.test.ts` + `storage.test.ts` | **PASS** | 16 focused cases cover deterministic merges, counters, reset generations, schemas, outbox replay, quota recovery, library persistence and backup restore. Included in the final full gate. |
 | `make test-file FILE=src/__tests__/sync-transport.test.ts` | **PASS** | 6 focused cases: actual WebCrypto over mocked signaling/raw datachannels, one invitation, Unicode/chunked audio, remembered reconnect, bounds/expiry, replay/tamper, cancellation and custom broker/TURN configuration. No real rendezvous/network used. |
@@ -54,6 +54,62 @@ key selector and Roman toggle went with the Practice tab.
 The header's Devices dialog performs occasional transfers. `App` unmounts the current feature
 while it is open, stopping listening/ear hooks, and remounts persisted projections on close.
 Opening it during a full-screen practice session is blocked. It does not add another practice engine.
+
+## Demo repertoire and first use (2026-11-18)
+
+Two original studies are bundled in `tunes/demos.ts`: First Steps retains its existing stable ID;
+Blue Hour is a 12-bar C jazz blues at 76 BPM, with short phrases, rests, even eighths, a turnaround
+and a separate sustained-chord accompaniment part. Its downloadable MusicXML includes provenance
+and AGPL terms; see [ASSETS.md](../ASSETS.md).
+
+An empty Tutor previews Blue Hour, lets the visitor choose First Steps, and opens its score or
+practice without finding a file. Song's empty state and always-reachable Library demo shelf offer
+Listen, Open score, Practice and score download. Opening a demo saves a missing entry before launch
+and reuses an existing entry without overwriting user edits/progress. Audio/fullscreen preparation
+occurs in the originating practice gesture; demo Listen unlocks shared audio before asynchronous
+saving and waits for the matching rendered score. Listen does not request microphone access.
+
+Song also has an expandable **Create a score with your agent** prompt, with clipboard feedback and
+selectable fallback. It describes the actual importer convention and standard-tuning boundary;
+[CREATE_A_SCORE.md](CREATE_A_SCORE.md) explains verification and private sources. No score/source is
+automatically sent to another service, and no acquisition converter is part of the app.
+
+MusicXML parser tests verify both demo identities, melody range, bar duration, harmony,
+accompaniment and repeated playback order. Actual first-use rendering, audible balance, clipboard
+and download behavior remain runtime-unverified in this pass: the browser connector was unavailable.
+
+## Agent-ready practice brief (2026-11-18)
+
+**Song → Library → Library tools → Practice brief** generates a previewable JSON snapshot for
+explicit Copy/Download. `agent/brief.ts` is a pure versioned projection: a bounded material list,
+28-day saved practice summary, observed note/timing counts, selected tune and demonstrated clean
+tempos. Its reporting window uses stored local calendar days. Missing measurements remain null;
+assistance/detection confidence that was not captured remains unknown. Definitions distinguish
+reference alignment, within-attempt timing scatter, scheduling and musical ability.
+
+It excludes score XML, audio, raw attempts, device/calibration settings, pairing secrets and the
+transaction journal. No agent service, API key, inbound plan execution or private-data endpoint
+is added. `public/llms.txt` describes capabilities and boundaries; external agents need an explicit
+user-provided export to discuss private progress. One focused existing overview-suite case covers
+empty evidence, window bounds, demonstrated-versus-suggested tempo, event deduplication and excluded
+data. Browser clipboard/download behavior remains unverified.
+
+## Relative timing and alignment (2026-11-18)
+
+Timed sessions and Free play separate steady pulse from constant early/late alignment. A temporary,
+bounded phase fit uses distinct attacks, coverage, scatter and drift; it does not move playback,
+change the visible audio-clock pulse or overwrite calibration. Its phase bound is the smallest of
+200 ms, 30% of a beat and 45% of nearby attack spacing, with tighter residual tolerance for fast
+subdivisions. Raw offsets remain in evidence and appear neutrally as alignment; progression and
+warmth use steadiness. Profile timing scores no longer penalize constant mean displacement or name
+it rushing/dragging. Legacy evidence/enums remain readable.
+
+Free play requires at least six distinct contiguous subdivision attacks and checks phase movement
+between reading windows. Missing/duplicate attacks, ambiguous phases, irregularity and accumulating
+drift cannot earn a rise. Adjacent timed targets have disjoint attack ownership. Focused existing
+tests cover symmetric fixed offsets, drift, sparse/duplicate evidence and profile semantics.
+Physical guitar timing and latency remain unverified; play-along compensation still includes the
+player's reference behavior and is not an independent hardware-latency measurement.
 
 ## Tutor layer (2026-11-17)
 

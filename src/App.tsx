@@ -86,9 +86,9 @@ export default function App() {
     setTab("tunes");
   }, []);
 
-  const startPractice = useCallback((tuneId: string, cardId?: string) => {
+  const startPractice = useCallback((tuneId: string, cardId?: string, prepared = false) => {
     saveCurrentTuneId(tuneId);
-    openPractice(input);
+    if (!prepared) openPractice(input);
     setLaunch({ kind: cardId ? "card" : "session", tuneId, cardId });
     setTab("tunes");
   }, [input]);
@@ -129,7 +129,7 @@ export default function App() {
           <SaveNotice />
 
           {devicesOpen ? <main className="device-sync-placeholder" aria-hidden="true" /> : tab === "tutor" ? (
-            <OverviewView key={stateRevision} onOpenMode={openMode} onOpenSong={openSong} onStartPractice={startPractice} />
+            <OverviewView key={stateRevision} onOpenMode={openMode} onOpenSong={openSong} onStartPractice={startPractice} onPreparePractice={() => openPractice(input)} />
           ) : tab === "tunes" ? (
             <TuneView key={stateRevision} input={input} launch={launch} onLaunched={launched} />
           ) : tab === "free" ? (

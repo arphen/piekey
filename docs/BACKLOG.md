@@ -56,6 +56,14 @@ Unless an item says otherwise, implement it there.
 
 ## Recommended next steps
 
+**Demo/agent/timing update (2026-11-18):** original Blue Hour and First Steps are accessible from
+the empty Tutor and Song's persistent demo shelf, with direct listening/practice and XML download.
+A score-creation prompt and explicit read-only practice-brief export bridge to a user's own agent.
+T16/T21 timing now separates bounded constant alignment from scatter/drift in timed passes and
+Free play; phase alone does not penalize the profile or tempo. Raw evidence/calibration remain
+unchanged. Browser/audio/physical timing verification remains open. The broader proposal is
+[SOL_OPINION.md](../SOL_OPINION.md); its unimplemented ideas do not change this backlog's status.
+
 **Reliability update (2026-11-18):** direct daily-session/card entry and standalone Free play are
 built. Import now previews part/voice and handles forward/backup timing, durable identities,
 duplicates and explicit replacement. Large XML migrates safely to IndexedDB; save failures are

@@ -43,6 +43,25 @@ lead-sheet harmony/spelling layer. Do not fork note-name or spelling logic; reus
 Score acquisition/conversion utilities live in separate local projects. The app accepts user-imported
 MusicXML through `src/tunes/musicxml.ts`; conversion tools have no runtime or build role here.
 
+`tunes/demos.ts` catalogs bundled original scores with stable `TuneEntry` identities. The existing
+First Steps ID is preserved; Blue Hour imports its MusicXML source as a raw build asset. Opening a
+demo goes through the same durable library/parser/session boundaries as personal music and never
+overwrites an existing entry merely to restore a demo. Shared audio is primed in the originating
+gesture before asynchronous save/selection; pending demo playback is tied to that selected score.
+
+`agent/brief.ts` is a pure, versioned, bounded projection for user-initiated export. `TuneView`
+collects saved material metadata/stores, displays the generated JSON, and only copies/downloads
+after explicit user actions. The projection whitelists observed metrics and definitions; no raw
+score, recording, settings or journal dump crosses this boundary. It changes no practice result.
+`public/llms.txt` documents capabilities without exposing browser-local data. The separate
+`tunes/agentPrompt.ts` is user-copyable source-creation guidance, not a live agent integration.
+
+Temporary timing alignment is fitted by `tunes/scoring.ts` and reused by Free play. Timed matching
+keeps adjacent attacks disjoint; readiness distinguishes bounded phase, residual scatter and drift.
+Free play also verifies distinct contiguous grid cells and successive-window alignment. Raw offsets
+remain evidence; temporary alignment is not persisted as calibration or applied to the audio clock.
+Profiles report timing consistency without interpreting constant reference phase as a habit.
+
 ## Two tune models, and why they exist
 
 This is the main source of conceptual duplication.

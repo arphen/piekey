@@ -190,6 +190,7 @@ function renderNavigation() {
     "- `src/song/` — song/coach domain: harmony, cues, deck, fingering, Leitner review, lines, notation, voicings, session/follower hooks.",
     "- `src/tunes/` — MusicXML import/preview/unzip/order, durable library identities, IndexedDB score storage, backups, scoring and playback.",
     "- `src/storage.ts` — visible browser-save failures, pending writes and retry/read-through helpers.",
+    "- `src/agent/` — pure, bounded practice-brief projection for explicit user export to an external agent.",
     "- `src/ear/` — ear-training engine, library, theory and session hook.",
     "- `src/listen/` — microphone input, pitch/spectrum analysis, calibration.",
     "- `src/follow/` — own-pace melody follower and hook.",

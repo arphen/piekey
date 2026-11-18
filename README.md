@@ -10,7 +10,8 @@ Source repository: [arphen/piekey](https://github.com/arphen/piekey).
 - **Tutor** — the default entrypoint. Shows the current song, a mixed three-exercise queue, the
   practice modes, and the next three units for every song in the library. Songs are read from the
   same deck/box data as the full-screen session. Start today's practice directly or open a specific
-  exercise. **Try a starter tune** adds the original eight-bar First Steps study.
+  exercise. An empty library previews the original Blue Hour jazz study, with First Steps as a
+  gentler alternative. Open the score or try practice without finding a file first.
 - **Changes** — the current tune's own chord and harmony cards, run as a focused full-screen session.
 - **Reading** — the tune's reading cards (fresh notes from its range each day) as a focused full-screen session.
 - **Song** (the Tunes tab) — a score-centered page for browsing MusicXML, listening to the melody
@@ -30,13 +31,31 @@ in IndexedDB. Optional device pairing uses a signaling service to establish an e
 Score imports are parsed and saved in the browser, without uploading them to the static host.
 The library persists across browser restarts; clearing the site's browser data removes it.
 Imported scores are browser data, separate from this source repository and its production build.
-The app includes the original First Steps study; users import their own MusicXML repertoire.
+The app includes two original studies: **Blue Hour**, a 12-bar C jazz blues with accompaniment,
+and **First Steps**, an eight-bar C major melody. They remain available from Song's Library,
+including after importing personal tunes. Listen, open the score, start practice, or download
+their MusicXML. Reopening a demo preserves its existing library identity and progress.
+Users can also import their own MusicXML repertoire. **Create a score with your agent** provides
+a copyable prompt for an original study or a source they specify; see
+[the score-creation guide](docs/CREATE_A_SCORE.md). The app does not send sources to an agent.
 Score acquisition/conversion utilities are maintained as separate local projects.
 Song includes an import preview with part/voice selection and explicit score replacement. Use
 **Devices → Save file** for a `.fretpack` containing tunes, practice history, settings and recordings.
 Importing a transfer merges its immutable transactions; repeated imports do not count practice twice.
 Song's older JSON practice backup remains available under Library tools and excludes recordings.
 Save failures remain visible and unsaved practice writes can be retried or exported.
+
+## With your own agent
+
+In **Song → Library → Library tools → Practice brief**, generate a saved-state JSON report,
+preview it, then copy or download it to share with your chosen agent. The bounded report includes
+recent practice counts, observed notes/timing and demonstrated clean tempos with definitions and
+explicit unknowns. It excludes score XML, audio, hardware/calibration settings, pairing secrets and
+the transaction journal. Nothing is automatically sent to an LLM; generating a brief changes no
+practice state. A public `llms.txt` describes the capabilities and boundaries for external agents.
+
+The app remains guitar-first. The brief supports a conversation about goals and next steps;
+there is no agent control API or automatic plan execution.
 
 ## Devices and full transfers
 
@@ -100,6 +119,8 @@ make check       # handoff gate: typecheck + repo-map freshness + tests
 
 ## Documentation
 
+- [docs/CREATE_A_SCORE.md](docs/CREATE_A_SCORE.md) — using your chosen agent to prepare a personal
+  MusicXML score, with import and musical verification guidance.
 - [docs/CURRENT_STATE.md](docs/CURRENT_STATE.md) — verified snapshot of what is implemented,
   partially implemented and unfinished, plus storage keys, health status and cleanup candidates.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — layers, tune/session models, data flow,

@@ -14,6 +14,7 @@ Regenerate with `make map-update`; verify with `make map-check`.
 - `src/song/` — song/coach domain: harmony, cues, deck, fingering, Leitner review, lines, notation, voicings, session/follower hooks.
 - `src/tunes/` — MusicXML import/preview/unzip/order, durable library identities, IndexedDB score storage, backups, scoring and playback.
 - `src/storage.ts` — visible browser-save failures, pending writes and retry/read-through helpers.
+- `src/agent/` — pure, bounded practice-brief projection for explicit user export to an external agent.
 - `src/ear/` — ear-training engine, library, theory and session hook.
 - `src/listen/` — microphone input, pitch/spectrum analysis, calibration.
 - `src/follow/` — own-pace melody follower and hook.
@@ -53,6 +54,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 
 - `docs/ARCHITECTURE.md`
 - `docs/BACKLOG.md`
+- `docs/CREATE_A_SCORE.md`
 - `docs/CURRENT_STATE.md`
 - `docs/PRACTICE_SESSION.md`
 - `docs/tutor/01-student-model.md`
@@ -117,6 +119,10 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `notices/runtime/webrtc-adapter-9.0.6/LICENSE.md`
 - `notices/runtime/webrtc-adapter-9.0.6/SOURCE_NOTICES.txt`
 
+## public
+
+- `public/llms.txt`
+
 ## scripts
 
 - `scripts/generate-repo-map.mjs`
@@ -149,6 +155,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/__tests__/sync.test.ts`
 - `src/__tests__/tones.test.ts`
 - `src/__tests__/tutor.test.ts`
+- `src/agent/brief.ts` — `BriefMaterial:4`, `PracticeBriefInput:10`, `PracticeBrief:50`, `buildPracticeBrief:154`
 - `src/audio/backing.ts` — `BackingKind:5`, `BackingEvent:7`, `compVoicing:39`, `generateBacking:52`
 - `src/audio/context.ts` — `ensureAudio:14`
 - `src/audio/demo.ts` — `DEMO_BPM:10`, `DemoPlayback:57`, `playDemo:66`, `demoNow:117`
@@ -188,7 +195,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/components/SkillTree.tsx` — `SkillTree:18`
 - `src/components/SongCoach.tsx` — `openPractice:219`, `SongCoach:301`
 - `src/components/Transport.tsx` — `Transport:18`
-- `src/components/TuneView.tsx` — `TuneView:35`
+- `src/components/TuneView.tsx` — `TuneView:40`
 - `src/components/UnitCard.tsx` — `UnitCard:21`
 - `src/components/keyContext.ts` — `KeyContext:4`, `useKey:6`, `RomanContext:13`
 - `src/core/contract.ts` — `ParentScaleId:10`, `ParentScale:12`, `KeyInfo:22`, `ChordInBar:29`, `Bar:40`, `Tune:46`, `HarmonyLevel:53`, `PositionId:57`, `Position:58`, `NoteRole:68`, `FretNote:75`, `PatternId:87`, `PatternStep:89`, `Mix:114`, `PlayerState:121`, `PlayerApi:135` (+14 more)
@@ -274,11 +281,15 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/sync/state.ts` — `MergeResult:7`, `SyncConflict:7`, `SyncSnapshot:7`, `SyncTransaction:7`, `parseSyncSnapshot:8`, `flushSyncJournal:9`, `getSyncState:9`, `subscribeSyncState:9`, `initializeSyncJournal:15`, `captureSnapshot:29`, `mergeSnapshot:90`
 - `src/sync/sync.css`
 - `src/sync/transport.ts` — `PairedDevice:3`, `PairInvite:10`, `SyncConnection:18`, `SyncTransportOptions:29`, `SyncTransport:42`, `syncNetworkConfig:51`, `encodePairInvite:149`, `decodePairInvite:153`, `createSyncTransport:458`
+- `src/tunes/agentPrompt.ts` — `MUSICXML_AGENT_PROMPT:2`
 - `src/tunes/backup.ts` — `PracticeBackup:8`, `createBackup:74`, `parseBackup:90`, `restoreBackup:118`
 - `src/tunes/chordName.ts` — `nameVoicing:31`
 - `src/tunes/database.ts` — `writeTuneXml:17`, `readTuneXml:31`
+- `src/tunes/demos.ts` — `DemoTune:5`, `BLUE_HOUR_ENTRY:12`, `DEMO_TUNES:19`
+- `src/tunes/demos/blue-hour.musicxml`
 - `src/tunes/learn.ts` — `StepKind:11`, `Step:13`, `buildPlan:28`, `melodyOverChords:165`, `chordLandings:188`
 - `src/tunes/library.ts` — `TuneEntry:9`, `LARGE_TUNE_CHARS:25`, `isLibraryBusy:31`, `subscribeLibraryOperations:32`, `withLibraryOperation:38`, `readStored:48`, `writeStored:57`, `loadLibrary:75`, `loadLibraryAsync:82`, `saveLibrary:103`, `newTuneId:143`, `sameTuneContent:149`, `parseTuneEntry:159`, `loadCurrentTuneId:163`, `saveCurrentTuneId:168`, `hasOldLibrary:172`
+- `src/tunes/musicxml-assets.d.ts`
 - `src/tunes/musicxml.ts` — `CompEvent:11`, `LeadSheet:18`, `MusicXmlOptions:32`, `MusicXmlPart:37`, `MusicXmlSource:44`, `parseMusicXml:284`, `loadTuneFile:600`
 - `src/tunes/order.ts` — `Slot:8`, `Target:17`, `Voice:30`, `Timeline:36`, `playOrder:48`, `buildTimeline:128`, `slotOfBar:172`, `firstTargetAt:177`, `printedResults:186`
 - `src/tunes/scoring.ts` — `matchesPitch:4`, `PitchSample:7`, `PitchWindow:13`, `judgePitch:29`, `TimingFit:51`, `fitTiming:59`, `timingTolerance:73`, `timingPhaseLimit:75`, `assessTiming:78`, `timingReady:91`

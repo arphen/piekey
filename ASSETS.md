@@ -8,6 +8,7 @@ Project-owned code, documentation, original music and visual assets are licensed
 | `src/assets/water-texture.webp`, `src/assets/leaf-texture.webp` | Derived from original photographs owned by the project owner. | AGPL-3.0-only, included with the project. |
 | `public/icon.svg` and its PNG exports | Original project fretboard icon. | AGPL-3.0-only. |
 | First Steps in `src/tunes/starter.ts` | Original eight-bar C major study written for this app. | AGPL-3.0-only. |
+| Blue Hour in `src/tunes/demos/blue-hour.musicxml` | Original 12-bar C jazz-blues melody and guitar chord accompaniment composed for this app; no third-party transcription or arrangement. | AGPL-3.0-only, including the downloadable score. |
 | Classical/traditional melodies in `src/song/reading.ts` | Public-domain melodies, represented by the project's scale-degree/rhythm encoding. | The project encoding is AGPL-3.0-only; the underlying public-domain music remains public domain. |
 
 Third-party libraries and fonts retain their original licenses. See

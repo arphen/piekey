@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { sameTuneContent } from "../tunes/library";
+import { buildDeck } from "../song/deck";
+import { BLUE_HOUR_ENTRY, DEMO_TUNES } from "../tunes/demos";
+import { parseTuneEntry, sameTuneContent } from "../tunes/library";
 import { loadTuneFile, parseMusicXml } from "../tunes/musicxml";
 import { buildTimeline } from "../tunes/order";
 
@@ -43,6 +45,50 @@ function archive(entries: [string, string][]): ArrayBuffer {
 }
 
 describe("MusicXML interpreted for practice", () => {
+  it("imports the bundled jazz study with complete bars, sounding guitar pitches and a repeated chorus", () => {
+    const sheet = parseTuneEntry(BLUE_HOUR_ENTRY);
+    expect(sheet).toMatchObject({ id: "demo-blue-hour-v1", title: "Blue Hour", composer: "Fretboard Focus Lab", tempo: 76, keySignature: "C" });
+    expect(sheet.source).toMatchObject({ partId: "P1", partName: "Guitar", voice: "1", range: [48, 60], hasChords: true, warnings: [] });
+    expect(sheet.bars).toHaveLength(12);
+    for (const bar of sheet.bars) {
+      expect(bar.beats).toBe(4);
+      expect(bar.notes.reduce((beats, n) => beats + n.durationBeats, 0)).toBe(4);
+    }
+    expect(sheet.bars[0].notes[0].rest).toBe(true);
+    expect(sheet.bars[10].chordSymbols).toEqual(["C7", "Dm7"]);
+    expect(sheet.bars[10].chordBeats).toEqual([0, 2]);
+    expect(sheet.bars[11].chordSymbols).toEqual(["G7", "C7"]);
+    expect(sheet.comp).toHaveLength(14);
+    for (let bar = 0; bar < 12; bar++) expect(sheet.comp.filter((chord) => chord.bar === bar).reduce((beats, chord) => beats + chord.dur, 0)).toBe(4);
+    expect(sheet.comp.filter((chord) => chord.bar >= 10)).toEqual([
+      { bar: 10, beat: 0, dur: 2, midis: [48, 52, 58] },
+      { bar: 10, beat: 2, dur: 2, midis: [50, 53, 60] },
+      { bar: 11, beat: 0, dur: 2, midis: [43, 47, 53] },
+      { bar: 11, beat: 2, dur: 2, midis: [48, 52, 58] },
+    ]);
+    const tl = buildTimeline(sheet);
+    expect(tl.slots).toHaveLength(24);
+    expect(tl.total).toBe(96);
+    expect(tl.comp).toHaveLength(28);
+    expect(tl.comp.slice(0, 14)).toEqual(tl.comp.slice(14).map((chord) => ({ ...chord, t: chord.t - 48 })));
+    expect(tl.targets.filter((target) => target.slot < 12).map((target) => [target.midi, target.t, target.dur]))
+      .toEqual(tl.targets.filter((target) => target.slot >= 12).map((target) => [target.midi, target.t - 48, target.dur]));
+  });
+
+  it("turns each downloadable demo into melody, harmony and listening practice", () => {
+    for (const demo of DEMO_TUNES) {
+      const sheet = parseTuneEntry(demo.entry);
+      const deck = buildDeck(sheet, buildTimeline(sheet));
+      const families = new Set(deck.cards.map((card) => card.family));
+      for (const family of ["melody", "chords", "harmony", "ear", "reading"]) expect(families.has(family as typeof deck.cards[number]["family"])).toBe(true);
+      expect(deck.cards.some((card) => card.run)).toBe(true);
+      for (const card of deck.cards) {
+        expect(card.last).toBeGreaterThanOrEqual(card.first);
+        expect(card.tl.targets.slice(card.first, card.last + 1).every((target) => Number.isFinite(target.midi) && target.dur > 0)).toBe(true);
+      }
+    }
+  });
+
   it("keeps leading and internal silence in the score and scoring timeline", () => {
     const sheet = parseMusicXml(score(`<measure number="1">${attributes}${note("C")}<forward><duration>2</duration></forward>${note("D")}</measure><measure number="2"><forward><duration>2</duration></forward>${note("C", 2)}</measure>`));
     expect(sheet.bars[0].beats).toBe(4);

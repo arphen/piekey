@@ -10,7 +10,7 @@ import { pickGlobalUnits } from "../overview/summary";
 import { useSongSummaries } from "../overview/useSongSummaries";
 import { relativeDay } from "../overview/visual";
 import { loadLibraryAsync, parseTuneEntry, saveLibrary } from "../tunes/library";
-import { STARTER_ENTRY } from "../tunes/starter";
+import { BLUE_HOUR_ENTRY, DEMO_TUNES } from "../tunes/demos";
 import { Glyph } from "./Glyph";
 import { UnitCard } from "./UnitCard";
 import { Score } from "./Score";
@@ -133,7 +133,7 @@ function EmptyLibrary({ onOpen }: { onOpen: () => void }) {
     <div className="tutor-empty">
       <Glyph name="library" size={26} />
       <div>
-        <strong>No tunes yet</strong>
+        <strong>Your own music</strong>
         <p>MusicXML · .xml · .mxl</p>
       </div>
       <button type="button" className="tutor-primary" onClick={onOpen}>
@@ -147,33 +147,43 @@ export function OverviewView({
   onOpenMode,
   onOpenSong,
   onStartPractice,
+  onPreparePractice,
 }: {
   onOpenMode: (target: TutorTargetTab) => void;
   onOpenSong: (tuneId: string) => void;
-  onStartPractice: (tuneId: string, cardId?: string) => void;
+  onStartPractice: (tuneId: string, cardId?: string, prepared?: boolean) => void;
+  onPreparePractice?: () => void;
 }) {
   const { songs, currentTuneId, loading, error } = useSongSummaries();
   const [showAll, setShowAll] = useState(false);
   const [starting, setStarting] = useState(false);
+  const demoBusy = useRef(false);
+  const [demoId, setDemoId] = useState(BLUE_HOUR_ENTRY.id);
+  const demo = DEMO_TUNES.find((item) => item.entry.id === demoId) ?? DEMO_TUNES[0];
   const current = songs.find((song) => song.tuneId === currentTuneId) ?? songs[0] ?? null;
   const mixed = pickGlobalUnits(songs, current?.tuneId ?? null, 3);
   const visibleSongs = showAll ? songs : songs.slice(0, SONG_LIMIT);
   const day = today();
-  const example = useMemo(() => !current && !loading && !error ? parseTuneEntry(STARTER_ENTRY) : null, [current, loading, error]);
+  const example = useMemo(() => !current && !loading && !error ? parseTuneEntry(demo.entry) : null, [current, loading, error, demo]);
   const excerpt = current?.excerpt ?? (example ? { bars: example.bars.slice(0, 2), keySignature: example.keySignature, timeSignature: example.timeSignature } : null);
   const title = current?.title ?? example?.title ?? (loading ? "Loading…" : "Library unavailable");
   const key = current?.key ?? example?.keySignature;
   const tempo = current?.tempo ?? example?.tempo;
   const barCount = current?.barCount ?? example?.bars.length;
-  const starter = async () => {
+  const openDemo = async (practice: boolean) => {
+    if (demoBusy.current) return;
+    demoBusy.current = true;
+    if (practice) onPreparePractice?.();
     setStarting(true);
     try {
       const entries = await loadLibraryAsync();
-      if (!entries.some((entry) => entry.id === STARTER_ENTRY.id) && !await saveLibrary([...entries, STARTER_ENTRY])) return;
-      onStartPractice(STARTER_ENTRY.id);
+      if (!entries.some((entry) => entry.id === demo.entry.id) && !await saveLibrary([...entries, demo.entry])) return;
+      if (practice) onStartPractice(demo.entry.id, undefined, Boolean(onPreparePractice));
+      else onOpenSong(demo.entry.id);
     } catch {
       // The shared save notice reports the error and preserves the current library.
     } finally {
+      demoBusy.current = false;
       setStarting(false);
     }
   };
@@ -182,7 +192,7 @@ export function OverviewView({
     <main className="tutor">
       <header className="tutor-hero">
         <div className="tutor-hero-copy">
-          <p className="tutor-eyebrow">{current ? "Practice" : "Guitar study"}</p>
+          <p className="tutor-eyebrow">{current ? "Practice" : demo.label}</p>
           <h2>{title}</h2>
           <div className="tutor-tune-meta">
             {key ? <span>{key}</span> : null}
@@ -191,18 +201,24 @@ export function OverviewView({
             {barCount ? <span>{barCount} bars</span> : null}
           </div>
           {current?.composer ? <p className="tutor-composer">{current.composer}</p> : null}
+          {!current && !loading && !error ? <>
+            <p className="tutor-demo-description">{demo.description}</p>
+            <div className="tutor-demo-choices" role="group" aria-label="Try an original study">
+              {DEMO_TUNES.map((item) => <button key={item.entry.id} type="button" aria-pressed={demoId === item.entry.id} disabled={starting} onClick={() => setDemoId(item.entry.id)}>{item.title}</button>)}
+            </div>
+          </> : null}
           {error ? <p className="tutor-error" role="alert">{error}</p> : null}
           <div className="tutor-actions">
             <button
               type="button"
               className="tutor-primary"
               disabled={loading || starting || Boolean(error)}
-              onClick={() => current ? onStartPractice(current.tuneId) : void starter()}
+              onClick={() => current ? onStartPractice(current.tuneId) : void openDemo(true)}
             >
-              <Glyph name="play" size={18} />{starting ? "Loading…" : "Start practice"}
+              <Glyph name="play" size={18} />{starting ? "Loading…" : current ? "Start practice" : "Try practice"}
             </button>
-            <button type="button" className="tutor-secondary" onClick={() => onOpenMode("tunes")}>
-              <Glyph name="library" size={19} />Library
+            <button type="button" className="tutor-secondary" disabled={loading || starting || Boolean(error)} onClick={() => current ? onOpenMode("tunes") : void openDemo(false)}>
+              <Glyph name={current ? "library" : "melody"} size={19} />{current ? "Library" : "Open score"}
             </button>
           </div>
         </div>

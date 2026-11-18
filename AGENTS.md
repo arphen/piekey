@@ -40,6 +40,8 @@ exact phrases in `SongCoach`; do not restore an inline Learn flow. Ear (`src/ear
 9. `src/tunes/musicxml.ts` — MusicXML/archive import, the entry point for loaded tunes.
 10. `src/sync/` — immutable transaction journal, deterministic projection, full recording/file
     exchange and encrypted foreground transport. `DeviceSync`/`DeviceSyncPanel` own its shell UI.
+11. `src/agent/brief.ts` — pure, versioned, bounded practice-brief projection for explicit user
+    export. Keep score/audio contents, device secrets and raw storage/journal data out of it.
 
 ## Repository map and project docs (read this second)
 
@@ -128,6 +130,10 @@ component tests run under jsdom. No CI configuration is committed; `make check` 
   hooks stop and the feature remounts persisted projections on close. Preserve that idle boundary.
 - Tutor can launch a daily session or a selected card directly, and its Free play tile opens
   the existing free-play engine without a tune. Do not add another practice or audio engine.
+- Bundled demos use stable IDs from `src/tunes/demos.ts`; preserve the existing First Steps ID
+  and never overwrite a saved demo when reopening it. New distributed scores need provenance in
+  `ASSETS.md`. Agent briefs are explicit read-only exports with versioned definitions and unknowns;
+  never send them to an LLM automatically or execute agent-authored plans without a new boundary.
 - The practice session (`src/song/`, `SongCoach`) is operated from the guitar and reacts to the
   player rather than instructing them; read `docs/PRACTICE_SESSION.md` before changing its
   gestures, tempo rules or card box. Any new action there needs a played gesture, shown on screen.
