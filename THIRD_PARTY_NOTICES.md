@@ -2,7 +2,7 @@
 
 Fretboard Focus Lab includes the following third-party software and font data. Their original licenses and copyright notices remain in effect; the project’s AGPL-3.0-only license does not replace these terms. Keep this index and the linked full texts with redistributed builds and source.
 
-This inventory covers every one of the 21 runtime package entries in `package-lock.json`, their identified embedded attributions, Vite’s build-generated browser helpers, VexFlow font data, and the five font families requested from Google Fonts. It is not an inventory of all development tools installed by npm.
+This inventory covers every one of the 21 runtime package entries in `package-lock.json`, their identified embedded attributions, Vite’s build-generated browser helpers, VexFlow font data, and the locally bundled Google Fonts. It is not an inventory of all development tools installed by npm.
 
 All npm license texts were copied unchanged from the exact versioned tarballs below after checking each archive against the lockfile integrity value. Embedded license comments are retained as excerpts with their original wording. Font and additional upstream license texts are copied unchanged from the pinned sources below. File hashes, archive member names, revisions and download URLs are recorded in [the machine-readable inventory](notices/inventory.json).
 
@@ -67,9 +67,9 @@ OFL font data remains under the SIL Open Font License 1.1, including its Reserve
 | Petaluma outlines and PetalumaScript text metrics | OFL-1.1 | [Petaluma-LICENSE.txt](notices/fonts/vexflow-4.2.5/Petaluma-LICENSE.txt) | [source](https://raw.githubusercontent.com/0xfe/vexflow/67d49027443341578f2979fef3fd305d2a9ddf7a/tools/fonts/@/petaluma/LICENSE.txt) |
 | Roboto Slab text metrics | Apache-2.0 | [RobotoSlab-LICENSE.txt](notices/fonts/vexflow-4.2.5/RobotoSlab-LICENSE.txt) | [source](https://raw.githubusercontent.com/0xfe/vexflow/67d49027443341578f2979fef3fd305d2a9ddf7a/tools/fonts/@/robotoslab/LICENSE.txt) |
 
-## Remotely loaded Google Fonts
+## Locally bundled Google Fonts
 
-`src/styles.css` requests Sora and Space Mono; `src/practice.css` requests Fraunces, Inter and JetBrains Mono from Google Fonts. The CSS requests do not pin the served font-binary versions. The full OFL texts below are provenance snapshots from Google Fonts source revision `75706cfdd7c49a2be20f66c1e24c26f4f39a33b8`; no Google font binaries are stored in this repository by this collection. Keep the corresponding copyright and OFL text if these fonts are later self-hosted or redistributed.
+`src/fonts.css` serves unmodified Latin and extended-Latin WOFF2 subsets of Fraunces v38 (normal 500–700 and italic 500), Inter v20 (400–600), and JetBrains Mono v24 (500). They are bundled in `src/assets/fonts/` and cached with the app, with no Google Fonts request at runtime. Exact source URLs, sizes and SHA-256 hashes are recorded in [font-assets.json](notices/font-assets.json). The full copyright/OFL texts below are provenance snapshots from Google Fonts source revision `75706cfdd7c49a2be20f66c1e24c26f4f39a33b8`. Sora and Space Mono are no longer requested; their notices are preserved for earlier releases.
 
 | Font family | Terms | Full text | Pinned Google Fonts source |
 | --- | --- | --- | --- |

@@ -73,6 +73,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `notices/embedded/babel-regenerator-MIT.txt`
 - `notices/embedded/qrcodegen-MIT.txt`
 - `notices/embedded/reverbgen-Apache-2.0.txt`
+- `notices/font-assets.json`
 - `notices/fonts/OFL-1.1.txt`
 - `notices/fonts/google/fraunces-OFL.txt`
 - `notices/fonts/google/inter-OFL.txt`
@@ -216,6 +217,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/ear/useEarTrainer.ts` — `EarMode:22`, `TrackProgress:24`, `Settings:33`, `ChordQuestion:57`, `NameQuestion:68`, `Question:77`, `useEarTrainer:117`, `EarTrainer:405`
 - `src/follow/follower.ts` — `FollowState:46`, `initFollow:72`, `stepFollow:233`, `takeFrom:268`
 - `src/follow/useFollower.ts` — `useFollower:7`
+- `src/fonts.css`
 - `src/listen/calibration.ts` — `StringTake:17`, `StringReport:22`, `Profile:29`, `soundsLike:72`, `fitProfile:77`, `loadProfile:114`, `applyProfile:124`, `saveProfile:129`, `initCalibration:142`
 - `src/listen/pitch.ts` — `midiOf:9`
 - `src/listen/spectrum.ts` — `HeardNote:6`, `fft:32`, `spectrumDb:69`, `detectNotes:90`, `strongPitchClasses:133`

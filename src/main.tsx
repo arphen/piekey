@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { initCalibration } from "./listen/calibration";
 import { registerOfflineShell } from "./pwa";
+import "./fonts.css";
 import "./styles.css";
 
 // Apply the saved microphone calibration before the first render.

@@ -10,6 +10,7 @@ Project-owned code, documentation, original music and visual assets are licensed
 | First Steps in `src/tunes/starter.ts` | Original eight-bar C major study written for this app. | AGPL-3.0-only. |
 | Blue Hour in `src/tunes/demos/blue-hour.musicxml` | Original 12-bar C jazz-blues melody and guitar chord accompaniment composed for this app; no third-party transcription or arrangement. | AGPL-3.0-only, including the downloadable score. |
 | Classical/traditional melodies in `src/song/reading.ts` | Public-domain melodies, represented by the project's scale-degree/rhythm encoding. | The project encoding is AGPL-3.0-only; the underlying public-domain music remains public domain. |
+| `src/assets/fonts/*.woff2` | Unmodified Google Fonts web subsets: Fraunces v38, Inter v20 and JetBrains Mono v24; Latin and extended Latin. See `notices/font-assets.json` for exact URLs and hashes. | SIL Open Font License 1.1; separate copyright/OFL texts in `notices/fonts/google/`. |
 
 Third-party libraries and fonts retain their original licenses. See
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for notices and license links. The project AGPL
