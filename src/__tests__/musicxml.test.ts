@@ -1,14 +1,28 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
+import { OPEN_MIDI } from "../core";
 import { buildDeck } from "../song/deck";
-import { BLUE_HOUR_ENTRY, DEMO_TUNES } from "../tunes/demos";
+import { BLUE_HOUR_ENTRY, DEMO_TUNES, getDemoStudy } from "../tunes/demos";
 import { parseTuneEntry, sameTuneContent } from "../tunes/library";
 import { loadTuneFile, parseMusicXml } from "../tunes/musicxml";
 import { buildTimeline } from "../tunes/order";
+import { STARTER_ENTRY } from "../tunes/starter";
 
 const note = (step: string, duration = 1, voice = "1") => `<note><pitch><step>${step}</step><octave>4</octave></pitch><duration>${duration}</duration><voice>${voice}</voice><type>${duration === 4 ? "whole" : "quarter"}</type></note>`;
 const attributes = '<attributes><divisions>1</divisions><key><fifths>-1</fifths><mode>major</mode></key><time><beats>4</beats><beat-type>4</beat-type></time></attributes>';
 const score = (content: string, second = "") => `<score-partwise><work><work-title>A tune</work-title></work><part-list><score-part id="P1"><part-name>Melody</part-name></score-part><score-part id="P2"><part-name>Guitar</part-name></score-part></part-list><part id="P1">${content}</part>${second}</score-partwise>`;
+
+function compactGuitarShape(midis: number[], chosen: { string: number; fret: number }[] = []): boolean {
+  if (chosen.length === midis.length) {
+    const fretted = chosen.map((note) => note.fret).filter((fret) => fret > 0);
+    return !fretted.length || Math.max(...fretted) - Math.min(...fretted) <= 3;
+  }
+  return OPEN_MIDI.some((open, string) => {
+    const fret = midis[chosen.length] - open;
+    return fret >= 0 && fret <= 5 && (!chosen.length || string < chosen[chosen.length - 1].string)
+      && compactGuitarShape(midis, [...chosen, { string, fret }]);
+  });
+}
 
 /** A small stored ZIP, enough to exercise the real central-directory/container reader. */
 function archive(entries: [string, string][]): ArrayBuffer {
@@ -58,21 +72,54 @@ describe("MusicXML interpreted for practice", () => {
     expect(sheet.bars[10].chordSymbols).toEqual(["C7", "Dm7"]);
     expect(sheet.bars[10].chordBeats).toEqual([0, 2]);
     expect(sheet.bars[11].chordSymbols).toEqual(["G7", "C7"]);
-    expect(sheet.comp).toHaveLength(14);
-    for (let bar = 0; bar < 12; bar++) expect(sheet.comp.filter((chord) => chord.bar === bar).reduce((beats, chord) => beats + chord.dur, 0)).toBe(4);
+    expect(sheet.comp).toHaveLength(24);
+    for (let bar = 0; bar < 12; bar++) {
+      const chords = sheet.comp.filter((chord) => chord.bar === bar);
+      expect(chords.map((chord) => chord.beat)).toEqual(bar < 10 ? [0, 2.5] : [0, 2]);
+      expect(chords.reduce((beats, chord) => beats + chord.dur, 0)).toBeLessThan(4);
+    }
     expect(sheet.comp.filter((chord) => chord.bar >= 10)).toEqual([
-      { bar: 10, beat: 0, dur: 2, midis: [48, 52, 58] },
-      { bar: 10, beat: 2, dur: 2, midis: [50, 53, 60] },
-      { bar: 11, beat: 0, dur: 2, midis: [43, 47, 53] },
+      { bar: 10, beat: 0, dur: 1, midis: [48, 52, 58] },
+      { bar: 10, beat: 2, dur: 1, midis: [50, 53, 60] },
+      { bar: 11, beat: 0, dur: 1, midis: [43, 53, 59] },
       { bar: 11, beat: 2, dur: 2, midis: [48, 52, 58] },
     ]);
+    for (let index = 1; index < sheet.comp.length; index++) {
+      const previous = sheet.comp[index - 1].midis.slice(-2);
+      const next = sheet.comp[index].midis.slice(-2);
+      expect(next.every((midi, voice) => Math.abs(midi - previous[voice]) <= 2)).toBe(true);
+    }
     const tl = buildTimeline(sheet);
     expect(tl.slots).toHaveLength(24);
     expect(tl.total).toBe(96);
-    expect(tl.comp).toHaveLength(28);
-    expect(tl.comp.slice(0, 14)).toEqual(tl.comp.slice(14).map((chord) => ({ ...chord, t: chord.t - 48 })));
+    expect(tl.comp).toHaveLength(48);
+    expect(tl.comp.slice(0, 24)).toEqual(tl.comp.slice(24).map((chord) => ({ ...chord, t: chord.t - 48 })));
     expect(tl.targets.filter((target) => target.slot < 12).map((target) => [target.midi, target.t, target.dur]))
       .toEqual(tl.targets.filter((target) => target.slot >= 12).map((target) => [target.midi, target.t - 48, target.dur]));
+  });
+
+  it("gives the originals complete, separated, compact guitar accompaniments without changing the starter melody", () => {
+    const starter = parseTuneEntry(STARTER_ENTRY);
+    expect(starter.source?.range).toEqual([59, 69]);
+    expect(starter.bars.flatMap((bar) => bar.notes)).toHaveLength(32);
+    expect(starter.bars.every((bar) => bar.notes.every((note) => !note.rest && note.durationBeats === 1))).toBe(true);
+    for (let bar = 0; bar < 8; bar++) expect(starter.comp.filter((chord) => chord.bar === bar).map((chord) => [chord.beat, chord.dur])).toEqual([[0, 1], [2, 1]]);
+    for (const demo of DEMO_TUNES) {
+      const sheet = parseTuneEntry(demo.entry);
+      const accompaniment = parseMusicXml(demo.entry.xml, "", { partId: "P2" });
+      expect(accompaniment.bars).toHaveLength(sheet.bars.length);
+      for (const bar of accompaniment.bars) expect(bar.notes.reduce((beats, note) => beats + note.durationBeats, 0)).toBe(4);
+      for (const [index, chord] of sheet.comp.entries()) {
+        expect(compactGuitarShape(chord.midis)).toBe(true);
+        expect(chord.dur).toBeGreaterThan(0);
+        expect(chord.beat + chord.dur).toBeLessThanOrEqual(4);
+        const next = sheet.comp[index + 1];
+        if (next?.bar === chord.bar) expect(chord.beat + chord.dur).toBeLessThan(next.beat);
+      }
+      expect(getDemoStudy({ ...demo.entry, name: "My title" })).toBe(demo.study);
+      expect(getDemoStudy({ ...demo.entry, partId: "P2" })).toBeUndefined();
+      expect(getDemoStudy({ ...demo.entry, xml: demo.entry.xml.replace("<step>E</step>", "<step>D</step>") })).toBeUndefined();
+    }
   });
 
   it("turns each downloadable demo into melody, harmony and listening practice", () => {
