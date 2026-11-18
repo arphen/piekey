@@ -177,7 +177,7 @@ not the complete journal evidence query used by goal counters.
 ## Relative timing and alignment (2026-11-18)
 
 Timed sessions and Free play separate steady pulse from constant early/late alignment. A temporary,
-bounded phase fit uses distinct attacks, coverage, scatter and drift; it does not move playback,
+bounded phase fit uses distinct attacks, 60% coverage, scatter and noise-bounded drift; it does not move playback,
 change the visible audio-clock pulse or overwrite calibration. Its phase bound is the smallest of
 200 ms, 30% of a beat and 45% of nearby attack spacing, with tighter residual tolerance for fast
 subdivisions. Raw offsets remain in evidence and appear neutrally as alignment; progression and

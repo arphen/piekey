@@ -53,6 +53,7 @@ export interface TimingFit {
   offset: number; // raw median alignment, ms; never a learned hardware latency
   spread: number; // RMS distance from that alignment, ms
   drift: number; // fitted change in offset from the first to last measured attack, ms
+  driftError: number; // standard error of that drift from scatter around the fitted line, ms
 }
 
 /** Keep missing positions and temporal order: sorting the offsets would conceal tempo drift. */
@@ -67,14 +68,20 @@ export function fitTiming(offsets: readonly (number | null)[]): TimingFit | null
   const meanOffset = heard.reduce((sum, x) => sum + x.offset, 0) / n;
   const variance = heard.reduce((sum, x) => sum + (x.i - meanIndex) ** 2, 0);
   const slope = variance ? heard.reduce((sum, x) => sum + (x.i - meanIndex) * (x.offset - meanOffset), 0) / variance : 0;
-  return { n, offset, spread, drift: slope * (heard[n - 1].i - heard[0].i) };
+  const span = heard[n - 1].i - heard[0].i;
+  const residual = n > 2 ? Math.sqrt(heard.reduce((sum, x) => sum + (x.offset - meanOffset - slope * (x.i - meanIndex)) ** 2, 0) / (n - 2)) : 0;
+  return { n, offset, spread, drift: slope * span, driftError: variance ? residual * span / Math.sqrt(variance) : 0 };
 }
 
 export const timingTolerance = (beatMs: number, spacingMs = beatMs): number => Math.min(Math.max(35, Math.min(65, beatMs * 0.1)), spacingMs * 0.2);
 /** Stay well inside a neighbouring attack, symmetrically early/late; never wrap a whole beat. */
 export const timingPhaseLimit = (beatMs: number, spacingMs = beatMs): number => Math.min(200, beatMs * 0.3, spacingMs * 0.45);
 
-/** Edge notes stay forgiving. A constant alignment is separate from unevenness and tempo drift. */
+/**
+ * Edge notes stay forgiving. A constant alignment is separate from unevenness and tempo drift.
+ * An attack the onset detector missed (a slur, a ringing repeat) is a detection gap, not a timing
+ * error, so 60% of the middle attacks suffice. Drift counts only beyond its own measurement noise.
+ */
 export function assessTiming(offsets: readonly (number | null)[], bpm: number, spacingMs = 60000 / bpm): { fit: TimingFit | null; ready: boolean } {
   const middle = offsets.length >= 5 ? offsets.slice(1, -1) : offsets;
   const fit = fitTiming(middle);
@@ -83,8 +90,8 @@ export function assessTiming(offsets: readonly (number | null)[], bpm: number, s
   const limit = timingTolerance(60000 / bpm, spacingMs);
   // A very short card can retain its centred timing policy, but cannot establish an offset.
   const phase = fit.n >= 3 ? timingPhaseLimit(60000 / bpm, spacingMs) : Math.min(limit, timingPhaseLimit(60000 / bpm, spacingMs));
-  const enough = fit.n >= Math.min(3, middle.length) && fit.n >= middle.length * 0.8;
-  return { fit, ready: enough && fit.spread <= limit && Math.abs(fit.drift) <= limit && Math.abs(fit.offset) <= phase };
+  const enough = fit.n >= Math.min(3, middle.length) && fit.n >= middle.length * 0.6;
+  return { fit, ready: enough && fit.spread <= limit && Math.abs(fit.drift) <= Math.max(limit, 2 * fit.driftError) && Math.abs(fit.offset) <= phase };
 }
 
 /** The legacy measured flag does not turn observed alignment into a player-timing verdict. */

@@ -192,7 +192,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/components/Glyph.tsx` — `UtilityGlyphName:4`, `Glyph:73`
 - `src/components/GoalChooser.tsx` — `GoalChooser:9`
 - `src/components/GuitarNav.tsx` — `GuitarNav:16`
-- `src/components/GuitarPad.tsx` — `SUMMON_HINT:88`, `useSummon:91`, `toneKeysFor:138`, `drawerToneKeys:149`, `useToneKeys:166`, `noteName:217`, `useNoteKeys:224`, `NoteTag:282`, `ToneTag:292`, `PadRow:302`, `GuitarPad:308`
+- `src/components/GuitarPad.tsx` — `PAD_NOTES:18`, `SUMMON_HINT:94`, `useSummon:100`, `toneKeysFor:148`, `drawerToneKeys:160`, `useToneKeys:177`, `noteName:228`, `useNoteKeys:235`, `NoteTag:293`, `ToneTag:303`, `PadRow:313`, `GuitarPad:319`
 - `src/components/HoverDemo.tsx` — `HoverDemo:25`
 - `src/components/InputBar.tsx` — `InputBar:17`
 - `src/components/LeadSheet.tsx` — `LeadSheet:35`, `ChordSymbol:210`
@@ -210,9 +210,9 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/components/SessionSummary.tsx` — `SessionSummary:85`
 - `src/components/ShapesView.tsx` — `ShapesView:16`
 - `src/components/SkillTree.tsx` — `SkillTree:18`
-- `src/components/SongCoach.tsx` — `openPractice:230`, `SongCoach:312`, `SongCoachRoom:317`
+- `src/components/SongCoach.tsx` — `openPractice:233`, `SongCoach:315`, `SongCoachRoom:320`
 - `src/components/Transport.tsx` — `Transport:18`
-- `src/components/TunePicker.tsx` — `TunePicker:11`
+- `src/components/TunePicker.tsx` — `TunePicker:13`
 - `src/components/TuneView.tsx` — `TuneView:44`
 - `src/components/UnitCard.tsx` — `UnitCard:21`
 - `src/components/goal-chooser.css`
@@ -282,7 +282,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/song/leitner.ts` — `Result:18`, `CardState:20`, `Settings:30`, `AttemptConditions:41`, `Attempt:52`, `SessionEntry:70`, `Store:79`, `BOX_DAYS:89`, `BOXES:90`, `loadStore:134`, `saveStore:153`, `loadStores:175`, `chronologicalAttempts:192`, `saveStores:205`, `saveMeta:225`, `allStores:231` (+10 more)
 - `src/song/lines.ts` — `LineNote:10`, `Span:16`, `ScaleDrill:22`, `scaleLine:42`, `arpLine:84`, `guideLine:97`, `chainLine:127`
 - `src/song/notation.ts` — `KEY_FIFTHS:8`, `signatureOf:21`, `lineSheet:48`, `signatureFor:104`, `playedSheet:110`
-- `src/song/notekeys.ts` — `KEY_HOMES:14`, `usedMidis:22`, `commandMidis:37`, `assignNoteKeys:55`, `spotOf:73`
+- `src/song/notekeys.ts` — `OPEN_STRINGS:10`, `SUMMON_NOTE:13`, `KEY_HOMES:19`, `usedMidis:27`, `commandMidis:43`, `assignNoteKeys:59`, `spotOf:77`
 - `src/song/planner.ts` — `Length:15`, `LENGTHS:16`, `LENGTH_MINUTES:17`, `Role:19`, `Block:21`, `Arc:27`, `SessionPlan:33`, `cardSeconds:64`, `nextArc:81`, `loadArc:91`, `saveArc:99`, `newCards:112`, `PlanOptions:120`, `planBlocks:129`
 - `src/song/practiceHistory.ts` — `PracticeTempoPoint:6`, `ExerciseHistory:17`, `PracticeStoreProjection:29`, `PracticeHistoryResult:31`, `projectPracticeStore:58`, `groupPracticeHistory:106`, `projectPracticeHistory:138`
 - `src/song/profile.ts` — `Axis:11`, `MistakeClass:12`, `AxisLevel:14`, `Weakness:21`, `Ceiling:29`, `SkillProfile:34`, `AXES:40`, `allAttempts:50`, `axesOf:55`, `buildProfile:119`
@@ -296,7 +296,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/song/spot.ts` — `Spot:11`, `Trouble:26`, `spotOf:35`, `createTrouble:47`, `spotCard:98`, `fingerFor:116`
 - `src/song/stats.ts` — `familyOf:9`, `attemptsOf:19`, `CardTrend:23`, `cardTrend:31`, `SessionPoint:47`, `sessionTrend:51`, `totals:55`, `meanShare:67`
 - `src/song/support.ts` — `Support:25`, `createSupport:36`
-- `src/song/theme.ts` — `THEME_MIN_NOTES:4`, `THEME_MAX_NOTES:5`, `THEME_MAX_TUNES:6`, `ThemeSource:8`, `OpeningTheme:14`, `ThemeCatalog:20`, `ThemeCandidate:25`, `buildThemeCatalog:36`, `rankThemeMatches:58`, `ThemeCapture:74`, `initThemeCapture:86`, `stepThemeCapture:94`
+- `src/song/theme.ts` — `THEME_MIN_NOTES:4`, `THEME_MAX_NOTES:5`, `THEME_MAX_TUNES:6`, `ThemeSource:8`, `OpeningTheme:14`, `ThemeCatalog:20`, `ThemeCandidate:25`, `buildThemeCatalog:34`, `rankThemeMatches:56`, `ThemeCapture:72`, `initThemeCapture:84`, `stepThemeCapture:92`
 - `src/song/tree.ts` — `TreeNode:13`, `TreeEdge:25`, `TreeInput:31`, `TREE_SIZE:39`, `buildTree:72`
 - `src/song/tune-picker.css`
 - `src/song/useChordFollower.ts` — `ChordGoal:9`, `useChordFollower:21`
@@ -333,7 +333,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/tunes/musicxml.ts` — `CompEvent:11`, `LeadSheet:18`, `MusicXmlOptions:32`, `MusicXmlPart:37`, `MusicXmlSource:44`, `parseMusicXml:284`, `loadTuneFile:600`
 - `src/tunes/order.ts` — `Slot:8`, `Target:17`, `Voice:30`, `Timeline:36`, `playOrder:48`, `buildTimeline:128`, `slotOfBar:172`, `firstTargetAt:177`, `printedResults:186`
 - `src/tunes/passage.ts` — `PassageRange:5`, `validPassage:7`, `passageOccurrences:13`, `passageLabel:23`, `passageId:33`, `parsePassageId:37`, `passageTimeline:46`
-- `src/tunes/scoring.ts` — `matchesPitch:4`, `PitchSample:7`, `PitchWindow:13`, `judgePitch:29`, `TimingFit:51`, `fitTiming:59`, `timingTolerance:73`, `timingPhaseLimit:75`, `assessTiming:78`, `timingReady:91`
+- `src/tunes/scoring.ts` — `matchesPitch:4`, `PitchSample:7`, `PitchWindow:13`, `judgePitch:29`, `TimingFit:51`, `fitTiming:60`, `timingTolerance:76`, `timingPhaseLimit:78`, `assessTiming:85`, `timingReady:98`
 - `src/tunes/starter.ts` — `STARTER_ENTRY:23`
 - `src/tunes/tunes.css`
 - `src/tunes/unzip.ts` — `unzip:4`

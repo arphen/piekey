@@ -96,8 +96,11 @@ next safe boundary. **Stop now** remains available. Neither action awards an unf
   late, and a finished pass keeps its colours for a moment.
   Untied repeated notes need separate attacks; ties remain a single target. Scale, melody and
   comping passes must also establish steady timing before the tempo rises. A bounded constant
-  early/late alignment is separate from unevenness or accumulating drift; distinct, sufficiently
-  covered attacks must establish steadiness. Alignment does not earn a larger increase. Held
+  early/late alignment is separate from unevenness or accumulating drift; distinct attacks for at
+  least 60% of the middle notes must establish steadiness (an attack the onset detector misses,
+  such as a slur or ringing repeat, is a detection gap rather than a timing error). Drift counts
+  only beyond its own measurement noise (twice its standard error from scatter around the fitted
+  line), so noisy short phrases are not failed by chance. Alignment does not earn a larger increase. Held
   voicings and improvisation keep their own acceptance rules.
 - **Gaps.** Once an exercise is well known (box 4) the band drops out for two bars in four (four in
   eight in the top box) while it plays in time; the notes are still judged, so the time is the
