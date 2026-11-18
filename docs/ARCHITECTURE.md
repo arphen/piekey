@@ -9,7 +9,7 @@ inventory see [CURRENT_STATE.md](CURRENT_STATE.md).
 
 Local-first React SPA. No app-data backend, router or server state. Optional device exchange uses
 signaling plus encrypted WebRTC. `src/main.tsx` mounts `App`; `App`
-owns the active view, Devices visibility, transient tune/card launch request, shared mic input and the key used by
+owns the active view, Devices/Tools visibility, transient tune/card launch request, shared mic input and the key used by
 the Scales shape explorer. Each mode owns its feature state; the session modes share one
 component (`FocusView` → `SongCoach`). Free play is also reachable without a tune.
 
@@ -17,14 +17,16 @@ component (`FocusView` → `SongCoach`). Free play is also reachable without a t
 main.tsx
   └─ App.tsx
        ├─ header: brand + icon-labelled tab buttons + DeviceSync → DeviceSyncPanel
-       ├─ Tutor     ── OverviewView → useSongSummaries → summary/pickGlobalUnits
-       ├─ Song      ── TuneView → parseMusicXml → LeadSheet → buildTimeline
+       ├─ Practice  ── OverviewView → useSongSummaries → summary/pickGlobalUnits
+       ├─ Songs     ── TuneView → parseMusicXml → LeadSheet → buildTimeline
        │                 ├─ Score + listening transport + phrase/exercise rows
        │                 └─ SongCoach → buildDeck → useSession → SessionSummary
-       ├─ Changes   ── FocusView(changes) → SongCoach(focus) over familiesOnly(deck)
+       ├─ Progress  ── ProgressView → goals / observed patterns / retained take comparison
+       ├─ Explore: Changes ── FocusView(changes) → SongCoach(focus) over familiesOnly(deck)
        ├─ Scales    ── ScalesView → FocusView(scales) | ShapesView → harmonicMinorShapes → usePlayer
        ├─ Reading   ── FocusView(reading) → SongCoach(focus) over familiesOnly(deck)
-       └─ Ear       ── EarView → useEarTrainer → ear engine
+       ├─ Explore: Ear ── EarHub → FocusView(ear) | EarView → useEarTrainer
+       └─ Tools     ── GuitarTools → useTuner / usePlayback (shared input/context)
 ```
 
 The four layers:
@@ -47,7 +49,8 @@ MusicXML through `src/tunes/musicxml.ts`; conversion tools have no runtime or bu
 First Steps ID is preserved; Blue Hour imports its MusicXML source as a raw build asset. Opening a
 demo goes through the same durable library/parser/session boundaries as personal music and never
 overwrites an existing entry merely to restore a demo. Shared audio is primed in the originating
-gesture before asynchronous save/selection; pending demo playback is tied to that selected score.
+gesture before asynchronous save/selection; pending demo playback is tied to that selected score. Failed saving falls back to a labelled
+bundled preview without replacing any saved edited arrangement.
 
 `agent/brief.ts` is a pure, versioned, bounded projection for user-initiated export. `TuneView`
 collects saved material metadata/stores, displays the generated JSON, and only copies/downloads
@@ -413,6 +416,40 @@ starting tempo/goal that keeps notes-per-minute sensible.
 If you add a card family, update `familyOf`, `FAMILY_LABEL`, the summary grouping, tree/stats (if it
 should appear there), and the tests.
 
+## Musical goals and assessment provenance
+
+`guitar-goals-v1` contains immutable goals grouped by tune and an active goal ID. Each goal freezes
+an outcome, 1–12 essential task IDs, personal start/target BPM and an interpreted arrangement
+fingerprint. `goalDeck` adjusts session tempos without editing imported score tempo; the planner
+prioritizes its relevant tasks. `GoalChooser` subscribes via `useGoals`. The fingerprint includes
+musical notes/form/source selection/comping and excludes display fingering and title.
+
+`sync/model.ts` validates full goals and replay output; `sync/merge.ts` unions goal IDs even for
+two independent first writes. Conflicting content under the same immutable ID rejects projection.
+Only the active selection follows ordered transactions. Explicit backup resets still create a
+new generation. Local creation is capped at 12 goals/tune; replay allows 256 so independent device
+histories have room. Bounds fail visibly without silently dropping goals.
+
+Attempts and takes optionally carry `AttemptConditions` (measured/self, support, notation,
+tempo mode, exposure, confidence, interruption) plus arrangement fingerprint. Omission means
+unknown legacy evidence. No detector-confidence level is inferred from a clean result. Current
+goal proof checks actual measured attempts since creation and matching fingerprint. Timed tasks
+need samples and stable assessed-pass BPM; echoes prove successful own-pace response and describe
+BPM as reference-call tempo. Historical `bestCleanBpm` is retained, with its weaker provenance
+explained in Progress.
+
+`usePlayback` tracks BPM bounds per assessed pass, independent of trimmed scheduling segments.
+`useSession` logs the assessed tempo; manual changes invalidate the current pass immediately.
+A varying run-through cannot earn a new clean-speed claim. Stable adaptive lesson passes remain
+app-checked practice evidence, distinct from independent fixed-tempo uninterrupted performance.
+Self-guided operation uses this same state machine, logs activity and excludes automatic
+box/kinship/best/profile credit. Graceful finish waits for the current timed pass before summary.
+
+`audio/recorder.ts` exposes durable save outcomes and a subscribed pending-Blob recovery list.
+A failed save retains audio in memory for retry/download; consumers never treat an IndexedDB
+failure as an empty recording list. `keepPracticeWrite` keeps the window owner alive through
+stop-and-save. Take conditions/fingerprints survive transfer manifests and file export.
+
 ## Persistence
 
 Small records stay in `localStorage`; large imported XML uses IndexedDB (`guitar-tune-files`).
@@ -432,7 +469,9 @@ Rules:
 - `saveStore` caps history at 800 attempts and sessions at 200 (`saveStores`), and writes shared
   scale cards. Optional `at`/`goalBpm` evidence orders new attempts and explains achieved tempos;
   `bestCleanBpm` survives detailed-history trimming and is never the next suggested BPM.
-- Await `loadLibraryAsync()` before changing the library. It hydrates XML references, keeping
+- Await `loadLibraryAsync()` before changing the library. Partial hydration returns healthy entries
+  and named issues; `loadCompleteLibraryAsync()` gates full-state backup/exchange. Explicit repair
+  preserves IDs, and identity-only removal journals a tombstone while retaining practice history. It hydrates XML references, keeping
   the old inline library intact until both the IndexedDB write and updated index succeed.
 - Use `parseTuneEntry()` for persisted scores. Entry IDs are durable; parser metadata slugs
   are only legacy defaults. Replacing a score is explicit; duplicate content opens the saved copy.
@@ -482,9 +521,15 @@ operations whose initiating screen has unmounted.
 timers, then remounts persisted projections on close. A full-screen practice session blocks
 device entry. Merge operations serialize within the page and use a named Web Lock where the
 browser supports it; projection rechecks the committed union and retries if it changed.
-This does not prove simultaneous cross-tab practice is safe; use one active window per device.
+`platform/practiceWindow.ts` reserves one writer across same-origin windows using Web Locks.
+`PracticeWindowBoundary` mounts before session, Free play, Ear quiz, Tools or Devices hooks. A
+handoff unmounts the active subtree and waits for tracked writes, recording rescue and pending
+progress before releasing ownership. BroadcastChannel/storage events request handoff; they never
+establish ownership. Unsupported browsers are conservatively blocked from protected operations.
+JSON restore and update checks acquire the same idle lock. Physical suspension/handoff still needs
+testing; no expiring localStorage lease pretends to be an atomic lock.
 
-Portable state includes tune XML/identities, selected key/tune, per-tune/shared-scale progress,
+Portable state includes tune XML/identities, musical goals, selected key/tune, per-tune/shared-scale progress,
 free-play and ear progress/settings, retained Learn data, and all recordings still stored locally.
 Audio input/output IDs, detector calibration, measured latency, the active sequence allocator and
 pairing keys stay local. Source device IDs still travel with their immutable transactions.
@@ -503,7 +548,10 @@ JSON header (version, snapshot, recording descriptors and canonical-content SHA-
 the audio blobs in manifest order. Verify total length, snapshot/header checksum and every audio
 hash before projection. Current caps are 128 MiB per recording/header and 2 GiB per archive.
 The older JSON `tunes/backup.ts` format remains compatible and excludes audio; it is distinct from
-the full transaction/recording archive.
+the full transaction/recording archive. New JSON exports use the same portable-key policy;
+legacy hardware keys are accepted on parsing but ignored on restore. Current-device input/output,
+calibration and latency are retained. Full archives include pending recoverable audio; paired
+exchange requires it to save before advertising a durable-known recording ID.
 
 One-QR pairing uses a ten-minute URL-fragment invitation with host peer ID and a random 256-bit
 key. PeerJS handles SDP/ICE rendezvous; Cloudflare STUN is the default. STUN alone cannot carry the
@@ -531,7 +579,10 @@ only for a secure production build. `vite.config.ts` emits `sw.js` from the fina
 including lazy chunks, and caches the offline shell under a build-specific scope. Navigation
 falls back to cached `index.html`; updates wait for all old app windows to close, without
 `skipWaiting` or session reload. Browser user data remains in its own localStorage/IndexedDB.
-Offline shell code is inspected; real mobile installation/offline updates and physical pairing
+Offline/update status is observable through `pwa.ts` and `PlatformStatus`. Update checks are
+idle-only and never invoke skipWaiting. UI fonts are local WOFF2 assets imported by `fonts.css`
+and included in the build cache; their unmodified source URLs/hashes are in
+`notices/font-assets.json`. Offline shell code is inspected; real mobile installation/offline updates and physical pairing
 remain unverified until tested on devices.
 
 ## Contracts and types

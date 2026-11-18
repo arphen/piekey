@@ -30,7 +30,7 @@ exact phrases in `SongCoach`; do not restore an inline Learn flow. Ear (`src/ear
 ## Critical entry points
 
 1. `src/main.tsx` — mounts React and loads global styles.
-2. `src/App.tsx` — thin shell: six tabs (Tutor, Song, Changes, Scales, Reading, Ear), the one shared mic input, and `GuitarNav`. It also holds the key for the Scales shape explorer. Feature state belongs in the feature's hook, not here.
+2. `src/App.tsx` — thin shell: three primary tabs (Practice, Songs, Progress), with Changes, Scales, Reading and Ear under Explore, the one shared mic input, and `GuitarNav`. It also holds the key for the Scales shape explorer. Feature state belongs in the feature's hook, not here.
 3. `src/core/contract.ts` — the typed boundary between logic (`core`, `audio`) and UI (`App`, `components`). Change only by agreement, then update every consumer.
 4. `src/core/index.ts` — public music-domain API (`getKey`, `getTune`, `buildPattern`, `fretboardNotes`, ...).
 5. `src/audio/usePlayer.ts` — transport/playback API (`play`, `stop`, `setLoop`, `setPattern`, mix). `src/audio/backing.ts` generates the band.
@@ -40,6 +40,10 @@ exact phrases in `SongCoach`; do not restore an inline Learn flow. Ear (`src/ear
 9. `src/tunes/musicxml.ts` — MusicXML/archive import, the entry point for loaded tunes.
 10. `src/sync/` — immutable transaction journal, deterministic projection, full recording/file
     exchange and encrypted foreground transport. `DeviceSync`/`DeviceSyncPanel` own its shell UI.
+11. `src/song/goals.ts` — immutable arrangement-bound musical goals; `useGoals` subscribes to
+    portable changes. Self-guided history is activity, never measured progress.
+12. `src/platform/` — exclusive writer ownership across browser windows, offline/update status.
+    Mount the boundary before any practice/quiz/tools writer hook. `src/tools/` reuses input/playback.
 11. `src/agent/brief.ts` — pure, versioned, bounded practice-brief projection for explicit user
     export. Keep score/audio contents, device secrets and raw storage/journal data out of it.
 
@@ -114,7 +118,8 @@ component tests run under jsdom. No CI configuration is committed; `make check` 
   Large score XML lives in IndexedDB. Keep backup/restore compatible with existing tune IDs.
 - Sync is an occasional two-way union of immutable transactions, not whole-store replacement or
   live replication. Preserve `device:seq` IDs, causal context, stable attempt/session IDs and
-  recording IDs. Keep conflicting score versions and report ambiguous legacy history.
+  recording IDs. Keep conflicting score versions and report ambiguous legacy history. Goals union by immutable
+  ID even on independent first writes; only active selection follows deterministic transaction order.
   Backup restore records an explicit reset only after success; rollback writes must not become
   practice events. Keep whole asynchronous restores inside `withLibraryOperation` so Devices
   cannot open midway through a restore after its screen unmounts.
@@ -128,6 +133,9 @@ component tests run under jsdom. No CI configuration is committed; `make check` 
   HTTPS; never describe a laptop's localhost address as a usable phone URL or claim deployment.
   `App` owns dialog visibility and unmounts the active feature while it is open, so listening/ear
   hooks stop and the feature remounts persisted projections on close. Preserve that idle boundary.
+- Assessment conditions and arrangement fingerprints are optional on legacy attempts/takes. Keep
+  unknowns explicit; self-guided activity never promotes boxes, kinship, profile or clean tempo.
+  Timed claims use the actual stable assessed-pass BPM, never the final UI tempo.
 - Tutor can launch a daily session or a selected card directly, and its Free play tile opens
   the existing free-play engine without a tune. Do not add another practice or audio engine.
 - Bundled demos use stable IDs from `src/tunes/demos.ts`; preserve the existing First Steps ID

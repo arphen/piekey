@@ -1,0 +1,9 @@
+.platform-status { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: .45rem 1rem; padding: .4rem 1rem; font-size: .76rem; color: var(--ink-soft, #8b9891); }
+.platform-status p { margin: 0; }
+.platform-status button { font: inherit; color: inherit; background: transparent; border: 1px solid currentColor; border-radius: .35rem; padding: .2rem .55rem; cursor: pointer; }
+.platform-status button:disabled { opacity: .55; cursor: default; }
+.platform-practice { max-width: 38rem; margin: 12vh auto; padding: 2rem; }
+.platform-practice h1 { font-size: 1.6rem; }
+.platform-practice p { line-height: 1.6; }
+.platform-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1.5rem; }
+.platform-actions button { padding: .65rem 1rem; }

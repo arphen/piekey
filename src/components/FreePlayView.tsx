@@ -2,10 +2,15 @@ import { useEffect } from "react";
 import type { InputApi } from "../listen/useInput";
 import { FreePlay } from "./FreePlay";
 import { InputBar } from "./InputBar";
+import { PracticeWindowBoundary } from "../platform/PracticeWindowBoundary";
 import "../song/song.css";
 
 /** The existing free-play engine, reachable without importing a tune or opening a card box. */
 export function FreePlayView({ input, onClose }: { input: InputApi; onClose(): void }) {
+  return <PracticeWindowBoundary onExit={onClose}><FreePlayRoom input={input} onClose={onClose} /></PracticeWindowBoundary>;
+}
+
+function FreePlayRoom({ input, onClose }: { input: InputApi; onClose(): void }) {
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();

@@ -1,6 +1,7 @@
 # Current state
 
-Updated **2026-11-18** after the demo repertoire, agent handoff and relative-timing work.
+Updated **2026-11-18** after the first SOL implementation slices. See [SOL_IMPLEMENTATION.md](SOL_IMPLEMENTATION.md)
+for delivered boundaries and remaining product work.
 This is the authoritative description of what exists, what is only partly built, and what is
 broken. Update it when a feature's status changes; wishes belong in [BACKLOG.md](BACKLOG.md).
 
@@ -15,17 +16,12 @@ broken. Update it when a feature's status changes; wishes belong in [BACKLOG.md]
 
 | Check | Result | Detail |
 | --- | --- | --- |
-| `make check` | **PASS** | Final gate: typecheck, current repository map and 25 suites / 304 tests passing. |
-| `npm run build:quiet` | **PASS** | Final production build passed with Vite's existing >500 kB chunk-size warning. |
-| `sync.test.ts` + `storage.test.ts` | **PASS** | 16 focused cases cover deterministic merges, counters, reset generations, schemas, outbox replay, quota recovery, library persistence and backup restore. Included in the final full gate. |
-| `make test-file FILE=src/__tests__/sync-transport.test.ts` | **PASS** | 6 focused cases: actual WebCrypto over mocked signaling/raw datachannels, one invitation, Unicode/chunked audio, remembered reconnect, bounds/expiry, replay/tamper, cancellation and custom broker/TURN configuration. No real rendezvous/network used. |
-| `make test-file FILE=src/__tests__/sync-exchange.test.ts` | **PASS** | 3 cases: omitted advertised transactions get no ACK/projection; damaged JSON/audio and truncated archives get no writes; repeated exchanges send only missing transactions/audio. Persistence is mocked. |
-| Production browser preview | **PASS, bounded** | In-app browser: six tabs, empty-library starter, selected-card entry, calibration preview/skip, standalone Free play entry/exit and backup-export feedback. No console errors observed. Import preview/restore UI and real quota behavior were not exercised. |
-| Session presentation preview | **PASS, bounded** | In-app browser at 1280×720 and 390×844: Free play arrival, manually enabled steady pulse/meter, menu/return/leave, Ready and input-paused UI. |
-| Home / shell presentation | **PASS, bounded** | In-app browser at 1280×900 and 390×844: full two-bar score excerpt and metadata, flat exercise rows, mode icons and responsive header. Selected bars 1–2 opens that exercise in Ready; Changes and Free play arrival/exit checked at phone width. Compact guitar legend and disconnected input state observed. |
-| Song / Devices browser review | **PASS, bounded** | Production in-app browser at 1280×900 and 390×844: score and exercises, Listen/Stop control state, a printed-bar click opening the exact phrase in Ready, Devices layout, localhost/HTTPS guidance and transfer-file export feedback. Rebuilt app opened and reloaded with no console errors observed. File-import UI was not exercised. |
-| Offline shell / physical sync | **Code-verified; runtime-unverified** | Production service-worker generation includes lazy chunks/assets. No phone site has been hosted; physical phone pairing, install/offline lifecycle and cross-network/TURN operation remain unverified. |
-| Audio / mic / devices | **Runtime-unverified** | No physical guitar, input/output routing, device reconnect, audible playback or microphone scoring was tested. Actual RMS response, warmed colours and audio/visual alignment remain unverified. Fullscreen and autoplay policy behavior also need hardware/browser checks. |
+| `make check` | **PASS** | Typecheck, repository map freshness and 30 suites / 353 tests passed. |
+| `npm run build:quiet` | **PASS** | Production build passed; Vite retains its existing >500 kB chunk-size warning. |
+| Focused iteration checks | **PASS** | Typecheck plus storage, goal/planner, session trust, recording, platform, scheduler, archive and mounted score-browsing suites passed while integrating. Full gate below supersedes individual iteration counts. |
+| Current browser preview | **BLOCKED** | Approved `127.0.0.1:5173` showed a stale blank cached shell after refresh. Automatic approval review denied the alternate `localhost:5173` origin because existing authorization covered only `127.0.0.1`; a new browser grant was requested. Current layout/interaction has not been visually verified. Earlier browser results describe a prior tree. |
+| Offline shell / physical sync | **Code-verified; runtime-unverified** | Worker generation includes local fonts/lazy assets. Actual phone HTTPS, install/offline/update, cross-network/TURN and active-window handoff remain unverified. |
+| Audio / mic / devices | **Runtime-unverified** | No physical guitar, routing, reconnect, audible balance, recording, tuner, microphone scoring or audio/visual alignment was tested. See [SUPPORTED_SETUPS.md](SUPPORTED_SETUPS.md), whose outcomes remain NOT RUN. |
 
 ## What the app is
 
@@ -36,24 +32,59 @@ React 18 + TypeScript + Vite; Tone.js for transport/synths/backing; VexFlow for 
 `@tonejs/midi` only for the unused MIDI export. Preferences and progress live in `localStorage`;
 large imported scores and recorded takes use IndexedDB.
 
-There are **six top-level views**, a practice session reachable from Tutor or Song, and standalone
-Free play reachable from Tutor:
+There are **three primary views**, with the existing focused modes under Practice → Explore:
 
-| Tab | Component | Role |
+| Surface | Component | Role |
 | --- | --- | --- |
-| Tutor | `OverviewView.tsx` → `overview/useSongSummaries.ts` | **Default entrypoint.** Current score excerpt and metadata, a mixed three-exercise Next list, mode icons and simple tune rows. |
-| Changes | `FocusView.tsx` (`focus="changes"`) | The current tune's `chords` + `harmony` cards in `SongCoach`. |
-| Reading | `FocusView.tsx` (`focus="reading"`) | The current tune's `reading` cards in `SongCoach`; replaces the old generated sight-reading tab. |
-| Song (`tunes`) | `TuneView.tsx` → `SongCoach` | Score-centered MusicXML browsing/listening, exact phrase launches and the canonical full-screen coached session. No inline Learn mode. |
-| Scales | `ScalesView.tsx` → `FocusView` (`focus="scales"`) / `ShapesView.tsx` | The tune's scale cards in `SongCoach`; the harmonic-minor 3NPS shape explorer sits one step behind a button. |
-| Ear | `EarHub.tsx` → `FocusView` (`focus="ear"`) / `EarView.tsx` | Echo cards from the tune (hear a phrase, play it back); the chord quiz one step behind a button. |
+| Practice (`tutor`) | `OverviewView` → `useSongSummaries` | Current music, goals, Next, Explore, original first-use studies. |
+| Songs (`tunes`) | `TuneView` → `SongCoach` | Score-centered listening and selected-phrase practice; Library tools. |
+| Progress | `ProgressView` | Current goal evidence, historical milestones, bounded cross-tune observations and retained audio comparison. |
+| Changes / Reading | `FocusView` → `SongCoach` | Same session narrowed to the tune's chord/harmony or reading cards. |
+| Scales | `ScalesView` → `FocusView` / `ShapesView` | Tune scale cards and existing shape explorer. |
+| Ear | `EarHub` → `FocusView` / `EarView` | Tune echoes and the original chord quiz. |
+| Free play | `FreePlayView` | Existing adaptive engine without requiring a tune. |
+| Tools | `GuitarTools` | Shared-input chromatic tuner; shared-clock metronome, tap/count-in/subdivisions. |
 
-The header has the brand and icon-labelled tab buttons, without a tagline. `App.tsx` holds the active tab, a pending practice
-launch and the key used by the Scales shape explorer (`guitar-key`); each mode owns its own state. The old shared transport,
-key selector and Roman toggle went with the Practice tab.
-The header's Devices dialog performs occasional transfers. `App` unmounts the current feature
-while it is open, stopping listening/ear hooks, and remounts persisted projections on close.
-Opening it during a full-screen practice session is blocked. It does not add another practice engine.
+The header keeps real icon-labelled buttons and the existing played cursor. This hierarchy is an
+implemented design proposal; improved task finding has not been demonstrated with students.
+`App` owns Devices/Tools visibility and unmounts the current feature while either is open, then
+remounts saved projections on close. Practice, Free play, the Ear quiz, Tools, Devices and JSON
+restore acquire the same exclusive origin-scoped Web Lock before mounting writer hooks. Handoff
+waits for async saves and pending recovery; unsupported browsers keep browsing but cannot start
+protected operations. Hardware and installed-window behavior still require the
+[declared setup checks](SUPPORTED_SETUPS.md).
+
+## SOL delivery: goals, evidence and recovery (2026-11-18)
+
+- Musical goals freeze a short route for a specific interpreted arrangement and personal tempo
+  range. Melody, accompaniment, echo, reading and improvisation reuse the existing deck. Goals
+  are portable immutable identities; independent first goals union instead of replacing each other.
+  Active selection follows deterministic transaction order. The UI allows 12 local goals per tune;
+  replay accepts up to 256 per tune to retain independent histories.
+- Current-goal proof uses measured clean attempts since creation, matching the score fingerprint.
+  Timed tasks need timing samples and the actual stable assessed-pass BPM. Echo completion uses
+  own-pace success; its configured BPM describes the call, never a demonstrated response speed.
+  Historical card bests/boxes remain separate from this arrangement-bound evidence.
+- New attempts and recordings carry optional assessment conditions and arrangement fingerprint.
+  Legacy conditions stay unknown. Detector confidence currently stays unknown even for measured
+  attempts; no signal-qualification experiment has justified stronger claims.
+- Ready offers self-guided practice without requesting the microphone. It uses the existing
+  session/playback, stores activity and never awards measured boxes, kinship, profile or best tempo.
+  Finish after this pass waits for an ongoing timed pass; Stop now remains explicit.
+- Recording saves report recording/saving/saved/failed/unsupported outcomes. Failed Blobs stay in
+  memory with Retry and Save audio; full file export rescues pending audio. Paired exchange first
+  retries pending takes and refuses to advertise them as durable while saving is unresolved.
+- Partial-library loading retains healthy tunes and named repair issues. Missing/invalid XML can
+  be replaced under the same ID or explicitly removed while keeping history. Complete backups and
+  exchange refuse to silently omit missing scores; repair/remove them before a full-state claim.
+- Selected phrases can run a one-note rhythm task, then return to the original phrase in the same
+  session. This checks pitched attacks and timing, not muted-string strums. Ear calls now include
+  deterministic duration variation, rests and repeated pitches at higher tiers.
+- Progress owns take comparison and observed patterns, with task/tempo/arrangement/help context.
+  These are app observations on played material, not an overall guitar-level grade.
+- Production offline/update states are visible; updates wait for old windows to close. Fraunces,
+  Inter and JetBrains Mono are bundled locally with their separate OFL notices, removing live
+  font requests. Physical cache/update/interruption and sound verification remain not run.
 
 ## Demo repertoire and first use (2026-11-18)
 
@@ -64,8 +95,9 @@ and AGPL terms; see [ASSETS.md](../ASSETS.md).
 
 An empty Tutor previews Blue Hour, lets the visitor choose First Steps, and opens its score or
 practice without finding a file. Song's empty state and always-reachable Library demo shelf offer
-Listen, Open score, Practice and score download. Opening a demo saves a missing entry before launch
-and reuses an existing entry without overwriting user edits/progress. Audio/fullscreen preparation
+Listen, Open score, Practice and score download. Opening a demo tries to save a missing entry
+and reuses an existing entry without overwriting user edits/progress. If saving fails, the original
+stays playable as a clearly labelled bundled preview; the UI does not claim it was saved. Audio/fullscreen preparation
 occurs in the originating practice gesture; demo Listen unlocks shared audio before asynchronous
 saving and waits for the matching rendered score. Listen does not request microphone access.
 
@@ -84,7 +116,8 @@ and download behavior remain runtime-unverified in this pass: the browser connec
 explicit Copy/Download. `agent/brief.ts` is a pure versioned projection: a bounded material list,
 28-day saved practice summary, observed note/timing counts, selected tune and demonstrated clean
 tempos. Its reporting window uses stored local calendar days. Missing measurements remain null;
-assistance/detection confidence that was not captured remains unknown. Definitions distinguish
+assistance/detection confidence that was not captured remains unknown. The selected goal and
+assessment-condition counts are included; self-guided activity is excluded from measured proof. Definitions distinguish
 reference alignment, within-attempt timing scatter, scheduling and musical ability.
 
 It excludes score XML, audio, raw attempts, device/calibration settings, pairing secrets and the
@@ -115,7 +148,8 @@ player's reference behavior and is not an independent hardware-latency measureme
 
 [SOL_OPINION.md](../SOL_OPINION.md) is the comprehensive product review and proposed roadmap. It
 separates the current engine from longer-term design, curriculum, assessment, reliability,
-platform and agent-bridge proposals. It does not mark those proposals implemented.
+platform and agent-bridge proposals. [SOL_IMPLEMENTATION.md](SOL_IMPLEMENTATION.md) records
+which engineering slices are implemented and which validation/content work remains.
 
 ## Tutor layer (2026-11-17)
 
@@ -166,14 +200,13 @@ memory ladder that fades the page per stage, suggested next tunes, a full progre
   drift from the session.
 - Optional `excerpt`, `tempo` and `barCount` fields project score data for presentation. The home
   renders the first two printed bars with the shared `Score`, alongside title, key, meter, tempo
-  and bar count. An empty library previews First Steps before the player chooses to add it.
+  and bar count. An empty library previews Blue Hour with First Steps available as the gentler choice.
 - `pickGlobalUnits` returns three deterministic exercises: the current song first, then an overdue
   review from another song, then a different-family exercise. It does not shuffle or mutate boxes.
 - `overview/useSongSummaries.ts` reads `guitar-tunes-v2`, parses each sheet, builds and caches its
-  deck in memory, then re-reads the per-tune store on mount. Unreadable imports are skipped rather
-  than hiding the rest of the library.
+  deck in memory, then re-reads the per-tune store on mount. Unreadable imports become named repair issues while healthy scores remain available.
 - Next is one flat exercise list; Explore uses mode icons and names (`overview/modes.ts`). Tune
-  rows show factual metadata, an open action, recorded takes and existing progress. They do not
+  rows show factual metadata, an open action and existing progress. Progress owns recorded takes. They do not
   repeat the exercise list or use monogram cards. `UnitCard` and focused mode lists share the flat
   exercise-row presentation.
 - The primary action opens today's planned session; unit clicks open that exact `SongCoach` card.
@@ -236,8 +269,9 @@ dedicated "play the progression" card exists yet; a tune with no chord symbols h
 - Browsing playback (`tunes/order.ts` + `tunes/usePlayback.ts`) expands repeats, endings,
   D.C./D.S., To Coda and Fine into a `Timeline`; supports count-in, phrase loops,
   melody/chords/click mix and tempo changes. Listening does not score the microphone.
-- Clicking a printed bar finds its existing melody phrase card and opens that exact card in
-  `SongCoach`; phrase rows do the same. The primary action starts the daily plan. No inline Learn,
+- Clicking a printed bar or phrase selects its existing melody phrase. An explicit toolbar
+  offers Listen/Loop, full-screen practice or one-note rhythm isolation, with printed and
+  playing-order positions shown. Returning from practice restores the browse scroll position. The primary action starts the daily plan. No inline Learn,
   Play along or Wait for me mode competes with the full-screen session.
 - Full-screen **Practice session** (`SongCoach`) with multi-tune exercise mixing, free play,
   settings, calibration, input/output device choice, and the done-screen summary.
@@ -450,6 +484,7 @@ card. Progressions are not logged to `guitar-freeplay` or the map yet.
 | `guitar-key` | `App.tsx` | Tonic string for the Scales shape explorer, default `A`. |
 | `guitar-tutor-v4`, `guitar-roman` | (none) | Written by the removed Practice tab; no longer read or written. |
 | `guitar-song-deck:<tune>` | `song/leitner.ts` | Per-tune card box: cards, sessions, settings, history, credit, meta. |
+| `guitar-goals-v1` | `song/goals.ts` | Immutable arrangement-bound goals and active selection; portable journaled state. |
 | `guitar-skills` | `song/leitner.ts` | Shared scale card states and credit. |
 | `guitar-freeplay` | `song/freeplay.ts` | Free-play log (`FreeEntry[]`), capped. |
 | `guitar-freeplay-prefs` | `song/useFreePlay.ts` | Band on/off. |
@@ -594,8 +629,8 @@ failure paths use controlled test doubles. There is no Playwright/CI configurati
 1. **Docs and map can drift.** The map has been regenerated, but docs must be kept current.
 2. **The chord quiz is still its own engine** (`ear/*`, `guitar-ear-v1`); it does not share boxes
    or stats with the tune session. Echo cards already use the shared deck.
-3. **Stats are session-scoped.** `SessionSummary` totals use the current tune's store; there is no
-   cross-tune dashboard or per-exercise long-term history.
+3. **Progress remains bounded.** Progress reads cross-tune observations and retained takes;
+   there is no long-term per-exercise chart or validated overall ability model.
 4. **Free play chord recognition is untested on a real acoustic**: strum detection and naming are
    unit-tested on pitch-class sets only.
 5. **String attribution is inferred, not heard.** `song/fingering.ts` chooses a position and
@@ -609,7 +644,7 @@ failure paths use controlled test doubles. There is no Playwright/CI configurati
    changes behind the browser's system-default route cannot be identified for recalibration.
 8. **No phone hosting or physical sync verification yet.** A production HTTPS origin is needed;
    public signaling availability, restrictive NAT/TURN, large real recording libraries, installed
-   mobile app storage and cross-tab edits still need end-to-end checks.
+   mobile app storage and active-window handoff still need physical end-to-end checks.
 
 ## Cleanup candidates (not done)
 

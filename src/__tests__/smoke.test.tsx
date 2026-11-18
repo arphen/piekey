@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { createRoot, type Root } from "react-dom/client";
-import { act } from "react";
+import { act, type ReactNode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { SongSummary } from "../overview/summary";
 import type { InputApi } from "../listen/useInput";
@@ -18,11 +18,12 @@ const shell = vi.hoisted(() => ({
   } as InputApi,
 }));
 vi.mock("../listen/useInput", () => ({ useInput: () => shell.input }));
-vi.mock("../overview/useSongSummaries", () => ({ useSongSummaries: () => shell.overview }));
+vi.mock("../overview/useSongSummaries", () => ({ useSongSummaries: () => shell.overview, cachedSong: () => undefined }));
 vi.mock("../components/SongCoach", () => ({ openPractice: () => undefined }));
 vi.mock("../components/GuitarNav", () => ({ GuitarNav: () => null }));
 vi.mock("../components/Score", () => ({ Score: () => null }));
 vi.mock("../components/FreePlay", () => ({ FreePlay: () => <div>standalone metronome</div> }));
+vi.mock("../platform/PracticeWindowBoundary", () => ({ PracticeWindowBoundary: ({ children }: { children: ReactNode }) => <>{children}</> }));
 vi.mock("../components/TuneView", () => ({
   TuneView: ({ launch }: { launch?: { kind: string; tuneId?: string; cardId?: string } }) => (
     <main data-tune={launch?.tuneId} data-launch={launch?.kind} data-card={launch?.cardId} />

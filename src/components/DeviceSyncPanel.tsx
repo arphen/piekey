@@ -7,6 +7,7 @@ import { readSyncJournal } from "../sync/journal";
 import { createTransferFile, exchangeState, importTransferFile, type ExchangeProgress, type ExchangeResult } from "../sync/exchange";
 import { loadDevicePreferences, saveDevicePreferences, type DevicePreferences } from "../sync/devices";
 import { Glyph } from "./Glyph";
+import { keepPracticeWrite } from "../platform/practiceWindow";
 
 function errorText(error: unknown): string { return error instanceof Error ? error.message : "The transfer could not finish. Try again."; }
 function lastSync(at: number) { return new Date(at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); }
@@ -56,7 +57,7 @@ export default function DeviceSyncPanel({ onClose, onUpdated }: { onClose: () =>
     connection.current = channel;
     setBusy(true); setError(undefined); setNotice(undefined); setInvite(undefined);
     try {
-      const outcome = await exchangeState(channel, updateProgress);
+      const outcome = await keepPracticeWrite(exchangeState(channel, updateProgress));
       if (!alive.current) return;
       const peer = { ...channel.remote, lastSynced: Date.now() };
       const next = { ...preferences.current, peers: [...preferences.current.peers.filter((item) => item.deviceId !== peer.deviceId), peer] };
@@ -143,7 +144,7 @@ export default function DeviceSyncPanel({ onClose, onUpdated }: { onClose: () =>
   const fileAction = async (action: () => Promise<void>) => {
     if (busyRef.current || pendingDial.current) return;
     busyRef.current = true; setBusy(true); setError(undefined); setResult(undefined); setNotice(undefined);
-    try { await action(); } catch (failure) { setError(errorText(failure)); onUpdatedRef.current(); }
+    try { await keepPracticeWrite(action()); } catch (failure) { if (alive.current) { setError(errorText(failure)); onUpdatedRef.current(); } }
     finally { busyRef.current = false; setBusy(false); setProgress(undefined); }
   };
   const exportFile = () => fileAction(async () => {

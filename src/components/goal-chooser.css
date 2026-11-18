@@ -1,0 +1,28 @@
+.goal-chooser { min-width: 0; padding: 0 0 24px; border-bottom: 1px solid var(--line-strong); color: var(--ink-soft); }
+.goal-chooser-summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.goal-chooser-kicker { color: var(--ink-faint); font: 400 10px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; }
+.goal-chooser-summary p { margin: 8px 0 0; font-size: 13px; }
+.goal-chooser-summary strong { color: var(--ink); font-weight: 500; }
+.goal-chooser button, .goal-chooser select { font: inherit; color: inherit; border: 1px solid var(--line-strong); border-radius: 3px; background: var(--bg); min-height: 44px; padding: 8px 10px; }
+.goal-chooser button:focus-visible, .goal-chooser select:focus-visible { outline: 2px solid var(--brass); outline-offset: 4px; }
+.goal-chooser select option { background: var(--bg); color: var(--ink); }
+.goal-chooser-summary button { flex-shrink: 0; padding: 0; border: 0; background: none; font-size: 11px; }
+.goal-chooser-summary button:hover { color: var(--ink); }
+.goal-chooser-body { margin-top: 18px; }
+.goal-chooser label { display: flex; flex-direction: column; gap: 6px; font-size: 11px; }
+.goal-chooser-fields { display: grid; grid-template-columns: minmax(160px, 2fr) repeat(2, minmax(70px, 1fr)); gap: 10px; margin-top: 12px; }
+.goal-chooser-fields select { width: 100%; min-width: 0; box-sizing: border-box; }
+.goal-chooser-note, .goal-chooser-warning, .goal-chooser-summary .goal-chooser-note { color: var(--ink-faint); font-size: 11px; line-height: 1.7; }
+.goal-chooser-warning { color: var(--warn); }
+.goal-chooser .goal-chooser-save { margin-top: 4px; cursor: pointer; font-size: 11px; }
+.goal-chooser button:disabled { cursor: default; opacity: .45; }
+.goal-chooser-route { margin-top: 12px; font-size: 11px; }
+.goal-chooser-route > p { color: var(--ink-faint); }
+.goal-chooser-route ol { margin: 0; padding-left: 22px; }
+.goal-chooser-route li { padding: 5px 0 5px 3px; }
+.goal-chooser-route li > span:last-child { margin-left: 8px; color: var(--ink-faint); white-space: nowrap; }
+@media (max-width: 520px) {
+  .goal-chooser-summary { align-items: flex-start; flex-direction: column; gap: 10px; }
+  .goal-chooser-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .goal-chooser-fields > label:first-child { grid-column: 1 / -1; }
+}

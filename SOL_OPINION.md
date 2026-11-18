@@ -15,6 +15,9 @@ market research. Hardware and learning claims below therefore have explicit vali
 The accompanying demo/onboarding and timing work should be assessed separately from the longer
 roadmap; their final status belongs in CURRENT_STATE.
 
+> Implementation ledger: [docs/SOL_IMPLEMENTATION.md](docs/SOL_IMPLEMENTATION.md) records the
+> delivered engineering slices and remaining physical, content and product acceptance work.
+
 ## Contents
 
 1. [The recommendation](#1-the-recommendation)

@@ -1,0 +1,23 @@
+.guitar-tools { width: min(42rem, calc(100% - 2rem)); margin: 3vh auto; padding: clamp(1rem, 4vw, 2rem); border: 1px solid var(--line, #34483e); border-radius: 1rem; background: var(--surface, #15241c); color: var(--ink, #e7eee7); }
+.guitar-tools-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.guitar-tools-head h1 { font-size: 1.4rem; margin: 0; }
+.guitar-tools button, .guitar-tools select, .guitar-tools input[type="number"] { font: inherit; border: 1px solid var(--line, #506358); border-radius: .45rem; color: inherit; background: var(--bg, #0e1b14); padding: .55rem .8rem; }
+.guitar-tools button { cursor: pointer; }
+.guitar-tools-tabs { display: flex; gap: .6rem; margin: 1.5rem 0; }
+.guitar-tools-tabs button { flex: 1; }
+.guitar-tools-tabs [aria-pressed="true"], .guitar-tools-count[aria-pressed="true"] { border-color: var(--accent, #e0a956); color: var(--accent, #e0a956); }
+.guitar-tools-tuner, .guitar-tools-metronome { text-align: center; }
+.guitar-tools-note { min-height: 6rem; margin: .5rem 0 0; font-size: 4.5rem; font-weight: 600; }
+.guitar-tools-note small { font-size: 1.6rem; margin-left: .2rem; }
+.guitar-tools-cents, .guitar-tools-hint { color: var(--ink-soft, #b3c0b5); font-size: .86rem; }
+.guitar-tools-meter { position: relative; display: flex; justify-content: space-between; align-items: center; height: 2.5rem; margin: 1rem auto; max-width: 25rem; border-bottom: 1px solid var(--line, #506358); }
+.guitar-tools-meter::after { content: ""; position: absolute; left: 50%; top: .5rem; bottom: 0; border-left: 1px solid var(--accent, #e0a956); }
+.guitar-tools-meter i { position: absolute; left: var(--tuner-position); bottom: .3rem; width: .4rem; height: 1.2rem; background: var(--accent, #e0a956); opacity: 0; transform: translateX(-50%); transition: left .1s; }
+.guitar-tools-meter .is-reading { opacity: 1; }
+.guitar-tools .input-bar { justify-content: center; flex-wrap: wrap; margin-top: 1.5rem; }
+.guitar-tools-tempo, .guitar-tools-controls { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: .7rem; margin: 1rem 0; }
+.guitar-tools-tempo input { width: 5.2rem; text-align: center; }
+.guitar-tools-controls select { margin-left: .4rem; max-width: 100%; }
+.guitar-tools-count { display: block; margin: 1.3rem auto; }
+.guitar-tools .guitar-tools-start { min-width: 12rem; border-color: var(--accent, #e0a956); }
+.guitar-tools-metronome .beat-pulse { margin: 0 auto 1rem; }

@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { buildDeck, familiesOnly, FOCUS_FAMILIES, type Focus } from "../song/deck";
 import { loadStore, today } from "../song/leitner";
 import { nextUnits } from "../overview/summary";
 import { relativeDay } from "../overview/visual";
 import type { GlyphName } from "../overview/modes";
 import type { InputApi } from "../listen/useInput";
-import { loadCurrentTuneId, loadLibrary, loadLibraryAsync, parseTuneEntry, saveCurrentTuneId, type TuneEntry } from "../tunes/library";
+import { getLibraryIssues, loadCurrentTuneId, loadLibrary, loadLibraryAsync, parseTuneEntry, saveCurrentTuneId, subscribeLibraryIssues, type TuneEntry } from "../tunes/library";
 import type { LeadSheet } from "../tunes/musicxml";
 import { buildTimeline, type Timeline } from "../tunes/order";
 import { Glyph } from "./Glyph";
@@ -35,6 +35,7 @@ export function FocusView({ focus, input, onOpenTunes, extra }: { focus: Mode; i
   const [selected, setSelected] = useState<string | null>(() => loadCurrentTuneId());
   const [coach, setCoach] = useState(false);
   const [revision, setRevision] = useState(0);
+  const libraryIssues = useSyncExternalStore(subscribeLibraryIssues, getLibraryIssues, getLibraryIssues);
 
   const entry = library.find((tune) => tune.id === selected) ?? library[0] ?? null;
   useEffect(() => {
@@ -115,6 +116,11 @@ export function FocusView({ focus, input, onOpenTunes, extra }: { focus: Mode; i
         </div>
       </header>
 
+      {!loading && libraryIssues.length ? <p className="focus-song-empty" role="status">
+        {libraryIssues.map((issue) => issue.name).join(", ")} {libraryIssues.length === 1 ? "needs" : "need"} a score repair. Healthy tunes remain available.
+        {onOpenTunes ? <> <button type="button" className="focus-song-secondary" onClick={onOpenTunes}>Repair in library</button></> : null}
+      </p> : null}
+
       {sheet && store ? (
         <>
           <div className="focus-song-tune" aria-label="current tune">
@@ -137,7 +143,7 @@ export function FocusView({ focus, input, onOpenTunes, extra }: { focus: Mode; i
         <section className="focus-song-empty-state">
           <Glyph name="library" size={30} />
           <div>
-            <strong>{loading ? "Opening library…" : loadError ? "Library unavailable" : entry ? "Unreadable score" : "No tunes"}</strong>
+            <strong>{loading ? "Opening library…" : loadError ? "Library unavailable" : libraryIssues.length ? "Scores need repair" : entry ? "Unreadable score" : "No tunes"}</strong>
             {loadError || entry ? <p>{loadError ? "Your saved tunes are unchanged." : "Import the MusicXML file again."}</p> : null}
           </div>
           {onOpenTunes ? <button type="button" className="focus-song-start" onClick={onOpenTunes}>Open library<Glyph name="arrow" size={15} /></button> : null}

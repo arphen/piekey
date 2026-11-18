@@ -7,24 +7,27 @@ Source repository: [arphen/piekey](https://github.com/arphen/piekey).
 
 ## Views
 
-- **Tutor** — the default entrypoint. Shows the current song, a mixed three-exercise queue, the
-  practice modes, and the next three units for every song in the library. Songs are read from the
-  same deck/box data as the full-screen session. Start today's practice directly or open a specific
-  exercise. An empty library previews the original Blue Hour jazz study, with First Steps as a
-  gentler alternative. Open the score or try practice without finding a file first.
-- **Changes** — the current tune's own chord and harmony cards, run as a focused full-screen session.
-- **Reading** — the tune's reading cards (fresh notes from its range each day) as a focused full-screen session.
-- **Song** (the Tunes tab) — a score-centered page for browsing MusicXML, listening to the melody
-  and backing, and starting practice. Click a printed bar or a phrase row to open that exact phrase
-  in the full-screen coach; the main practice action starts the daily session. There is no inline
-  Learn view.
-  The full-screen practice session is run from the guitar: played notes are its buttons, it follows
-  the player's tempo and mistakes, and between sessions it shows what moved (see
-  [docs/PRACTICE_SESSION.md](docs/PRACTICE_SESSION.md)). Free play with an adaptive metronome is
-  one note away.
-- **Scales** — the tune's scale cards as a focused session, plus the harmonic-minor shape explorer.
-- **Ear** — echo cards (hear a phrase from your tune's own scale, play it back; the page helps in the first tiers) plus the original chord quiz.
-- **Free play** — open its tile on Tutor for the adaptive metronome without importing a tune.
+- **Practice** — the home screen: current score, a short Next list, musical goals and Explore
+  shortcuts. Start the daily session, a selected exercise, or Free play without importing music.
+  An empty library offers **Listen** and **Try practice** for two original studies.
+- **Songs** — browse and hear MusicXML with the score at the center. Select a printed bar or
+  phrase, listen once or loop it, then launch that phrase in the full-screen coach. The selection
+  shows both printed bars and playing-order positions. Returning preserves the browsing position.
+  Library/import/backup tools are disclosed separately.
+- **Progress** — musical goals, historical task records, observed practice patterns and recordings.
+  Compare any two retained takes with tempo, task, score-version and assistance context.
+
+**Changes, Scales, Reading and Ear** remain accessible through Practice’s Explore shortcuts.
+Changes/Scales/Reading narrow the same `SongCoach` session; Ear includes tune-based echo cards and
+its existing chord quiz. Scales also has a shape explorer. The **Tools** control opens a chromatic
+440 Hz tuner and a metronome with tap tempo, count-in and subdivisions. Tools and Devices pause
+browsing audio and run outside the full-screen session.
+
+The full-screen coach is played from the guitar, with ordinary buttons alongside its gestures.
+It also offers **Practise without scoring** when the microphone is unavailable or unwanted.
+Self-guided activity stays in history and never earns measured accuracy, review-box or clean-tempo
+credit. **Finish after this pass** offers a musical ending; see
+[docs/PRACTICE_SESSION.md](docs/PRACTICE_SESSION.md).
 
 Practice runs locally, with preferences/progress stored in the browser and large scores/recordings
 in IndexedDB. Optional device pairing uses a signaling service to establish an encrypted connection.
@@ -43,7 +46,8 @@ Song includes an import preview with part/voice selection and explicit score rep
 **Devices → Save file** for a `.fretpack` containing tunes, practice history, settings and recordings.
 Importing a transfer merges its immutable transactions; repeated imports do not count practice twice.
 Song's older JSON practice backup remains available under Library tools and excludes recordings.
-Save failures remain visible and unsaved practice writes can be retried or exported.
+Save failures remain visible. Unsaved progress can be retried or exported; failed recording saves
+stay in memory with Retry and Save audio actions. Keep the page open until they are rescued.
 
 ## With your own agent
 
@@ -51,7 +55,8 @@ In **Song → Library → Library tools → Practice brief**, generate a saved-s
 preview it, then copy or download it to share with your chosen agent. The bounded report includes
 recent practice counts, observed notes/timing and demonstrated clean tempos with definitions and
 explicit unknowns. It excludes score XML, audio, hardware/calibration settings, pairing secrets and
-the transaction journal. Nothing is automatically sent to an LLM; generating a brief changes no
+the transaction journal. It includes the selected goal and bounded assessment-condition counts;
+older assistance and detector confidence remain explicitly unknown. Nothing is automatically sent to an LLM; generating a brief changes no
 practice state. A public `llms.txt` describes the capabilities and boundaries for external agents.
 
 The app remains guitar-first. The brief supports a conversation about goals and next steps;
@@ -66,7 +71,9 @@ ten minutes. Pasting a pairing link and carrying a `.fretpack` file are alternat
 
 Sync is manual and runs in the foreground, outside an active practice session. Devices waits for
 pending library saves/restores; opening it suspends the current screen's listening/ear engine,
-and closing it remounts saved state. It exchanges missing transactions and recordings in
+and closing it remounts saved state. Practice, the Ear quiz, Tools, Devices and JSON restore share
+an exclusive browser Web Lock; moving practice to another window waits for pending saves.
+Browsers without Web Locks retain browsing but cannot start these protected operations. It exchanges missing transactions and recordings in
 both directions, then confirms durable saves. Concurrent score edits are preserved as separate
 library copies; differences in history created before transaction recording are reported for review.
 Microphone/output choices, detector calibration, latency and pairing keys stay with each device.
@@ -89,10 +96,13 @@ Run `npm run build:quiet`, then serve the generated `dist/` contents at the root
 site. Open that address on the phone, then use the browser's install/Add to Home Screen action.
 After a successful production load and service-worker installation, the cached app opens offline;
 paired transfers still need connectivity for rendezvous. Updates wait until the old app windows
-close. The development server does not register the offline shell.
+close. A visible status distinguishes offline preparation, readiness, failure and an update
+waiting for windows to close. Fonts are bundled for offline use. The development server does
+not register the offline shell.
 
 Full transfer files work between local browser instances without public hosting. Real phone pairing,
-microphone use and installed-app behavior still need physical-device verification.
+microphone use and installed-app behavior still need physical-device verification. The explicit
+[setup and acceptance matrix](docs/SUPPORTED_SETUPS.md) records those checks as not run.
 
 ## Run locally
 
@@ -119,6 +129,8 @@ make check       # handoff gate: typecheck + repo-map freshness + tests
 
 ## Documentation
 
+- [docs/SOL_IMPLEMENTATION.md](docs/SOL_IMPLEMENTATION.md) — delivered implementation slices,
+  evidence limits and remaining product work.
 - [SOL_OPINION.md](SOL_OPINION.md) — comprehensive product critique, design direction, learning
   strategy, agent bridge, staged delivery plan and acceptance gates. Proposals are distinct from
   implemented features.

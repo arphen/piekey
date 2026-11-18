@@ -181,10 +181,10 @@ function renderNavigation() {
   return [
     "## Navigation",
     "",
-    "- `src/App.tsx` — app shell: six tabs, direct practice launches, standalone Free play, scale-explorer key and shared mic input.",
+    "- `src/App.tsx` — app shell: Practice/Songs/Progress, focused modes, tools, direct practice launches, standalone Free play, scale-explorer key and shared mic input.",
     "- `src/core/` — pure music domain: `contract.ts` shared types, keys/scales, fretboard, patterns, landings, shapes, Roman numerals, tune data.",
     "- `src/musicTheory.ts`, `src/pitchDetection.ts` — shared pitch/note-name primitives and microphone analysis.",
-    "- `src/components/` — Tutor, Song, Changes, Scales, Reading, Ear and Free play views; shared score, fretboard, session and device controls.",
+    "- `src/components/` — Practice, Songs, Progress, focused modes and Free play views; shared score, fretboard, session and device controls.",
     "- `src/audio/` — Web Audio playback: context, samples/pluck, metronome, backing band, MIDI export, `usePlayer` transport hook.",
     "- `src/reading/` — legacy deterministic sight-reading generator and levels, retained as score test fixtures.",
     "- `src/song/` — song/coach domain: harmony, cues, deck, fingering, Leitner review, lines, notation, voicings, session/follower hooks.",

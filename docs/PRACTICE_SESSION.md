@@ -40,7 +40,21 @@ All blocks, including focus work, fit the selected estimated budget; a melody is
 the ending when one fits. The estimate is not a countdown: retries and time spent on a passage
 can extend it. If nothing fits, the ready screen offers a longer length or free play. Mixed-tune
 attempts are ordered by timestamp (day/order for older data) before adapting the new-card count.
-From Tutor or a focused mode, choosing an exercise opens that exact card on the ready screen.
+From Practice or a focused mode, choosing an exercise opens that exact card on the ready screen.
+
+A selected musical goal fixes a short arrangement-specific route and personal start/target tempo.
+The planner favors its relevant tasks while retaining due review and a musical ending. New goals
+never rewrite the imported score tempo. Goals appear in Practice, Songs and Progress; their
+completion evidence is distinct from lifetime review boxes and historical milestones.
+
+Ready offers **Practise without scoring** before a fresh microphone request. This starts the same
+session engine with playback and manual actions, without listening-based verdicts. Activity is
+saved with source `self`; it earns no automatic box, kinship, accuracy or clean-tempo credit. A
+failed or denied microphone therefore leaves a useful practice route available.
+
+**Finish after this pass** is reachable through the shown time-note action and its button. During
+a timed pass it waits for that pass to finish, then opens the summary; elsewhere it finishes at the
+next safe boundary. **Stop now** remains available. Neither action awards an unfinished pass.
 
 ## One exercise
 
@@ -69,7 +83,11 @@ From Tutor or a focused mode, choosing an exercise opens that exact card on the 
   drift limits still apply. Calibration's play-along supplies effective compensation, including
   the player's response to the reference; it does not isolate hardware latency.
   Tuning/noise calibration belongs to the opened input and sample rate; measured lag also belongs
-  to the selected output. Changing that setup makes lag a guess until measured again. A suspended
+  to the selected output. Changing that setup makes lag a guess until measured again.
+  Assessed BPM comes from the completed pass's actual scheduled tempo, not its final control value.
+  Changing tempo invalidates the current pass immediately. A varying run-through is at most `ok`
+  and cannot certify a new clean speed; adaptive lessons need a fresh, stable complete pass.
+  A suspended
   input pauses the session until it resumes.
 - **Silence.** 8 s without a note at the player's own pace: the next note sounds quietly and the
   cursor calls. Twice that and the passage is played again. 75 s: the session rests until a note
@@ -97,7 +115,15 @@ keeping the current beat marker and readable state.
 
 - **Run-through.** The whole tune once with the band; nothing stops for a wrong note and the tempo
   holds. The result shows it bar by bar, the short bars come back in the next sessions, and the take
-  is recorded so the first and latest can be heard from the overview.
+  is recorded so retained takes can be compared in Progress. Recording/saving/saved/failure states
+  are distinct. Failed audio stays in memory with Retry and Save audio; keep the page open until
+  rescued. A stopped microphone may produce a visible unsupported/failed outcome, not a saved take.
+- **Rhythm on one note.** Select a phrase in Songs, then choose this exercise. Its existing note
+  durations, rests, ties and order become a single comfortable pitch. The next card returns to the
+  same phrase in context. This is pitched-attack timing, not muted-strum or expressive-rhythm grading.
+- **Echo.** Seeded calls include duration variation, rests and repeated notes at higher tiers. The
+  response remains at the player's own pace. A goal's BPM names the call tempo; success never
+  claims the response was performed at that BPM.
 - **Comping.** A section's or cadence's voicings struck on 2 and 4, then the Charleston, with the
   bass. Every hit must be struck again.
 - **Improvising.** Any notes over a section; the chord's notes are lit, a chord tone on one and
@@ -150,13 +176,25 @@ exactly that scale and pattern, the menu offers it.
 
 Save failures remain visible. Failed progress writes stay in memory for retry and are included
 in a backup exported from Song. Do not close the page before saving or exporting that progress.
-Audio takes are excluded from the backup. New tune identities are independent of titles and
+Song's JSON backup excludes audio; Devices → Save file exports a full `.fretpack`, including
+pending recoverable audio. New JSON exports and full transfers keep input/output/calibration and
+latency local to each device; older JSON hardware settings are ignored on restore. New tune identities are independent of titles and
 arrangements; existing identities and their history stay unchanged.
 
 The overview reports measured note accuracy, clean scale tempo relative to its goal, timing and
-performance milestones. A suggested next BPM is not an achievement; the fastest clean tempo is
+historical task milestones. New goal evidence needs microphone-checked clean attempts of the same
+arrangement since goal creation; timed targets need real timing samples. Support, notation,
+tempo mode, exposure and interruption travel with new attempts/takes where known. Older evidence
+remains unknown, and detector confidence is currently unknown. A suggested next BPM is not an achievement; the fastest clean tempo is
 kept on the card even after detailed history is trimmed. Whole-tune, section, memory and run-through
 milestones are independent of how many technique variants the deck contains.
+
+Practice, Free play, Tools, the Ear quiz and Devices reserve one writer window per browser origin.
+An explicit handoff unmounts listening hooks and waits for pending saves before another window
+starts. If those writes fail, ownership stays with their recovery window. JSON restore also needs
+an idle writer lock. Browsers without Web Locks keep score browsing but cannot start these
+protected operations. Installed/mobile behavior needs the physical checks in
+[SUPPORTED_SETUPS.md](SUPPORTED_SETUPS.md).
 
 ## Not there yet
 

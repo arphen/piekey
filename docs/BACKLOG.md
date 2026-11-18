@@ -32,10 +32,10 @@ Unless an item says otherwise, implement it there.
 | --- | --- | --- | --- |
 | T1 | Done-screen movement, multiple tunes/types, axes of variation | SHIPPED (v1) | Axes are fixed to tune × family; no configurable axis model. |
 | T2 | Done-screen actions playable from the guitar; instrument-navigable app | PARTIAL | Done screen is fully playable; other views have no note controller. |
-| T3 | Metrics over sessions per exercise and overall, performance over time | PARTIAL | Overview now shows skill axes with trends, minutes a week, tune path (2026-11-17); no per-exercise history chart. |
+| T3 | Metrics over sessions per exercise and overall, performance over time | PARTIAL | Progress now combines goal evidence, retained audio comparison and cross-tune observations; long-term per-exercise chart remains open. |
 | T4 | Done-screen visual fidelity; micro/macro/mini attention design; refreshing music | SHIPPED (v1) | Subjective polish and user validation remain. |
 | T5 | AFK time should not keep counting | SHIPPED | Verify in a real browser. |
-| T6 | Learn bars 1–3 only; hide irrelevant bars | PARTIAL | Other bars are dimmed/faded, not removed. |
+| T6 | Learn bars 1–3 only; hide irrelevant bars | PARTIAL | Songs selects generated phrases with explicit listen/loop/practice; arbitrary drag ranges and hiding irrelevant coach bars remain open. |
 | T7 | Remove patronizing/AI language; react instead of instructing | PARTIAL | Modern session is neutral; LearnView/Practice/TuneView copy remains instructive. |
 | T8 | Listen again always available, triggered by a guitar note (e.g. E5) | PARTIAL | Done in SongCoach; Learn/Tune/Reading/Changes lack it. |
 | T9 | Silence guidance, playback cursor, wrong-note names in score | PARTIAL | Full treatment in SongCoach; other score views only highlight the bar. |
@@ -55,6 +55,20 @@ Unless an item says otherwise, implement it there.
 | T23 | Ear as call-and-response: hear a phrase, play it back (tiered, in the songs' keys, page as a help first) | PARTIAL (v1 built) | Two-note, chord-arpeggio and other-key calls added (2026-11-17); feel untuned, no adaptive page, no chord-quality calls. The chord quiz stays behind a button. |
 
 ## Recommended next steps
+
+
+**SOL implementation (2026-11-18, code verified; hardware verification open):** Practice/Songs/
+Progress is the primary hierarchy; focus modes remain under Explore. T3 now has a dedicated
+Progress surface, comparable retained audio and sample-counted cross-tune observations, though
+long-term per-exercise history is still open. T6/T15 score browsing now selects a phrase before
+explicit listening/loop/practice and restores browse position. T17 gains immutable, arrangement-bound
+musical goals and goal-aware planning; T16/T21 use actual stable assessed-pass tempo, excluding
+self-guided activity and varying run-throughs from clean-speed claims. T18 gains standalone tuner/
+metronome Tools on the shared input/transport. T23 calls have seeded rhythm/rest/repeated-note
+variety; their own-pace response is not a performed-BPM claim. Recording failure rescue, named
+partial-library repair, portable backup policy, active-window ownership, local fonts and visible
+offline/update state are implemented. None closes the real-guitar/mobile acceptance work. See
+[SOL_IMPLEMENTATION.md](SOL_IMPLEMENTATION.md) and [SUPPORTED_SETUPS.md](SUPPORTED_SETUPS.md).
 
 **Demo/agent/timing update (2026-11-18):** original Blue Hour and First Steps are accessible from
 the empty Tutor and Song's persistent demo shelf, with direct listening/practice and XML download.
@@ -174,7 +188,8 @@ session; show performance over time; show stats.
 minutes, a 14-session clean-share line, per-exercise tempo sparklines, box counts and the tree.
 `leitner.ts` stores `Attempt[]` history (capped at 800) and `SessionEntry[]` (capped at 200).
 
-**What remains.** No dedicated stats screen; no long-term per-exercise chart (only a 56×18 sparkline
+**2026-11-18 update.** A dedicated Progress view now owns cross-tune observations, current goal evidence
+and retained recording comparison. **What remains.** No long-term per-exercise chart (only a 56×18 sparkline
 of the last 10 tempos); no cross-tune or all-library totals (`totals(s.store)` reads the current
 tune's store); no export; no comparison between exercise types; no "best/median/average" table.
 The data is mostly there; the presentation is not.

@@ -4,6 +4,7 @@ import { initializeSyncJournal } from "../sync/state";
 import { getSyncState, subscribeSyncState } from "../sync/journal";
 import { clearStorageError, reportStorageError } from "../storage";
 import { isLibraryBusy, subscribeLibraryOperations } from "../tunes/library";
+import { PracticeWindowBoundary } from "../platform/PracticeWindowBoundary";
 import { Glyph } from "./Glyph";
 import "../sync/sync.css";
 
@@ -25,8 +26,8 @@ export function DeviceSync({ open, onOpenChange, onUpdated }: { open: boolean; o
     <button type="button" className="device-sync-trigger" disabled={libraryBusy} title={libraryBusy ? "Wait for the library to finish saving." : undefined} onClick={() => { if (!sessionOpen() && !isLibraryBusy()) onOpenChange(true); }} aria-label="Devices and sync">
       <Glyph name="devices" size={19} /><span>Devices</span>
     </button>
-    {open ? <Suspense fallback={<span className="device-sync-loading" role="status">Opening devices…</span>}>
+    {open ? <PracticeWindowBoundary onExit={() => onOpenChange(false)}><Suspense fallback={<span className="device-sync-loading" role="status">Opening devices…</span>}>
       <DeviceSyncPanel onClose={() => onOpenChange(false)} onUpdated={onUpdated} />
-    </Suspense> : null}
+    </Suspense></PracticeWindowBoundary> : null}
   </>;
 }

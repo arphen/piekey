@@ -3,12 +3,13 @@ import type { InputApi } from "../listen/useInput";
 import { hush, interlude } from "../song/cues";
 import { FAMILY_LABEL, type Deck, type Family } from "../song/deck";
 import { loadFreePlay } from "../song/freeplay";
-import { allStores, boxCounts, BOXES, type CardState, type Result } from "../song/leitner";
-import { cardTrend, familyOf, meanShare, sessionTrend, totals } from "../song/stats";
+import { allStores, boxCounts, BOXES, chronologicalAttempts, type CardState, type Result } from "../song/leitner";
+import { familyOf, meanShare, sessionTrend, totals } from "../song/stats";
 import { buildTree } from "../song/tree";
 import type { SessionApi } from "../song/useSession";
 import { NoteTag, useNoteKeys } from "./GuitarPad";
 import { SkillTree } from "./SkillTree";
+import { RecordingStatus } from "./RecordingStatus";
 
 // Between sessions. A few bars of music, then what happened, in the order the eye should take it:
 // the numbers, the exercises travelling to their new boxes, the map filling in, and last what a
@@ -32,6 +33,8 @@ interface Row {
   bpm: number | null;
   delta: number | null; // tempo against the time before
   tempos: number[]; // each time it was played, oldest first
+  tempoLabel: "played" | "call" | "reference" | null;
+  self: boolean;
 }
 
 /** A number's history as a line: no axes, the last point marked. */
@@ -145,7 +148,13 @@ export function SessionSummary({
     const out = new Map<string, Row>();
     for (const o of s.log) {
       if (o.result === "skip") continue;
-      const trend = cardTrend(s.store, o.id);
+      const self = o.conditions?.source === "self";
+      const timed = !self && (o.conditions?.tempo === "fixed" || o.conditions?.tempo === "adaptive");
+      const visits = chronologicalAttempts(s.store.history ?? []).filter((attempt) => attempt.id === o.id);
+      const version = visits[visits.length - 1]?.arrangementFingerprint;
+      const tempos = timed && version ? visits
+        .filter((attempt) => attempt.arrangementFingerprint === version && attempt.conditions?.source === "measured" && (attempt.conditions.tempo === "fixed" || attempt.conditions.tempo === "adaptive") && (attempt.ev?.time?.n ?? 0) > 0)
+        .slice(-10).map((attempt) => attempt.bpm) : [];
       out.set(o.id, {
         id: o.id,
         title: `${byId.get(o.id)?.title ?? o.id}${o.secret ? ` · ${o.secret}` : ""}`,
@@ -154,16 +163,18 @@ export function SessionSummary({
         from: out.get(o.id)?.from ?? o.from, // twice in a session: from where it started
         to: o.to,
         result: o.result,
-        bpm: o.bpm,
-        delta: trend.bpmDelta,
-        tempos: trend.bpm,
+        bpm: self ? null : o.bpm,
+        delta: tempos.length >= 2 ? tempos[tempos.length - 1] - tempos[tempos.length - 2] : null,
+        tempos,
+        tempoLabel: self ? null : timed ? "played" : byId.get(o.id)?.family === "ear" ? "call" : "reference",
+        self,
       });
     }
     const along: Row[] = [];
     for (const o of s.log)
       for (const a of o.also)
         if (!out.has(a.id) && !along.some((r) => r.id === a.id))
-          along.push({ id: a.id, title: byId.get(a.id)?.title ?? a.id, tune: byId.get(a.id)?.tune ?? title, family: byId.get(a.id)?.family ?? familyOf(a.id), from: a.from, to: a.to, result: "carried", bpm: null, delta: null, tempos: [] });
+          along.push({ id: a.id, title: byId.get(a.id)?.title ?? a.id, tune: byId.get(a.id)?.tune ?? title, family: byId.get(a.id)?.family ?? familyOf(a.id), from: a.from, to: a.to, result: "carried", bpm: null, delta: null, tempos: [], tempoLabel: null, self: false });
     return { rows: [...out.values()], carried: along };
   }, [s.log, s.store, byId, title]);
 
@@ -246,6 +257,10 @@ export function SessionSummary({
         ) : null}
       </header>
 
+      {s.log.some((outcome) => outcome.conditions?.source === "self") ? <p className="recording-status">Self-guided practice is activity, with no mic score or box advancement.</p> : null}
+      {s.log.some((outcome) => outcome.conditions?.tempo === "own-pace" && outcome.conditions.source !== "self") ? <p className="recording-status">Own-pace BPM is the call or reference tempo, not your performed speed.</p> : null}
+      <RecordingStatus ids={s.log.flatMap((outcome) => outcome.recordingId ? [outcome.recordingId] : [])} />
+
       <div className="sm-body">
         <section className="sm-left">
           {groups.length ? (
@@ -273,7 +288,7 @@ export function SessionSummary({
                     const here = moved ? r.to : r.from;
                     const style = { "--from": r.from, "--at": here, "--lo": Math.min(r.from, here), "--span": Math.abs(here - r.from), "--d": `${row++ * 90}ms` } as CSSProperties;
                     return (
-                      <div key={r.id} className={`sm-row is-${r.result}`} style={style} title={`${r.title}: ${r.from ? `box ${r.from}` : "new"} → box ${r.to}`}>
+                      <div key={r.id} className={`sm-row is-${r.result}`} style={style} title={r.self ? `${r.title}: self-guided, unscored` : `${r.title}: ${r.from ? `box ${r.from}` : "new"} → box ${r.to}`}>
                         <span className="sm-name">{r.title}</span>
                         <span className="sm-track">
                           {[0, 1, 2, 3, 4, 5].map((b) => (
@@ -285,10 +300,10 @@ export function SessionSummary({
                         </span>
                         <span className="sm-tempo">
                           <Spark values={r.tempos} label={`tempo each time: ${r.tempos.join(", ")}`} />
-                          {r.bpm !== null ? <b>♩ {r.bpm}</b> : null}
+                          {r.bpm !== null ? <b>{r.tempoLabel === "call" ? "call " : r.tempoLabel === "reference" ? "ref. " : ""}♩ {r.bpm}</b> : null}
                           {r.delta ? <em>{r.delta > 0 ? `+${r.delta}` : `−${-r.delta}`}</em> : null}
                         </span>
-                        <span className="sm-verdict">{r.result === "clean" ? "✓ clean" : r.result === "ok" ? "through" : r.result === "fail" ? "↺ comes back" : "carried"}</span>
+                        <span className="sm-verdict">{r.self ? "unscored" : r.result === "clean" ? "✓ clean" : r.result === "ok" ? "through" : r.result === "fail" ? "↺ comes back" : "carried"}</span>
                       </div>
                     );
                   })}

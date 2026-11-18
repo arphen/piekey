@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { GlyphName } from "../overview/modes";
 
-export type UtilityGlyphName = "home" | "play" | "library" | "arrow" | "clock" | "check" | "devices" | "sync" | "close" | "copy" | "plus" | "download";
+export type UtilityGlyphName = "home" | "play" | "library" | "arrow" | "clock" | "check" | "devices" | "sync" | "close" | "copy" | "plus" | "download" | "progress" | "tools";
 
 const PATHS: Record<GlyphName | UtilityGlyphName, ReactNode> = {
   home: <><path d="m3 11 9-7 9 7" /><path d="M5 10v10h5v-6h4v6h5V10" /></>,
@@ -16,6 +16,8 @@ const PATHS: Record<GlyphName | UtilityGlyphName, ReactNode> = {
   copy: <><path d="M8 4H4v12h4" /><rect x="8" y="8" width="12" height="13" rx="1" /></>,
   plus: <path d="M12 4v16M4 12h16" />,
   download: <><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5" /></>,
+  progress: <><path d="M4 19h16M5 15l4-5 4 2 6-7" /><circle cx="9" cy="10" r="1" /><circle cx="13" cy="12" r="1" /></>,
+  tools: <><path d="M6 4v16M12 4v16M18 4v16" /><path d="M3 8h6M9 16h6M15 10h6" /></>,
   melody: (
     <>
       <path d="M9 18V6l9-2v12" />

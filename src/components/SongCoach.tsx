@@ -10,7 +10,10 @@ import { mod, pitchClassToName } from "../musicTheory";
 import { melodyOverChords } from "../tunes/learn";
 import type { LeadSheet } from "../tunes/musicxml";
 import { printedResults, type Timeline } from "../tunes/order";
-import { buildDeck, FAMILY_LABEL, familiesOnly, FOCUS_FAMILIES, FOCUS_LABEL, mixDecks, noteName as spelled, type Card, type Context, type Deck, type Focus } from "../song/deck";
+import { buildDeck, FAMILY_LABEL, familiesOnly, FOCUS_FAMILIES, FOCUS_LABEL, mixDecks, noteName as spelled, rhythmSourceId, type Card, type Context, type Deck, type Focus } from "../song/deck";
+import { rhythmSheet } from "../song/rhythm";
+import { arrangementIdentity, goalDeck, loadActiveGoal } from "../song/goals";
+import { useGoals } from "../song/useGoals";
 import { fitTiming, timingTolerance } from "../tunes/scoring";
 import { localId } from "../song/ids";
 import { KEY_FIFTHS, lineSheet } from "../song/notation";
@@ -32,6 +35,8 @@ import { Fretboard, type FretGhost, type FretPulse, type LabelMode } from "./Fre
 import { BeatPulse, PracticeAtmosphere } from "./PracticeAtmosphere";
 import { Score } from "./Score";
 import { SessionSummary } from "./SessionSummary";
+import { RecordingRecovery, RecordingStatus } from "./RecordingStatus";
+import { PracticeWindowBoundary } from "../platform/PracticeWindowBoundary";
 import "../song/song.css";
 import "../song/coach-flow.css";
 
@@ -58,7 +63,7 @@ const PAGE = 8; // notes of a long run shown on the fretboard at once
 const HOLD_MS = 700; // a note held this long is a "yes"
 const HOLD_GAP_MS = 160;
 const IDLE_MS = 2600; // then the corner buttons and the cursor fade
-const READY_KEYS = [50, 49, 56, 53]; // D: free play · C♯: settings · G♯: this tune or all of them · F: how long, in any octave
+const READY_KEYS = [50, 49, 56, 53, 51]; // D: free play · C♯: settings · G♯: mix · F: length · E♭: self-guided
 const NECK_MS = 7000; // the neck stays this long after it was called for
 const NO_TUNES: { sheet: LeadSheet; tl: Timeline }[] = [];
 const IV_LABEL: Record<number, string> = { 0: "R", 1: "♭9", 2: "9", 3: "♭3", 4: "3", 5: "4", 6: "♭5", 7: "5", 8: "♯5", 9: "6", 10: "♭7", 11: "7" };
@@ -215,11 +220,11 @@ function shapeOf(card: Card, active: number): { key: string; spots: Set<string> 
   return { key: `${card.id}:${from}:${to}`, spots };
 }
 
-/** Call from the click that opens the session: full screen, audio and the input all need a gesture. */
+/** Prime sound from the opening click; a new microphone permission remains an explicit choice. */
 export function openPractice(input: InputApi) {
   ensureAudio();
   void Tone.start().catch(() => undefined);
-  if (input.status === "idle" || input.status === "error") void input.start();
+  if (input.status === "idle" || input.status === "error") input.autoStart();
   const el = document.documentElement;
   if (el.requestFullscreen && !document.fullscreenElement) el.requestFullscreen().catch(() => undefined);
 }
@@ -298,12 +303,20 @@ function useHold(input: InputApi, enabled: boolean, onHold: () => void, except: 
 /** How often each exercise of a tune has been played: decides what its reading exercises bring next. */
 const seenIn = (tuneId: string) => Object.fromEntries(Object.entries(loadStore(tuneId).cards).map(([id, st]) => [id, st.seen]));
 
-export function SongCoach({ sheet, tl, input, onClose, tunes = [], onTune, others = NO_TUNES, focus = "all", initialCardId }: SongCoachProps) {
+export function SongCoach(props: SongCoachProps) {
+  return <PracticeWindowBoundary onExit={props.onClose}><SongCoachSession {...props} /></PracticeWindowBoundary>;
+}
+
+function SongCoachSession({ sheet, tl, input, onClose, tunes = [], onTune, others = NO_TUNES, focus = "all", initialCardId }: SongCoachProps) {
   const [windowP, setWindowP] = useState<number | null>(() => loadStore(sheet.id).settings.window);
   const [mix, setMix] = useState(() => loadStore(sheet.id).settings.mix !== false); // the other tunes' exercises too
   // reading exercises bring new notes whenever this changes: every day, and after every session
   const [round, setRound] = useState(() => `${today()}:${loadStore(sheet.id).sessions.length}`);
-  const own = useMemo(() => buildDeck(sheet, tl, { window: windowP ?? undefined, round, seen: seenIn(sheet.id) }), [sheet, tl, windowP, round]);
+  const rawOwn = useMemo(() => buildDeck(sheet, tl, { window: windowP ?? undefined, round, seen: seenIn(sheet.id), rhythmFrom: rhythmSourceId(initialCardId) }), [sheet, tl, windowP, round, initialCardId]);
+  const goals = useGoals();
+  const activeGoal = useMemo(() => loadActiveGoal(sheet, rawOwn), [sheet, rawOwn, goals]);
+  const own = useMemo(() => goalDeck(rawOwn, activeGoal), [rawOwn, activeGoal]);
+  const arrangementFingerprint = useMemo(() => arrangementIdentity(sheet).fingerprint, [sheet]);
   const focused = useMemo(() => (focus === "all" ? own : familiesOnly(own, FOCUS_FAMILIES[focus])), [focus, own]);
   const guests = useMemo(
     () =>
@@ -317,15 +330,16 @@ export function SongCoach({ sheet, tl, input, onClose, tunes = [], onTune, other
   const deck = useMemo(() => mixDecks(focused, guests), [focused, guests]);
   const tuneIds = useMemo(() => [sheet.id, ...guests.map((g) => g.tuneId)], [sheet.id, guests]);
   const sheets = useMemo(() => new Map<string, LeadSheet>([[sheet.id, sheet], ...guests.map((g) => [g.tuneId, g.sheet] as [string, LeadSheet])]), [sheet, guests]);
+  const arrangementFingerprints = useMemo(() => new Map([...sheets].map(([id, score]) => [id, arrangementIdentity(score).fingerprint])), [sheets]);
   const [gapIds, setGapIds] = useState<ReadonlySet<string>>(() => new Set()); // a focus on time: these play with gaps in the band
-  const session = useSession(deck, tuneIds, input, { gap: gapIds });
+  const session = useSession(deck, tuneIds, input, { gap: gapIds, arrangementFingerprint, arrangementFingerprints, tempoBounds: activeGoal?.tempo });
   const outputs = useOutputs();
   const [labels, setLabels] = useState<LabelMode>("names");
   const [menu, setMenu] = useState(false);
   const [free, setFree] = useState(false); // free play: nothing asked, a click that follows the player
   const [full, setFull] = useState(() => Boolean(document.fullscreenElement));
   const [pad, setPad] = useState<number | null>(null); // the guitar's own menu: which page is up
-  const [calib, setCalib] = useState(() => !loadProfile()); // hearing the guitar: the first time, and on request
+  const [calib, setCalib] = useState(() => !loadProfile() && input.status !== "idle" && input.status !== "error");
   const checkedSetups = useRef(new Set<string>());
   const skippedPendingSetup = useRef(false);
   const idle = useIdle(!menu);
@@ -374,13 +388,14 @@ export function SongCoach({ sheet, tl, input, onClose, tunes = [], onTune, other
   const shaped = useMemo<SessionPlan>(() => {
     const chosen = deck.cards.find((card) => card.id === chosenCard);
     if (chosen) {
-      const minutes = Math.max(1, Math.ceil(cardSeconds(store)[chosen.family] / 60));
-      return { ids: [chosen.id], blocks: [{ role: "focus", cards: [chosen.id], minutes }], minutes, why: "Selected exercise", arc: null };
+      const ids = [chosen.id, ...(chosen.followedBy ? [chosen.followedBy] : [])];
+      const minutes = Math.max(1, Math.ceil(ids.length * cardSeconds(store)[chosen.family] / 60));
+      return { ids, blocks: [{ role: "focus", cards: ids, minutes }], minutes, why: chosen.followedBy ? "Rhythm, then the phrase" : "Selected exercise", arc: null };
     }
     const day = today();
     const profile = buildProfile(allAttempts(allStores()), day, latencyMeasured());
-    return planBlocks(deck, store, day, { minutes: LENGTH_MINUTES[length], tuneId: sheet.id, profile, arc: loadArc() });
-  }, [chosenCard, deck, store, length, sheet.id]);
+    return planBlocks(deck, store, day, { minutes: LENGTH_MINUTES[length], tuneId: sheet.id, profile, arc: loadArc(), goal: activeGoal });
+  }, [chosenCard, deck, store, length, sheet.id, activeGoal]);
   const plan = shaped.ids;
   const cycleLength = () => {
     if (!live) session.updateSettings({ length: LENGTHS[(LENGTHS.indexOf(length) + 1) % LENGTHS.length] });
@@ -391,12 +406,13 @@ export function SongCoach({ sheet, tl, input, onClose, tunes = [], onTune, other
     if (document.fullscreenElement) document.exitFullscreen().catch(() => undefined);
     onClose();
   };
-  const beginNow = () => {
+  const beginNow = (self = false) => {
     if (calib || menu || free || !plan.length) return;
     saveArc(shaped.arc);
     const onTime = shaped.arc && ["rushing", "dragging", "unsteady"].includes(shaped.arc.cls);
     setGapIds(new Set(onTime ? shaped.blocks.find((b) => b.role === "focus")?.cards ?? [] : []));
-    session.begin(plan);
+    if (self) session.begin(plan, true);
+    else session.begin(plan);
     setChosenCard(undefined);
   };
   const toggleFull = () => {
@@ -504,7 +520,7 @@ export function SongCoach({ sheet, tl, input, onClose, tunes = [], onTune, other
   const toneKeys = toneKeysFor(usedPcs, 2);
   // the drawer's switches: click, melody under me, spoken names. Full screen is left out because
   // browsers only grant it from a real click or key press, never from a note coming in.
-  const switchTones = drawerToneKeys(usedPcs, 3, toneKeys);
+  const switchTones = drawerToneKeys(usedPcs, 6, toneKeys);
   // between exercises single notes are the keys, so double taps only work the open drawer there
   const tapped = useToneKeys(input, !calib && !free && (inExercise || menu), [...toneKeys, ...switchTones], (key) => {
     if (key === 0) (menu ? closeMenu : openMenu)();
@@ -542,7 +558,7 @@ export function SongCoach({ sheet, tl, input, onClose, tunes = [], onTune, other
       title: "Session",
       rows: [
         { label: "Exercise controls" },
-        { label: "Next exercise" },
+        { label: session.selfGuided ? "Done practising" : "Next exercise" },
         { label: "Click", value: session.click ? "on" : "off" },
         { label: "Support melody", value: session.settings.guide ? "always" : "when needed" },
         { label: session.spot ? "Return to the piece" : "Practise this bar" },
@@ -565,7 +581,7 @@ export function SongCoach({ sheet, tl, input, onClose, tunes = [], onTune, other
         { label: "Free play" },
         { label: "Shuffle", value: session.settings.shuffle ? "on" : "off" },
         { label: "Calibrate guitar" },
-        { label: "Finish session" },
+        { label: session.ending ? "Finishing after this pass" : "Finish after this pass" },
       ],
       fire: [
         () => setPad(1),
@@ -573,7 +589,7 @@ export function SongCoach({ sheet, tl, input, onClose, tunes = [], onTune, other
         openFree,
         () => session.updateSettings({ shuffle: !session.settings.shuffle }),
         () => (setPad(null), setCalib(true)), // stays paused until the guitar has been heard
-        () => (closePad(false), session.finish()),
+        () => (closePad(), session.finishAfterPass()),
       ],
     },
   ];
@@ -657,7 +673,8 @@ export function SongCoach({ sheet, tl, input, onClose, tunes = [], onTune, other
           shaped={shaped}
           length={length}
           onLength={cycleLength}
-          onBegin={beginNow}
+          onBegin={() => beginNow()}
+          onSelfBegin={() => beginNow(true)}
           onFree={openFree}
           onSettings={openMenu}
           keysOn={between}
@@ -742,6 +759,7 @@ function Ready({
   length,
   onLength,
   onBegin,
+  onSelfBegin,
   onFree,
   onSettings,
   keysOn,
@@ -759,6 +777,7 @@ function Ready({
   length: string;
   onLength(): void;
   onBegin(): void;
+  onSelfBegin(): void;
   onFree(): void;
   onSettings(): void;
   keysOn: boolean;
@@ -770,7 +789,7 @@ function Ready({
   const byId = useMemo(() => new Map(deck.cards.map((c) => [c.id, c])), [deck]);
   // any held note begins, except the ones that mean something else here
   const ring = useHold(input, plan.length > 0 && keysOn, onBegin, READY_KEYS.map((m) => mod(m)));
-  const held = useNoteKeys(input, keysOn, [READY_KEYS[0], READY_KEYS[1], guests.length ? READY_KEYS[2] : null, READY_KEYS[3]], (k) => (k === 0 ? onFree() : k === 1 ? onSettings() : k === 2 ? onMix() : onLength()), true);
+  const held = useNoteKeys(input, keysOn, [READY_KEYS[0], READY_KEYS[1], guests.length ? READY_KEYS[2] : null, READY_KEYS[3], READY_KEYS[4]], (k) => (k === 0 ? onFree() : k === 1 ? onSettings() : k === 2 ? onMix() : k === 3 ? onLength() : onSelfBegin()), true);
   const from = new Set(plan.map((id) => byId.get(id)?.tune).filter(Boolean));
   const listening = input.status === "listening" && !input.paused;
   const first = byId.get(plan[0]);
@@ -833,6 +852,9 @@ function Ready({
           onClick={listening ? onBegin : () => void input.start()}
         >
           {startLabel}<span aria-hidden="true">↗</span>
+        </button>
+        <button type="button" onClick={onSelfBegin} disabled={!keysOn || !plan.length}>
+          <NoteTag midi={READY_KEYS[4]} held={held === 4} octave={false} /> Practise without scoring
         </button>
       </div>
 
@@ -907,6 +929,8 @@ function barsOf(card: Card, sheet: LeadSheet): string {
  */
 function coachLine(card: Card, s: SessionApi, last: number | undefined): { text: string; tone?: "good" } {
   if (s.paused) return { text: "" };
+  if (s.ending) return { text: "Finishing after this pass" };
+  if (s.selfGuided) return { text: "Self-guided · no mic score" };
   if (s.phase === "pace") {
     if (card.view === "chords" || !s.follow.done || !s.lastTake) return { text: "" };
     return { text: `${s.lastTake.hit} of ${s.lastTake.total}`, tone: s.lastTake.clean ? "good" : undefined };
@@ -1016,7 +1040,7 @@ function Running({
         <div className="ss-phasebar">
           <span className="ss-exercise-count">{String(s.pos + 1).padStart(2, "0")} <em>/ {String(s.queue.length).padStart(2, "0")}</em></span>
           <span className="ss-phase-name" aria-live="polite"><i />{phase}</span>
-          <span className={`ss-connection ${listening ? "is-live" : ""}`}><i />{listening ? "Input live" : "Input off"}</span>
+          <span className={`ss-connection ${listening ? "is-live" : ""}`}><i />{s.selfGuided ? "Self-guided · unscored" : listening ? "Input live" : "Input off"}</span>
         </div>
         <p className="ss-kicker">
           <span className="ss-fam">{FAMILY_LABEL[card.family]}</span>
@@ -1061,6 +1085,7 @@ function Running({
             <strong>{s.away ? "A moment of quiet" : s.listeningOff ? "Let’s hear you again" : "Paused"}</strong>
             <small>{s.listeningOff ? input.error ?? "The session carries on when the guitar is connected." : s.away ? "A note brings the session back." : "Space to carry on · low E for the guitar menu"}</small>
             {s.listeningOff ? <button type="button" onClick={() => void input.start()} disabled={input.status === "starting"}>{input.status === "starting" ? "Opening input…" : input.paused ? "Resume listening" : "Reconnect input"}</button> : null}
+            {s.listeningOff ? <button type="button" onClick={s.continueWithoutScoring}>Continue without scoring</button> : null}
           </span>
         ) : null}
         {s.phase === "result" && s.outcome ? <ResultMark o={s.outcome} titleOf={(id) => byId.get(id)?.title ?? ""} secret={s.outcome.secret} /> : null}
@@ -1113,9 +1138,9 @@ function Running({
                 </li>
               ))}
               <li className="ss-trail-next">
-                <button type="button" onClick={s.next} disabled={s.paused} aria-label={`Next exercise${s.keys.next !== null ? ` · hold ${keyName(s.keys.next)}` : ""}`}>
+                <button type="button" onClick={s.next} disabled={s.paused} aria-label={`${s.selfGuided ? "Done practising" : "Next exercise"}${s.keys.next !== null ? ` · hold ${keyName(s.keys.next)}` : ""}`}>
                   <NoteTag midi={s.keys.next} held={held === 3} />
-                  <span>Next exercise</span>
+                  <span>{s.selfGuided ? "Done practising" : "Next exercise"}</span>
                 </button>
               </li>
             </ol>
@@ -1150,7 +1175,8 @@ function BoxPips({ box, gained = 0 }: { box: number; gained?: number }) {
 }
 
 function ResultMark({ o, titleOf, secret }: { o: Outcome; titleOf(id: string): string; secret?: string }) {
-  const text = o.result === "clean" ? `Box ${o.to}` : o.result === "ok" ? `Stays in box ${o.to}` : o.result === "fail" ? "Back to box 1" : "";
+  const self = o.conditions?.source === "self";
+  const text = self ? "Practice noted · unscored" : o.result === "clean" ? `Box ${o.to}` : o.result === "ok" ? `Stays in box ${o.to}` : o.result === "fail" ? "Back to box 1" : "";
   const also = o.also.map((a) => titleOf(a.id)).filter(Boolean);
   return (
     <div className={`ss-result is-${o.result}`}>
@@ -1160,10 +1186,10 @@ function ResultMark({ o, titleOf, secret }: { o: Outcome; titleOf(id: string): s
       </svg>
       {secret ? <p className="ss-result-secret">{secret}</p> : null}
       {text ? <p>{text}</p> : null}
-      {o.result !== "skip" ? <BoxPips box={o.to} gained={o.to > o.from ? o.to : 0} /> : null}
+      {o.result !== "skip" && !self ? <BoxPips box={o.to} gained={o.to > o.from ? o.to : 0} /> : null}
       {o.result !== "skip" ? (
         <p className="ss-result-facts">
-          ♩ {o.bpm}
+          {!self ? <>{o.conditions?.tempo === "own-pace" ? "reference " : ""}♩ {o.bpm}</> : "Unscored"}
           {o.share !== null ? ` · ${Math.round(o.share * 100)}%` : ""}
         </p>
       ) : null}
@@ -1174,6 +1200,7 @@ function ResultMark({ o, titleOf, secret }: { o: Outcome; titleOf(id: string): s
           ))}
         </ol>
       ) : null}
+      {o.recordingId ? <RecordingStatus ids={[o.recordingId]} /> : null}
       {also.length ? (
         <p className="ss-result-also">
           carried up with it: {also.slice(0, 3).join(" · ")}
@@ -1442,7 +1469,8 @@ function excerptOf(sheet: LeadSheet, bars: number[]) {
   return { exercise: { bars: cutBars, keySignature, timeSignature }, from, offset, count: cutBars.reduce((n, b) => n + heads(b), 0) };
 }
 
-function MelodyStage({ card, session: s, sheet }: { card: Card; session: SessionApi; sheet: LeadSheet }) {
+function MelodyStage({ card, session: s, sheet: source }: { card: Card; session: SessionApi; sheet: LeadSheet }) {
+  const sheet = useMemo(() => card.rhythmPitch !== undefined ? rhythmSheet(source, card.rhythmPitch) : source, [source, card.rhythmPitch]);
   const over = useMemo(() => melodyOverChords(sheet), [sheet]);
   const bars = useMemo(() => {
     const set = new Set<number>();
@@ -1707,6 +1735,8 @@ function Drawer({
           </button>
         </header>
 
+        <RecordingRecovery input={input} tones={tones.slice(3)} />
+
         <section>
           <h3>Listening</h3>
           <div className="ss-listen">
@@ -1768,7 +1798,7 @@ function Drawer({
                 {s.phase === "time" || s.phase === "result" ? "Skip it" : "Next step"}
               </button>
               <button type="button" onClick={() => (s.finish(), onClose())}>
-                End session
+                Stop now
               </button>
             </div>
           </section>

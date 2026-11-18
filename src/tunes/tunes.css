@@ -76,6 +76,13 @@
 .tunes-phrases > div { display: flex; flex-wrap: wrap; gap: 2px 22px; }
 .tunes-phrases button { display: inline-flex; align-items: center; gap: 9px; min-height: 37px; border: 0; padding: 0; background: none; color: var(--ink-faint); font-size: 11px; }
 .tunes-phrases button:hover { color: var(--ink); }
+.tunes-phrases button[aria-pressed="true"] { color: var(--ink); text-decoration: underline; text-decoration-color: #b8c4a7; text-underline-offset: 6px; }
+.tunes-selection { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 20px; margin: -8px 0 12px; padding: 14px 0; border-top: 1px solid var(--line); color: var(--ink-soft); font-size: 12px; }
+.tunes-selection > span { margin-right: auto; }
+.tunes-selection > span small { display: block; margin-top: 4px; color: var(--ink-faint); font: 10px var(--font-mono); }
+.tunes-selection button { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding: 5px 0; border: 0; border-radius: 0; background: none; color: var(--ink-soft); font: inherit; }
+.tunes-selection button:hover, .tunes-selection button[aria-pressed="true"] { color: var(--ink); }
+.tunes-selection button[aria-pressed="true"] { text-decoration: underline; text-underline-offset: 5px; }
 .tunes-exercises { margin-top: 23px; }
 .tunes-exercises > header { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 8px; }
 .tunes-exercises > header > button { color: var(--ink-faint); font-size: 11px; }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { midiOf } from "../listen/pitch";
 import type { InputApi } from "../listen/useInput";
 import { pitchClassToName } from "../musicTheory";
+import { Glyph } from "./Glyph";
 
 interface InputBarProps {
   input: InputApi;
@@ -60,7 +61,7 @@ export function InputBar({ input, prominent = false }: InputBarProps) {
         className={listening ? "pill is-on" : prominent ? "input-start" : "pill"}
         onClick={() => (listening ? input.stop() : void input.start())}
       >
-        {input.status === "starting" ? "Opening input…" : listening ? "Listening" : "🎸 Start listening"}
+        <Glyph name="ear" size={16} />{input.status === "starting" ? "Opening input…" : listening ? "Listening" : "Enable microphone"}
       </button>
       {listening ? (
         <>
@@ -89,7 +90,7 @@ export function InputBar({ input, prominent = false }: InputBarProps) {
       ) : null}
       {input.paused ? <span className="input-note">Click anywhere so the browser lets the app hear you</span> : null}
       {!input.paused && quiet ? (
-        <span className="input-note">Play a string. If the meter stays still, turn up the input knob on the 2i2 or pick another input here.</span>
+          <span className="input-note">Play a string. If the meter stays still, check the input level or choose another microphone.</span>
       ) : null}
       {input.error ? <span className="input-error">{input.error}</span> : null}
     </div>

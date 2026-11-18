@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import * as Tone from "tone";
 import { version as appVersion } from "../../package.json";
 import { buildPracticeBrief, type BriefMaterial, type PracticeBrief } from "../agent/brief";
@@ -6,7 +6,7 @@ import { ensureAudio } from "../audio/context";
 import type { InputApi } from "../listen/useInput";
 import { setNavMuted } from "../nav/useGuitarNav";
 import { pitchClassToName } from "../musicTheory";
-import { hasOldLibrary, loadCurrentTuneId, loadLibrary, loadLibraryAsync, newTuneId, parseTuneEntry, sameTuneContent, saveCurrentTuneId, saveLibrary, type TuneEntry } from "../tunes/library";
+import { getLibraryIssues, hasOldLibrary, loadCurrentTuneId, loadLibrary, loadLibraryAsync, newTuneId, parseTuneEntry, removeLibraryEntry, sameTuneContent, saveCurrentTuneId, saveLibrary, subscribeLibraryIssues, type TuneEntry } from "../tunes/library";
 import { loadTuneFile, parseMusicXml, type LeadSheet } from "../tunes/musicxml";
 import { createBackup, parseBackup, restoreBackup, type PracticeBackup } from "../tunes/backup";
 import { BLUE_HOUR_ENTRY, DEMO_TUNES, type DemoTune } from "../tunes/demos";
@@ -17,10 +17,12 @@ import { usePlayback } from "../tunes/usePlayback";
 import type { NoteResult } from "../core/contract";
 import { buildDeck, familiesOnly, type Family } from "../song/deck";
 import { allStores, loadStore, today } from "../song/leitner";
+import { loadActiveGoal } from "../song/goals";
 import { nextUnits } from "../overview/summary";
 import { Glyph } from "./Glyph";
 import { UnitCard } from "./UnitCard";
 import { Score } from "./Score";
+import { GoalChooser } from "./GoalChooser";
 import { openPractice, SongCoach } from "./SongCoach";
 import "../tunes/tunes.css";
 
@@ -30,15 +32,16 @@ const EXERCISE_FAMILIES: Family[] = ["scales", "harmony", "chords", "reading", "
 const noteLabel = (midi: number) => `${pitchClassToName(midi).replace("#", "♯")}${Math.floor(midi / 12) - 1}`;
 
 interface Launch {
-  kind: "song" | "session" | "card";
+  kind: "song" | "listen" | "session" | "card";
   tuneId?: string;
   cardId?: string;
 }
 
-type PendingImport = Omit<TuneEntry, "id">;
+type PendingImport = Omit<TuneEntry, "id"> & { repairId?: string };
 
 export function TuneView({ input, launch, onLaunched }: { input: InputApi; launch?: Launch; onLaunched?: () => void }) {
   const [library, setLibrary] = useState<TuneEntry[]>(() => loadLibrary());
+  const [demoPreview, setDemoPreview] = useState<TuneEntry | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<PendingImport[]>([]);
@@ -66,8 +69,11 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
   const [demoToListen, setDemoToListen] = useState<string | null>(null);
   const launched = useRef<Launch>();
   const openingDemo = useRef(false);
+  const browseScroll = useRef(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const backupRef = useRef<HTMLInputElement>(null);
+  const repairTarget = useRef<string>();
+  const libraryIssues = useSyncExternalStore(subscribeLibraryIssues, getLibraryIssues, getLibraryIssues);
 
   useEffect(() => {
     let gone = false;
@@ -85,7 +91,9 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
     return () => { gone = true; };
   }, []);
 
-  const entry = library.find((t) => t.id === selected) ?? library[0] ?? null;
+  const selectedIssue = libraryIssues.find((issue) => issue.id === selected);
+  const entry = selectedIssue ? null : library.find((t) => t.id === selected)
+    ?? (demoPreview?.id === selected ? demoPreview : null) ?? library[0] ?? null;
   useEffect(() => { setBrief(null); }, [entry, revision]);
   const parsed = useMemo((): { sheet: LeadSheet | null; error: string | null } => {
     if (!entry) return { sheet: null, error: null };
@@ -131,24 +139,42 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
   useEffect(() => {
     if (!launch || loading || launched.current === launch) return;
     if (launch.tuneId && entry?.id !== launch.tuneId) {
-      if (library.some((tune) => tune.id === launch.tuneId)) pick(launch.tuneId);
-      else {
-        setLoadError("That tune is no longer in the library.");
+      if (libraryIssues.some((issue) => issue.id === launch.tuneId)) {
+        pick(launch.tuneId);
+        setLibraryOpen(true);
         launched.current = launch;
         onLaunched?.();
+        return;
+      }
+      if (library.some((tune) => tune.id === launch.tuneId)) pick(launch.tuneId);
+      else {
+        const bundled = DEMO_TUNES.find((demo) => demo.entry.id === launch.tuneId);
+        if (bundled) {
+          setDemoPreview(bundled.entry);
+          pick(bundled.entry.id);
+          setNotice("Previewing the bundled study. It has not been saved to your library.");
+        } else {
+          setLoadError("That tune is no longer in the library.");
+          launched.current = launch;
+          onLaunched?.();
+        }
       }
       return;
     }
     if (!sheet) return;
     launched.current = launch;
-    if (launch.kind !== "song") {
+    if (launch.kind === "listen") {
+      setCoach(false);
+      setDemoToListen(sheet.id);
+    } else if (launch.kind !== "song") {
       setSessionLaunch(launch);
       setCoach(true);
     } else setCoach(false);
     onLaunched?.();
-  }, [launch, loading, sheet, entry?.id, library, pick, onLaunched]);
+  }, [launch, loading, sheet, entry?.id, library, libraryIssues, pick, onLaunched]);
 
   const candidate = pending[0];
+  useEffect(() => { setReplaceId(candidate?.repairId ?? ""); }, [candidate?.xml, candidate?.repairId]);
   const preview = useMemo(() => {
     if (!candidate) return null;
     try {
@@ -163,7 +189,7 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
     : undefined, [candidate, previewSource, library]);
 
   const addFiles = useCallback(
-    async (files: FileList | File[]) => {
+    async (files: FileList | File[], repairId?: string) => {
       setLoadError(null);
       setNotice(null);
       const previews: PendingImport[] = [];
@@ -171,13 +197,12 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
         try {
           const { xml, name } = await loadTuneFile(file);
           parseMusicXml(xml, name);
-          previews.push({ xml, name });
+          previews.push({ xml, name, ...(repairId && !previews.length ? { repairId } : {}) });
         } catch (e) {
           setLoadError(`${file.name}: ${e instanceof Error ? e.message : "couldn't read it"}`);
         }
       }
       setPending((current) => [...current, ...previews]);
-      setReplaceId("");
     },
     [],
   );
@@ -185,11 +210,31 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
   const remove = useCallback(async () => {
     if (!entry) return;
     setBusy(true);
-    const next = library.filter((tune) => tune.id !== entry.id);
-    if (await saveLibrary(next)) setLibrary(next);
-    else setLoadError("The tune could not be removed. Your saved library is unchanged.");
-    setBusy(false);
-  }, [entry, library]);
+    try {
+      if (await removeLibraryEntry(entry.id)) setLibrary(await loadLibraryAsync());
+      else setLoadError("The tune could not be removed. Your saved library is unchanged.");
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "The tune could not be removed.");
+    } finally { setBusy(false); }
+  }, [entry]);
+
+  const repairScore = (id: string) => {
+    repairTarget.current = id;
+    fileRef.current?.click();
+  };
+  const removeDamaged = async (id: string) => {
+    if (loading || busy) return;
+    setBusy(true);
+    try {
+      if (!await removeLibraryEntry(id)) throw new Error("This entry could not be removed. Try again after saving pending changes.");
+      const entries = await loadLibraryAsync();
+      setLibrary(entries);
+      if (selected === id) setSelected(entries[0]?.id ?? null);
+      setNotice("Damaged score entry removed. Its practice history has been kept.");
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "The entry could not be removed.");
+    } finally { setBusy(false); }
+  };
 
   const acceptImport = async () => {
     if (!candidate || !preview?.sheet || !previewSource || busy) return;
@@ -200,7 +245,8 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
       return;
     }
     setBusy(true);
-    const imported: TuneEntry = { ...candidate, id: replaceId || newTuneId(), partId: previewSource.partId, voice: previewSource.voice };
+    const { repairId: _repair, ...score } = candidate;
+    const imported: TuneEntry = { ...score, id: replaceId || newTuneId(), partId: previewSource.partId, voice: previewSource.voice };
     const next = [...library.filter((saved) => saved.id !== imported.id), imported];
     if (await saveLibrary(next)) {
       setLibrary(next);
@@ -237,6 +283,7 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
       if (await restoreBackup(restore)) {
         setLibrary(await loadLibraryAsync());
         setSelected(loadCurrentTuneId());
+        setRevision((value) => value + 1);
         setLoading(false);
         setRestore(null);
         setNotice("Backup restored. Tunes with other IDs were kept; matching settings and practice histories were replaced.");
@@ -266,12 +313,11 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
   playingRef.current = playback.playing;
   const slotRef = useRef(-1);
   slotRef.current = playback.activeSlot;
-  const start = useCallback((from = 0) => {
-    const phrase = looping && range ? phrases.find((card) => card.from === range.start && card.to === range.end) : undefined;
-    void play(phrase?.from ?? from, phrase?.to, Boolean(phrase)).catch((error: unknown) => {
+  const start = useCallback((from?: number) => {
+    void play(from ?? range?.start ?? 0, range?.end, looping && Boolean(range)).catch((error: unknown) => {
       setLoadError(error instanceof Error ? error.message : "Playback could not start.");
     });
-  }, [play, looping, range, phrases]);
+  }, [play, looping, range]);
   const startRef = useRef(start);
   startRef.current = start;
 
@@ -300,6 +346,7 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
   const practice = useCallback((cardId?: string) => {
     if (!sheet || loading || busy) return;
     stop();
+    browseScroll.current = window.scrollY;
     openPractice(input);
     setSessionLaunch(cardId ? { kind: "card", tuneId: sheet.id, cardId } : undefined);
     setCoach(true);
@@ -320,14 +367,24 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
         audioReady = Tone.start().then(() => true, () => false);
       } else if (action === "practice") openPractice(input);
       const saved = library.find((tune) => tune.id === demo.entry.id);
+      if (libraryIssues.some((issue) => issue.id === demo.entry.id)) {
+        pick(demo.entry.id);
+        setLibraryOpen(true);
+        return;
+      }
       const chosen = saved ?? demo.entry;
       const chosenSheet = parseTuneEntry(chosen);
       const next = saved ? library : [...library, chosen];
-      if (!saved && !await saveLibrary(next)) {
-        setLoadError("This demo could not be saved. Free browser storage and try again.");
-        return;
+      let persisted = Boolean(saved);
+      if (!saved) {
+        try { persisted = await saveLibrary(next); }
+        catch { /* The original study remains playable when browser persistence is unavailable. */ }
       }
-      setLibrary(next);
+      if (persisted) setLibrary(next);
+      else {
+        setDemoPreview(chosen);
+        setNotice("Previewing the bundled study. It has not been saved to your library.");
+      }
       pick(chosen.id);
       setBpm(chosenSheet.tempo ?? 80);
       setRange(null);
@@ -382,6 +439,7 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
           return { tuneId: tune.id, title: tune.name, key: null };
         }
       });
+      materials.push(...getLibraryIssues().map(({ id, name }) => ({ tuneId: id, title: name, key: null })));
       const selectedSheet = entry ? sheets.get(entry.id) : undefined;
       const selectedDeck = selectedSheet ? buildDeck(selectedSheet, buildTimeline(selectedSheet), { window: loadStore(selectedSheet.id).settings.window ?? undefined }) : null;
       const now = new Date();
@@ -393,6 +451,7 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
         materials,
         stores: allStores(),
         selectedExercises: selectedDeck?.cards.map((card) => ({ id: card.id, title: card.title })),
+        selectedGoal: selectedSheet && selectedDeck ? loadActiveGoal(selectedSheet, selectedDeck) : null,
       }));
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "The practice brief could not be prepared.");
@@ -402,13 +461,14 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
   };
   const onBarClick = useCallback((bar: number) => {
     const phrase = phrases.find((card) => card.tl.slots.slice(card.from, card.to + 1).some((slot) => slot.bar === bar));
-    if (phrase || whole) practice((phrase ?? whole)!.id);
+    if (phrase) { stop(); setRange({ start: phrase.from, end: phrase.to }); }
     else setNotice("There are no melody notes to practise in this bar.");
-  }, [phrases, whole, practice]);
+  }, [phrases, stop]);
+  const selectedPhrase = range ? phrases.find((card) => card.from === range.start && card.to === range.end) : undefined;
   const playingBar = playback.playing ? tl.slots[playback.activeSlot]?.bar ?? -1 : -1;
   const barLabel = (bar: number) => sheet?.barNumbers[bar] ?? String(bar + 1);
   const activeTarget = playback.activeTarget >= 0 ? tl.targets[playback.activeTarget] : undefined;
-  const marked = looping && range ? {
+  const marked = range ? {
     start: Math.min(...tl.slots.slice(range.start, range.end + 1).map((slot) => slot.bar)),
     end: Math.max(...tl.slots.slice(range.start, range.end + 1).map((slot) => slot.bar)),
   } : null;
@@ -419,7 +479,7 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
       sheet={sheet}
       tl={tl}
       input={input}
-      onClose={() => { setCoach(false); setRevision((value) => value + 1); }}
+      onClose={() => { setCoach(false); setRevision((value) => value + 1); window.requestAnimationFrame(() => window.scrollTo(0, browseScroll.current)); }}
       tunes={library.map((tune) => ({ id: tune.id, title: tune.name }))}
       onTune={(id) => { setSessionLaunch(undefined); pick(id); }}
       others={others}
@@ -440,11 +500,11 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
       <header className="tunes-heading">
         <div>
           <p className="tunes-kicker">Song</p>
-          <h2>{sheet?.title ?? (loading ? "Opening library…" : "Your music")}</h2>
+          <h2>{sheet?.title ?? selectedIssue?.name ?? (loading ? "Opening library…" : "Your music")}</h2>
           {sheet ? <p className="tunes-byline">{[sheet.composer, sheet.keySignature, sheet.timeSignature, `${sheet.bars.length} bars`].filter(Boolean).join(" · ")}</p> : null}
         </div>
         <button type="button" className="tunes-library-toggle" aria-expanded={libraryOpen} aria-controls="song-library" onClick={() => setLibraryOpen((open) => !open)}>
-          <Glyph name="library" size={19} />Library<span>{library.length || ""}</span>
+          <Glyph name="library" size={19} />Library<span>{library.length + libraryIssues.length || ""}</span>
         </button>
       </header>
 
@@ -453,10 +513,13 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
           {library.map((tune) => <button type="button" key={tune.id} className={tune.id === entry?.id ? "is-selected" : ""} aria-current={tune.id === entry?.id ? "true" : undefined} onClick={() => pick(tune.id)} disabled={loading || busy}>
             <Glyph name="melody" size={17} /><span>{tune.id === entry?.id && sheet ? sheet.title : tune.name}</span><Glyph name={tune.id === entry?.id ? "check" : "arrow"} size={15} />
           </button>)}
-          {!library.length ? <p className="tunes-note">No saved tunes</p> : null}
+          {libraryIssues.map((issue) => <button type="button" key={issue.id} aria-current={issue.id === selected ? "true" : undefined} onClick={() => pick(issue.id)} disabled={loading || busy}>
+            <Glyph name="melody" size={17} /><span>{issue.name} · score needs repair</span><Glyph name="arrow" size={15} />
+          </button>)}
+          {!library.length && !libraryIssues.length ? <p className="tunes-note">No saved tunes</p> : null}
         </div>
         <div className="tunes-library-actions">
-          <button type="button" onClick={() => fileRef.current?.click()} disabled={loading || busy}>Import MusicXML<Glyph name="arrow" size={15} /></button>
+          <button type="button" onClick={() => { repairTarget.current = undefined; fileRef.current?.click(); }} disabled={loading || busy}>Import MusicXML<Glyph name="arrow" size={15} /></button>
           <button type="button" aria-expanded={toolsOpen} aria-controls="song-library-tools" onClick={() => setToolsOpen((open) => !open)}>Library tools</button>
         </div>
         {library.length ? <DemoShelf library={library} disabled={loading || busy} onChoose={(demo, action) => void chooseDemo(demo, action)} onDownload={downloadDemo} /> : null}
@@ -475,7 +538,8 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
         {library.length ? <AgentScorePrompt /> : null}
       </section> : null}
       <input ref={fileRef} hidden type="file" accept=".musicxml,.xml,.mxl" multiple onChange={(event) => {
-        if (event.target.files?.length) void addFiles(event.target.files);
+        if (event.target.files?.length) void addFiles(event.target.files, repairTarget.current);
+        repairTarget.current = undefined;
         event.target.value = "";
       }} />
       <input ref={backupRef} hidden type="file" accept=".json,application/json" onChange={(event) => {
@@ -488,6 +552,17 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
       }} />
       {loadError || parsed.error ? <p className="tunes-error" role="alert">{loadError ?? parsed.error}</p> : null}
       {notice ? <p className="tunes-note" role="status">{notice}</p> : null}
+      {!loading && libraryIssues.length ? <section className="tunes-import" aria-label="Scores needing repair">
+        <h3>Scores needing repair</h3>
+        <p>Healthy tunes can still be played. Re-import a damaged score to keep its identity and practice history. Complete backups and device exchange require these entries to be repaired or explicitly removed.</p>
+        {libraryIssues.map((issue) => <div key={issue.id}>
+          <p><strong>{issue.name}</strong> · {issue.message}</p>
+          <div className="reading-controls">
+            <button type="button" onClick={() => repairScore(issue.id)} disabled={busy}>Re-import {issue.name}</button>
+            <button type="button" className="tunes-remove" onClick={() => void removeDamaged(issue.id)} disabled={busy}>Remove damaged entry</button>
+          </div>
+        </div>)}
+      </section> : null}
         {candidate ? (
           <section className="tunes-import" aria-label="import preview">
             <h3>Check this score</h3>
@@ -499,7 +574,7 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
                     <select value={previewSource.partId} onChange={(event) => {
                       const partId = event.target.value;
                       setPending((queue) => [{ ...queue[0], partId, voice: undefined }, ...queue.slice(1)]);
-                      setReplaceId("");
+                      setReplaceId(candidate.repairId ?? "");
                     }}>
                       {previewSource.parts.filter((part) => part.notes > 0).map((part) => <option key={part.id} value={part.id}>{part.name}</option>)}
                     </select>
@@ -518,11 +593,12 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
                 <p>{preview!.sheet!.bars.length} bars · Key {preview!.sheet!.keySignature} · Sounds {noteLabel(previewSource.range[0])}–{noteLabel(previewSource.range[1])} · {previewSource.hasChords ? "Chords available" : "No chords"}</p>
                 {previewSource.warnings.length ? <ul>{previewSource.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
                 {duplicate ? <p>This part and voice are already saved as <strong>{duplicate.name}</strong>.</p> : null}
-                {library.length && !duplicate ? (
+                {(library.length || libraryIssues.length) && (!duplicate || candidate.repairId) ? (
                   <label>Save as{" "}
                     <select value={replaceId} onChange={(event) => setReplaceId(event.target.value)}>
                       <option value="">A separate tune or arrangement</option>
                       {library.map((saved) => <option key={saved.id} value={saved.id}>Replace {saved.name} · keep its history</option>)}
+                      {libraryIssues.map((issue) => <option key={issue.id} value={issue.id}>Repair {issue.name} · keep its history</option>)}
                     </select>
                   </label>
                 ) : null}
@@ -556,7 +632,7 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
       {sheet ? <>
         <div className="tunes-score-actions">
           <button type="button" className={`tunes-listen-button ${playback.playing ? "is-playing" : ""}`} aria-pressed={playback.playing} onClick={() => playback.playing ? stop() : start()} disabled={!tl.slots.length || loading || busy}>
-            {playback.playing ? <span className="tunes-stop" aria-hidden="true" /> : <Glyph name="play" size={17} />}{playback.playing ? "Stop" : looping ? "Listen to phrase" : "Listen to piece"}
+            {playback.playing ? <span className="tunes-stop" aria-hidden="true" /> : <Glyph name="play" size={17} />}{playback.playing ? "Stop" : range ? "Listen to phrase" : "Listen to piece"}
           </button>
           <button type="button" className="tunes-practice-piece" onClick={() => practice(whole?.id)} disabled={!whole || loading || busy}>Practice piece<Glyph name="arrow" size={16} /></button>
           <span className="tunes-play-position">{playback.playing ? playback.counting ? "Count-in" : playingBar >= 0 ? `Bar ${barLabel(playingBar)}` : "" : ""}</span>
@@ -569,28 +645,36 @@ export function TuneView({ input, launch, onLaunched }: { input: InputApi; launc
           <button type="button" aria-pressed={click} onClick={() => setClick((value) => !value)}>Click</button>
           <button type="button" aria-pressed={countIn} onClick={() => setCountIn((value) => !value)}>Count-in</button>
           <button type="button" aria-pressed={showFingering} onClick={() => setShowFingering((value) => !value)}>String &amp; fret hints</button>
-          {phrases.length ? <label>Listen range<select value={looping && range ? `${range.start}:${range.end}` : ""} onChange={(event) => {
+          {phrases.length ? <label>Listen range<select value={range ? `${range.start}:${range.end}` : ""} onChange={(event) => {
             stop();
             const phrase = phrases.find((card) => `${card.from}:${card.to}` === event.target.value);
             setRange(phrase ? { start: phrase.from, end: phrase.to } : null);
             setLooping(Boolean(phrase));
-          }}><option value="">Whole piece</option>{phrases.map((card) => <option key={card.id} value={`${card.from}:${card.to}`}>Loop {card.where}</option>)}</select></label> : null}
+          }}><option value="">Whole piece</option>{phrases.map((card) => <option key={card.id} value={`${card.from}:${card.to}`}>{card.where} · playing order {card.from + 1}–{card.to + 1}</option>)}</select></label> : null}
         </div> : null}
         <section className="tunes-manuscript" aria-label={`${sheet.title} score`}>
-          <div className="tunes-score-caption"><Glyph name="melody" size={15} /><span>Click a bar to practice its phrase</span></div>
+          <div className="tunes-score-caption"><Glyph name="melody" size={15} /><span>Choose a bar to hear or practise its phrase</span></div>
           <Score exercise={sheet} activeStep={activeTarget?.notes[0] ?? -1} activeNotes={activeTarget?.notes ?? []} results={NO_RESULTS} showFingering={showFingering} autoScroll onBarClick={onBarClick} marked={marked} playingBar={playingBar} />
         </section>
+        {selectedPhrase ? <div className="tunes-selection" role="group" aria-label="Selected phrase">
+          <span><strong>{selectedPhrase.where}</strong><small>Playing order {selectedPhrase.from + 1}–{selectedPhrase.to + 1}</small></span>
+          <button type="button" aria-pressed={looping} onClick={() => { stop(); setLooping((value) => !value); }}><Glyph name="sync" size={16} />Loop</button>
+          <button type="button" onClick={() => practice(selectedPhrase.id)}><Glyph name="play" size={16} />Practise phrase</button>
+          <button type="button" onClick={() => practice(`rhythm:${selectedPhrase.id}`)}><Glyph name="free" size={16} />Rhythm on one note</button>
+          <button type="button" aria-label="Clear phrase selection" onClick={() => { stop(); setRange(null); setLooping(false); }}><Glyph name="close" size={15} /></button>
+        </div> : null}
         {phrases.length ? <section className="tunes-phrases" aria-labelledby="song-phrases-title">
           <h3 id="song-phrases-title">Phrases</h3>
-          <div>{phrases.map((card) => <button type="button" key={card.id} onClick={() => practice(card.id)} aria-label={`Practice ${card.where}`}><span>{card.where}</span><Glyph name="arrow" size={14} /></button>)}</div>
+          <div>{phrases.map((card) => <button type="button" key={card.id} aria-pressed={selectedPhrase?.id === card.id} onClick={() => { stop(); setRange({ start: card.from, end: card.to }); }} aria-label={`Select ${card.where}`}><span>{card.where}</span><Glyph name="arrow" size={14} /></button>)}</div>
         </section> : null}
+        {deck ? <GoalChooser sheet={sheet} deck={deck} /> : null}
         {exercises.length ? <section className="tunes-exercises" aria-labelledby="song-exercises-title">
           <header><h3 id="song-exercises-title">Exercises</h3><button type="button" onClick={() => practice()}>Daily session<Glyph name="arrow" size={15} /></button></header>
           <div>{exercises.map((unit) => <UnitCard key={unit.id} unit={unit} onOpen={() => practice(unit.id)} />)}</div>
         </section> : null}
       </> : !entry && !loading ? <section className="tunes-empty">
         <DemoShelf library={library} disabled={busy} onChoose={(demo, action) => void chooseDemo(demo, action)} onDownload={downloadDemo} />
-        <div className="tunes-empty-import"><button type="button" onClick={() => fileRef.current?.click()} disabled={busy}>Open your own score<Glyph name="arrow" size={16} /></button><p>MusicXML · .musicxml · .xml · .mxl</p></div>
+        <div className="tunes-empty-import"><button type="button" onClick={() => { repairTarget.current = undefined; fileRef.current?.click(); }} disabled={busy}>Open your own score<Glyph name="arrow" size={16} /></button><p>MusicXML · .musicxml · .xml · .mxl</p></div>
         {hasOldLibrary() ? <p className="tunes-upgrade">Load your previous tunes again to update their playing order.</p> : null}
       </section> : null}
       {!entry && !loading ? <AgentScorePrompt /> : null}

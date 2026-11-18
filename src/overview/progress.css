@@ -1,0 +1,38 @@
+.progress-view { gap: 36px; }
+.progress-heading h2 { font-size: clamp(42px, 6vw, 70px); }
+.progress-heading .tutor-eyebrow { margin-bottom: 14px; }
+.progress-welcome { padding: 30px 0 60px; color: var(--ink-soft); }
+.progress-welcome > svg { color: var(--brass); margin-bottom: 20px; }
+.progress-welcome h3 { font: 400 25px/1.35 var(--font-display); }
+.progress-welcome p { max-width: 42ch; font-size: 13px; line-height: 1.7; }
+.progress-music { border-block: 1px solid var(--line-strong); padding: 24px 0; }
+.progress-song-heading { display: flex; align-items: end; justify-content: space-between; flex-wrap: wrap; gap: 20px; }
+.progress-song-heading label, .progress-take-choices label { display: grid; gap: 8px; color: var(--ink-faint); font-size: 11px; }
+.progress-song-heading select { max-width: min(600px, 80vw); font-size: 22px; }
+.progress-view select { border: 0; border-bottom: 1px solid var(--line-strong); border-radius: 0; color: var(--ink); background: var(--bg); padding: 10px 28px 10px 0; font-family: inherit; }
+.progress-musical-facts { display: flex; align-items: center; flex-wrap: wrap; gap: 24px 48px; margin: 26px 0; }
+.progress-musical-facts > div { display: grid; gap: 7px; }
+.progress-musical-facts span { color: var(--ink-faint); font-size: 11px; }
+.progress-musical-facts strong { color: var(--ink-soft); font-size: 14px; font-weight: 400; }
+.progress-milestones { margin: 16px 0; padding: 0; list-style: none; }
+.progress-milestones li { display: grid; grid-template-columns: 20px minmax(120px, 1fr) minmax(170px, 1.5fr); align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); color: var(--ink-soft); font-size: 12px; }
+.progress-milestones svg { color: #acbb98; }
+.progress-milestones small { color: var(--ink-faint); font-size: 11px; }
+.progress-caption, .progress-empty { color: var(--ink-faint); max-width: 90ch; font-size: 11px; line-height: 1.7; }
+.progress-caption { margin: 12px 0 22px; }
+.progress-take-choices { display: flex; flex-wrap: wrap; gap: 18px 36px; }
+.progress-take-choices select { max-width: 100%; font-size: 12px; min-height: 44px; }
+.progress-take-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 48px; margin: 24px 0 12px; }
+.progress-take { min-width: 0; margin: 0; }
+.progress-take figcaption { display: flex; gap: 15px; justify-content: space-between; align-items: baseline; margin-bottom: 12px; color: var(--ink-soft); font-size: 12px; }
+.progress-take strong { font-weight: 500; }
+.progress-take figcaption span { color: var(--ink-faint); font: 10px var(--font-mono); }
+.progress-take audio { width: 100%; height: 40px; color-scheme: dark; }
+.progress-take > p { font-size: 11px; color: var(--ink-faint); }
+.progress-samples { display: block; margin-top: 4px; font-size: 9px; color: var(--ink-faint); }
+@media (max-width: 620px) {
+  .progress-take-pair { grid-template-columns: 1fr; }
+  .progress-milestones li { grid-template-columns: 20px 1fr; }
+  .progress-milestones small { grid-column: 2; }
+  .progress-song-heading select { font-size: 19px; }
+}

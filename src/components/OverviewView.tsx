@@ -1,115 +1,22 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { listTakes, takeAudio, type TakeMeta } from "../audio/recorder";
-import { latencyMeasured } from "../audio/latency";
-import { allStores, today } from "../song/leitner";
-import { allAttempts, buildProfile, type Axis } from "../song/profile";
-import { weeklyMinutes } from "../overview/progress";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
+import * as Tone from "tone";
+import { ensureAudio } from "../audio/context";
+import { today } from "../song/leitner";
 import type { NoteResult } from "../core/contract";
 import { TUTOR_MODES, type TutorTargetTab } from "../overview/modes";
 import { pickGlobalUnits } from "../overview/summary";
-import { useSongSummaries } from "../overview/useSongSummaries";
+import { cachedSong, useSongSummaries } from "../overview/useSongSummaries";
 import { relativeDay } from "../overview/visual";
 import { loadLibraryAsync, parseTuneEntry, saveLibrary } from "../tunes/library";
 import { BLUE_HOUR_ENTRY, DEMO_TUNES } from "../tunes/demos";
 import { Glyph } from "./Glyph";
 import { UnitCard } from "./UnitCard";
 import { Score } from "./Score";
+import { GoalChooser } from "./GoalChooser";
 import "../overview/overview.css";
 
 const SONG_LIMIT = 4;
 const NO_RESULTS: NoteResult[] = [];
-const AXIS_LABEL: Record<Axis, string> = { pitch: "First-try notes", time: "Timing consistency", tempo: "Clean scale tempo / goal", chords: "Chord accuracy", reading: "Reading accuracy", ear: "Echo accuracy" };
-const pct = (x: number) => `${Math.round(x * 100)} %`;
-
-/** The tune's first run-through and its latest, to be heard one after the other. */
-function Takes({ tuneId, day }: { tuneId: string; day: string }) {
-  const [takes, setTakes] = useState<TakeMeta[]>([]);
-  const [playing, setPlaying] = useState<string | null>(null);
-  const audio = useRef<HTMLAudioElement | null>(null);
-  useEffect(() => {
-    let gone = false;
-    void listTakes(tuneId).then((t) => !gone && setTakes(t));
-    return () => {
-      gone = true;
-      audio.current?.pause();
-    };
-  }, [tuneId]);
-  if (!takes.length) return null;
-  const first = takes[0];
-  const latest = takes.length > 1 ? takes[takes.length - 1] : null;
-  const play = async (t: TakeMeta) => {
-    audio.current?.pause();
-    if (playing === t.id) return setPlaying(null);
-    const blob = await takeAudio(tuneId, t.id);
-    if (!blob) return;
-    const a = new Audio(URL.createObjectURL(blob));
-    a.onended = () => setPlaying(null);
-    audio.current = a;
-    setPlaying(t.id);
-    void a.play().catch(() => setPlaying(null));
-  };
-  const label = (t: TakeMeta) => `${relativeDay(t.day, day)} · ♩ ${t.bpm}${t.share !== null ? ` · ${pct(t.share)}` : ""}`;
-  return (
-    <div className="tutor-takes" aria-label="run-throughs, recorded">
-      {[first, latest].filter((t): t is TakeMeta => t !== null).map((t, i) => (
-        <button key={t.id} type="button" className={`tutor-link ${playing === t.id ? "is-playing" : ""}`} onClick={() => void play(t)}>
-          {playing === t.id ? "■" : "▶"} {i === 0 ? "first take" : "latest take"} · {label(t)}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/** How the playing is going across every tune: skills, the mistakes that keep coming back, minutes. */
-function Playing({ day }: { day: string }) {
-  const { profile, weeks } = useMemo(() => {
-    const stores = allStores();
-    return { profile: buildProfile(allAttempts(stores), day, latencyMeasured()), weeks: weeklyMinutes(stores.map((s) => s.store), day) };
-  }, [day]);
-  const axes = (Object.keys(AXIS_LABEL) as Axis[]).filter((a) => profile.axes[a].n > 0);
-  if (!axes.length) return null;
-  const most = Math.max(1, ...weeks);
-  return (
-    <section className="tutor-section" aria-labelledby="tutor-playing-title">
-      <div className="tutor-section-head">
-        <div>
-          <h3 id="tutor-playing-title">Playing</h3>
-        </div>
-      </div>
-      <div className="tutor-playing">
-        <ul className="tutor-axes">
-          {axes.map((a) => {
-            const x = profile.axes[a];
-            return (
-              <li key={a}>
-                <span>{AXIS_LABEL[a]}</span>
-                <i style={{ "--level": x.level } as CSSProperties} />
-                <b>{pct(x.level)}</b>
-                <em className={x.trend === null ? "" : x.trend >= 0 ? "is-up" : "is-down"}>{x.trend === null ? "" : `${x.trend >= 0 ? "+" : "−"}${Math.round(Math.abs(x.trend) * 100)}`}</em>
-              </li>
-            );
-          })}
-        </ul>
-        <div className="tutor-weeks" aria-label="minutes played, the last four weeks">
-          {weeks.map((m, i) => (
-            <span key={i} title={`${m} min`}>
-              <i style={{ height: `${Math.max(4, (m / most) * 100)}%` }} />
-              <small>{m}</small>
-            </span>
-          ))}
-          <p>minutes a week</p>
-        </div>
-        {profile.weaknesses.length ? (
-          <ul className="tutor-weak">
-            {profile.weaknesses.slice(0, 3).map((w) => (
-              <li key={w.cls}>{w.fact}</li>
-            ))}
-          </ul>
-        ) : null}
-      </div>
-    </section>
-  );
-}
 
 function BoxBar({ boxes, total }: { boxes: number[]; total: number }) {
   return (
@@ -146,46 +53,53 @@ function EmptyLibrary({ onOpen }: { onOpen: () => void }) {
 export function OverviewView({
   onOpenMode,
   onOpenSong,
+  onListenSong,
+  onOpenProgress,
   onStartPractice,
   onPreparePractice,
 }: {
   onOpenMode: (target: TutorTargetTab) => void;
   onOpenSong: (tuneId: string) => void;
+  onListenSong?: (tuneId: string) => void;
+  onOpenProgress?: () => void;
   onStartPractice: (tuneId: string, cardId?: string, prepared?: boolean) => void;
   onPreparePractice?: () => void;
 }) {
-  const { songs, currentTuneId, loading, error } = useSongSummaries();
+  const { songs, currentTuneId, loading, error, issues = [] } = useSongSummaries();
   const [showAll, setShowAll] = useState(false);
   const [starting, setStarting] = useState(false);
   const demoBusy = useRef(false);
   const [demoId, setDemoId] = useState(BLUE_HOUR_ENTRY.id);
   const demo = DEMO_TUNES.find((item) => item.entry.id === demoId) ?? DEMO_TUNES[0];
   const current = songs.find((song) => song.tuneId === currentTuneId) ?? songs[0] ?? null;
+  const currentMusic = current ? cachedSong(current.tuneId) : undefined;
   const mixed = pickGlobalUnits(songs, current?.tuneId ?? null, 3);
   const visibleSongs = showAll ? songs : songs.slice(0, SONG_LIMIT);
   const day = today();
-  const example = useMemo(() => !current && !loading && !error ? parseTuneEntry(demo.entry) : null, [current, loading, error, demo]);
+  const example = useMemo(() => !current && !loading ? parseTuneEntry(demo.entry) : null, [current, loading, demo]);
   const excerpt = current?.excerpt ?? (example ? { bars: example.bars.slice(0, 2), keySignature: example.keySignature, timeSignature: example.timeSignature } : null);
   const title = current?.title ?? example?.title ?? (loading ? "Loading…" : "Library unavailable");
   const key = current?.key ?? example?.keySignature;
   const tempo = current?.tempo ?? example?.tempo;
   const barCount = current?.barCount ?? example?.bars.length;
-  const openDemo = async (practice: boolean) => {
+  const openDemo = async (action: "open" | "listen" | "practice") => {
     if (demoBusy.current) return;
     demoBusy.current = true;
-    if (practice) onPreparePractice?.();
+    if (action === "practice") onPreparePractice?.();
+    if (action === "listen") { ensureAudio(); void Tone.start().catch(() => undefined); }
     setStarting(true);
     try {
       const entries = await loadLibraryAsync();
-      if (!entries.some((entry) => entry.id === demo.entry.id) && !await saveLibrary([...entries, demo.entry])) return;
-      if (practice) onStartPractice(demo.entry.id, undefined, Boolean(onPreparePractice));
-      else onOpenSong(demo.entry.id);
+      if (!entries.some((entry) => entry.id === demo.entry.id)) await saveLibrary([...entries, demo.entry]);
     } catch {
-      // The shared save notice reports the error and preserves the current library.
+      // The bundled original can be previewed even when the saved library is unavailable.
     } finally {
       demoBusy.current = false;
       setStarting(false);
     }
+    if (action === "practice") onStartPractice(demo.entry.id, undefined, Boolean(onPreparePractice));
+    else if (action === "listen" && onListenSong) onListenSong(demo.entry.id);
+    else onOpenSong(demo.entry.id);
   };
 
   return (
@@ -201,7 +115,7 @@ export function OverviewView({
             {barCount ? <span>{barCount} bars</span> : null}
           </div>
           {current?.composer ? <p className="tutor-composer">{current.composer}</p> : null}
-          {!current && !loading && !error ? <>
+          {!current && !loading ? <>
             <p className="tutor-demo-description">{demo.description}</p>
             <div className="tutor-demo-choices" role="group" aria-label="Try an original study">
               {DEMO_TUNES.map((item) => <button key={item.entry.id} type="button" aria-pressed={demoId === item.entry.id} disabled={starting} onClick={() => setDemoId(item.entry.id)}>{item.title}</button>)}
@@ -212,13 +126,13 @@ export function OverviewView({
             <button
               type="button"
               className="tutor-primary"
-              disabled={loading || starting || Boolean(error)}
-              onClick={() => current ? onStartPractice(current.tuneId) : void openDemo(true)}
+              disabled={loading || starting}
+              onClick={() => current ? onStartPractice(current.tuneId) : void openDemo("practice")}
             >
               <Glyph name="play" size={18} />{starting ? "Loading…" : current ? "Start practice" : "Try practice"}
             </button>
-            <button type="button" className="tutor-secondary" disabled={loading || starting || Boolean(error)} onClick={() => current ? onOpenMode("tunes") : void openDemo(false)}>
-              <Glyph name={current ? "library" : "melody"} size={19} />{current ? "Library" : "Open score"}
+            <button type="button" className="tutor-secondary" disabled={loading || starting} onClick={() => current ? onOpenMode("tunes") : void openDemo(onListenSong ? "listen" : "open")}>
+              <Glyph name={current ? "library" : "ear"} size={19} />{current ? "Library" : "Listen"}
             </button>
           </div>
         </div>
@@ -232,6 +146,10 @@ export function OverviewView({
           ) : null}
         </div>
       </header>
+
+      {currentMusic ? <GoalChooser sheet={currentMusic.sheet} deck={currentMusic.deck} /> : null}
+
+      {issues.length ? <section className="tutor-library-issues" aria-label="Scores needing repair"><h3>Scores needing repair</h3>{issues.map((issue) => <div key={issue.id}><span>{issue.name}</span><small>{issue.message}</small><button type="button" className="tutor-link" onClick={() => onOpenSong(issue.id)}>Repair score <Glyph name="arrow" size={15} /></button></div>)}</section> : null}
 
       <div className="tutor-workbench">
       {loading || songs.length > 0 ? (
@@ -285,7 +203,8 @@ export function OverviewView({
       </section>
       </div>
 
-      {!loading ? <Playing day={day} /> : null}
+      {onOpenProgress ? <button type="button" className="tutor-link tutor-progress-link" onClick={onOpenProgress}><Glyph name="progress" size={18} />Progress & recordings <Glyph name="arrow" size={16} /></button> : null}
+
 
       <section className="tutor-section" aria-labelledby="tutor-songs-title">
         <div className="tutor-section-head">
@@ -321,7 +240,6 @@ export function OverviewView({
                     <Glyph name="arrow" size={19} />
                   </button>
                 </header>
-                <Takes tuneId={song.tuneId} day={day} />
               </article>
             ))}
           </div>

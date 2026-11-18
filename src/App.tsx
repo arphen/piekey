@@ -6,37 +6,39 @@ import { EarHub } from "./components/EarHub";
 import { FocusView } from "./components/FocusView";
 import { KeyContext, RomanContext } from "./components/keyContext";
 import { OverviewView } from "./components/OverviewView";
+import { ProgressView } from "./components/ProgressView";
 import { ScalesView } from "./components/ScalesView";
 import { TuneView } from "./components/TuneView";
 import { FreePlayView } from "./components/FreePlayView";
 import { SaveNotice } from "./components/SaveNotice";
-import { Glyph } from "./components/Glyph";
+import { PlatformStatus } from "./platform/PlatformStatus";
+import { Glyph, type UtilityGlyphName } from "./components/Glyph";
 import { DeviceSync } from "./components/DeviceSync";
 import { openPractice } from "./components/SongCoach";
 import type { GlyphName, TutorTargetTab } from "./overview/modes";
 import { useInput } from "./listen/useInput";
 import { saveCurrentTuneId } from "./tunes/library";
 import { getStoredItem, setStoredItem } from "./storage";
+import { GuitarTools } from "./tools/GuitarTools";
 import "./practice.css";
 
-type Tab = "tutor" | TutorTargetTab;
-type PracticeLaunch = { kind: "song" | "session" | "card"; tuneId?: string; cardId?: string };
+type Tab = "tutor" | "progress" | TutorTargetTab;
+type PracticeLaunch = { kind: "song" | "listen" | "session" | "card"; tuneId?: string; cardId?: string };
 
 const KEY_STORAGE = "guitar-key";
-const TABS: { id: Tab; label: string; glyph: GlyphName | "home" }[] = [
-  { id: "tutor", label: "Tutor", glyph: "home" },
-  { id: "tunes", label: "Song", glyph: "melody" },
-  { id: "changes", label: "Changes", glyph: "chords" },
-  { id: "scales", label: "Scales", glyph: "scales" },
-  { id: "reading", label: "Reading", glyph: "reading" },
-  { id: "ear", label: "Ear", glyph: "ear" },
+const TABS: { id: Tab; label: string; glyph: GlyphName | UtilityGlyphName }[] = [
+  { id: "tutor", label: "Practice", glyph: "home" },
+  { id: "tunes", label: "Songs", glyph: "melody" },
+  { id: "progress", label: "Progress", glyph: "progress" },
 ];
+const primaryTab = (tab: Tab) => tab === "tunes" || tab === "progress" ? tab : "tutor";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("tutor");
   const [launch, setLaunch] = useState<PracticeLaunch>();
   const [stateRevision, setStateRevision] = useState(0);
   const [devicesOpen, setDevicesOpen] = useState(() => new URLSearchParams(location.hash.slice(1)).has("pair"));
+  const [toolsOpen, setToolsOpen] = useState(false);
   const topbar = useRef<HTMLElement>(null);
   useEffect(() => {
     const header = topbar.current;
@@ -73,16 +75,22 @@ export default function App() {
   const input = useInput({ fftSize: 4096, intervalMs: 25 });
   const { autoStart } = input;
   useEffect(() => { autoStart(); }, [autoStart]);
-  const home = useCallback(() => { setLaunch(undefined); setTab("tutor"); }, []);
+  const home = useCallback(() => { setToolsOpen(false); setLaunch(undefined); setTab("tutor"); }, []);
   const moveTab = useCallback((dir: 1 | -1) => {
     setLaunch(undefined);
-    setTab((now) => TABS[(TABS.findIndex((t) => t.id === now) + dir + TABS.length) % TABS.length].id);
+    setToolsOpen(false);
+    setTab((now) => TABS[(TABS.findIndex((t) => t.id === primaryTab(now)) + dir + TABS.length) % TABS.length].id);
   }, []);
 
   const openTunes = useCallback(() => { setLaunch(undefined); setTab("tunes"); }, []);
   const openSong = useCallback((tuneId: string) => {
     saveCurrentTuneId(tuneId);
     setLaunch({ kind: "song", tuneId });
+    setTab("tunes");
+  }, []);
+  const listenSong = useCallback((tuneId: string) => {
+    saveCurrentTuneId(tuneId);
+    setLaunch({ kind: "listen", tuneId });
     setTab("tunes");
   }, []);
 
@@ -118,18 +126,22 @@ export default function App() {
             </div>
             <nav className="tabs" aria-label="views">
               {TABS.map((t) => (
-                <button key={t.id} type="button" className={tab === t.id ? "is-on" : ""} aria-current={tab === t.id ? "page" : undefined} onClick={() => { setLaunch(undefined); setTab(t.id); }}>
+                <button key={t.id} type="button" className={primaryTab(tab) === t.id ? "is-on" : ""} aria-current={primaryTab(tab) === t.id ? "page" : undefined} onClick={() => { setToolsOpen(false); setLaunch(undefined); setTab(t.id); }}>
                   <Glyph name={t.glyph} size={18} /><span>{t.label}</span>
                 </button>
               ))}
             </nav>
-            <DeviceSync open={devicesOpen} onOpenChange={setDevicesOpen} onUpdated={refreshState} />
+            <button type="button" className="device-sync-trigger" onClick={() => { setDevicesOpen(false); setToolsOpen(true); }} aria-label="Guitar tools"><Glyph name="tools" size={19} /><span>Tools</span></button>
+            <DeviceSync open={devicesOpen} onOpenChange={(open) => { setToolsOpen(false); setDevicesOpen(open); }} onUpdated={refreshState} />
           </header>
 
           <SaveNotice />
+          <PlatformStatus />
 
-          {devicesOpen ? <main className="device-sync-placeholder" aria-hidden="true" /> : tab === "tutor" ? (
-            <OverviewView key={stateRevision} onOpenMode={openMode} onOpenSong={openSong} onStartPractice={startPractice} onPreparePractice={() => openPractice(input)} />
+          {devicesOpen ? <main className="device-sync-placeholder" aria-hidden="true" /> : toolsOpen ? <GuitarTools input={input} onClose={() => setToolsOpen(false)} /> : tab === "tutor" ? (
+            <OverviewView key={stateRevision} onOpenMode={openMode} onOpenSong={openSong} onListenSong={listenSong} onOpenProgress={() => setTab("progress")} onStartPractice={startPractice} onPreparePractice={() => openPractice(input)} />
+          ) : tab === "progress" ? (
+            <ProgressView key={stateRevision} onOpenSong={openSong} onStartPractice={startPractice} />
           ) : tab === "tunes" ? (
             <TuneView key={stateRevision} input={input} launch={launch} onLaunched={launched} />
           ) : tab === "free" ? (
