@@ -141,22 +141,28 @@ describe("free play", () => {
     expect(readGrid(eighths, 1000, 500)!.offset).toBeCloseTo(30);
   });
 
-  it("speeds the click up for clean playing only, slows it for a player behind it, and steps out when the notes fall apart", () => {
+  const reading = (offset: number | number[], onGrid = 0.95, inKey = 1) => {
+    const offsets = typeof offset === "number" ? Array<number>(12).fill(offset) : offset;
+    const grid = readGrid(offsets.map((o, i) => 1000 + i * 375 + o), 1000, 750, 6);
+    return { notes: offsets.length, grid: grid ? { ...grid, onGrid: Math.min(onGrid, grid.onGrid) } : null, inKey, beatMs: 750 };
+  };
+
+  it("raises equally for steady early/late playing, slows for actual drift and steps out for scattered notes", () => {
     const on: Lock = { ...restingLock(80), on: true };
-    const reading = (offset: number, onGrid = 0.9, inKey = 1) => ({ notes: 12, grid: { division: 2 as const, onGrid, offset }, inKey, beatMs: 750 });
-    const twice = stepLock(stepLock(on, reading(5)).lock, reading(5));
-    expect(twice.change).toBe("up");
-    expect(twice.lock.bpm).toBe(84);
-
-    let ahead = on;
-    for (let i = 0; i < 5; i++) ahead = stepLock(ahead, reading(-90)).lock;
-    expect(ahead).toMatchObject({ bpm: 80, mood: "ahead" }); // rushing never earns a faster click
-
-    let behind = stepLock(stepLock(on, reading(90)).lock, reading(90));
+    for (const offset of [-150, 5, 150]) {
+      const r = reading(offset);
+      expect(r.grid?.offset).toBeCloseTo(offset);
+      const twice = stepLock(stepLock(on, r).lock, r);
+      expect(twice.change).toBe("up");
+      expect(twice.lock.bpm).toBe(84);
+    }
+    const drift = reading(Array.from({ length: 12 }, (_, i) => i * 12));
+    let behind = stepLock(stepLock(on, drift).lock, drift);
     expect(behind.lock).toMatchObject({ bpm: 80, mood: "behind" });
-    behind = stepLock(behind.lock, reading(90));
+    behind = stepLock(behind.lock, drift);
     expect(behind.change).toBe("down");
-
+    const ahead = stepLock(on, reading(Array.from({ length: 12 }, (_, i) => -i * 12)));
+    expect(ahead.lock).toMatchObject({ bpm: 80, mood: "ahead", clean: 0 });
     const loose = stepLock(stepLock(on, reading(0, 0.3)).lock, reading(0, 0.3));
     expect(loose.change).toBe("off");
     expect(loose.lock.on).toBe(false);
@@ -164,10 +170,10 @@ describe("free play", () => {
 
   it("holds a tempo the player chose until the playing is very clean, and rests when they stop", () => {
     const on: Lock = { ...restingLock(80), on: true };
-    const reading = (offset: number, onGrid = 0.95, notes = 12) => ({ notes, grid: { division: 2 as const, onGrid, offset }, inKey: 1, beatMs: 750 });
     // the click went up and the player did not go with it: back down, and it stays
     const rose = stepLock(stepLock(on, reading(5)).lock, reading(5)).lock;
-    const declined = stepLock(stepLock(rose, reading(90)).lock, reading(90));
+    const drift = reading(Array.from({ length: 12 }, (_, i) => i * 12));
+    const declined = stepLock(stepLock(rose, drift).lock, drift);
     expect(declined.change).toBe("down");
     expect(declined.lock).toMatchObject({ bpm: 80, hold: 80 });
     expect(toRise(declined.lock).need).toBe(4);
@@ -178,9 +184,21 @@ describe("free play", () => {
     expect(lifted.change).toBe("up");
     expect(lifted.lock.hold).toBeNull();
     // nothing played for two readings: the click steps out, to come back under whatever comes next
-    const rest = stepLock(stepLock(on, reading(0, 1, 0)).lock, reading(0, 1, 0));
+    const silence = { ...reading(0), notes: 0, grid: null };
+    const rest = stepLock(stepLock(on, silence).lock, silence);
     expect(rest.change).toBe("rest");
     expect(rest.lock.on).toBe(false);
+  });
+
+  it("does not earn a rise from missing, repeated or too few attacks, or a whole-beat shift", () => {
+    const on = { ...restingLock(80), on: true };
+    const attacks = Array.from({ length: 12 }, (_, i) => 1000 + i * 375 + 90);
+    for (const notes of [attacks.filter((_, i) => i !== 5), [...attacks, attacks[5] + 20], attacks.slice(0, 5), attacks.map((t) => t + 750)]) {
+      const r = { notes: notes.length, grid: readGrid(notes, 1000, 750, 6), inKey: 1, beatMs: 750 };
+      const twice = stepLock(stepLock(on, r).lock, r);
+      expect(twice.change).not.toBe("up");
+      expect(twice.lock.clean).toBe(0);
+    }
   });
 
   it("knows a tempo of the player's own from one that belongs to the click", () => {

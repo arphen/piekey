@@ -11,7 +11,7 @@ import { melodyOverChords } from "../tunes/learn";
 import type { LeadSheet } from "../tunes/musicxml";
 import { printedResults, type Timeline } from "../tunes/order";
 import { buildDeck, FAMILY_LABEL, familiesOnly, FOCUS_FAMILIES, FOCUS_LABEL, mixDecks, noteName as spelled, type Card, type Context, type Deck, type Focus } from "../song/deck";
-import { timingOf } from "../song/evidence";
+import { fitTiming, timingTolerance } from "../tunes/scoring";
 import { localId } from "../song/ids";
 import { KEY_FIFTHS, lineSheet } from "../song/notation";
 import { makeScale, nice, pretty, spellIn } from "../song/harmony";
@@ -919,14 +919,14 @@ function coachLine(card: Card, s: SessionApi, last: number | undefined): { text:
   return { text: "" };
 }
 
-/** How the notes sit against the beat: the dot left of the line is ahead of it, right of it behind. */
+/** Raw alignment remains visible; its cause may be the player, the route or onset detection. */
 function BeatMeter({ drift, beatMs }: { drift: number | null; beatMs: number }) {
   const x = drift === null ? 0 : Math.max(-1, Math.min(1, drift / (beatMs * 0.25)));
-  const where = drift === null ? "" : x > 0.45 ? "behind" : x < -0.45 ? "ahead" : "on";
+  const label = drift === null ? "" : `${drift >= 0 ? "+" : ""}${Math.round(drift)} ms`;
   return (
-    <span className={`ss-beat ${where ? `is-${where}` : ""}`} title="where the notes sit against the beat">
+    <span className="ss-beat" aria-label={label ? `Alignment ${label}` : "Alignment"} title="Alignment against the click, after the current input correction; not a hardware-latency measurement.">
       <i style={{ transform: `translateX(${(x * 16).toFixed(1)}px)` }} />
-      <em>{where === "on" ? "" : where}</em>
+      <em>{label}</em>
     </span>
   );
 }
@@ -936,18 +936,19 @@ function TimingStrip({ at, first, last, beatMs }: { at: (number | null)[]; first
   const offs = at.slice(first, last + 1);
   const vals = offs.filter((o): o is number => o !== null && o !== undefined);
   if (vals.length < 3) return null;
+  const fit = fitTiming(offs)!;
   const reach = beatMs * 0.25;
   const n = Math.max(1, offs.length - 1);
   return (
-    <span className="ss-timing" title="the last time through: each note against its beat">
+    <span className="ss-timing" title="Each note stays at its raw alignment against the click. Colour shows scatter around the passage's alignment; a constant offset is separate from steadiness.">
       <span className="ss-timing-lane">
         {offs.map((o, i) =>
           o === null || o === undefined ? null : (
-            <i key={i} className={Math.abs(o) > 60 ? "is-off" : ""} style={{ left: `${(i / n) * 100}%`, top: `${50 + Math.max(-1, Math.min(1, o / reach)) * 50}%` }} />
+            <i key={i} className={Math.abs(o - fit.offset) > timingTolerance(beatMs) ? "is-off" : ""} style={{ left: `${(i / n) * 100}%`, top: `${50 + Math.max(-1, Math.min(1, o / reach)) * 50}%` }} />
           ),
         )}
       </span>
-      <em>±{timingOf(vals).spread} ms</em>
+      <em>±{Math.round(fit.spread)} ms spread · {fit.offset >= 0 ? "+" : ""}{Math.round(fit.offset)} ms alignment</em>
     </span>
   );
 }

@@ -56,13 +56,18 @@ From Tutor or a focused mode, choosing an exercise opens that exact card on the 
   again. The tempo moves while the band plays. The first note may come early, the last may land
   late, and a finished pass keeps its colours for a moment.
   Untied repeated notes need separate attacks; ties remain a single target. Scale, melody and
-  comping passes must also establish steady timing before the tempo rises. Rushing does not earn
-  a larger tempo increase. Held voicings and improvisation keep their own acceptance rules.
+  comping passes must also establish steady timing before the tempo rises. A bounded constant
+  early/late alignment is separate from unevenness or accumulating drift; distinct, sufficiently
+  covered attacks must establish steadiness. Alignment does not earn a larger increase. Held
+  voicings and improvisation keep their own acceptance rules.
 - **Gaps.** Once an exercise is well known (box 4) the band drops out for two bars in four (four in
   eight in the top box) while it plays in time; the notes are still judged, so the time is the
   player's. During a focus on time every focus card plays this way.
 - **Timing.** After each pass in time a strip shows every note against its beat and how scattered
-  they were (ms). Calibration's play-along measures the input's lag so the strip means the player.
+  they were (ms), with raw reference alignment separate from scatter. A pass accommodates constant
+  phase within the smallest of 200 ms, 30% of a beat and 45% of nearby attack spacing; scatter and
+  drift limits still apply. Calibration's play-along supplies effective compensation, including
+  the player's response to the reference; it does not isolate hardware latency.
   Tuning/noise calibration belongs to the opened input and sample rate; measured lag also belongs
   to the selected output. Changing that setup makes lag a guess until measured again. A suspended
   input pauses the session until it resumes.
@@ -129,9 +134,11 @@ waiting or off, and offers Leave on its first page when there is no matching exe
 
 `song/freeplay.ts` (pure) and `song/useFreePlay.ts`. Whatever is played is written down; the key
 (Krumhansl profiles, line turns weighted), the pattern (run, thirds, triads, 7ths) and the grid
-are read off it. The click joins once the notes come evenly, a little under the player. Clean
-playing on the grid earns +4 bpm; being behind it three readings in a row costs 4; being ahead
-never speeds it up; notes falling apart send it away until the playing is steady again. What was
+are read off it. The click joins once the notes come evenly, a little under the player. Steady
+playing on a bounded phase-aligned grid earns +4 bpm; constant early/late alignment is neutral.
+At least six distinct contiguous attacks, enough coverage, low scatter and stable alignment across
+readings are required. Accumulating late drift costs tempo; earlier drift cannot earn a rise;
+notes falling apart send it away until the playing is steady again. What was
 practised is logged (`guitar-freeplay`) and shows on the map; if the box holds an exercise for
 exactly that scale and pattern, the menu offers it.
 

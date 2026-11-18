@@ -38,11 +38,11 @@ function clickLine(v: FreeView): string {
   if (v.change === "moved") return "Tempo matched";
   switch (v.mood) {
     case "locked":
-      return v.change === "up" ? "Tempo up" : v.held && v.mode === "follows" ? `Holding ♩ ${v.bpm}` : "In time";
+      return v.change === "up" ? "Tempo up" : v.held && v.mode === "follows" ? `Holding ♩ ${v.bpm}` : "Steady";
     case "ahead":
-      return "Ahead";
+      return "Moving earlier";
     case "behind":
-      return v.change === "down" ? `Tempo eased · ♩ ${v.bpm}` : "Behind";
+      return v.change === "down" ? `Tempo eased · ♩ ${v.bpm}` : "Moving later";
     case "loose":
       return "Finding the beat";
     default:
@@ -51,7 +51,7 @@ function clickLine(v: FreeView): string {
 }
 
 /** Where each of the last notes sat against the grid: a trail, the newest at the bottom. Left of the line is ahead of the click. */
-function Lane({ timing }: { timing: number[] }) {
+function Lane({ timing, alignment }: { timing: number[]; alignment: number }) {
   const w = 300;
   const h = 96;
   const row = (h - 26) / 28;
@@ -61,13 +61,13 @@ function Lane({ timing }: { timing: number[] }) {
       <line className="fp-lane-mid" x1={w / 2} x2={w / 2} y1="0" y2={h - 14} />
       {timing.map((d, i) => {
         const age = timing.length - 1 - i;
-        return <circle key={i} className={Math.abs(d) <= TIGHT ? "is-on" : "is-off"} cx={w / 2 + Math.max(-0.5, Math.min(0.5, d)) * w} cy={h - 20 - age * row} r={age === 0 ? 4.2 : 2.6} opacity={Math.max(0.12, 1 - age / 28)} />;
+        return <circle key={i} className={Math.abs(d - alignment) <= TIGHT ? "is-on" : "is-off"} cx={w / 2 + Math.max(-0.5, Math.min(0.5, d)) * w} cy={h - 20 - age * row} r={age === 0 ? 4.2 : 2.6} opacity={Math.max(0.12, 1 - age / 28)} />;
       })}
       <text x="6" y={h - 2}>
-        ahead
+        earlier
       </text>
       <text x={w - 6} y={h - 2} textAnchor="end">
-        behind
+        later
       </text>
     </svg>
   );
@@ -169,7 +169,7 @@ export function FreePlay({ input, deck, onClose, onPractise }: { input: InputApi
           {v.count > 2 ? <div className="ss-score ss-score--free"><Score exercise={sheet} activeStep={-1} results={NONE} showFingering={false} /></div> : null}
           <div className={`fp-deck ${v.onGrid === null ? "is-finding" : ""}`}>
             <div className="fp-side fp-timing">
-              {v.onGrid !== null ? <><p className="fp-overline">Your timing</p><Lane timing={v.timing} /><p className="fp-cap">{Math.round(v.onGrid * 100)}% on the grid</p></> : null}
+              {v.onGrid !== null ? <><p className="fp-overline">Your timing</p><Lane timing={v.timing} alignment={(v.alignment ?? 0) / (60000 / v.bpm / v.division)} /><p className="fp-cap">{Math.round(v.onGrid * 100)}% near alignment{v.spread !== null ? ` · ±${Math.round(v.spread)} ms spread` : ""}{v.alignment !== null ? ` · ${v.alignment >= 0 ? "+" : ""}${Math.round(v.alignment)} ms alignment` : ""}</p></> : null}
             </div>
             <div className="fp-click">
               <BeatPulse beat={v.beatSignal} bpm={v.on ? v.bpm : undefined} />

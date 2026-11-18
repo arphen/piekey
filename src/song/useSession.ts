@@ -8,7 +8,7 @@ import type { InputApi } from "../listen/useInput";
 import type { NoteResult } from "../core/contract";
 import type { Timeline } from "../tunes/order";
 import { usePlayback } from "../tunes/usePlayback";
-import { timingReady } from "../tunes/scoring";
+import { assessTiming } from "../tunes/scoring";
 import { latencyMeasured } from "../audio/latency";
 import { mod } from "../musicTheory";
 import type { Card, Deck } from "./deck";
@@ -696,9 +696,13 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     }
     const all = [...passes, score];
     setPasses(all);
-    estimator.pass(score, p.offset, 60000 / bpm);
+    const targets = card.tl.targets.slice(card.first, card.last + 1);
+    const beatMs = 60000 / bpm;
+    const spacing = targets.slice(1).reduce((shortest, t, i) => Math.min(shortest, (t.t - targets[i].t) * beatMs || shortest), beatMs);
+    const timing = assessTiming(p.at.slice(card.first, card.last + 1), bpm, spacing);
+    estimator.pass(score, timing.fit ? Math.max(timing.fit.spread, Math.abs(timing.fit.drift)) : null, beatMs);
     feel();
-    const onTime = (card.view === "chords" && card.kind !== "comping") || card.kind === "improv" || timingReady(p.at.slice(card.first, card.last + 1), bpm, latencyMeasured());
+    const onTime = (card.view === "chords" && card.kind !== "comping") || card.kind === "improv" || timing.ready;
     if (score >= card.pass && !onTime) rhythmMisses.current++;
     const missed = all.filter((s) => s < card.pass).length + rhythmMisses.current;
     const sp = !spot && spotted < MAX_SPOTS && card.kind !== "improv" ? trouble?.pass(p.results) ?? null : null;
@@ -708,7 +712,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
         conclude(slowed === 0 && backed === 0 && spotted === 0 && missed <= 1 ? "clean" : "ok", Math.max(...all));
         return;
       }
-      // A steady pass earns the step; rushing never makes it larger.
+      // A steady pass earns the step; a constant phase offset never makes the step larger.
       const far = target - bpm > 12;
       setBpm(Math.min(target, bpm + (far ? STEP_UP_FAR : STEP_UP)));
       return;

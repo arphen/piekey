@@ -7,8 +7,8 @@ export interface Estimator {
   note(hit: boolean): void;
   /** A finished take at the player's own pace. */
   take(clean: boolean): void;
-  /** A pass in time: the share of notes landed and how they sat against the beat (ms; null: unknown). */
-  pass(share: number, offsetMs: number | null, beatMs: number): void;
+  /** A pass in time: notes landed and unevenness/drift around its alignment (ms; null: unknown). */
+  pass(share: number, unevenMs: number | null, beatMs: number): void;
   value(): number;
   /** Notes landed in a row, up to now. */
   run(): number;
@@ -30,9 +30,9 @@ export function createEstimator(kind: "melody" | "scale"): Estimator {
     take(clean) {
       if (clean) rate = Math.max(rate, 0.85);
     },
-    pass(share, offsetMs, beatMs) {
+    pass(share, unevenMs, beatMs) {
       rate = 0.5 * rate + 0.5 * share;
-      if (offsetMs !== null) steady += 0.5 * (1 - Math.min(1, Math.abs(offsetMs) / (beatMs * 0.25)) - steady);
+      if (unevenMs !== null) steady += 0.5 * (1 - Math.min(1, Math.abs(unevenMs) / (beatMs * 0.25)) - steady);
     },
     value() {
       const run = Math.min(1, streak / fullRun);

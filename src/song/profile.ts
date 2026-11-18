@@ -44,7 +44,6 @@ const WINDOW_DAYS = 60; // evidence older than this no longer names a weakness
 const MIN_NOTES = 20; // notes behind a shape class before it is named
 const MIN_TIMED = 30; // timed notes before time is judged
 const MIN_WRONG = 4; // the same slip this often
-const OFF_MS = 35; // the average this far off the beat is a habit
 const SPREAD_MS = 50; // the notes this scattered around it
 
 /** Every attempt in every box, with ids that tell the tunes apart. */
@@ -95,17 +94,17 @@ function levelOf(list: { day: string; score: number }[], day: string): number | 
   return den ? num / den : null;
 }
 
-/** How a time pass sat on the beat, as a score: a tight spread counts, an average off it less so. */
-function timeScore(a: Attempt, measured: boolean): number {
+/** Historical timing evidence can establish scatter, but its mean cannot prove the cause of alignment. */
+function timeScore(a: Attempt): number {
   const t = a.ev?.time;
   if (!t) return 0;
-  return Math.max(0, Math.min(1, 1 - Math.max(0, t.spread - 25) / 75 - ((a.timingMeasured ?? measured) ? Math.max(0, Math.abs(t.mean) - 20) / 150 : 0)));
+  return Math.max(0, Math.min(1, 1 - Math.max(0, t.spread - 25) / 75));
 }
 
 /** Outcomes govern review scheduling; the profile reports measured playing instead. */
-function scoreOf(axis: Axis, a: Attempt, measured: boolean): number | null {
+function scoreOf(axis: Axis, a: Attempt): number | null {
   if (a.result === "skip") return null;
-  if (axis === "time") return a.ev?.time ? timeScore(a, measured) : null;
+  if (axis === "time") return a.ev?.time ? timeScore(a) : null;
   if (axis === "tempo") {
     if (a.result !== "clean" || !a.goalBpm || !Number.isFinite(a.goalBpm) || a.goalBpm <= 0 || !Number.isFinite(a.bpm) || a.bpm <= 0) return null;
     return Math.min(1, a.bpm / a.goalBpm);
@@ -115,12 +114,12 @@ function scoreOf(axis: Axis, a: Attempt, measured: boolean): number | null {
   return a.share !== null && Number.isFinite(a.share) ? Math.max(0, Math.min(1, a.share)) : null;
 }
 
-/** `measured`: the input's lag was measured (audio/latency.ts), so an average off the beat is the player's. */
-export function buildProfile(attempts: Attempt[], day: string, measured = true): SkillProfile {
+/** Keep the old calibration argument/API; play-along calibration does not isolate hardware latency. */
+export function buildProfile(attempts: Attempt[], day: string, _measured = true): SkillProfile {
   const axes = {} as Record<Axis, AxisLevel>;
   for (const axis of AXES) {
     const scored = attempts.filter((a) => axesOf(a).includes(axis)).flatMap((a) => {
-      const score = scoreOf(axis, a, measured);
+      const score = scoreOf(axis, a);
       return score === null ? [] : [{ day: a.day, score }];
     });
     const recent = scored.filter((x) => daysBetween(x.day, day) < 28);
@@ -135,7 +134,7 @@ export function buildProfile(attempts: Attempt[], day: string, measured = true):
     };
   }
   const fresh = attempts.filter((a) => daysBetween(a.day, day) < WINDOW_DAYS);
-  return { axes, weaknesses: weaknessesOf(fresh, axes, measured), ceilings: ceilingsOf(attempts) };
+  return { axes, weaknesses: weaknessesOf(fresh, axes), ceilings: ceilingsOf(attempts) };
 }
 
 const sum = (list: Tally[]): Tally => list.reduce<Tally>((t, x) => [t[0] + x[0], t[1] + x[1]], [0, 0]);
@@ -153,7 +152,7 @@ function worst(attempts: Attempt[], pick: (a: Attempt) => Tally | undefined): st
   return [...by].filter(([, t]) => t[1] > 0).sort((x, y) => rate(y[1]) - rate(x[1]) || y[1][1] - x[1][1]).slice(0, 6).map(([id]) => id);
 }
 
-function weaknessesOf(attempts: Attempt[], axes: Record<Axis, AxisLevel>, measured: boolean): Weakness[] {
+function weaknessesOf(attempts: Attempt[], axes: Record<Axis, AxisLevel>): Weakness[] {
   const ev = attempts.filter((a) => a.ev);
   const out: Weakness[] = [];
   const base = rate(sum(ev.map((a) => a.ev!.notes)));
@@ -187,18 +186,11 @@ function weaknessesOf(attempts: Attempt[], axes: Record<Axis, AxisLevel>, measur
     out.push({ cls: "accidental", strength: Math.min(1, top[1].n / 12), n: top[1].n, cards: [...top[1].ids].slice(0, 6), fact: `${pitchClassToName(w)} → ${pitchClassToName(h)} · ${top[1].n}×` });
   }
 
-  // where the notes sit against the beat, pooled over every timed pass
+  // Pool within-performance scatter. Raw means remain evidence, not a diagnosis of rushing/dragging.
   const timed = ev.filter((a) => a.ev!.time);
   const n = timed.reduce((x, a) => x + a.ev!.time!.n, 0);
   if (n >= MIN_TIMED) {
-    const calibrated = timed.filter((a) => a.timingMeasured ?? measured);
-    const measuredN = calibrated.reduce((x, a) => x + a.ev!.time!.n, 0);
-    const mean = measuredN ? calibrated.reduce((x, a) => x + a.ev!.time!.mean * a.ev!.time!.n, 0) / measuredN : 0;
-    // Pool within-performance spread: different devices' unmeasured offsets are not player scatter.
     const spread = Math.sqrt(timed.reduce((x, a) => x + a.ev!.time!.spread ** 2 * a.ev!.time!.n, 0) / n);
-    const byOff = (sign: number) => [...calibrated].sort((x, y) => sign * (y.ev!.time!.mean - x.ev!.time!.mean)).slice(0, 6).map((a) => a.id);
-    if (measuredN >= MIN_TIMED && mean <= -OFF_MS) out.push({ cls: "rushing", strength: Math.min(1, -mean / 100), n: measuredN, cards: byOff(-1), fact: `${Math.round(-mean)} ms ahead of the beat` });
-    else if (measuredN >= MIN_TIMED && mean >= OFF_MS) out.push({ cls: "dragging", strength: Math.min(1, mean / 100), n: measuredN, cards: byOff(1), fact: `${Math.round(mean)} ms behind the beat` });
     if (spread >= SPREAD_MS) out.push({ cls: "unsteady", strength: Math.min(1, (spread - 30) / 70), n, cards: [...timed].sort((x, y) => y.ev!.time!.spread - x.ev!.time!.spread).slice(0, 6).map((a) => a.id), fact: `Spread ${Math.round(spread)} ms` });
   }
 

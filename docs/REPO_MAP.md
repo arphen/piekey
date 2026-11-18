@@ -239,7 +239,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/song/evidence.ts` — `Tally:10`, `Timing:12`, `Evidence:20`, `EvidenceLog:43`, `createEvidence:54`, `timingOf:98`
 - `src/song/fingering.ts` — `MAX_FRET:8`, `Fingered:10`, `Window:15`, `windowAt:21`, `chooseWindow:24`, `fitWindow:36`, `fingerLine:66`, `notesIn:118`
 - `src/song/freeplay-room.css`
-- `src/song/freeplay.ts` — `Onset:23`, `createOnsets:29`, `KeyGuess:79`, `guessKey:102`, `Pattern:130`, `PATTERN_LABEL:131`, `guessPattern:136`, `Division:163`, `DIVISION_LABEL:164`, `Grid:169`, `readGrid:176`, `steadyGap:198`, `CLICK_MIN:205`, `CLICK_MAX:206`, `clickFor:211`, `Mood:222` (+14 more)
+- `src/song/freeplay.ts` — `Onset:24`, `createOnsets:30`, `KeyGuess:80`, `guessKey:103`, `Pattern:131`, `PATTERN_LABEL:132`, `guessPattern:137`, `Division:164`, `DIVISION_LABEL:165`, `Grid:170`, `readGrid:180`, `steadyGap:211`, `CLICK_MIN:218`, `CLICK_MAX:219`, `clickFor:224`, `Mood:235` (+14 more)
 - `src/song/fretboard.ts` — `Prompt:11`, `STRING_NAMES:18`, `stringPrompts:24`, `thirdPrompts:40`, `tonePrompts:57`
 - `src/song/harmony.ts` — `ChordKind:15`, `Chord:17`, `parseChord:53`, `isDominant:108`, `isMinorType:109`, `pretty:114`, `ScaleKind:125`, `Scale:139`, `Mode:148`, `Key:149`, `nice:163`, `makeScale:171`, `makeKey:179`, `spellIn:191`, `ChordEvent:200`, `KeyCentre:212` (+4 more)
 - `src/song/ids.ts` — `GLUE:6`, `isShared:9`, `glue:11`, `localId:14`, `tuneOf:20`
@@ -250,7 +250,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/song/notation.ts` — `KEY_FIFTHS:8`, `signatureOf:21`, `lineSheet:48`, `signatureFor:104`, `playedSheet:110`
 - `src/song/notekeys.ts` — `KEY_HOMES:13`, `usedMidis:21`, `assignNoteKeys:33`, `spotOf:51`
 - `src/song/planner.ts` — `Length:14`, `LENGTHS:15`, `LENGTH_MINUTES:16`, `Role:18`, `Block:20`, `Arc:26`, `SessionPlan:32`, `cardSeconds:63`, `nextArc:80`, `loadArc:90`, `saveArc:98`, `newCards:111`, `PlanOptions:119`, `planBlocks:127`
-- `src/song/profile.ts` — `Axis:11`, `MistakeClass:12`, `AxisLevel:14`, `Weakness:21`, `Ceiling:29`, `SkillProfile:34`, `AXES:40`, `allAttempts:51`, `axesOf:56`, `buildProfile:119`
+- `src/song/profile.ts` — `Axis:11`, `MistakeClass:12`, `AxisLevel:14`, `Weakness:21`, `Ceiling:29`, `SkillProfile:34`, `AXES:40`, `allAttempts:50`, `axesOf:55`, `buildProfile:118`
 - `src/song/progression.ts` — `nameChord:15`, `addChord:30`, `findLoop:36`, `cardForLoop:50`
 - `src/song/pulse.ts` — `BeatSignal:2`, `IDLE_BEAT:10`
 - `src/song/rand.ts` — `seeded:2`, `shuffled:14`
@@ -261,8 +261,8 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/song/support.ts` — `Support:25`, `createSupport:36`
 - `src/song/tree.ts` — `TreeNode:13`, `TreeEdge:25`, `TreeInput:31`, `TREE_SIZE:39`, `buildTree:72`
 - `src/song/useChordFollower.ts` — `ChordGoal:9`, `useChordFollower:21`
-- `src/song/useFreePlay.ts` — `ClickMode:51`, `FreeView:54`, `useFreePlay:237`
-- `src/song/useSession.ts` — `Phase:50`, `Outcome:91`, `SessionOptions:119`, `useSession:124`, `SessionApi:1080`
+- `src/song/useFreePlay.ts` — `ClickMode:51`, `FreeView:54`, `useFreePlay:248`
+- `src/song/useSession.ts` — `Phase:50`, `Outcome:91`, `SessionOptions:119`, `useSession:124`, `SessionApi:1084`
 - `src/song/voicings.ts` — `VoicingNote:10`, `Voicing:17`, `voiceChords:75`
 - `src/storage.ts` — `StorageIssue:4`, `pendingStorageWrites:14`, `getStoredItem:15`, `storedKeys:18`, `retryStorageWrites:32`, `getStorageIssues:38`, `subscribeStorageIssues:39`, `reportStorageError:44`, `clearStorageError:53`, `setStoredItem:59`, `removeStoredItem:74`
 - `src/styles.css`
@@ -281,7 +281,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/tunes/library.ts` — `TuneEntry:9`, `LARGE_TUNE_CHARS:25`, `isLibraryBusy:31`, `subscribeLibraryOperations:32`, `withLibraryOperation:38`, `readStored:48`, `writeStored:57`, `loadLibrary:75`, `loadLibraryAsync:82`, `saveLibrary:103`, `newTuneId:143`, `sameTuneContent:149`, `parseTuneEntry:159`, `loadCurrentTuneId:163`, `saveCurrentTuneId:168`, `hasOldLibrary:172`
 - `src/tunes/musicxml.ts` — `CompEvent:11`, `LeadSheet:18`, `MusicXmlOptions:32`, `MusicXmlPart:37`, `MusicXmlSource:44`, `parseMusicXml:284`, `loadTuneFile:600`
 - `src/tunes/order.ts` — `Slot:8`, `Target:17`, `Voice:30`, `Timeline:36`, `playOrder:48`, `buildTimeline:128`, `slotOfBar:172`, `firstTargetAt:177`, `printedResults:186`
-- `src/tunes/scoring.ts` — `matchesPitch:4`, `PitchSample:7`, `PitchWindow:13`, `judgePitch:29`, `timingReady:52`
+- `src/tunes/scoring.ts` — `matchesPitch:4`, `PitchSample:7`, `PitchWindow:13`, `judgePitch:29`, `TimingFit:51`, `fitTiming:59`, `timingTolerance:73`, `timingPhaseLimit:75`, `assessTiming:78`, `timingReady:91`
 - `src/tunes/starter.ts` — `STARTER_ENTRY:16`
 - `src/tunes/tunes.css`
 - `src/tunes/unzip.ts` — `unzip:4`

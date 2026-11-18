@@ -44,7 +44,7 @@ import { IDLE_BEAT, type BeatSignal } from "./pulse";
 // Free play, live: listens to whatever is played, works out the key and the pattern, and runs a
 // click by the rules in freeplay.ts. In "follows" the click joins once the notes come evenly,
 // a little under the player's tempo, moves up for clean playing, comes down when the player
-// stays behind it, steps out when the notes fall apart or stop, and moves over when the player
+// drifts behind it, steps out when the notes fall apart or stop, and moves over when the player
 // settles on a tempo of their own. In "steady" it only moves by hand. Once the playing has sat
 // on the click for a few bars, a band comes in under it, in the key that was heard.
 
@@ -70,6 +70,8 @@ export interface FreeView {
   bars: number; // bars in a row on the click
   onGrid: number | null; // share of the last two bars' notes that sat on the grid
   timing: number[]; // where the last notes sat against the grid, in grid cells: − ahead, + behind
+  alignment: number | null; // last reading's raw within-cell phase, ms; separate from steadiness
+  spread: number | null; // scatter around that phase, ms
   trace: number[]; // the click's tempo, two bars at a time
   best: Pace | null; // the fastest click played to cleanly, this visit
   record: Pace | null; // and before it, for this key and pattern
@@ -135,6 +137,8 @@ interface State {
   beaten: boolean;
   onGrid: number | null;
   timing: number[];
+  alignment: number | null;
+  spread: number | null;
   trace: number[];
   band: boolean;
   bandOn: boolean;
@@ -180,6 +184,8 @@ const fresh = (): State => ({
   beaten: false,
   onGrid: null,
   timing: [],
+  alignment: null,
+  spread: null,
   trace: [],
   band: false,
   bandOn: bandPref(),
@@ -211,6 +217,8 @@ const snapshot = (s: State): FreeView => ({
   bars: s.lock.on ? s.lock.streak * 2 : 0,
   onGrid: s.lock.on ? s.onGrid : null,
   timing: s.timing,
+  alignment: s.lock.on ? s.alignment : null,
+  spread: s.lock.on ? s.spread : null,
   trace: s.trace,
   best: s.best,
   record: s.record,
@@ -231,6 +239,9 @@ function quietClock(s: State) {
   s.beat = -1;
   s.beatSignal = { ...IDLE_BEAT, serial: s.beatSignal.serial };
   s.band = false;
+  s.alignment = null;
+  s.spread = null;
+  s.timing = [];
 }
 
 /** `active`: false holds everything still (a menu is open). */
@@ -417,13 +428,19 @@ export function useFreePlay(input: InputApi, active: boolean) {
           const from = s.beats.find((b) => b.n === to.n - READ_BEATS);
           s.readAt = to.n + READ_BEATS;
           if (from) {
-            const played = s.onsets.filter((o) => o.at - inputLag() >= from.perf - from.ms / 8 && o.at - inputLag() < to.perf - from.ms / 8);
-            const grid = readGrid(played.map((o) => o.at - inputLag()), from.perf, from.ms);
+            const played = s.onsets.filter((o) => o.at - inputLag() >= from.perf - from.ms * 0.3 && o.at - inputLag() < to.perf);
+            const grid = readGrid(played.map((o) => o.at - inputLag()), from.perf, from.ms, READ_BEATS);
             const scale = s.key?.scale;
             const inKey = scale && played.length ? played.filter((o) => scale.pcs.includes(mod(o.midi))).length / played.length : 1;
             const r = stepLock(s.lock, { notes: played.length, grid, inKey, beatMs: from.ms });
-            if (grid && grid.onGrid >= 0.75) s.division = grid.division;
-            s.onGrid = grid && played.length >= 4 ? grid.onGrid : null;
+            if (grid && grid.onGrid >= 0.75) {
+              if (s.division !== grid.division) s.timing = [];
+              s.division = grid.division;
+            }
+            const displayGrid = grid?.division === s.division && played.length >= 4 ? grid : null;
+            s.onGrid = displayGrid?.onGrid ?? null;
+            s.alignment = displayGrid?.offset ?? null;
+            s.spread = displayGrid?.spread ?? null;
             const pace = { bpm: s.lock.bpm, division: s.division };
             if (r.lock.mood === "locked" && r.lock.on && faster(pace, s.best)) {
               s.best = pace;
@@ -434,7 +451,7 @@ export function useFreePlay(input: InputApi, active: boolean) {
             }
             if (s.mode === "steady") {
               // a steady click only says how the player sits on it; it moves by hand
-              s.lock = { ...s.lock, mood: r.change === "off" ? "loose" : r.change === "rest" ? null : r.lock.mood, streak: r.lock.on ? r.lock.streak : 0, quiet: 0, loose: 0 };
+              s.lock = { ...s.lock, mood: r.change === "off" ? "loose" : r.change === "rest" ? null : r.lock.mood, streak: r.lock.on ? r.lock.streak : 0, quiet: 0, loose: 0, alignment: r.lock.alignment, division: r.lock.division };
               s.change = null;
             } else {
               s.lock = r.lock;
@@ -504,7 +521,7 @@ export function useFreePlay(input: InputApi, active: boolean) {
     const s = st.current;
     const bpm = Math.max(CLICK_MIN, Math.min(CLICK_MAX, s.lock.bpm + by));
     if (s.mode === "off") s.mode = "steady";
-    s.lock = { ...s.lock, on: true, bpm, clean: 0, behind: 0, loose: 0, quiet: 0, rose: null, hold: by < 0 ? bpm : null };
+    s.lock = { ...s.lock, on: true, bpm, clean: 0, behind: 0, loose: 0, quiet: 0, rose: null, hold: by < 0 ? bpm : null, alignment: null, division: null };
     s.change = by > 0 ? "up" : "down";
     s.misfit = null;
     s.trace = [...s.trace, bpm].slice(-TRACE);

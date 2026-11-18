@@ -78,23 +78,24 @@ describe("the player's profile", () => {
     expect(w.cards).toHaveLength(4);
   });
 
-  it("hears rushing and a scattered beat from timed passes", () => {
+  it("hears a scattered beat without treating raw alignment as rushing", () => {
     const list = Array.from({ length: 4 }, (_, i) => attempt(`scale:A-major:run`, day, { ev: ev({ time: { n: 10, mean: -50, spread: 60, rush: 4, drag: 0 } }), bpm: 90 + i }));
     const profile = buildProfile(list, day);
     const cls = profile.weaknesses.map((w) => w.cls);
-    expect(cls).toContain("rushing");
+    expect(cls).not.toContain("rushing");
     expect(cls).toContain("unsteady");
-    expect(buildProfile(list, day, false).axes.time.level).toBeGreaterThan(profile.axes.time.level);
+    expect(buildProfile(list, day, false).axes.time.level).toBe(profile.axes.time.level);
   });
 
-  it("keeps timing calibration with each performance across devices", () => {
+  it("keeps raw alignment and calibration provenance without penalizing steady performances", () => {
     const calibrated = attempt("mel:calibrated", day, {
       timingMeasured: true,
       ev: ev({ time: { n: 40, mean: -50, spread: 10, rush: 0, drag: 0 } }),
     });
     const recorded = buildProfile([calibrated], day, false);
-    expect(recorded.weaknesses).toMatchObject([{ cls: "rushing", n: 40, cards: [calibrated.id] }]);
-    expect(recorded.axes.time.level).toBeCloseTo(0.8);
+    expect(recorded.weaknesses).toEqual([]);
+    expect(recorded.axes.time.level).toBe(1);
+    expect(calibrated).toMatchObject({ timingMeasured: true, ev: { time: { mean: -50 } } });
     for (const mean of [-240, 240]) {
       const unmeasured = attempt("mel:other-device", day, {
         timingMeasured: false,

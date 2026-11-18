@@ -5,7 +5,8 @@ import { setInputSetup, setOutputSetup } from "../audio/setup";
 import { loadProfile, saveProfile, type Profile } from "../listen/calibration";
 import { DEFAULT_TUNING } from "../pitchDetection";
 import { createOnsets } from "../song/freeplay";
-import { judgePitch, timingReady, type PitchSample, type PitchWindow } from "../tunes/scoring";
+import { createEstimator } from "../song/estimator";
+import { assessTiming, judgePitch, timingReady, type PitchSample, type PitchWindow } from "../tunes/scoring";
 
 const windowOf = (patch: Partial<PitchWindow> = {}): PitchWindow => ({
   midi: 60, anyOctave: false, start: 1000, end: 1500, first: false, last: false,
@@ -45,20 +46,36 @@ describe("timed pitch scoring", () => {
     expect(judgePitch([sample(775, 60, 750)], windowOf({ first: true })).hit).toBe(true);
     expect(judgePitch([sample(1850, 60, 1825)], windowOf({ last: true })).hit).toBe(true);
     expect(judgePitch([sample(1100)], windowOf({ any: [0, 4, 7], before: 60 })).hit).toBe(true);
+    for (const offset of [-150, 150])
+      expect(judgePitch([sample(1050 + offset, 60, 1050 + offset)], windowOf({ previousStart: 250, nextStart: 1750 })).offset).toBe(offset);
   });
 });
 
 describe("earning a faster tempo", () => {
-  it("requires enough measured onsets, a centred pulse and a consistent spread", () => {
+  it("lets a steady early or late alignment progress and warm equally, without changing its raw evidence", () => {
     expect(timingReady([-250, -15, 0, 20, 300], 120, true)).toBe(true);
-    expect(timingReady([-90, -90, -90, -90, -90], 120, true)).toBe(false);
-    expect(timingReady([0, -100, 100, -100, 0], 120, true)).toBe(false);
-    expect(timingReady([0, 0, 0, 0, null, null, null, null], 120, true)).toBe(false);
+    const warmth = (offset: number) => {
+      const offsets = Array<number>(8).fill(offset);
+      const timing = assessTiming(offsets, 80);
+      expect(timing.ready).toBe(true);
+      expect(timing.fit?.offset).toBe(offset);
+      expect(timingReady(offsets, 80, false)).toBe(timingReady(offsets, 80, true));
+      const estimator = createEstimator("scale");
+      offsets.forEach(() => estimator.note(true));
+      estimator.pass(1, Math.max(timing.fit!.spread, Math.abs(timing.fit!.drift)), 750);
+      return estimator.value();
+    };
+    expect(warmth(-150)).toBe(warmth(0));
+    expect(warmth(150)).toBe(warmth(0));
   });
 
-  it("allows an unknown input lag until calibration measures it", () => {
-    expect(timingReady([90, 90, 90, 90], 120, false)).toBe(true);
-    expect(timingReady([90, 90, 90, 90], 120, true)).toBe(false);
+  it("rejects unevenness, drift, missing attacks and ambiguous offsets despite a small average", () => {
+    expect(timingReady([0, -100, 100, -100, 0], 120, true)).toBe(false);
+    expect(timingReady([0, 0, 0, 0, null, null, null, null], 120, true)).toBe(false);
+    expect(timingReady([-100, -70, -40, -10, 20, 50, 80, 110], 80)).toBe(false);
+    for (const offset of [-750, 750]) expect(timingReady(Array<number>(8).fill(offset), 80)).toBe(false);
+    expect(timingReady(Array<number>(8).fill(150), 80, true, 187.5)).toBe(false);
+    expect(timingReady([150, 150], 80)).toBe(false); // too short to establish an offset
   });
 });
 

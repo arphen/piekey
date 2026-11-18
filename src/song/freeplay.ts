@@ -1,6 +1,7 @@
 import { mod } from "../musicTheory";
 import { getStoredItem, setStoredItem } from "../storage";
 import { makeScale, type Scale } from "./harmony";
+import { fitTiming, timingPhaseLimit, timingTolerance } from "../tunes/scoring";
 
 // Free play: nobody said what to play, so the app works it out from the notes. Pure functions
 // over what was heard: which notes began when, what key they are in, what kind of exercise they
@@ -8,8 +9,8 @@ import { makeScale, type Scale } from "./harmony";
 // should do about it.
 //
 // The click's rule: it starts a little under the tempo the player is at, so they settle down onto
-// it. Clean playing on the grid earns a faster click, a few bpm at a time. Playing behind it
-// brings it down; playing ahead of it does not speed it up (that has to be earned). And when the
+// it. Steady playing earns a faster click, a few bpm at a time. Drifting later brings it down;
+// a constant early/late alignment is kept separate. And when the
 // notes fall apart, the click goes away until the player has a steady tempo again.
 
 // ---------- notes from frames ----------
@@ -168,24 +169,36 @@ const MIN_GRID_NOTES = 6;
 
 export interface Grid {
   division: Division;
-  onGrid: number; // share of notes that sit on it, 0..1
-  offset: number; // ms the notes come after (+) or before (−) their place
+  onGrid: number; // share near the fitted phase, including coverage of subdivision cells
+  offset: number; // raw within-cell median alignment, ms; + after, − before
+  spread: number;
+  drift: number; // change in alignment across this reading, ms
+  complete: boolean; // at least six distinct attacks, without missing/repeated subdivision cells
 }
 
-/** How notes sit on the click: the coarsest division of the beat most of them land on, and how far off. */
-export function readGrid(onsets: number[], beatAt: number, beatMs: number): Grid | null {
-  if (onsets.length < MIN_GRID_NOTES || beatMs <= 0) return null;
+/** Fit one bounded phase per reading; never move the click or turn drift into a learned delay. */
+export function readGrid(onsets: number[], beatAt: number, beatMs: number, beats?: number): Grid | null {
+  if (onsets.length < MIN_GRID_NOTES || !Number.isFinite(beatMs) || beatMs <= 0) return null;
   let best: Grid | null = null;
   for (const division of [1, 2, 3, 4] as const) {
     const cell = beatMs / division;
-    const tolerance = Math.min(0.12 * beatMs, 0.35 * cell);
-    const devs = onsets.map((t) => {
+    const slots = onsets.filter(Number.isFinite).sort((a, b) => a - b).map((t) => {
       const x = (t - beatAt) / cell;
-      return (x - Math.round(x)) * cell;
-    });
-    const on = devs.filter((d) => Math.abs(d) <= tolerance);
-    const grid: Grid = { division, onGrid: on.length / devs.length, offset: on.length ? on.reduce((a, b) => a + b, 0) / on.length : 0 };
-    if (grid.onGrid >= ON_GRID) return grid;
+      return { index: Math.round(x), offset: (x - Math.round(x)) * cell };
+    }).filter((x) => beats === undefined || (x.index >= 0 && x.index < beats * division));
+    const fit = fitTiming(slots.map((x) => x.offset));
+    if (!fit) continue;
+    const expected = beats === undefined ? slots[slots.length - 1].index - slots[0].index + 1 : Math.round(beats * division);
+    const occupied = new Set(slots.map((x) => x.index));
+    const tolerance = timingTolerance(beatMs, cell);
+    const on = slots.filter((x) => Math.abs(x.offset - fit.offset) <= tolerance);
+    const grid: Grid = {
+      division, onGrid: Math.min(on.length / slots.length, occupied.size / expected), offset: fit.offset,
+      spread: fit.spread, drift: fit.drift,
+      complete: slots.length >= MIN_GRID_NOTES && occupied.size === slots.length && occupied.size === expected,
+    };
+    if (grid.complete && grid.onGrid >= ON_GRID && Math.abs(grid.offset) <= timingPhaseLimit(beatMs, cell)
+      && grid.spread <= tolerance && Math.abs(grid.drift) <= tolerance) return grid;
     if (!best || grid.onGrid > best.onGrid) best = grid;
   }
   return best;
@@ -232,9 +245,11 @@ export interface Lock {
   streak: number; // readings in a row on the click
   hold: number | null; // a tempo the player chose, by hand or by not going along with a rise: it stays until the playing is very clean
   rose: number | null; // readings since the click last moved up by itself; null: not lately
+  alignment: number | null; // preceding reading's phase, only for detecting change; never persisted
+  division: Division | null;
 }
 
-export const restingLock = (bpm: number): Lock => ({ on: false, bpm, mood: null, clean: 0, behind: 0, loose: 0, quiet: 0, streak: 0, hold: null, rose: null });
+export const restingLock = (bpm: number): Lock => ({ on: false, bpm, mood: null, clean: 0, behind: 0, loose: 0, quiet: 0, streak: 0, hold: null, rose: null, alignment: null, division: null });
 
 export interface Reading {
   notes: number;
@@ -255,8 +270,6 @@ const BEHIND_TO_DECLINE = 2;
 const LOOSE_TO_STOP = 2;
 const QUIET_NOTES = 2; // fewer notes than this in a reading: nobody is playing
 const QUIET_TO_REST = 2;
-const AHEAD = 0.12; // of the division's length: further ahead than this is rushing
-const BEHIND = 0.15;
 
 /** Is the tempo being held where the player put it? */
 export const held = (s: Lock) => s.hold !== null && s.bpm >= s.hold;
@@ -266,7 +279,7 @@ export const toRise = (s: Lock): { have: number; need: number } => ({ have: s.cl
 
 /**
  * One reading (a couple of bars) of the player against the click, and what the click does next.
- * Clean playing moves it up. A player who stays behind brings it down, and one who falls behind
+ * Steady playing moves it up. A player who drifts later brings it down, and one who falls behind
  * right after a rise has said "not faster": the click goes back and holds there until the playing
  * is very clean. Notes off the grid send it away; so does silence, so that stopping and coming
  * back in slower is all it takes to get a slower click.
@@ -276,33 +289,37 @@ export function stepLock(s: Lock, r: Reading): { lock: Lock; change: Change } {
   if (r.notes < QUIET_NOTES) {
     const quiet = s.quiet + 1;
     if (quiet >= QUIET_TO_REST) return { lock: restingLock(s.bpm), change: "rest" };
-    return { lock: { ...s, quiet, clean: 0, streak: 0 }, change: null };
+    return { lock: { ...s, quiet, clean: 0, streak: 0, alignment: null, division: null }, change: null };
   }
-  if (r.notes < MIN_GRID_NOTES || !r.grid) return { lock: { ...s, quiet: 0 }, change: null };
+  if (r.notes < MIN_GRID_NOTES || !r.grid) return { lock: { ...s, quiet: 0, clean: 0, streak: 0, alignment: null, division: null }, change: null };
   const rose = s.rose === null || s.rose + 1 > DECLINE_WITHIN ? null : s.rose + 1;
-  const base: Lock = { ...s, quiet: 0, rose };
+  const base: Lock = { ...s, quiet: 0, rose, alignment: r.grid.offset, division: r.grid.division };
   const cell = r.beatMs / r.grid.division;
+  const tolerance = timingTolerance(r.beatMs, cell);
   if (r.grid.onGrid < 0.5 || r.inKey < 0.7) {
     const loose = s.loose + 1;
     if (loose >= LOOSE_TO_STOP) return { lock: restingLock(s.bpm), change: "off" };
     return { lock: { ...base, mood: "loose", clean: 0, streak: 0, loose }, change: null };
   }
-  if (r.grid.offset > BEHIND * cell) {
+  if (r.grid.drift > tolerance) {
     const behind = s.behind + 1;
     const declined = rose !== null && behind >= BEHIND_TO_DECLINE;
     if ((declined || behind >= BEHIND_TO_DROP) && s.bpm - STEP >= CLICK_MIN) {
       const bpm = s.bpm - STEP;
       const hold = declined ? bpm : s.hold !== null ? Math.min(s.hold, bpm) : null;
-      return { lock: { ...base, bpm, mood: "behind", clean: 0, behind: 0, loose: 0, streak: 0, rose: null, hold }, change: "down" };
+      return { lock: { ...base, bpm, mood: "behind", clean: 0, behind: 0, loose: 0, streak: 0, rose: null, hold, alignment: null, division: null }, change: "down" };
     }
     return { lock: { ...base, mood: "behind", clean: 0, streak: 0, behind, loose: 0 }, change: null };
   }
-  if (r.grid.offset < -AHEAD * cell) return { lock: { ...base, mood: "ahead", clean: 0, streak: 0, behind: 0, loose: 0 }, change: null };
+  if (r.grid.drift < -tolerance) return { lock: { ...base, mood: "ahead", clean: 0, streak: 0, behind: 0, loose: 0 }, change: null };
+  const shifted = s.alignment !== null && s.division === r.grid.division && Math.abs(r.grid.offset - s.alignment) > tolerance;
+  if (!r.grid.complete || shifted || r.grid.spread > tolerance || Math.abs(r.grid.offset) > timingPhaseLimit(r.beatMs, cell))
+    return { lock: { ...base, mood: "loose", clean: 0, streak: 0, behind: 0, loose: 0 }, change: null };
   const good = held(s) ? r.grid.onGrid >= VERY_CLEAN && r.inKey >= 0.95 : r.grid.onGrid >= 0.8 && r.inKey >= 0.9;
   const clean = good ? s.clean + 1 : 0;
   const streak = s.streak + 1;
   if (clean >= toRise(s).need && s.bpm + STEP <= CLICK_MAX)
-    return { lock: { ...base, bpm: s.bpm + STEP, mood: "locked", clean: 0, behind: 0, loose: 0, streak, rose: 0, hold: null }, change: "up" };
+    return { lock: { ...base, bpm: s.bpm + STEP, mood: "locked", clean: 0, behind: 0, loose: 0, streak, rose: 0, hold: null, alignment: null, division: null }, change: "up" };
   return { lock: { ...base, mood: "locked", clean, streak, behind: 0, loose: 0 }, change: null };
 }
 
