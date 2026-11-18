@@ -37,6 +37,7 @@ export function GuitarToolsRoom({ input, onClose, initialTool = "tuner", initial
   const [beats, setBeats] = useState<BeatsPerBar>(4);
   const [division, setDivision] = useState<NonNullable<PlaybackMix["clickSubdivision"]>>(1);
   const [countIn, setCountIn] = useState(true);
+  const [tempoDraft, setTempoDraft] = useState<string | null>(null); // typed digits, until they make a tempo
   const [error, setError] = useState("");
   const [pad, setPad] = useState<0 | 1 | null>(null);
   const room = useRef<HTMLElement>(null);
@@ -100,7 +101,18 @@ export function GuitarToolsRoom({ input, onClose, initialTool = "tuner", initial
     setTool(next);
     setError("");
   };
-  const changeTempo = (value: number) => { setBpm(clampToolBpm(value)); taps.current = []; };
+  const changeTempo = (value: number) => { setBpm(clampToolBpm(value)); setTempoDraft(null); taps.current = []; };
+  // Typing 120 passes through 1 and 12: only a complete in-range tempo applies, the rest on leaving the field.
+  const editTempo = (text: string) => {
+    setTempoDraft(text);
+    const value = Number(text);
+    if (text.trim() && Number.isInteger(value) && value >= MIN_TOOL_BPM && value <= MAX_TOOL_BPM) { setBpm(value); taps.current = []; }
+  };
+  const commitTempo = () => {
+    if (tempoDraft === null) return;
+    if (tempoDraft.trim() && Number.isFinite(Number(tempoDraft))) changeTempo(Number(tempoDraft));
+    else setTempoDraft(null);
+  };
   const tap = () => {
     const result = tapTempo(taps.current, performance.now());
     taps.current = result.taps;
@@ -175,7 +187,7 @@ export function GuitarToolsRoom({ input, onClose, initialTool = "tuner", initial
         <div className="guitar-tools-settings">
         <div className="guitar-tools-tempo">
           <button type="button" className="guitar-tools-tempo-step" aria-label="4 beats per minute slower" onClick={() => changeTempo(bpm - 4)}>−<small>4</small></button>
-          <label>Tempo <span><input aria-label="Tempo in beats per minute" type="number" min={MIN_TOOL_BPM} max={MAX_TOOL_BPM} value={bpm} onChange={(event) => changeTempo(event.currentTarget.valueAsNumber)} /><small>bpm</small></span></label>
+          <label>Tempo <span><input aria-label="Tempo in beats per minute" type="number" min={MIN_TOOL_BPM} max={MAX_TOOL_BPM} value={tempoDraft ?? bpm} onChange={(event) => editTempo(event.currentTarget.value)} onBlur={commitTempo} /><small>bpm</small></span></label>
           <button type="button" className="guitar-tools-tempo-step" aria-label="4 beats per minute faster" onClick={() => changeTempo(bpm + 4)}>+<small>4</small></button>
         </div>
         <div className="guitar-tools-rhythm">

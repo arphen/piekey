@@ -33,7 +33,7 @@ describe("armed opening themes", () => {
     const catalog = buildThemeCatalog([source("b"), source("a", [...opening.slice(0, 6), 65, 60])]);
     expect(rankThemeMatches(catalog, opening.slice(0, 5))).toEqual([]);
     expect(rankThemeMatches(catalog, opening.slice(0, 6).map((m, i) => m + (i % 2 ? 12 : -12))).map((candidate) => candidate.id)).toEqual(["a", "b"]);
-    expect(rankThemeMatches(catalog, opening.slice(0, 7))).toEqual([{ id: "b", title: "b", matchedNotes: 7, confidence: 1 }]);
+    expect(rankThemeMatches(catalog, opening.slice(0, 7))).toEqual([{ id: "b", title: "b", matchedNotes: 7 }]);
     expect(rankThemeMatches(catalog, opening.map((m) => m + 2))).toEqual([]);
     expect(rankThemeMatches(catalog, [40, 41, ...opening])).toMatchObject([{ id: "b", matchedNotes: 8 }]);
     expect(rankThemeMatches(catalog, [60, 60, 64, 68, 65, 62])).toEqual([]);

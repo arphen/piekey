@@ -1,4 +1,4 @@
-import { useEffect, useRef, type MutableRefObject } from "react";
+import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import type { BeatSignal } from "../song/pulse";
 
 const VERTEX = `
@@ -74,6 +74,7 @@ export function RenderedWater({ playing, warmth, flow, beat, level }: RenderedWa
   const latest = useRef({ playing, warmth, flow, beat });
   latest.current = { playing, warmth, flow, beat };
   const wake = useRef<() => void>(() => undefined);
+  const [restored, setRestored] = useState(0); // a restored GPU context needs its program built again
   useEffect(() => { wake.current(); }, [playing, beat?.active, beat?.serial, warmth, flow]);
 
   useEffect(() => {
@@ -132,10 +133,12 @@ export function RenderedWater({ playing, warmth, flow, beat, level }: RenderedWa
       if (disposed || failed || document.hidden || gpu.isContextLost()) return;
       const s = latest.current;
       const active = (s.playing && now - level.current.heard < 900) || Boolean(s.beat?.active);
-      if (!motion?.matches && active && previous && now - previous < 1000 / 30) { frame = requestAnimationFrame(paint); return; }
+      // After the playing stops the glow sinks over some seconds instead of vanishing, then the GPU rests.
+      const moving = !motion?.matches && (active || bloom > .01 || smoothEnergy > .01);
+      if (moving && previous && now - previous < 1000 / 30) { frame = requestAnimationFrame(paint); return; }
       const dt = previous ? Math.min(100, now - previous) : 33;
       previous = now;
-      if (active && !motion?.matches) elapsed += dt / 1000;
+      if (moving) elapsed += dt / 1000;
       if (s.beat?.active && s.beat.serial !== serial) { serial = s.beat.serial; struck = now; }
       if (changedSize) {
         const rect = el.getBoundingClientRect();
@@ -150,17 +153,17 @@ export function RenderedWater({ playing, warmth, flow, beat, level }: RenderedWa
       smoothEnergy += ((heard ? level.current.level : 0) - smoothEnergy) * (1 - Math.exp(-dt / 350));
       const earned = Math.min(s.warmth, level.current.played / 150000);
       const target = heard ? Math.pow(Math.max(0, earned), 1.6) * Math.max(0, Math.min(1, (s.flow - .48) / .44)) : 0;
-      bloom += (target - bloom) * (1 - Math.exp(-dt / 11000));
+      bloom += (target - bloom) * (1 - Math.exp(-dt / (!heard ? 4000 : target > bloom ? 11000 : 14000)));
       gl.uniform2f(u.resolution, el.width, el.height);
       gl.uniform1f(u.time, elapsed);
-      gl.uniform1f(u.energy, motion?.matches || !active ? 0 : smoothEnergy);
-      gl.uniform1f(u.warmth, active ? bloom : 0);
+      gl.uniform1f(u.energy, motion?.matches ? 0 : smoothEnergy);
+      gl.uniform1f(u.warmth, bloom);
       gl.uniform1f(u.strike, motion?.matches || !s.beat?.active ? 0 : Math.exp(-(now - struck) / 360));
       gl.uniform1f(u.downbeat, s.beat?.index === 0 ? 1 : 0);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
       painted = true;
       el.dataset.renderer = "ready";
-      if (!motion?.matches && active) frame = requestAnimationFrame(paint);
+      if (moving) frame = requestAnimationFrame(paint);
     };
     const start = () => {
       if (motion?.matches && painted && !changedSize) return;
@@ -174,9 +177,11 @@ export function RenderedWater({ playing, warmth, flow, beat, level }: RenderedWa
     if (!resize) window.addEventListener("resize", resized);
     const visibility = () => { if (document.hidden) { cancelAnimationFrame(frame); frame = 0; previous = 0; } else start(); };
     const lost = (event: Event) => { event.preventDefault(); failed = true; cancelAnimationFrame(frame); frame = 0; el.dataset.renderer = "unavailable"; };
+    const regained = () => setRestored((n) => n + 1);
     document.addEventListener("visibilitychange", visibility);
     motion?.addEventListener("change", start);
     el.addEventListener("webglcontextlost", lost);
+    el.addEventListener("webglcontextrestored", regained);
     start();
     return () => {
       disposed = true;
@@ -187,9 +192,10 @@ export function RenderedWater({ playing, warmth, flow, beat, level }: RenderedWa
       document.removeEventListener("visibilitychange", visibility);
       motion?.removeEventListener("change", start);
       el.removeEventListener("webglcontextlost", lost);
+      el.removeEventListener("webglcontextrestored", regained);
       release();
     };
-  }, [level]);
+  }, [level, restored]);
 
   return <canvas className="pa-rendered-water" ref={canvas} aria-hidden="true" />;
 }

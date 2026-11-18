@@ -26,8 +26,6 @@ export interface ThemeCandidate {
   id: string;
   title: string;
   matchedNotes: number;
-  /** Exact comparison share, not a statistical probability. */
-  confidence: number;
 }
 
 const validMidi = (midi: number) => Number.isInteger(midi) && midi >= 0 && midi <= 127;
@@ -64,7 +62,7 @@ export function rankThemeMatches(catalog: ThemeCatalog, heard: readonly number[]
       const start = recent.length - length;
       const played = recent.slice(start).map((midi) => mod(midi));
       if (new Set(played).size < 3 || !played.every((pc, index) => pc === theme.pcs[index])) continue;
-      candidates.push({ id: theme.id, title: theme.title, matchedNotes: length, confidence: 1 });
+      candidates.push({ id: theme.id, title: theme.title, matchedNotes: length });
       break;
     }
   }
