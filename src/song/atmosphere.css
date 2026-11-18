@@ -1,0 +1,143 @@
+/* A listening room: a still pool at first, living colour after sustained playing. */
+.ss { isolation: isolate; }
+.ss > .practice-atmosphere, .ss-free > .practice-atmosphere {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+}
+
+.practice-atmosphere {
+  --bloom: 0;
+  --breath: 0;
+  --drift-x: 0%;
+  --drift-y: 0%;
+  overflow: hidden;
+  pointer-events: none;
+  background: #101615;
+  contain: strict;
+}
+
+.practice-atmosphere > * { position: absolute; pointer-events: none; }
+.pa-dawn {
+  inset: -12%;
+  background:
+    radial-gradient(ellipse at 8% 80%, #a3734d3b, transparent 43%),
+    radial-gradient(ellipse at 80% 14%, #80a08b24, transparent 46%),
+    radial-gradient(ellipse at 78% 95%, #489eab, transparent 44%),
+    radial-gradient(ellipse at 14% 15%, #e5a455, transparent 47%);
+  opacity: calc(0.1 + var(--bloom) * 0.6);
+  transform: translate(var(--drift-x), var(--drift-y)) scale(calc(1 + var(--breath) * 0.035));
+}
+
+.pa-water {
+  inset: -13% -14% -20% 22%;
+  background: url("../assets/water-texture.webp") center 46% / cover no-repeat;
+  filter: grayscale(0.88) sepia(0.3);
+  opacity: calc(0.15 + var(--breath) * 0.025);
+  mask-image: radial-gradient(ellipse at 88% 64%, #000 6%, #0009 40%, transparent 72%);
+  transform: translate(var(--drift-x), var(--drift-y)) rotate(-12deg) scale(calc(1.04 + var(--breath) * 0.02));
+}
+
+.pa-water-colour {
+  filter: saturate(1.1);
+  opacity: calc(var(--bloom) * 0.46);
+}
+
+.pa-leaf {
+  inset: 22% 45% -40% -22%;
+  background: url("../assets/leaf-texture.webp") 45% 70% / cover no-repeat;
+  opacity: calc(var(--bloom) * 0.2);
+  mask-image: radial-gradient(ellipse, #0006, transparent 66%);
+  transform: rotate(34deg) translate(var(--drift-y), var(--drift-x));
+}
+
+.pa-current {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: #aebfa2;
+  stroke-width: 0.6;
+  opacity: calc(0.12 + var(--breath) * 0.07 + var(--bloom) * 0.15);
+  transform: translateY(calc(var(--breath) * -5px));
+}
+.pa-current path:nth-child(2n) { opacity: 0.45; }
+.pa-current path:nth-child(3n) { stroke: #d6a270; opacity: calc(0.2 + var(--bloom) * 0.8); }
+.pa-shade {
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 45% 42%, #10141396 12%, transparent 70%),
+    linear-gradient(180deg, #0e121275 0%, transparent 24%, transparent 75%, #0c111170 100%);
+}
+
+/* The beat is a discrete clock signal, visually independent of the slower room. */
+.beat-pulse {
+  --pulse-ink: #b9c9ae;
+  display: grid;
+  justify-items: center;
+  gap: 17px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.beat-pulse-face {
+  position: relative;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 9px;
+  width: clamp(150px, 22vh, 210px);
+  aspect-ratio: 1;
+  border: 1px solid #d6e1cc24;
+  border-radius: 50%;
+  background: radial-gradient(circle, #a2c7a708, transparent 72%);
+}
+.beat-pulse-face::before {
+  content: "";
+  position: absolute;
+  inset: 7px;
+  border: 1px solid #d6e1cc0c;
+  border-radius: inherit;
+}
+.beat-pulse-wave {
+  position: absolute;
+  inset: -1px;
+  border: 1px solid var(--pulse-ink);
+  border-radius: inherit;
+  box-shadow: 0 0 25px #bfd6aa0b, inset 0 0 20px #bfd6aa0b;
+  animation: beat-breathe var(--beat-decay) ease-out both;
+}
+.is-downbeat .beat-pulse-wave { border-width: 2px; }
+.beat-pulse-number { font: 500 clamp(50px, 8vh, 78px)/1 var(--font-display); letter-spacing: -0.05em; }
+.beat-pulse-unit { color: var(--ink-faint); font: 400 9px/1 var(--font-mono); letter-spacing: 0.14em; text-transform: uppercase; }
+.beat-pulse-dots { display: flex; gap: 14px; margin: 0; padding: 0; list-style: none; }
+.beat-pulse-dots li {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid #d6e1cc26;
+  border-radius: 50%;
+  color: var(--ink-faint);
+  font: 400 8px/1 var(--font-mono);
+  transition: background 80ms, color 80ms, border-color 80ms;
+}
+.beat-pulse-dots li.is-now { border-color: var(--pulse-ink); background: var(--pulse-ink); color: #131b17; }
+.beat-pulse-dots li:first-child { border-width: 2px; }
+.beat-pulse:not(.is-active) .beat-pulse-dots { opacity: 0.4; }
+@keyframes beat-breathe { from { opacity: 0.85; transform: scale(1); } to { opacity: 0; transform: scale(1.16); } }
+
+.beat-pulse--compact { display: flex; gap: 12px; }
+.beat-pulse--compact .beat-pulse-face { width: 40px; gap: 0; border-color: #d6e1cc14; }
+.beat-pulse--compact .beat-pulse-face::before { display: none; }
+.beat-pulse--compact .beat-pulse-number { font: 500 12px/1 var(--font-mono); letter-spacing: -0.04em; }
+.beat-pulse--compact .beat-pulse-unit { display: none; }
+.beat-pulse--compact .beat-pulse-dots { gap: 4px; }
+.beat-pulse--compact .beat-pulse-dots li { width: 5px; height: 5px; border-width: 1px; }
+.beat-pulse--compact .beat-pulse-dots span { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .practice-atmosphere > * { transform: none; }
+  .beat-pulse-wave { display: none; }
+  .beat-pulse.is-active .beat-pulse-face { border-color: #b9c9ae75; }
+  .beat-pulse-dots li { transition: none; }
+}

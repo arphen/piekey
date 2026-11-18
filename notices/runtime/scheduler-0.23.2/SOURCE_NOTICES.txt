@@ -1,0 +1,96 @@
+Embedded copyright/license comments retained from the exact locked npm archive.
+
+Source archive member: package/cjs/scheduler-unstable_mock.development.js
+
+/**
+ * @license React
+ * scheduler-unstable_mock.development.js
+ *
+ * Copyright (c) Facebook, Inc. and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+---
+
+Source archive member: package/cjs/scheduler-unstable_mock.production.min.js
+
+/**
+ * @license React
+ * scheduler-unstable_mock.production.min.js
+ *
+ * Copyright (c) Facebook, Inc. and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+---
+
+Source archive member: package/cjs/scheduler-unstable_post_task.development.js
+
+/**
+ * @license React
+ * scheduler-unstable_post_task.development.js
+ *
+ * Copyright (c) Facebook, Inc. and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+---
+
+Source archive member: package/cjs/scheduler-unstable_post_task.production.min.js
+
+/**
+ * @license React
+ * scheduler-unstable_post_task.production.min.js
+ *
+ * Copyright (c) Facebook, Inc. and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+---
+
+Source archive member: package/cjs/scheduler.development.js
+
+/**
+ * @license React
+ * scheduler.development.js
+ *
+ * Copyright (c) Facebook, Inc. and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+---
+
+Source archive member: package/umd/scheduler.development.js
+
+/**
+ * @license React
+ *
+ * Copyright (c) Facebook, Inc. and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+---
+
+Source archive member: package/cjs/scheduler.production.min.js
+
+/**
+ * @license React
+ * scheduler.production.min.js
+ *
+ * Copyright (c) Facebook, Inc. and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */

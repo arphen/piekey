@@ -1,0 +1,56 @@
+/* Focused exercise lists use the same rows as the tutor. */
+.focus-song {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  width: min(980px, calc(100% - 64px));
+  margin: 0 auto;
+  padding: 38px 0 84px;
+}
+
+.focus-song button { font: inherit; cursor: pointer; }
+.focus-song-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 22px; }
+.focus-song h2 { display: flex; align-items: center; gap: 13px; margin: 0; color: var(--ink); font: 500 30px/1.2 var(--font-ui); letter-spacing: -0.035em; }
+.focus-song h2 > svg { color: var(--ink-soft); }
+.focus-song-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 22px; }
+.focus-song .focus-song-start,
+.focus-song-start { display: inline-flex; align-items: center; justify-content: center; gap: 9px; border: 1px solid var(--line-strong); border-radius: 4px; background: none; padding: 10px 15px; color: var(--ink); font: 500 12px/1.4 var(--font-ui); }
+.focus-song-start:hover:not(:disabled) { border-color: var(--ink-soft); }
+.focus-song-start:disabled { opacity: 0.4; cursor: default; }
+.focus-song-secondary { display: inline-flex; align-items: center; gap: 9px; border: 0; background: none; padding: 8px 0; color: var(--ink-soft); font: 400 12px/1.4 var(--font-ui); cursor: pointer; }
+.focus-song-secondary:hover { color: var(--ink); }
+.focus-song .focus-song-library { display: inline-grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; background: none; color: var(--ink-faint); }
+.focus-song .focus-song-library:hover { color: var(--ink); }
+.focus-song button:focus-visible,
+.focus-song-secondary:focus-visible { outline: 2px solid var(--brass); outline-offset: 4px; }
+
+.focus-song-tune { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 24px; padding: 6px 0 24px; border-bottom: 1px solid var(--line); }
+.focus-song-tune strong { color: var(--ink); font-size: 18px; font-weight: 500; line-height: 1.5; }
+.focus-song-tune > span { color: var(--ink-faint); font-size: 11px; line-height: 1.6; }
+.focus-song-chords { display: flex; flex-wrap: wrap; align-items: center; gap: 13px 21px; margin: -8px 0 0; color: var(--ink-soft); }
+.focus-song-chords > svg { margin-right: 2px; color: var(--ink-faint); }
+.focus-song-chords > span { font: 400 20px/1.4 var(--font-display); }
+.focus-song-chords > small { color: var(--ink-faint); font-size: 11px; }
+.focus-song-plan { display: grid; min-width: 0; }
+.focus-song-plan-head { display: flex; align-items: baseline; justify-content: space-between; gap: 18px; padding-bottom: 13px; border-bottom: 1px solid var(--line); }
+.focus-song-plan-head h3 { margin: 0; color: var(--ink-soft); font: 500 10px/1.5 var(--font-ui); letter-spacing: 0.12em; text-transform: uppercase; }
+.focus-song-plan-head > span { color: var(--ink-faint); font: 400 10px/1.5 var(--font-mono); }
+.focus-song-empty { margin: 0; padding: 24px 0; color: var(--ink-faint); font-size: 13px; }
+.focus-song-empty-state { display: flex; flex-wrap: wrap; align-items: center; gap: 22px; min-height: 210px; border-top: 1px solid var(--line); }
+.focus-song-empty-state > svg { flex: 0 0 auto; color: var(--ink-faint); }
+.focus-song-empty-state > div { flex: 1; min-width: 160px; }
+.focus-song-empty-state strong { color: var(--ink-soft); font-size: 16px; font-weight: 500; }
+.focus-song-empty-state p { margin: 6px 0 0; color: var(--ink-faint); font-size: 12px; line-height: 1.6; }
+
+.scales-bar { display: flex; align-items: center; gap: 22px; width: min(1180px, calc(100% - 32px)); margin: 18px auto 0; }
+
+@media (max-width: 640px) {
+  .focus-song { width: calc(100% - 40px); gap: 24px; padding-top: 28px; }
+  .focus-song-head { align-items: flex-start; gap: 20px; }
+  .focus-song h2 { font-size: 27px; }
+  .focus-song-actions { gap: 18px; }
+  .focus-song-tune { flex-direction: column; gap: 5px; padding-bottom: 20px; }
+  .focus-song-tune strong { font-size: 17px; }
+  .focus-song-chords { gap: 12px 17px; }
+  .focus-song-empty-state { align-content: center; min-height: 230px; gap: 18px; padding: 26px 0; }
+}

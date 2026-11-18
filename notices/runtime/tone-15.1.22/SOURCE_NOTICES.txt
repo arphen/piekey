@@ -1,0 +1,27 @@
+Embedded copyright/license comments retained from the exact locked npm archive.
+
+Source archive member: package/build/esm/effect/Reverb.js
+
+/**
+ * Simple convolution created with decaying noise.
+ * Generates an Impulse Response Buffer
+ * with Tone.Offline then feeds the IR into ConvolverNode.
+ * The impulse response generation is async, so you have
+ * to wait until {@link ready} resolves before it will make a sound.
+ *
+ * Inspiration from [ReverbGen](https://github.com/adelespinasse/reverbGen).
+ * Copyright (c) 2014 Alan deLespinasse Apache 2.0 License.
+ *
+ * @category Effect
+ */
+
+---
+
+Source archive member: package/build/esm/core/Tone.js
+
+/**
+ * Tone.js
+ * @author Yotam Mann
+ * @license http://opensource.org/licenses/MIT MIT License
+ * @copyright 2014-2024 Yotam Mann
+ */

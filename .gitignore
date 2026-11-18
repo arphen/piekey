@@ -1,0 +1,48 @@
+# deps / build
+node_modules
+dist
+dist-ssr
+*.local
+.env*
+.claude/
+
+# tsc / vite
+*.tsbuildinfo
+.tsbuildinfo
+
+# tests / coverage / reporters (keep verbose output out of git + context)
+coverage
+.nyc_output
+test-results
+playwright-report
+junit*.xml
+vitest-*.json
+*.lcov
+
+# logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# scratch / tmp / OS
+.tmp
+.temp
+tmp
+.vscode
+
+# in-progress tune transcriptions (keep the staging README)
+tunes/*.musicxml
+tunes/*.xml
+tunes/*.mxl
+tunes/staging/*
+!tunes/staging/README.md
+
+# local scratch harness (not part of the app)
+.harness/
+harness.html
+.idea
+.DS_Store
+Thumbs.db

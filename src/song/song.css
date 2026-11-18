@@ -1,0 +1,2963 @@
+/* Practice session: full screen and quiet. One exercise in the middle, the rest at the edges. */
+
+.ss {
+  --fam: var(--brass);
+  --melody: #b3a4ec;
+  --chords: #e7826a;
+  --scales: #5fb3a8;
+  --harmony: #e0a956;
+  --reading: #8cc4ea;
+  --ear: #d98fd3;
+  --fretboard: #c9b46a;
+  --night: #0d0c0f;
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  overflow: hidden;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  background:
+    radial-gradient(1100px 620px at 50% -12%, color-mix(in srgb, var(--fam) 9%, transparent), transparent 62%),
+    var(--night);
+  transition: background 0.8s;
+}
+
+.ss.is-idle {
+  cursor: none;
+}
+
+.ss button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+.ss.is-idle button {
+  cursor: none;
+}
+
+.ss button:focus-visible {
+  outline: 2px solid var(--fam);
+  outline-offset: 3px;
+}
+
+.ss kbd {
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  padding: 1px 6px;
+  margin: 0 2px 0 8px;
+  border-radius: 5px;
+  border: 1px solid var(--line-strong);
+  color: var(--ink-soft);
+}
+
+.fam-scales { --fam: var(--scales); }
+.fam-harmony { --fam: var(--harmony); }
+.fam-melody { --fam: var(--melody); }
+.fam-chords { --fam: var(--chords); }
+.fam-reading { --fam: var(--reading); }
+.fam-ear { --fam: var(--ear); }
+.fam-fretboard { --fam: var(--fretboard); }
+
+.ss-kicker {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.ss-fam {
+  color: var(--fam);
+}
+
+.is-hidden {
+  visibility: hidden;
+}
+
+/* ---------- corner buttons: there when the mouse moves ---------- */
+
+.ss-chrome {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  z-index: 3;
+  display: flex;
+  gap: 6px;
+  opacity: 0.55;
+  transition: opacity 0.5s;
+}
+
+.ss-chrome:hover {
+  opacity: 1;
+}
+
+.ss.is-idle .ss-chrome {
+  opacity: 0;
+}
+
+.ss .ss-icon {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--ink-soft);
+  transition: background 0.2s, color 0.2s;
+}
+
+.ss .ss-icon:hover {
+  background: rgba(255, 240, 220, 0.08);
+  color: var(--ink);
+}
+
+.ss-icon svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+/* ---------- the listening circle ---------- */
+
+.ss .ss-ear {
+  --size: 44px;
+  position: relative;
+  width: var(--size);
+  height: var(--size);
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--ink-faint);
+  transition: color 0.3s;
+}
+
+.ss .ss-ear--big {
+  --size: clamp(150px, 22vh, 210px);
+}
+
+.ss-ear > svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+  fill: none;
+}
+
+.ss-ear-track {
+  stroke: var(--line-strong);
+  stroke-width: 1.5;
+  stroke-dasharray: 2 5;
+  transition: stroke 0.3s;
+}
+
+.ss-ear.is-on .ss-ear-track {
+  stroke: color-mix(in srgb, var(--fam) 45%, transparent);
+  stroke-dasharray: none;
+}
+
+.ss-ear.is-error .ss-ear-track {
+  stroke: var(--warn);
+}
+
+.ss-ear-hold {
+  stroke: var(--fam);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset 0.09s linear;
+}
+
+.ss-ear-disc {
+  position: absolute;
+  inset: 12%;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--fam) 34%, transparent), color-mix(in srgb, var(--fam) 6%, transparent) 70%);
+  transform: scale(0.5);
+  opacity: 0;
+  transition: transform 0.13s ease-out, opacity 0.4s;
+}
+
+.ss-ear.is-on .ss-ear-disc {
+  opacity: 1;
+}
+
+.ss-ear-note {
+  position: relative;
+  font-family: var(--font-mono);
+  font-size: calc(var(--size) * 0.27);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.ss-ear--big .ss-ear-note {
+  font-family: var(--font-display);
+  font-size: calc(var(--size) * 0.26);
+  font-weight: 500;
+}
+
+.ss-ear.is-on {
+  color: var(--ink-soft);
+}
+
+.ss-ear.is-hearing {
+  color: var(--ink);
+}
+
+.ss-ear-note svg {
+  display: block;
+  width: calc(var(--size) * 0.44);
+  height: calc(var(--size) * 0.44);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ss-ear--big .ss-ear-note svg {
+  width: calc(var(--size) * 0.3);
+  height: calc(var(--size) * 0.3);
+  stroke-width: 1.2;
+}
+
+.ss-ear:hover .ss-ear-track {
+  stroke: var(--ink-soft);
+}
+
+/* ---------- before and after: a title and the circle ---------- */
+
+.ss-ready {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 40px 24px;
+  text-align: center;
+  animation: ss-rise 0.7s ease both;
+}
+
+.ss-display {
+  margin: 0;
+  max-width: 18ch;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(40px, 6.4vw, 88px);
+  line-height: 1.04;
+  letter-spacing: -0.01em;
+}
+
+.ss-sub {
+  margin: 0 0 clamp(16px, 4vh, 44px);
+  color: var(--ink-soft);
+  font-size: 16px;
+}
+
+.ss-beads {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 7px;
+  max-width: 420px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ss-beads li {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--fam);
+  opacity: 0.85;
+}
+
+.ss-beads.is-results li.is-ok {
+  opacity: 0.5;
+}
+
+.ss-beads.is-results li.is-fail {
+  background: none;
+  box-shadow: inset 0 0 0 1.5px var(--warn);
+}
+
+.ss-beads.is-results li.is-skip {
+  background: none;
+  box-shadow: inset 0 0 0 1.5px var(--ink-faint);
+}
+
+.ss-say {
+  margin: 0;
+  min-height: 1.4em;
+  font-family: var(--font-display);
+  font-size: clamp(20px, 2.3vw, 28px);
+  font-weight: 400;
+  color: var(--ink);
+  text-align: center;
+  transition: color 0.3s;
+}
+
+.ss-say.is-good {
+  color: var(--good);
+}
+
+.ss-ready .ss-say {
+  margin-top: clamp(10px, 2.4vh, 26px);
+}
+
+.ss-first {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 14px;
+}
+
+.ss-focus {
+  margin: 0;
+  color: var(--ink-soft, var(--ink-faint));
+  font-size: 14px;
+  letter-spacing: 0.02em;
+}
+
+/* ---------- during ---------- */
+
+.ss-run {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  justify-items: center;
+  padding: 0 clamp(18px, 3vw, 48px) 20px;
+}
+
+.ss-progress {
+  justify-self: stretch;
+  display: flex;
+  gap: 4px;
+  height: 3px;
+  margin: 0 calc(-1 * clamp(18px, 3vw, 48px));
+  padding: 0;
+  list-style: none;
+}
+
+.ss-progress li {
+  flex: 1;
+  background: rgba(255, 240, 220, 0.07);
+  transition: background 0.6s;
+}
+
+.ss-progress li.is-now {
+  background: color-mix(in srgb, var(--fam) 45%, transparent);
+}
+
+.ss-progress li.is-clean,
+.ss-progress li.is-ok {
+  background: var(--fam);
+}
+
+.ss-progress li.is-ok {
+  opacity: 0.55;
+}
+
+.ss-progress li.is-fail {
+  background: color-mix(in srgb, var(--warn) 70%, transparent);
+}
+
+.ss-head {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding-top: clamp(18px, 3.2vh, 34px);
+  text-align: center;
+  animation: ss-rise 0.6s ease both;
+}
+
+.ss-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(22px, 2.3vw, 30px);
+  line-height: 1.1;
+  color: var(--ink-soft);
+  transition: font-size 0.7s cubic-bezier(0.2, 0.7, 0.2, 1), color 0.7s;
+}
+
+.ss-why {
+  margin: 0;
+  max-width: 62ch;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  color: var(--ink-soft);
+  font-size: 17px;
+  line-height: 1.5;
+  transition: max-height 0.7s, opacity 0.5s;
+}
+
+.phase-intro .ss-title {
+  font-size: clamp(38px, 5vw, 68px);
+  color: var(--ink);
+}
+
+.phase-intro .ss-why {
+  max-height: 6em;
+  opacity: 1;
+}
+
+.ss-stage {
+  position: relative;
+  align-self: stretch;
+  justify-self: stretch;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+}
+
+.ss-material {
+  width: min(1180px, 100%);
+  max-height: 100%;
+  min-height: 0;
+  display: grid;
+  transition: opacity 0.6s, filter 0.6s, transform 0.6s;
+}
+
+.phase-intro .ss-material {
+  opacity: 0.22;
+  filter: blur(3px);
+  transform: scale(0.985);
+}
+
+.phase-result .ss-material,
+.is-paused .ss-material {
+  opacity: 0.12;
+  filter: blur(4px);
+}
+
+.ss-countin,
+.ss-veil {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  font-family: var(--font-display);
+}
+
+.ss-countin {
+  font-size: clamp(120px, 26vh, 260px);
+  font-weight: 400;
+  color: var(--fam);
+  animation: ss-beat 0.55s ease-out both;
+}
+
+.ss-veil {
+  font-size: clamp(30px, 4vw, 52px);
+  color: var(--ink-soft);
+}
+
+.ss-coach {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 10px 0 clamp(10px, 2.4vh, 26px);
+}
+
+.ss-takes,
+.ss-pips {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.ss-takes i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--ink-faint);
+  transition: background 0.3s, box-shadow 0.3s;
+}
+
+.ss-takes i.is-on {
+  background: var(--good);
+  box-shadow: none;
+}
+
+.ss-pips i {
+  width: 14px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 240, 220, 0.14);
+}
+
+.ss-pips i.is-on {
+  background: var(--fam);
+}
+
+.ss-pips i.is-new {
+  animation: ss-pip 0.9s 0.5s ease both;
+}
+
+.ss-foot {
+  justify-self: stretch;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+}
+
+.ss-trail {
+  display: flex;
+  gap: 26px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 240, 220, 0.22);
+}
+
+.ss-trail li {
+  transition: color 0.4s;
+}
+
+.ss-trail li.is-done {
+  color: var(--ink-faint);
+}
+
+.ss-trail li.is-now {
+  color: var(--fam);
+}
+
+.ss-side {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+/* result */
+
+.ss-result {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 18px;
+  pointer-events: none;
+}
+
+.ss-result svg {
+  width: clamp(110px, 18vh, 160px);
+  fill: none;
+  stroke: var(--good);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ss-result.is-fail svg {
+  stroke: var(--warn);
+}
+
+.ss-result.is-skip svg {
+  stroke: var(--ink-faint);
+}
+
+.ss-result svg circle {
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+  stroke-dasharray: 1;
+  animation: ss-draw 0.7s ease-out both;
+}
+
+.ss-result svg path {
+  stroke-width: 4;
+  stroke-dasharray: 1;
+  animation: ss-draw 0.45s 0.45s ease-out both;
+}
+
+.ss-result p {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(22px, 2.6vw, 32px);
+  animation: ss-rise 0.5s 0.3s ease both;
+}
+
+.ss-result .ss-pips i {
+  width: 22px;
+  height: 5px;
+}
+
+/* ---------- the material ---------- */
+
+.ss-harm {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  min-height: 46px;
+  padding: 0 6px;
+}
+
+.ss-harm b {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(30px, 3.4vw, 44px);
+  line-height: 1;
+}
+
+.ss-harm i {
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 15px;
+  color: var(--fam);
+}
+
+.ss-harm span {
+  color: var(--ink-faint);
+  font-size: 14px;
+}
+
+.ss-harm em {
+  margin-left: auto;
+  font-style: normal;
+  font-family: var(--font-display);
+  font-size: clamp(20px, 2.2vw, 28px);
+  color: var(--ink-faint);
+}
+
+.ss-line {
+  display: grid;
+  gap: clamp(8px, 1.6vh, 18px);
+  min-width: 0;
+}
+
+.ss-board {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.ss-board .fb--full,
+.ss-board .fb-stack {
+  min-width: 640px;
+}
+
+.ss-board .fb-window {
+  opacity: 0.5;
+}
+
+.ss-ticker {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ss-ticker li {
+  width: 52px;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 6px 0;
+  border-radius: 10px;
+  color: var(--ink-faint);
+  transition: color 0.2s, background 0.2s, transform 0.2s;
+}
+
+.ss-ticker b {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 20px;
+}
+
+.ss-ticker span {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.ss-ticker li.is-hit {
+  color: var(--good);
+}
+
+.ss-ticker li.is-miss,
+.ss-ticker li.is-wrong {
+  color: var(--warn);
+}
+
+.ss-ticker li.is-now {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--fam) 18%, transparent);
+  transform: scale(1.12);
+}
+
+/* melody */
+
+.ss-melody {
+  display: grid;
+  gap: 8px;
+  min-height: 0;
+  min-width: 0;
+}
+
+.ss-score {
+  max-height: 54vh;
+  overflow: auto;
+  scrollbar-width: none;
+  padding: 10px 14px 4px;
+  border-radius: 14px;
+  background: rgba(255, 240, 220, 0.035);
+}
+
+.ss-score .score-bar.is-focus {
+  fill: rgba(255, 240, 220, 0.045);
+}
+
+.ss .ss-score .vf-stavenote.is-dim {
+  opacity: 0.14;
+}
+
+/* chords */
+
+.ss-prompts {
+  display: grid;
+  justify-items: center;
+  gap: clamp(12px, 2.4vh, 28px);
+  width: 100%;
+}
+
+.ss-prompt {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  margin: 0;
+  animation: ss-rise 0.3s ease both;
+}
+
+.ss-prompt b {
+  font-size: clamp(40px, 7vh, 72px);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.ss-prompt span {
+  color: var(--ink-soft);
+  font-size: 15px;
+}
+
+.ss-improv {
+  display: grid;
+  justify-items: center;
+  gap: clamp(12px, 2.4vh, 28px);
+  width: 100%;
+}
+
+.ss-chords {
+  display: grid;
+  justify-items: center;
+  gap: clamp(12px, 2.4vh, 28px);
+}
+
+.ss-chords-pair {
+  display: flex;
+  align-items: center;
+  gap: clamp(30px, 6vw, 90px);
+}
+
+.ss-chords-now {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+
+.ss-chord-name {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(40px, 5vw, 64px);
+  line-height: 1;
+}
+
+.ss-chord-roman {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  color: var(--fam);
+}
+
+.ss-chords-next {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  color: var(--ink-faint);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.ss-chords-next b {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 26px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-soft);
+}
+
+.chordbox--big {
+  width: clamp(180px, 30vh, 270px);
+}
+
+.chordbox--small {
+  width: 120px;
+}
+
+.cb-fret,
+.cb-string {
+  stroke: var(--wire);
+  stroke-width: 1.2;
+}
+
+.cb-nut {
+  fill: var(--string);
+}
+
+.cb-base,
+.cb-mute {
+  fill: var(--ink-faint);
+  font-size: 13px;
+  text-anchor: middle;
+}
+
+.cb-base {
+  text-anchor: start;
+}
+
+.cb-note circle {
+  fill: var(--sc);
+}
+
+.cb-note.is-root circle {
+  fill: var(--root-fill);
+}
+
+.cb-note text {
+  fill: #1d1712;
+  font-size: 10px;
+  font-weight: 600;
+  text-anchor: middle;
+}
+
+.cb-note.is-lit circle,
+.cb-open.is-lit {
+  stroke: var(--good);
+  stroke-width: 3;
+}
+
+.cb-open {
+  fill: none;
+  stroke: var(--string);
+  stroke-width: 1.5;
+}
+
+.ss-tones {
+  display: flex;
+  gap: 6px;
+}
+
+.ss-tones i {
+  min-width: 30px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-align: center;
+  color: var(--ink-faint);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  transition: background 0.15s, color 0.15s;
+}
+
+.ss-tones i.is-on {
+  background: var(--good);
+  color: #10200f;
+  box-shadow: none;
+}
+
+.ss-strip {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-display);
+  font-size: 19px;
+  color: var(--ink-faint);
+}
+
+.ss-strip li {
+  padding-bottom: 3px;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.ss-strip li.is-hit {
+  color: var(--good);
+}
+
+.ss-strip li.is-miss {
+  color: var(--warn);
+}
+
+.ss-strip li.is-now {
+  color: var(--ink);
+  border-color: var(--fam);
+}
+
+/* ---------- behind the gear ---------- */
+
+.ss-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  background: rgba(6, 5, 8, 0.55);
+  animation: ss-fade 0.25s ease both;
+}
+
+.ss-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  width: min(400px, 100%);
+  overflow-y: auto;
+  padding: 18px 24px 40px;
+  background: #151317;
+  border-left: 1px solid var(--line);
+  box-shadow: -30px 0 60px rgba(0, 0, 0, 0.45);
+  animation: ss-slide 0.3s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.ss-drawer header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.ss-drawer h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 24px;
+}
+
+.ss-drawer section {
+  display: grid;
+  gap: 12px;
+  padding: 20px 0;
+  border-top: 1px solid var(--line);
+}
+
+.ss-drawer h3 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.ss-listen {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.ss-listen div {
+  display: grid;
+  gap: 2px;
+}
+
+.ss-listen span,
+.ss-note {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ss-row,
+.ss .ss-switch,
+.ss-select {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  font-size: 14px;
+  color: var(--ink-soft);
+  text-align: left;
+}
+
+.ss-seg {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(255, 240, 220, 0.06);
+}
+
+.ss .ss-seg button {
+  min-width: 30px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--ink-faint);
+  transition: background 0.2s, color 0.2s;
+}
+
+.ss .ss-seg button.is-on {
+  background: var(--ink);
+  color: #17141a;
+}
+
+.ss-switch i {
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 24px;
+  border-radius: 999px;
+  background: rgba(255, 240, 220, 0.12);
+  transition: background 0.2s;
+}
+
+.ss-switch i::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--ink);
+  transition: transform 0.2s cubic-bezier(0.3, 0.7, 0.3, 1.3);
+}
+
+.ss-switch[aria-checked="true"] i {
+  background: var(--good);
+}
+
+.ss-switch[aria-checked="true"] i::after {
+  transform: translateX(16px);
+}
+
+/* a switch's tone shortcut: the note, then the switch itself */
+.ss-switch-end {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.ss-switch .ss-tone {
+  position: static;
+  transform: none;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  opacity: 0.45;
+}
+
+.ss-select select {
+  appearance: none;
+  max-width: 230px;
+  padding: 7px 30px 7px 12px;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  background:
+    linear-gradient(45deg, transparent 50%, var(--ink-soft) 50%) right 15px center / 5px 5px no-repeat,
+    linear-gradient(-45deg, transparent 50%, var(--ink-soft) 50%) right 10px center / 5px 5px no-repeat,
+    rgba(255, 240, 220, 0.06);
+}
+
+.ss-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(255, 240, 220, 0.06);
+}
+
+.ss-stepper b {
+  min-width: 44px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.ss .ss-stepper button {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 17px;
+  color: var(--ink-soft);
+}
+
+.ss .ss-stepper button:hover {
+  background: rgba(255, 240, 220, 0.1);
+}
+
+.ss-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ss .ss-actions button {
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  transition: color 0.2s, box-shadow 0.2s;
+}
+
+.ss .ss-actions button:hover {
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink-faint);
+}
+
+.ss-plan,
+.ss-map {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+}
+
+.ss-plan li {
+  display: grid;
+  grid-template-columns: 8px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink-soft);
+}
+
+.ss-plan i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--fam);
+}
+
+.ss-plan em {
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.ss-plan li.is-done {
+  opacity: 0.45;
+}
+
+.ss-plan li.is-now span {
+  color: var(--ink);
+}
+
+.ss-map li {
+  display: grid;
+  gap: 1px;
+}
+
+.ss-map b {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.ss-map span {
+  color: var(--ink-faint);
+  font-size: 13px;
+}
+
+.ss-boxes {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  height: 96px;
+}
+
+.ss-box {
+  position: relative;
+  display: grid;
+  align-content: end;
+  justify-items: center;
+  gap: 1px;
+  padding-bottom: 4px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(255, 240, 220, 0.04);
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.ss-box i {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: color-mix(in srgb, var(--scales) 30%, transparent);
+}
+
+.ss-box.is-new i {
+  background: rgba(255, 240, 220, 0.1);
+}
+
+.ss-box b {
+  position: relative;
+  font-family: var(--font-mono);
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.ss-box span {
+  position: relative;
+}
+
+.ss-keys {
+  margin: 0;
+  font-size: 13px;
+  line-height: 2.1;
+  color: var(--ink-faint);
+}
+
+.ss-keys kbd:first-child {
+  margin-left: 0;
+}
+
+/* ---------- motion ---------- */
+
+@keyframes ss-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@keyframes ss-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes ss-slide {
+  from {
+    transform: translateX(40px);
+    opacity: 0;
+  }
+}
+
+@keyframes ss-beat {
+  from {
+    opacity: 0.9;
+    transform: scale(1.12);
+  }
+  to {
+    opacity: 0.18;
+    transform: scale(1);
+  }
+}
+
+@keyframes ss-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes ss-pip {
+  0% {
+    transform: scaleX(0.2);
+    background: var(--good);
+  }
+  60% {
+    transform: scaleX(1.25);
+    background: var(--good);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ss *,
+  .ss {
+    animation-duration: 0.01s !important;
+    transition-duration: 0.01s !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .ss-trail {
+    gap: 12px;
+    letter-spacing: 0.08em;
+  }
+
+  .ss-ticker li {
+    width: 40px;
+  }
+
+  .ss-chords-next {
+    display: none;
+  }
+}
+
+/* ---------- shadow notes and small motion ---------- */
+
+/* on the neck: where the wrong note was, with a thread to the one that was meant */
+
+.ss .fb-ghost {
+  animation: ss-ghost 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.ss .fb-ghost circle {
+  fill: color-mix(in srgb, var(--warn) 14%, transparent);
+  stroke: var(--warn);
+  stroke-width: 2;
+  stroke-dasharray: 3 4;
+  stroke-linecap: round;
+}
+
+.ss .fb-ghost line {
+  stroke: var(--warn);
+  stroke-width: 2;
+  stroke-dasharray: 1 7;
+  stroke-linecap: round;
+  opacity: 0.8;
+}
+
+.ss .fb-pulse {
+  fill: none;
+  stroke: var(--good);
+  stroke-width: 2.5;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ss-ripple 0.5s ease-out both;
+}
+
+.ss .fb-pulse.is-miss {
+  stroke: var(--warn);
+}
+
+/* on the staff: a hollow head at the height that was played */
+
+.ss-score {
+  position: relative;
+}
+
+.ss-ghost-note {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1.5px solid var(--warn);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
+  transform: rotate(-20deg);
+  opacity: 0.85;
+  pointer-events: none;
+  animation: ss-ghost-note 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.ss-ghost-note i {
+  position: absolute;
+  right: calc(100% + 2px);
+  top: 50%;
+  transform: translateY(-55%) rotate(20deg);
+  font: 500 15px/1 var(--font-display);
+  font-style: normal;
+  color: var(--warn);
+}
+
+.ss .ss-score .vf-stavenote path {
+  transition: fill 0.25s, stroke 0.25s;
+}
+
+/* in the note row: the name that sounded, over the one that was meant */
+
+.ss-ticker li {
+  position: relative;
+}
+
+.ss-ticker em {
+  position: absolute;
+  top: -15px;
+  font: 500 11px/1 var(--font-mono);
+  font-style: normal;
+  color: var(--warn);
+  opacity: 0.75;
+  text-decoration: line-through;
+  animation: ss-drop 0.35s ease-out both;
+}
+
+.ss-ticker li.is-hit b {
+  animation: ss-pop 0.32s ease-out;
+}
+
+.ss-ticker li.is-miss b {
+  animation: ss-nudge 0.3s ease-out;
+}
+
+.ss-takes i.is-on {
+  animation: ss-pop 0.4s ease-out;
+}
+
+.ss-say,
+.ss-harm b {
+  animation: ss-fade 0.35s ease-out;
+}
+
+.ss-bpm {
+  display: inline-block;
+  animation: ss-tick 0.3s ease-out;
+}
+
+/* the melody playing along: only there while it is */
+
+.ss-aid {
+  display: inline-grid;
+  width: 22px;
+  color: var(--fam);
+  transition: opacity 1.2s;
+}
+
+.ss-aid svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+@keyframes ss-ghost {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes ss-ghost-note {
+  from {
+    opacity: 0;
+    transform: rotate(-20deg) scale(1.6);
+  }
+}
+
+@keyframes ss-ripple {
+  from {
+    opacity: 0.9;
+    transform: scale(0.7);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.9);
+  }
+}
+
+@keyframes ss-pop {
+  40% {
+    transform: scale(1.28);
+  }
+}
+
+@keyframes ss-nudge {
+  30% {
+    transform: translateX(-3px);
+  }
+  65% {
+    transform: translateX(3px);
+  }
+}
+
+@keyframes ss-drop {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes ss-tick {
+  from {
+    opacity: 0.3;
+    transform: translateY(5px);
+  }
+}
+
+/* ---------- the guitar as controller: six strings, six actions ---------- */
+
+.ss-pad {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  align-content: center;
+  align-content: safe center;
+  justify-items: center;
+  gap: clamp(18px, 4vh, 40px);
+  padding: clamp(28px, 6vh, 64px) 24px;
+  background: #101615f5;
+  overflow-y: auto;
+  animation: ss-fade 0.25s ease-out;
+}
+
+.has-pad .ss-veil,
+.has-pad .ss-coach,
+.has-pad .ss-head {
+  opacity: 0;
+}
+
+.ss-pad-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(22px, 2.6vw, 34px);
+  color: var(--ink-soft);
+}
+
+.ss-pad-strings {
+  width: min(760px, 86vw);
+  display: grid;
+}
+
+.ss-pad-row {
+  --p: 0;
+  display: grid;
+  grid-template-columns: 44px minmax(80px, 1fr) minmax(220px, 300px);
+  align-items: center;
+  gap: 18px;
+  padding: clamp(9px, 1.7vh, 16px) 0;
+  border: 0;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  animation: ss-rise 0.4s ease-out both;
+}
+
+.ss button.ss-pad-row { padding: clamp(9px, 1.7vh, 16px) 0; }
+
+.ss-pad-row:nth-child(2) { animation-delay: 0.03s; }
+.ss-pad-row:nth-child(3) { animation-delay: 0.06s; }
+.ss-pad-row:nth-child(4) { animation-delay: 0.09s; }
+.ss-pad-row:nth-child(5) { animation-delay: 0.12s; }
+.ss-pad-row:nth-child(6) { animation-delay: 0.15s; }
+
+.ss-pad-row.is-empty {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.ss-pad-note {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font: 500 18px var(--font-display);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--fam) calc(35% + var(--p) * 65%), transparent);
+  background: color-mix(in srgb, var(--fam) calc(var(--p) * 45%), transparent);
+  transform: scale(calc(1 + var(--p) * 0.12));
+}
+
+.ss-pad-string {
+  position: relative;
+  min-height: 1px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--ink) 26%, transparent);
+}
+
+.ss-pad-string::after {
+  content: "";
+  position: absolute;
+  inset: -1px 0;
+  border-radius: 2px;
+  background: var(--fam);
+  box-shadow: 0 0 12px var(--fam);
+  transform-origin: left;
+  transform: scaleX(var(--p));
+}
+
+.ss-pad-label {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  font-family: var(--font-display);
+  font-size: clamp(19px, 2vw, 26px);
+  color: color-mix(in srgb, var(--ink) calc(62% + var(--p) * 38%), transparent);
+}
+
+.ss-pad-row:hover .ss-pad-label {
+  color: var(--ink);
+}
+
+.ss-pad-label em {
+  font: 500 12px var(--font-mono);
+  font-style: normal;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+}
+
+.ss-pad-hint {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+@media (max-width: 600px) {
+  .ss-pad-strings { width: calc(100vw - 48px); }
+  .ss-pad-row { grid-template-columns: 34px minmax(20px, 0.6fr) minmax(0, 2fr); gap: 12px; }
+  .ss-pad-note { width: 34px; height: 34px; font-size: 15px; }
+  .ss-pad-label { flex-wrap: wrap; gap: 4px 8px; min-width: 0; font-size: 18px; }
+  .ss-pad-label em { flex-basis: 100%; font-size: 10px; line-height: 1.5; letter-spacing: 0; }
+  .ss-cal { padding: 54px 24px 24px; overflow-y: auto; }
+  .ss-cal .ss-display { font-size: clamp(32px, 9vw, 48px); text-align: center; line-height: 1.1; }
+  .ss-cal .ss-say { font-size: 18px; text-align: center; }
+}
+
+.ss-call {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  justify-self: start;
+}
+
+.ss-callhint {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  opacity: 0.7;
+  transition: opacity 0.6s;
+}
+
+.is-idle .ss-callhint {
+  opacity: 0;
+}
+
+/* tone keys: a note the exercise doesn't play, played twice, works the element it sits under */
+.ss-tone {
+  position: absolute;
+  top: calc(100% + 1px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+  opacity: 0.4;
+  pointer-events: none;
+  transition: opacity 0.4s, color 0.4s;
+}
+
+.ss-tone sup {
+  font-size: 8px;
+  margin-left: 1px;
+}
+
+.ss-tone.is-lit {
+  opacity: 1;
+  color: var(--fam);
+}
+
+.ss-bpm.is-own {
+  color: var(--fam);
+}
+
+/* the way to the menu is shown while each exercise is introduced, mouse or no mouse */
+.is-idle .phase-intro .ss-callhint,
+.is-idle .is-paused .ss-callhint {
+  opacity: 0.7;
+}
+
+/* ---------- hearing the guitar: each open string once ---------- */
+
+.ss-cal {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: clamp(10px, 2.2vh, 22px);
+  background: var(--night);
+  animation: ss-fade 0.4s ease-out;
+}
+
+.ss-cal .ss-display {
+  margin-bottom: clamp(10px, 3vh, 30px);
+}
+
+.ss-cal-row {
+  cursor: default;
+  transition: opacity 0.4s;
+}
+
+.ss-cal-row.is-todo {
+  opacity: 0.3;
+}
+
+.ss-cal-row.is-ok {
+  --p: 1;
+  opacity: 0.75;
+}
+
+.ss-cal-row.is-ok .ss-pad-string::after {
+  background: var(--good);
+  box-shadow: none;
+  opacity: 0.55;
+}
+
+.ss-cal-row.is-now .ss-pad-note {
+  box-shadow: inset 0 0 0 2px var(--fam, var(--brass));
+  color: var(--ink);
+}
+
+.ss-cal-row.is-again {
+  animation: ss-nudge 0.35s ease-out;
+}
+
+.ss-cal-row.is-again .ss-pad-note {
+  box-shadow: inset 0 0 0 2px var(--warn);
+}
+
+/* where the string sits against concert pitch: centre is in tune */
+.ss-cal .ss-pad-string i {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  background: var(--good);
+  animation: ss-pop 0.4s ease-out;
+}
+
+.ss-cal .ss-pad-string i.is-off {
+  background: var(--warn);
+}
+
+.ss-cal-tick {
+  width: 22px;
+  fill: none;
+  stroke: var(--good);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  animation: ss-draw 0.35s ease-out both;
+}
+
+.ss-cal .ss-say {
+  margin-top: clamp(8px, 2vh, 20px);
+}
+
+.ss-cal-skip {
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+
+.ss-cal-skip:hover {
+  color: var(--ink);
+}
+
+/* ---------- lines are read: the staff in the middle, the neck as an aside ---------- */
+
+.ss-score--line {
+  max-height: 44vh;
+  justify-self: center;
+  width: min(1100px, 100%);
+  box-sizing: border-box;
+}
+
+.ss-board--aside {
+  justify-self: center;
+  width: min(620px, 78%);
+  opacity: 0.8;
+  transition: opacity 0.4s;
+}
+
+.ss-board--aside .fb--full,
+.ss-board--aside .fb-stack {
+  min-width: 0;
+}
+
+/* the neck comes forward when it has something to say: a wrong note */
+.ss-board--aside:has(.fb-ghost) {
+  opacity: 1;
+}
+
+/* once a line is known (and always while reading) the neck steps back, and returns when it is called for */
+.ss-board--aside.is-away {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ---------- a part taken out: the neck in full, every note by name ---------- */
+
+.ss-board--aside.is-spot {
+  opacity: 1;
+  width: min(760px, 86%);
+}
+
+.ss-why.ss-spotline {
+  max-height: 6em;
+  opacity: 1;
+  color: var(--ink-soft);
+  animation: ss-rise 0.5s ease both;
+}
+
+/* ---------- how it is going, in numbers: notes in a row, and each time through ---------- */
+
+.ss-meter {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 22px;
+  min-height: 26px;
+}
+
+.phase-intro .ss-meter,
+.phase-listen .ss-meter,
+.phase-result .ss-meter {
+  visibility: hidden;
+}
+
+.ss-streak {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  transition: color 0.6s;
+}
+
+.ss-streak b {
+  display: inline-block;
+  margin-right: 4px;
+  font: 500 22px / 1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  color: var(--ink-soft);
+  animation: ss-tick 0.25s ease-out;
+  transition: color 0.6s, text-shadow 0.6s;
+}
+
+.ss-streak.is-warm b {
+  color: var(--fam);
+}
+
+.ss-streak.is-hot b {
+  color: var(--fam);
+  text-shadow: 0 0 16px color-mix(in srgb, var(--fam) 70%, transparent);
+}
+
+.ss-passes {
+  position: relative;
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 26px;
+}
+
+.ss-passes i {
+  width: 5px;
+  border-radius: 2px;
+  background: var(--ink-faint);
+  animation: ss-rise 0.4s ease both;
+}
+
+.ss-passes i.is-in {
+  background: var(--good);
+}
+
+.ss-runbars {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 3px;
+  max-width: 420px;
+  margin: 10px auto 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ss-runbars li {
+  width: 10px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--ink-faint);
+  opacity: 0.55;
+}
+
+.ss-runbars li.is-in {
+  background: var(--good);
+  opacity: 1;
+}
+
+.ss-runbars li.is-short {
+  background: var(--warn);
+  opacity: 0.9;
+}
+
+.ss-timing {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 10px;
+}
+
+.ss-timing-lane {
+  position: relative;
+  width: 72px;
+  height: 22px;
+  border-left: 1px solid var(--line);
+  background: linear-gradient(var(--line-strong), var(--line-strong)) center / 100% 1px no-repeat;
+}
+
+.ss-timing-lane i {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  margin: -2px 0 0 -2px;
+  border-radius: 50%;
+  background: var(--good);
+  animation: ss-rise 0.4s ease both;
+}
+
+.ss-timing-lane i.is-off {
+  background: var(--ink-faint);
+}
+
+.ss-timing em {
+  font-style: normal;
+  font-size: 0.75rem;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.ss-passes em {
+  position: absolute;
+  left: -3px;
+  right: -3px;
+  height: 0;
+  border-top: 1px dashed var(--line-strong);
+}
+
+.ss-spotline b {
+  font-weight: 600;
+  color: var(--fam);
+}
+
+.ss-now {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  gap: 6px 18px;
+  margin: 2px 0 0;
+  min-height: 2.2em;
+  font-size: 14px;
+  color: var(--ink-soft);
+  animation: ss-fade 0.25s ease both;
+}
+
+.ss-now b {
+  font: 500 clamp(26px, 3.6vh, 36px) / 1 var(--font-display);
+  color: var(--ink);
+}
+
+.ss-now span + span::before {
+  content: "·";
+  margin-right: 18px;
+  color: var(--ink-faint);
+}
+
+.ss-melody .ss-board--aside {
+  margin-top: 10px;
+}
+
+/* what a tune with no name turned out to be */
+.ss-result-secret {
+  font: italic 500 clamp(22px, 3.4vh, 34px) / 1.15 var(--font-display);
+  color: var(--ink);
+  animation: ss-rise 0.6s 0.25s ease both;
+}
+
+/* ---------- note keys: one note, held for a moment, works the thing it sits beside ---------- */
+
+.ss-nk {
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 5px;
+  font: 600 10.5px/1 var(--font-mono);
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--ink-soft);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  background: linear-gradient(var(--fam), var(--fam)) no-repeat left / 0% 100%;
+  transition: background-size 0.12s, color 0.12s;
+}
+
+/* fills over the length of the hold, so the press is seen coming */
+.ss-nk.is-held {
+  background-size: 100% 100%;
+  color: var(--night);
+  transition: background-size 0.42s linear, color 0.3s 0.12s;
+}
+
+.ss-trail li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ss-trail .ss-nk {
+  opacity: 0.6;
+  transition: opacity 0.4s, background-size 0.12s, color 0.12s;
+}
+
+.ss-trail li.is-now .ss-nk,
+.ss-trail .ss-nk.is-held {
+  opacity: 1;
+}
+
+.ss-trail-next {
+  margin-left: 4px;
+  padding-left: 26px;
+  border-left: 1px solid var(--line);
+}
+
+/* the row of things a note does, on the screens between exercises */
+.ss-acts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  opacity: 0.3;
+  transition: opacity 0.9s;
+}
+
+.ss-acts.is-armed {
+  opacity: 1;
+}
+
+.ss .ss-acts button {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 10px;
+  border-radius: 9px;
+  font-size: 14px;
+  color: var(--ink-soft);
+  transition: background 0.2s, color 0.2s;
+}
+
+.ss .ss-acts button:hover:not(:disabled) {
+  background: rgba(255, 240, 220, 0.06);
+  color: var(--ink);
+}
+
+.ss .ss-acts button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.ss-acts .ss-nk {
+  min-width: 30px;
+  height: 22px;
+  font-size: 12px;
+}
+
+.ss-acts li.is-main button {
+  font-size: 17px;
+  color: var(--ink);
+}
+
+.ss-acts li.is-main .ss-nk {
+  box-shadow: inset 0 0 0 1.5px var(--fam);
+  color: var(--ink);
+}
+
+.ss-acts li.is-main .ss-nk.is-held {
+  color: var(--night);
+}
+
+.ss-ready .ss-acts {
+  margin-top: clamp(14px, 3vh, 34px);
+}
+
+/* ---------- how it is going: the room warms as the playing does ---------- */
+
+.ss {
+  --flow: 0.5;
+  background:
+    radial-gradient(1100px 620px at 50% -12%, color-mix(in srgb, var(--fam) calc(4% + var(--flow) * 14%), transparent), transparent 62%),
+    var(--night);
+}
+
+.ss-flow {
+  width: calc(28px + var(--flow) * 190px);
+  height: 2px;
+  border-radius: 1px;
+  background: var(--fam);
+  opacity: calc(0.12 + var(--flow) * 0.8);
+  box-shadow: 0 0 calc(var(--flow) * 16px) color-mix(in srgb, var(--fam) 70%, transparent);
+  transition: width 1.2s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 1.2s, box-shadow 1.2s;
+}
+
+.phase-intro .ss-flow,
+.phase-result .ss-flow {
+  opacity: 0;
+}
+
+/* against the beat: left of the line is ahead, right of it behind */
+.ss-beat {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 14px;
+}
+
+.ss-beat::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 1px;
+  bottom: 1px;
+  width: 1px;
+  background: var(--ink-faint);
+}
+
+.ss-beat i {
+  position: absolute;
+  left: calc(50% - 3px);
+  top: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink-faint);
+  transition: transform 0.5s, background 0.5s;
+}
+
+.ss-beat.is-on i {
+  background: var(--good);
+}
+
+.ss-beat.is-ahead i,
+.ss-beat.is-behind i {
+  background: var(--warn);
+}
+
+.ss-beat em {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  font: 500 9.5px/1 var(--font-mono);
+  font-style: normal;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.ss-bpm em {
+  font-style: normal;
+  color: var(--ink-faint);
+}
+
+/* ---------- where the music is: a lit column behind the note in play ---------- */
+
+.ss .score-cursor {
+  fill: color-mix(in srgb, var(--fam) 16%, transparent);
+  stroke: color-mix(in srgb, var(--fam) 60%, transparent);
+  stroke-width: 1.5;
+  opacity: 0;
+  transition: transform 0.14s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s;
+}
+
+.ss .score-cursor.is-on {
+  opacity: 1;
+}
+
+/* after a silence: the cursor calls, twice, then leaves the player alone again */
+.ss .score-cursor.is-calling {
+  animation: ss-call 1.1s ease-out 2;
+}
+
+@keyframes ss-call {
+  0% {
+    fill: color-mix(in srgb, var(--fam) 62%, transparent);
+    stroke-width: 4;
+  }
+}
+
+.ss .ss-score .score-bar.is-playing {
+  fill: rgba(255, 240, 220, 0.075);
+}
+
+/* the two names side by side: what sounded, and what is written */
+.ss-ghost-note b {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 5px);
+  transform: translateX(-50%) rotate(20deg);
+  font: 600 11px/1 var(--font-mono);
+  color: var(--warn);
+  white-space: nowrap;
+}
+
+.ss-want-name {
+  position: absolute;
+  transform: translate(-50%, 4px);
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: var(--night);
+  font: 600 11px/1 var(--font-mono);
+  color: var(--good);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: ss-fade 0.3s ease-out;
+}
+
+.ss-result p.ss-result-facts {
+  font: 500 14px/1 var(--font-mono);
+  color: var(--ink-soft);
+}
+
+.ss-result p.ss-result-also {
+  max-width: 60ch;
+  font: 400 14px/1.4 var(--font-ui);
+  color: var(--ink-faint);
+  text-align: center;
+}
+
+/* ---------- between sessions ---------- */
+
+.sm {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: clamp(12px, 2.6vh, 30px);
+  padding: clamp(22px, 4.4vh, 52px) clamp(20px, 4.4vw, 72px) 20px;
+}
+
+.sm-head {
+  display: grid;
+  gap: clamp(8px, 1.6vh, 16px);
+  animation: ss-rise 0.7s ease both;
+}
+
+.sm-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px clamp(24px, 4.6vw, 68px);
+  margin: 0;
+}
+
+.sm-tiles > div {
+  display: grid;
+  gap: 3px;
+  animation: ss-rise 0.6s ease both;
+}
+
+.sm-tiles > div:nth-child(1) { animation-delay: 0.2s; }
+.sm-tiles > div:nth-child(2) { animation-delay: 0.32s; }
+.sm-tiles > div:nth-child(3) { animation-delay: 0.44s; }
+.sm-tiles > div:nth-child(4) { animation-delay: 0.56s; }
+
+.sm-tiles dt {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.sm-tiles dd {
+  margin: 0;
+  font: 500 clamp(34px, 4.6vw, 62px) / 1 var(--font-display);
+  color: var(--ink);
+}
+
+.sm-tiles dd small {
+  margin-left: 4px;
+  font: 400 0.36em/1 var(--font-ui);
+  color: var(--ink-soft);
+}
+
+.sm-tiles p {
+  margin: 0;
+  min-height: 1.3em;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.sm-body {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: clamp(20px, 4vw, 64px);
+}
+
+.sm-left {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: clamp(10px, 2vh, 22px);
+}
+
+.sm-moves {
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: none;
+  animation: ss-rise 0.7s 0.75s ease both;
+}
+
+.sm-axis,
+.sm-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 1.15fr) minmax(130px, 1fr) 132px 96px;
+  align-items: center;
+  column-gap: 18px;
+}
+
+.sm-axis {
+  padding-bottom: 6px;
+  font: 500 10.5px/1 var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.sm-axis > span:nth-child(3) {
+  text-align: right;
+}
+
+.sm-scale,
+.sm-track {
+  position: relative;
+  height: 14px;
+  margin: 0 8px;
+}
+
+.sm-scale span {
+  position: absolute;
+  left: calc(var(--b) * 20%);
+  transform: translateX(-50%);
+}
+
+.sm-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 3px;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.sm-group i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--fam);
+}
+
+.sm-row {
+  height: 30px;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.sm-row.is-carried {
+  height: 24px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.sm-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sm-track::before {
+  content: "";
+  position: absolute;
+  inset: 50% 0 auto;
+  height: 1px;
+  background: var(--line);
+}
+
+.sm-track s {
+  position: absolute;
+  left: calc(var(--b) * 20%);
+  top: 4px;
+  width: 1px;
+  height: 6px;
+  background: var(--line-strong);
+}
+
+.sm-link,
+.sm-to {
+  transition-duration: 0.9s;
+  transition-timing-function: cubic-bezier(0.3, 0.7, 0.2, 1);
+  transition-delay: var(--d);
+}
+
+.sm-link {
+  position: absolute;
+  top: calc(50% - 1px);
+  left: calc(var(--lo) * 20%);
+  width: calc(var(--span) * 20%);
+  height: 2px;
+  border-radius: 1px;
+  background: var(--fam);
+  opacity: 0.7;
+  transition-property: left, width;
+}
+
+.sm-from {
+  position: absolute;
+  top: calc(50% - 4px);
+  left: calc(var(--from) * 20% - 4px);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--night);
+  box-shadow: inset 0 0 0 1.5px var(--fam);
+}
+
+.sm-to {
+  position: absolute;
+  top: calc(50% - 6px);
+  left: calc(var(--at) * 20% - 6px);
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--fam);
+  box-shadow: 0 0 0 2px var(--night);
+  transition-property: left;
+}
+
+.sm-row.is-carried .sm-to {
+  top: calc(50% - 4px);
+  left: calc(var(--at) * 20% - 4px);
+  width: 8px;
+  height: 8px;
+}
+
+.sm-tempo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  font: 500 12px/1 var(--font-mono);
+  color: var(--ink-soft);
+}
+
+.sm-tempo b {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.sm-tempo em {
+  min-width: 2.2em;
+  font-style: normal;
+  color: var(--ink-faint);
+}
+
+.sm-spark path {
+  fill: none;
+  stroke: var(--ink-faint);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sm-spark circle {
+  fill: var(--ink);
+}
+
+.sm-verdict {
+  font-size: 12px;
+  color: var(--ink-faint);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.sm-row.is-clean .sm-verdict {
+  color: var(--good);
+}
+
+.sm-row.is-fail .sm-verdict {
+  color: var(--warn);
+}
+
+.sm-rest,
+.sm-cap {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.sm-trend {
+  display: grid;
+  gap: 4px;
+  animation: ss-rise 0.7s 1.15s ease both;
+}
+
+.sm-trend h3 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.sm-chart {
+  width: min(420px, 100%);
+  height: auto;
+  overflow: visible;
+}
+
+.sm-grid {
+  stroke: var(--line);
+}
+
+.sm-line {
+  fill: none;
+  stroke: var(--brass);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sm-point {
+  fill: var(--brass);
+  stroke: var(--night);
+  stroke-width: 2;
+}
+
+.sm-hit {
+  fill: transparent;
+}
+
+.sm-value {
+  fill: var(--ink);
+  font: 500 12px var(--font-mono);
+}
+
+.sm-map {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  justify-items: center;
+  animation: ss-rise 0.8s 0.95s ease both;
+}
+
+.sm-cap {
+  text-align: center;
+}
+
+.sm-foot {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+  animation: ss-rise 0.7s 1.4s ease both;
+}
+
+.sm-esc {
+  justify-self: end;
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+/* the map: keys on the circle of fifths, their skills, the tunes */
+
+.st {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: visible;
+}
+
+.st-edges line {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.st-edges line.is-on {
+  stroke: color-mix(in srgb, var(--scales) 60%, transparent);
+  stroke-width: 1.5;
+}
+
+.st-dot {
+  fill: var(--scales);
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+
+.st-major .st-dot,
+.st-minor .st-dot {
+  fill: var(--ink);
+}
+
+.st-skill.is-seen .st-dot {
+  stroke: var(--scales);
+}
+
+.st-tune .st-dot {
+  fill: var(--melody);
+  stroke: color-mix(in srgb, var(--melody) 70%, transparent);
+}
+
+.st-arc {
+  fill: none;
+  stroke: var(--scales);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.st-node text {
+  fill: var(--ink-faint);
+  font: 500 12px var(--font-ui);
+}
+
+.st-major text,
+.st-minor text {
+  text-anchor: middle;
+}
+
+.st-minor text {
+  font-size: 9.5px;
+}
+
+.st-node.is-seen text {
+  fill: var(--ink);
+}
+
+.st-tune text {
+  font-size: 11px;
+  fill: var(--ink-soft);
+}
+
+.st-node.is-lit .st-dot {
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+
+.st-halo {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: st-halo 1.6s 1.6s ease-out both;
+}
+
+@keyframes st-halo {
+  from {
+    opacity: 0.9;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 0;
+    transform: scale(2.4);
+  }
+}
+
+/* ---------- free play: the room follows the playing ---------- */
+
+.ss-free {
+  --tone: var(--ink-soft);
+  position: relative;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto auto auto;
+  justify-items: center;
+  gap: 8px;
+  padding: clamp(18px, 4vh, 44px) clamp(18px, 3vw, 48px) 18px;
+  text-align: center;
+  animation: ss-rise 0.6s ease both;
+}
+
+.ss-free > * {
+  position: relative;
+}
+
+.ss-free.is-locked {
+  --tone: var(--good);
+}
+
+.ss-free.is-ahead,
+.ss-free.is-behind {
+  --tone: var(--warn);
+}
+
+.ss-free.is-loose {
+  --tone: var(--ink-faint);
+}
+
+.ss-free.is-record {
+  --tone: var(--brass);
+}
+
+.ss-free .ss-display {
+  font-size: clamp(30px, 4.4vw, 60px);
+}
+
+.ss-free .ss-sub {
+  min-height: 1.4em;
+  margin: 0;
+}
+
+.ss-score--free {
+  align-self: center;
+  width: min(980px, 100%);
+}
+
+.fp-deck {
+  width: min(1040px, 100%);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(220px, 24vw, 320px) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(16px, 3vw, 48px);
+}
+
+.fp-side {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+
+.fp-cap {
+  margin: 0;
+  min-height: 1.3em;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.is-record .fp-cap:last-child {
+  color: var(--brass);
+}
+
+/* the trail of notes against the grid */
+.fp-lane {
+  width: min(340px, 100%);
+  height: auto;
+  overflow: visible;
+}
+
+.fp-lane-zone {
+  fill: color-mix(in srgb, var(--tone) 9%, transparent);
+  transition: fill 0.6s;
+}
+
+.fp-lane-mid {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+
+.fp-lane circle.is-on {
+  fill: var(--good);
+}
+
+.fp-lane circle.is-off {
+  fill: var(--warn);
+}
+
+.fp-lane text {
+  font: 9px var(--font-ui);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  fill: var(--ink-faint);
+  opacity: 0.7;
+}
+
+/* the click: a number in a ring that fills towards the next step up */
+.fp-click {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+}
+
+.fp-mood {
+  margin: 0;
+  min-height: 1.4em;
+  white-space: nowrap;
+  font-size: 15px;
+  color: var(--tone);
+  transition: color 0.5s;
+}
+
+/* counters */
+.fp-stats {
+  display: flex;
+  gap: clamp(14px, 2.4vw, 34px);
+  margin: 0;
+}
+
+.fp-stats > div {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-width: 64px;
+}
+
+.fp-stats dd {
+  margin: 0;
+  font: 500 clamp(26px, 4.2vh, 40px) / 1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+  transition: color 0.6s, text-shadow 0.6s;
+  animation: ss-tick 0.3s ease-out;
+}
+
+.fp-stats .is-lit dd {
+  color: var(--tone);
+  text-shadow: 0 0 18px color-mix(in srgb, var(--tone) 60%, transparent);
+}
+
+.fp-stats dt {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+/* under it: the tempo so far, and the band's four bars */
+.fp-under {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  min-height: 84px;
+}
+
+.fp-trace {
+  display: block;
+  width: 150px;
+  height: 30px;
+}
+
+.fp-trace path {
+  fill: none;
+  stroke: var(--ink-faint);
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.fp-trace circle {
+  fill: var(--tone);
+}
+
+.fp-vamp {
+  display: flex;
+  gap: 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-height: 1.5em;
+  font: italic 500 17px var(--font-display);
+  color: var(--ink-faint);
+  opacity: 0;
+  transition: opacity 0.8s;
+}
+
+.fp-vamp.is-in {
+  opacity: 1;
+}
+
+.fp-vamp li {
+  transition: color 0.2s, transform 0.2s;
+}
+
+.fp-vamp li.is-now {
+  color: var(--ink);
+  transform: translateY(-2px);
+}
+
+.fp-offer {
+  margin: 0;
+  min-height: 1.3em;
+  font-size: 13px;
+  color: var(--ink-faint);
+}
+
+@media (max-width: 900px) {
+  .sm-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sm-map {
+    display: none;
+  }
+
+  .fp-deck {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* in free play the menu is the only way out: its hint stays */
+.is-idle .ss-free .ss-callhint {
+  opacity: 0.7;
+}
+
+.fp-standalone-input {
+  position: absolute;
+  top: 18px;
+  left: 22px;
+  right: 80px;
+  z-index: 4;
+}
+
+.fp-standalone .ss-free { padding-top: 90px; }

@@ -1,0 +1,576 @@
+# Current state
+
+Updated **2026-11-18** after the score-centered Song, manual device exchange and offline-shell work.
+This is the authoritative description of what exists, what is only partly built, and what is
+broken. Update it when a feature's status changes; wishes belong in [BACKLOG.md](BACKLOG.md).
+
+**Evidence labels used below**
+
+- **Code-verified** — read from the implementation and covered by tests or direct inspection.
+- **Runtime-unverified** — implemented, but not exercised in a real browser with a guitar/audio
+  interface during verification. Browser-only checks are described separately.
+- **Broken** — currently fails a command or is known not to work.
+
+## Health snapshot
+
+| Check | Result | Detail |
+| --- | --- | --- |
+| `make check` | **PASS** | Final gate: typecheck, current repository map and 25 suites / 300 tests passing. |
+| `npm run build:quiet` | **PASS** | Final production build passed with Vite's existing >500 kB chunk-size warning. |
+| `sync.test.ts` + `storage.test.ts` | **PASS** | 16 focused cases cover deterministic merges, counters, reset generations, schemas, outbox replay, quota recovery, library persistence and backup restore. Included in the final full gate. |
+| `make test-file FILE=src/__tests__/sync-transport.test.ts` | **PASS** | 6 focused cases: actual WebCrypto over mocked signaling/raw datachannels, one invitation, Unicode/chunked audio, remembered reconnect, bounds/expiry, replay/tamper, cancellation and custom broker/TURN configuration. No real rendezvous/network used. |
+| `make test-file FILE=src/__tests__/sync-exchange.test.ts` | **PASS** | 3 cases: omitted advertised transactions get no ACK/projection; damaged JSON/audio and truncated archives get no writes; repeated exchanges send only missing transactions/audio. Persistence is mocked. |
+| Production browser preview | **PASS, bounded** | In-app browser: six tabs, empty-library starter, selected-card entry, calibration preview/skip, standalone Free play entry/exit and backup-export feedback. No console errors observed. Import preview/restore UI and real quota behavior were not exercised. |
+| Session presentation preview | **PASS, bounded** | In-app browser at 1280×720 and 390×844: Free play arrival, manually enabled steady pulse/meter, menu/return/leave, Ready and input-paused UI. |
+| Home / shell presentation | **PASS, bounded** | In-app browser at 1280×900 and 390×844: full two-bar score excerpt and metadata, flat exercise rows, mode icons and responsive header. Selected bars 1–2 opens that exercise in Ready; Changes and Free play arrival/exit checked at phone width. Compact guitar legend and disconnected input state observed. |
+| Song / Devices browser review | **PASS, bounded** | Production in-app browser at 1280×900 and 390×844: score and exercises, Listen/Stop control state, a printed-bar click opening the exact phrase in Ready, Devices layout, localhost/HTTPS guidance and transfer-file export feedback. Rebuilt app opened and reloaded with no console errors observed. File-import UI was not exercised. |
+| Offline shell / physical sync | **Code-verified; runtime-unverified** | Production service-worker generation includes lazy chunks/assets. No phone site has been hosted; physical phone pairing, install/offline lifecycle and cross-network/TURN operation remain unverified. |
+| Audio / mic / devices | **Runtime-unverified** | No physical guitar, input/output routing, device reconnect, audible playback or microphone scoring was tested. Actual RMS response, warmed colours and audio/visual alignment remain unverified. Fullscreen and autoplay policy behavior also need hardware/browser checks. |
+
+## What the app is
+
+A local-first guitar practice application with no accounts or app-data backend. Practice works
+locally; optional foreground device exchange uses PeerJS signaling and STUN/TURN to establish
+an encrypted WebRTC channel. Transfer files also work without a signaling connection.
+React 18 + TypeScript + Vite; Tone.js for transport/synths/backing; VexFlow for notation;
+`@tonejs/midi` only for the unused MIDI export. Preferences and progress live in `localStorage`;
+large imported scores and recorded takes use IndexedDB.
+
+There are **six top-level views**, a practice session reachable from Tutor or Song, and standalone
+Free play reachable from Tutor:
+
+| Tab | Component | Role |
+| --- | --- | --- |
+| Tutor | `OverviewView.tsx` → `overview/useSongSummaries.ts` | **Default entrypoint.** Current score excerpt and metadata, a mixed three-exercise Next list, mode icons and simple tune rows. |
+| Changes | `FocusView.tsx` (`focus="changes"`) | The current tune's `chords` + `harmony` cards in `SongCoach`. |
+| Reading | `FocusView.tsx` (`focus="reading"`) | The current tune's `reading` cards in `SongCoach`; replaces the old generated sight-reading tab. |
+| Song (`tunes`) | `TuneView.tsx` → `SongCoach` | Score-centered MusicXML browsing/listening, exact phrase launches and the canonical full-screen coached session. No inline Learn mode. |
+| Scales | `ScalesView.tsx` → `FocusView` (`focus="scales"`) / `ShapesView.tsx` | The tune's scale cards in `SongCoach`; the harmonic-minor 3NPS shape explorer sits one step behind a button. |
+| Ear | `EarHub.tsx` → `FocusView` (`focus="ear"`) / `EarView.tsx` | Echo cards from the tune (hear a phrase, play it back); the chord quiz one step behind a button. |
+
+The header has the brand and icon-labelled tab buttons, without a tagline. `App.tsx` holds the active tab, a pending practice
+launch and the key used by the Scales shape explorer (`guitar-key`); each mode owns its own state. The old shared transport,
+key selector and Roman toggle went with the Practice tab.
+The header's Devices dialog performs occasional transfers. `App` unmounts the current feature
+while it is open, stopping listening/ear hooks, and remounts persisted projections on close.
+Opening it during a full-screen practice session is blocked. It does not add another practice engine.
+
+## Tutor layer (2026-11-17)
+
+Built from the plans in [tutor/README.md](tutor/README.md). All of it is **code-verified** (unit
+tests in `tutor.test.ts`, typecheck) and the new session screens were rendered in headless Chrome
+with the synthetic player; **runtime-unverified** with a real guitar, mic and speakers.
+
+- **Evidence per attempt** (`song/evidence.ts`): first-try notes, what sounded instead, misses after
+  leaps / string crossings / position shifts (strings inferred), onset offsets of passes in time,
+  restarts, hears, a run-through's weak bars. Stored on `Attempt.ev`; older attempts have none.
+- **Profile** (`song/profile.ts`): skill axes (pitch, time, tempo, chords, reading, ear) with level
+  and four-week trend, mistake classes (leaps, crossings, shifts, semitone slips, rushing, dragging,
+  scattered time, ear lagging the page), tempo ceilings. Derived on demand.
+- **Measured latency** (`audio/latency.ts`): calibration ends with ten clicks to play along with;
+  the median click→note delay replaces the fixed 50 ms in playback and free play. Rushing/dragging
+  are only named once it has been measured. After each pass in time a timing strip shows each note
+  against its beat and the spread.
+- **Planner** (`song/planner.ts`): sessions of 10 / 25 / 45 minutes (ready screen, held F) as
+  warm-up → focus → review → music. The focus comes from the profile's strongest mistake (held up to
+  ten days as an arc, `guitar-arc`), else the last run-through's short bars, else a skill left
+  alone for a week; it is shown as one fact on the ready screen. New cards come by the last 16
+  attempts (none under 60 % clean, two extra over 85 %). "Carry on" still uses `planSession`.
+- **Gap click**: scale and melody cards from box 4 (and focus cards of a time arc) play in time
+  with the band dropping out for bars at a time; the notes are still judged.
+- **Chords**: chord changes are timed from the strum; comping cards (2 and 4, then Charleston)
+  per section and cadence after the voicings card, each hit must be struck again.
+- **Free play hears strummed progressions** (`song/progression.ts`) and offers the voicings card
+  whose changes contain the loop.
+- **Run-through** (`mel:run`): the whole tune once with the band, nothing stops; bar map on the
+  result; short bars feed the next sessions' focus; the take is recorded (`audio/recorder.ts`,
+  IndexedDB) and the overview plays the first and latest take.
+- **Improvising** (`sec:…:improv`): any notes over a section; a chord tone on beats one and three
+  lands; the chord's notes are lit on the neck; note keys are off.
+- **Fretboard family** (`fb:*`): notes on each string (exact pitch), thirds by shape (exact),
+  3rds/7ths of the tune's chords; timed per box.
+- **Ear**: two-note calls first, the tune's chords as arpeggio calls, phrases in its other keys.
+- **Overview**: path towards playing each tune whole, and a "Your playing" section (axes, minutes a
+  week, named mistakes).
+
+**Not built from the plans yet:** swing ratio and rhythm-only cards, a drop-2 voicing ladder,
+chord-quality ear calls (and folding the chord quiz), answer-the-phrase and trading fours, the
+memory ladder that fades the page per stage, suggested next tunes, a full progress screen.
+
+## Tutor overview
+
+- `overview/summary.ts` projects the canonical deck/store into `SongSummary` and three `UnitPreview`s
+  per song. It uses the same box, due-date and unlock rules as `planSession`, so the overview cannot
+  drift from the session.
+- Optional `excerpt`, `tempo` and `barCount` fields project score data for presentation. The home
+  renders the first two printed bars with the shared `Score`, alongside title, key, meter, tempo
+  and bar count. An empty library previews First Steps before the player chooses to add it.
+- `pickGlobalUnits` returns three deterministic exercises: the current song first, then an overdue
+  review from another song, then a different-family exercise. It does not shuffle or mutate boxes.
+- `overview/useSongSummaries.ts` reads `guitar-tunes-v2`, parses each sheet, builds and caches its
+  deck in memory, then re-reads the per-tune store on mount. Unreadable imports are skipped rather
+  than hiding the rest of the library.
+- Next is one flat exercise list; Explore uses mode icons and names (`overview/modes.ts`). Tune
+  rows show factual metadata, an open action, recorded takes and existing progress. They do not
+  repeat the exercise list or use monogram cards. `UnitCard` and focused mode lists share the flat
+  exercise-row presentation.
+- The primary action opens today's planned session; unit clicks open that exact `SongCoach` card.
+  An empty library offers the original First Steps study. Free play opens without a tune.
+- Performance milestones use demonstrated clean tempo rather than the suggested next tempo;
+  clean BPM records survive history trimming. Skill axes report accuracy/timing/clean tempo.
+
+## One learning system
+
+The legacy Practice curriculum (`src/tutor/*`, CoachPanel/SessionPanel, `guitar-tutor-v4`), the
+Fretboard Lab and the standalone sight-reading tab were removed when the tutor shell took over. The
+canonical system is Tunes/`SongCoach`; Changes, Scales and Reading are the same session run on a
+narrowed deck (`FOCUS_FAMILIES` in `song/deck.ts`). Progress for all of them is one Leitner store per
+tune (`guitar-song-deck:<tune>`) plus `guitar-skills`. See
+[ARCHITECTURE.md](ARCHITECTURE.md#two-tune-models-and-why-they-exist).
+
+## View inventory
+
+### Changes
+
+- Song-aware. `FocusView` (changes) shows the current tune, key, chord symbols and up to three
+  chord/harmony exercise rows via `nextUnits`; it starts `SongCoach` with `focus="changes"`.
+- The deck is `familiesOnly(buildDeck(...), ["chords", "harmony"])`; guest-tune mixing is off, and
+  `needs` links to removed cards are dropped. Boxes, tempo and sessions go to the tune's normal
+  Leitner store, so progress is shared with Song mode.
+- Typecheck and `overview.test.ts` cover the deck narrowing; the focused landing screens render
+  in the production browser preview. Real guitar sessions remain unverified.
+- The old abstract ii–V–I drill (`src/changes/*`) was deleted.
+
+**Gaps:** inherits SongCoach's gestures (listen again, tempo, card box), so the old gaps (metronome,
+guitar controller, jarring ii–V–I switch) no longer apply to the screen the app shows. No
+dedicated "play the progression" card exists yet; a tune with no chord symbols has no Changes cards.
+
+### Reading
+
+- `FocusView focus="reading"`: the tune's `reading` family cards (`song/reading.ts`: fresh notes
+  from the tune's range, introduced as earlier ones land) in `SongCoach`. The old standalone
+  generator tab (levels, wait-for-me/play-along, `useNoteCheck`) was removed.
+- Same gestures, mic scoring and box as the rest of the session.
+
+**Gaps:** no level control (the deck's window/`round` decide new notes); unverified at runtime.
+
+### Tunes
+
+- Import `.musicxml`, `.xml`, `.mxl` by button or drag-and-drop; library persisted in
+  `guitar-tunes-v2`, current tune in `guitar-tune`. A legacy `guitar-tunes` key only triggers a
+  "load your tunes once more" notice; there is no automatic migration.
+- Import previews the melody part/voice, key, sounding range, chord availability and warnings.
+  The parser honors forward/backup timing movements, repeats/endings/jumps and optional comping.
+  `.mxl` is unzipped with archive checks. New arrangements get independent IDs; exact duplicates
+  open the saved score, and replacement explicitly preserves the selected tune's history.
+- The selected part uses its first staff. Instrument transposition is warned about rather than
+  applied; the existing guitar octave interpretation remains. Check the sounding-range preview.
+- Large XML is stored in IndexedDB with safe migration from existing inline entries. Song exports
+  and restores tunes/settings/history in one backup file (audio recordings excluded). Save failures
+  stay visible; pending progress can be retried or exported before closing the page.
+- Song defaults to a large score with tune metadata, a compact listening transport, phrase rows
+  and the next exercise from each family. Library/import/backup tools and sound settings are
+  disclosed when requested.
+- Browsing playback (`tunes/order.ts` + `tunes/usePlayback.ts`) expands repeats, endings,
+  D.C./D.S., To Coda and Fine into a `Timeline`; supports count-in, phrase loops,
+  melody/chords/click mix and tempo changes. Listening does not score the microphone.
+- Clicking a printed bar finds its existing melody phrase card and opens that exact card in
+  `SongCoach`; phrase rows do the same. The primary action starts the daily plan. No inline Learn,
+  Play along or Wait for me mode competes with the full-screen session.
+- Full-screen **Practice session** (`SongCoach`) with multi-tune exercise mixing, free play,
+  settings, calibration, input/output device choice, and the done-screen summary.
+- Older `LearnView`/`useCoach` modules and stored `guitar-learn:*` data remain compatible legacy
+  code/data; the Song page no longer renders them.
+
+**Canonical modern path:** Tunes → Practice session → `SongCoach`. See
+[PRACTICE_SESSION.md](PRACTICE_SESSION.md) for behavior and gestures.
+
+### Scales
+
+- `ScalesView`: the tune's `scales` cards via `FocusView`, plus the shape explorer below.
+
+#### Shape explorer (`ShapesView`)
+
+- Root-to-root shape plus seven 3NPS harmonic-minor shapes across the neck, in every key.
+- Drills: notes, groups of three, thirds; i(maj7)–V7 vamp generated by `buildMinorVamp`; playback
+  with `usePlayer`; degrees or note names; hide-notes memory mode; ←/→ switches shapes.
+- Explains the augmented second and the raised 7th's resolution.
+
+**Gaps:** no mic scoring, no guitar controller, no persisted per-shape practice history.
+
+### Ear
+
+**Echo cards (call-and-response, new)** — the `ear` deck family (`song/ear.ts`, `deck.ts`):
+- A phrase is played, then you play it back (any octave). Run from the Ear tab, from Song, or from
+  the overview's queues: they are ordinary cards in the tune's box.
+- Notes come only from each tune's own home scale (`song/ear.ts`), so only keys you play songs in
+  come up; a mixed session echoes each tune in its own key. A quiet home triad sounds under it.
+- Tiers, each unlocking the next (`needs`): 1 three notes by step, 2 four notes with skips (both with
+  the page on screen as a help), 3 four notes and 4 five notes with wider steps (page hidden until
+  played: `memory`), then the first two sections' own opening phrases by ear.
+- Each visit a new phrase (seeded by tune, card, round and times seen). The note names appear once
+  it is played (`secret`).
+- Flow: listen (always, even in high boxes) → play it back at your own pace (mic-scored; starting
+  over is free) → done. There is no in-time pass for an echo. Neck hints return on a wrong note.
+- Verified in headless Chrome with a synthetic guitar: the Ear tab starts the session by played
+  notes (see Shell navigation) and the ready screen shows the first tier. **Unverified:** a real
+  guitar, and how the phrases feel (length, tempo 76, which notes).
+
+**Chord quiz** (the original trainer, behind the "Chord quiz" button on the Ear tab):
+
+- Two modes: **Hear the chords** (choose the progression's chords) and **Name that progression**
+  (multiple choice / famous song match).
+- Tracks: jazz/pop/etc. (`ear/theory.ts`), staged vocabulary, mastery per chord, confusion pairs,
+  adaptive weak-chord weighting, voice leading, generated audio.
+- Side panels: path/ladder, mastery, "your music" (song library and Spotify links), mix-ups to
+  drill, settings (keys vs guitar sound, pace, progression length).
+- Progress in `guitar-ear-v1`; it picks its own random keys and is not tied to your songs' keys.
+
+**Guitar:** the shell cursor (E5–A5, see Shell navigation) reaches every button, including chord
+answers (`F♯5` presses). Three keys act directly: `A♯5` play/stop, `B5` check (or next once
+answered), `C6` bass line. The keys go quiet while the trainer is sounding, so its own speakers
+cannot press them. Unverified with a real guitar.
+
+**Gaps:** the quiz's answers are still picked, not played, and it is not tied to your songs' keys or
+the card box; `ear/engine.ts` still uses unseeded randomness. Echo cards are **T23** in
+[BACKLOG.md](BACKLOG.md) (v1 built; next steps listed there).
+
+## The modern practice session
+
+`SongCoach` is the full-screen, hands-on system. The authoritative behavior doc is
+[PRACTICE_SESSION.md](PRACTICE_SESSION.md); this section is the implementation summary.
+
+### Flow
+
+```
+Ready screen
+  └─ held note or Start
+       intro → (listen) → your pace → in time → result → next card …
+                                                   └─ session done → SessionSummary
+```
+
+- `useSession` runs the queue; `phase` is `intro | listen | pace | time | result`.
+- A card can be a scale run/pattern, arpeggio/guide-tone/chain over changes, voicing exercise,
+  melody chunk, or fresh reading line.
+- New cards are introduced; long cards may be shortened into a spot (`song/spot.ts`) after repeated
+  trouble in the same bar.
+- Ready previews the first three planned exercises, separates input connection from starting, and
+  shows the held-note gesture beside the start button. Running screens name the phase and exercise
+  number; the displayed note actions and low-E menu also have clickable buttons.
+- The six-string menu has a quiet scrim and phone-safe rows. It waits for the summoning note to
+  stop/change before accepting a fresh 0.6 s row hold; free play uses a fixed overlay.
+- `PracticeAtmosphere` shares a muted water/leaf background and current lines with free play.
+  Existing RMS frames give it small smoothed movements; sustained playing and flow gradually
+  reveal colour. It is decorative, performs no pitch analysis, and respects reduced motion.
+  `BeatPulse` shares the output-clock beat display. Real-guitar responsiveness remains unverified.
+
+### Shell navigation (outside sessions)
+
+`App` owns one shared mic input; `GuitarNav` (`src/nav/useGuitarNav.ts`, `components/GuitarNav.tsx`)
+makes every screen outside a session playable. Keys are exact notes from the 12th fret up, held
+~0.4 s (`useNoteKeys`), shown as a compact note-and-icon strip at the foot of the page. Labels
+remain in tooltips and accessible names. It is DOM-driven: the cursor
+moves over every visible `button`, `select`, link and `role="button"` in reading order, so new
+screens are navigable without wiring. It goes quiet while a session (`.ss`) is open.
+
+| Note | Fret | Action |
+| --- | --- | --- |
+| `E5` / `F5` | high e, 12 / 13 | Cursor back / on |
+| `F♯5` | high e, 14 | Press (a `select` turns to its next option) |
+| `G5` | high e, 15 | Home (Tutor overview) |
+| `G♯5` / `A5` | high e, 16 / 17 | Previous / next mode tab |
+
+The keys are muted while something listens to the guitar or makes sound: open sessions, the Ear
+trainer while it plays, Song's listening transport while playing, and the Devices dialog.
+The tune's own notes can reach E5 and above.
+
+Verified: cursor stepping/press logic (`nav.test.ts`), and in headless Chrome with a synthetic
+guitar (a scripted `getUserMedia` stream through the real input and pitch pipeline): cursor
+moves, mode tabs, home, press, starting a Changes session by played notes, and the Scales,
+Reading, Ear and Song screens render. **Unverified:** a real guitar and mic. A programmatic click is not a user gesture, so a
+session started this way may not go full screen until the page has been clicked once.
+
+### Session gestures
+
+| Gesture | Where | Action |
+| --- | --- | --- |
+| Hold a note ~0.7 s | Ready | Begin (any note except the reserved action notes) |
+| `E5` (or assigned hear key) | Exercise | Hear it again |
+| `F2` (or assigned pace key) | Exercise | Your pace |
+| `G2` (or assigned time key) | Exercise | In time |
+| `G♯2` (or assigned next key) | Exercise | Next exercise |
+| Open low E held ~1.3 s | Exercise / free play | Six-string menu (tempo, click, output, free play, shuffle, calibration, finish) |
+| `C3` | Done screen | Carry on |
+| `D3` | Done screen | Free play · metronome |
+| `C♯3` | Done screen | Settings |
+| `F3` | Done screen | Next tune (if the library has more) |
+| `F♯3` | Done screen | Toggle shuffle |
+
+Action notes are shown beside their labels. Note keys avoid notes the exercise or its band sounds;
+see `song/notekeys.ts`. The done-screen mapping is `SessionSummary.tsx` (`KEYS`).
+
+### Tempo, scoring and reactions
+
+- **Your pace:** cursor waits per note; going back is followed; a take starts on a fresh attack. A
+  clean take forgives the first and last note and one stray in twelve (`song/judge.ts`).
+- **In time:** click starts at 88 % of the player's measured tempo; clean passes raise it (4 bpm,
+  8 bpm when far below target). Untied repeated notes need separate attacks; tempo increases
+  require a steady pulse, including comping. Two short passes lower it; two mostly-wrong
+  passes send the band away until a clean at-your-own-pace take.
+- **Pass thresholds** are per card: scales 0.85, arpeggios/chains 0.75–0.8, melody/voicings 0.7,
+  reading 0.8 (roughly; see `Card.pass` in `song/deck.ts`).
+- **Silence:** 8 s → next note sounded quietly; 12 s → passage replayed; 75 s → session rests until
+  a note wakes it. The active clock stops after 12 s without a note, so AFK time is not counted.
+- **Lost input:** session pauses; `useInput` reopens when a device returns, without reload.
+- **"How it is going":** `song/estimator.ts` drives the CSS `--flow` warmth, the run counter and
+  pass bars. Scales weight unbroken runs and steadiness; melodies weight right notes.
+- **Wrong notes:** `ScoreShadows` writes the played note's name beside a hollow notehead at its
+  staff height, and the written note's name below; `Fretboard` ghosts show the likely string/fret.
+- **Playback position:** a bar highlight (`playingBar`) plus a cursor column (`cursor`) that pulses
+  on a silence nudge; the score auto-scrolls.
+
+### Curriculum and progress
+
+- Deck cards carry `family` (`scales`, `harmony`, `melody`, `chords`, `reading`), `kind`, `rhythm`,
+  `needs` (stage gate) and optional `secret`/`spot`/`fresh`.
+- Scale stages: run → quarters → thirds → triplets → triads → sixteenths → sevenths. A stage opens
+  once its prerequisite reaches box 2 (`unlocked`).
+- Five-box Leitner: clean +1 box, ok stays, fail → box 1. Intervals 0/0/1/3/7/21 days. A session
+  plans due cards, a few new ones, and a scale warm-up (`planSession`).
+- Kinship (`song/kin.ts`): a clean scale pass credits relatives (same scale other pattern 0.34;
+  same notes other tonic 0.5; one note apart 0.5; a fifth away 0.25). A whole box of credit moves a
+  relative up unplayed.
+- Scale cards are shared across tunes (`guitar-skills`); other families are per-tune.
+- The map (`song/tree.ts` + `SkillTree.tsx`) is derived from the boxes and free-play log: circle of
+  fifths hubs, relative minors inside, skills growing outward, tunes on the rim. Read-only.
+
+### Done screen
+
+`SessionSummary.tsx` shows:
+
+- Session tiles: minutes, exercises, notes landed %, boxes gained; all-time sessions/minutes.
+- Exercise movement: grouped by tune then family, each row from old box to new box, with tempo
+  sparkline and verdict; carried relatives listed separately.
+- A 14-session "clean exercises per session" trend line.
+- The skill tree, lit for cards touched this session.
+- Guitar actions (carry on, free play, settings, next tune, shuffle) and an interlude played under
+  the screen.
+
+This is a v1 of the `todo` done-screen vision: movement, axes (tune × family), stats and guitar
+actions exist. Long-term per-exercise history and a configurable axis model do not.
+
+## Free play
+
+`FreePlay` + `useFreePlay` + `song/freeplay.ts`:
+
+- Opens with a quiet listening invitation and input control; notation appears after three notes,
+  timing and best tempo only once measured. A manually enabled click shows its pulse before notes.
+  Shares `PracticeAtmosphere` and the heard-beat `BeatPulse` with the coached session.
+- Listens to single notes; estimates key (Krumhansl profiles), pattern (run, thirds, triads, 7ths)
+  and grid/division (quarters, triplets, 16ths).
+- The click joins once notes are steady, starts under the player's tempo, and follows the rules in
+  `freeplay.ts`: clean readings raise it, sustained lateness lowers it, rushing never raises it,
+  messy playing sends the band away.
+- Writes the played notes to a score (`playedSheet`), logs what was practised to
+  `guitar-freeplay`, tracks best tempo/record per key+pattern, and offers a matching card from the
+  box when one exists.
+- Low-E menu, also a persistent button: slower/stay, faster, click mode, band and matching-card
+  practice. Leave is on the first page when no card is offered; band status distinguishes playing,
+  waiting and off. Stats distinguish consecutive bars and this visit's best tempo.
+
+Strummed chords are read too (see Tutor layer): a loop of two to four chords offers its voicings
+card. Progressions are not logged to `guitar-freeplay` or the map yet.
+
+## Storage keys
+
+| Key | Writer | Contents |
+| --- | --- | --- |
+| `guitar-key` | `App.tsx` | Tonic string for the Scales shape explorer, default `A`. |
+| `guitar-tutor-v4`, `guitar-roman` | (none) | Written by the removed Practice tab; no longer read or written. |
+| `guitar-song-deck:<tune>` | `song/leitner.ts` | Per-tune card box: cards, sessions, settings, history, credit, meta. |
+| `guitar-skills` | `song/leitner.ts` | Shared scale card states and credit. |
+| `guitar-freeplay` | `song/freeplay.ts` | Free-play log (`FreeEntry[]`), capped. |
+| `guitar-freeplay-prefs` | `song/useFreePlay.ts` | Band on/off. |
+| `guitar-output` | `audio/output.ts` | Chosen output device id. |
+| `guitar-input` | `listen/useInput.ts` | Chosen input device id. |
+| `guitar-calibration` | `listen/calibration.ts` | Per-string detector profile bound to input device/sample rate. |
+| `guitar-ear-v1` | `ear/useEarTrainer.ts` | Ear-training progress/settings. |
+| `guitar-changes`, `guitar-changes-times` | (none) | Written by the removed ii–V–I drill; no longer read or written. |
+| `guitar-tunes-v2` | `tunes/library.ts` | Imported tune index: stable id/name, part/voice and small XML or large-XML reference. |
+| `guitar-tune` | `TuneView.tsx` | Currently selected tune id. |
+| `guitar-learn:<tune>` | `tunes/useCoach.ts` | Learn-mode plan progress. |
+| `guitar-latency` | `audio/latency.ts` | Measured input lag bound to input device/sample rate and output route. |
+| `guitar-arc` | `song/planner.ts` | The planner's current focus (mistake class, start day, strength). |
+| `guitar-recordings` (IndexedDB) | `audio/recorder.ts` | Run-through takes per tune. |
+| `guitar-tune-files` (IndexedDB) | `tunes/database.ts` | Large imported XML, referenced by the library index. |
+| `guitar-sync-v1` (IndexedDB) | `sync/journal.ts` | Immutable transaction log, causal device identity/vector and committed outbox batch tokens. |
+| `fretboard-sync-outbox-v1` | `sync/journal.ts` | Pending journal mutations written before materialized state; retried after reload with batch deduplication. |
+| `fretboard-focus-devices-v1` | `sync/devices.ts` | Local device name, phone app URL, paired peer IDs/secrets and last successful exchange. Never exported as practice data. |
+
+Access is guarded. Existing library entries and progress IDs remain stable; large inline scores
+migrate only after the new score storage and index have both saved successfully.
+
+## Manual device exchange and offline shell
+
+- `sync/model.ts`, `journal.ts`, `merge.ts` and `state.ts` record portable state as immutable
+  `device:seq` transactions, with causal vectors and deterministic replay. New attempt/session
+  rows have stable identities. Repeating a union does not count the same event twice; devices
+  can practise separately and merge later.
+- Library XML, selected tune/key, tune/shared-scale progress, free play, ear progress/settings and
+  retained legacy Learn state are portable. Recordings carry their existing IDs, metadata, MIME
+  types and SHA-256 hashes. Input/output routes, detector calibration, measured latency and pairing
+  secrets stay local to the device.
+- Concurrent score edits preserve alternate library copies. Different pre-journal history
+  snapshots are retained and reported as legacy conflicts, because overlapping old aggregates
+  cannot prove which practice was shared. Reset/deletion handling uses causal context. Successful
+  backup restores create an explicit restored generation; subsequent practice survives, while
+  conflicting older/offline events remain retained in the journal and reported.
+- `exchange.ts` compares inventories, sends missing transactions and recordings in both
+  directions. Each recording gets a durable-save ACK before the sender proceeds to the next;
+  the final saved ACK follows journal/projection.
+  Portable `.fretpack` files use a `FRETPK01` prefix, big-endian JSON-header length, checksummed
+  snapshot/recording manifest and concatenated audio. All binary hashes are checked before
+  applying practice state. Limits are 128 MiB per recording/header and 2 GiB per archive.
+- `transport.ts` pairs with one QR/link containing a short-lived fragment secret, then remembers
+  the peer after a successful full exchange. PeerJS provides rendezvous; Cloudflare STUN is the
+  default. The channel handshake and payloads are AES-GCM encrypted with fresh directional keys
+  and replay counters. Logical payloads use 16 KiB chunks with backpressure and a 128 MiB default
+  cap. TURN/custom signaling are build-time options described in README.
+- Exchange is manual and foreground-only: keep Devices open on both idle screens. Pending
+  library saves or backup restores finish before Devices opens, even after switching screens.
+  The current feature's listening/scoring hooks are unmounted during transfer and remount saved state on
+  close; full-screen practice blocks opening the dialog. There is no continuous/background
+  replication. Use one active app window per device for an exchange;
+  simultaneous cross-tab editing has not been verified.
+- Source publication does not provision hosting. A phone cannot use a laptop's localhost
+  address. Host a production build at a reachable trusted HTTPS origin before phone microphone,
+  install/Add to Home Screen and QR flows can be verified. The local dialog can remember that URL;
+  entering it does not publish the app. `.fretpack` transfers remain usable between local browsers.
+- `pwa.ts`, the web manifest/icons and the build-generated service worker provide a production
+  offline shell after a successful cache installation. The worker is disabled in development;
+  updates wait for old windows to close and do not reload a session. Sync rendezvous still needs
+  connectivity. Physical-device/PWA behavior remains runtime-unverified.
+
+## Audio and input
+
+- **One shared context.** `audio/context.ts` creates a Tone context lazily (`ensureAudio`), adds a
+  compressor + limiter, and starts output-device watching. `play()`/session entry must be called
+  from a user gesture.
+- **Sound sources.** `audio/samples.ts` pre-renders one-shot buffers (keys, bass, ride, hat, kick,
+  click); `audio/pluck.ts` renders a plucked guitar; `audio/backing.ts` generates the older
+  Practice-band events; `audio/cues.ts` provides pad/bass/hint/chime/interlude cues; `song/cues.ts`
+  wraps them with speech.
+- **Playback.** `tunes/usePlayback.ts` schedules a lookahead loop on the audio clock, scores notes
+  against the timeline, and supports chord scoring and guide/shadow melody. `audio/usePlayer.ts`
+  is the older bar/loop transport used by Practice, Reading and Scale shapes.
+- **Visible beat.** Session playback and free play expose a shared `BeatSignal` from the output
+  clock. The visual pulse follows heard beats, including count-in, rather than a separate CSS
+  metronome; playback gaps and stopped/suspended audio clear the signal. Physical audio/visual
+  alignment remains unverified on hardware.
+- **Input.** `listen/useInput.ts` owns `getUserMedia`, prefers audio interfaces, reads both channels
+  and chooses the louder, remembers the device, and reopens after device loss. `listen/spectrum.ts`
+  does FFT/note/chord detection; `pitchDetection.ts` provides pitch/onset primitives.
+- **Output.** `audio/output.ts` uses `AudioContext.setSinkId` where supported (Chrome/Edge), persists
+  the device, falls back to system output when it disappears, and restores it on return. Only
+  `SongCoach` exposes the picker (settings drawer and six-string menu), but routing is app-wide.
+- **Calibration.** `listen/calibration.ts` fits per-string detector profiles; `Calibrate.tsx` is
+  reachable from the session and stores `guitar-calibration`.
+
+## Content and fixtures
+
+- Project-owned code, documentation, visual assets and original music use `AGPL-3.0-only`.
+  [ASSETS.md](../ASSETS.md) records content provenance; [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)
+  preserves separate dependency/font licenses.
+- First Steps (`src/tunes/starter.ts`) is an original eight-bar C major study, added only when
+  requested and included under the project license. The older Autumn Leaves model
+  (`src/core/tunes/autumnLeaves.ts`) contains harmony data for domain fixtures, not a melody score
+  or separate Practice tab.
+- No third-party full-score transcriptions are bundled with the release source. Personal
+  MusicXML files under `tunes/` are ignored. Imported library scores persist in browser-local `localStorage`
+  and IndexedDB across restarts, and travel only through an explicit device exchange or export.
+  They are separate from the repository and app build; importing does not change their license.
+- Water and leaf textures are derived from the project owner's original photographs. The
+  fretboard icon and First Steps study are project assets; see `ASSETS.md` for their scope.
+- Reading cards include classical/traditional melodies encoded as scale degrees. The original
+  project encoding is AGPL-licensed; underlying public-domain music remains public domain.
+- Additional shared fixtures must be original or explicitly redistributable, with provenance.
+  Tests must not depend on ignored personal score files.
+- `scripts/generate-repo-map.mjs` generates the map. Score acquisition/conversion tools live in
+  separate local projects, outside the release source.
+
+## Test coverage
+
+Focused suites in `src/__tests__/` cover:
+
+- Music theory, keys/scales/spelling, patterns, landings, backing (`core`, `roman`, `demos`).
+- Harmonic-minor shapes and drills (`shapes`).
+- Reading generator invariants, accidentals, pattern conversion (`reading`; used as a `Score` fixture).
+- MusicXML parsing, harmony, deck generation, card box, notation (`song`).
+- Session kinship, stages, clean takes, note keys, free play, tree (`session`).
+- Melody shadow support (`support`).
+- Calibration and detector fitting (`calibration`).
+- Tone-key assignment (`tones`).
+- Practice spots, reading variation, multi-tune sessions (`practice`).
+- Ear theory, voice leading, mastery, famous-song matching (`ear`).
+- Scoring attacks, octave matching and timing gates (`audio-scoring`); suspended/stale input
+  lifecycle (`input-lifecycle`) and device-bound calibration (`calibration`).
+- Import cursor/voice/archive handling (`musicxml`); migration, pending saves, backup validation
+  and rollback (`storage`).
+- Overview and shell navigation (`overview`, `nav`), mounted tab/card/free-play routing (`smoke`),
+  selected-card/calibration entry (`coach-entry`), and planner/profile records (`tutor`).
+- Score rendering (`score.test.tsx`).
+- Encrypted pairing/chunking/replay/cancellation (`sync-transport`) and missing-only exchange,
+  archive corruption and pre-ACK validation (`sync-exchange`), using controlled transport/storage
+  doubles rather than a real signaling service or IndexedDB device.
+
+**Not covered on hardware:** real Web Audio output, microphone input, device reconnect, fullscreen,
+browser storage limits on large tune libraries, and end-to-end scored sessions. Input/storage
+failure paths use controlled test doubles. There is no Playwright/CI configuration committed.
+
+## Known risks and blockers
+
+1. **Docs and map can drift.** The map has been regenerated, but docs must be kept current.
+2. **The chord quiz is still its own engine** (`ear/*`, `guitar-ear-v1`); it does not share boxes
+   or stats with the tune session. Echo cards already use the shared deck.
+3. **Stats are session-scoped.** `SessionSummary` totals use the current tune's store; there is no
+   cross-tune dashboard or per-exercise long-term history.
+4. **Free play chord recognition is untested on a real acoustic**: strum detection and naming are
+   unit-tested on pitch-class sets only.
+5. **String attribution is inferred, not heard.** `song/fingering.ts` chooses a position and
+   `ghostSpot` guesses the likely string/fret; this is the known "so-so" string detection.
+6. **Browser storage is still finite.** Large XML, recordings and the transaction journal use
+   IndexedDB; private-mode restrictions and quota limits can prevent saving. Export `.fretpack`
+   files to include recordings. The journal has a durable pending outbox when localStorage is
+   writable; a quota failure can still require keeping the page open until saving finishes.
+7. **Unverified runtime behavior.** Audio routing, mic detection, device unplug/replug, fullscreen
+   and browser autoplay policies are implemented from code but not verified here. Physical output
+   changes behind the browser's system-default route cannot be identified for recalibration.
+8. **No phone hosting or physical sync verification yet.** A production HTTPS origin is needed;
+   public signaling availability, restrictive NAT/TURN, large real recording libraries, installed
+   mobile app storage and cross-tab edits still need end-to-end checks.
+
+## Cleanup candidates (not done)
+
+These modules remain in the source. Review their consumers before removing them.
+
+- `src/reading/*` — only `Score`'s test uses it now (the Reading mode runs on `song/reading.ts` cards).
+- `src/audio/exportMidi.ts` — `exportBackingMidi` has no UI wiring; MIDI export is effectively
+  unfinished.
+- Legacy-only code in `src/core/`: `PathStep` (contract), `landings.ts` (`landingMoves`,
+  `LandingMove`, `stepShort`: voice-leading landings for the removed Practice) and the exported
+  `buildAutumnLeaves`. Kept as possibly useful logic; only tests and each other use them.
+- Dead CSS was pruned (`practice.css`, `styles.css`); what remains unreferenced is dynamic
+  (`scale-*`, `role-*`, `kind-*`, `is-*`) or VexFlow's own classes.
+- `docs/REPO_MAP.md` must be regenerated after file moves; do not hand-edit it.
+
+## How to verify this snapshot
+
+```bash
+npm run typecheck        # strict TypeScript check
+make test                # focused unit/component suites
+make map-check           # generated repo-map freshness
+make check               # typecheck + map freshness + tests
+```
+
+For runtime verification, start `make run`, open the Vite URL, and exercise each tab with a guitar
+and an audio interface. Record what was actually tested; do not infer it from code.

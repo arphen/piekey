@@ -1,0 +1,43 @@
+in the session done screen:
+visualize the movement of the exercises and be prepared for the exercises to hold multiple songs and different types of exercises so we need axes of variation
+
+the next actions on the session done screen need to be all executable by playing notes rather than touching the keyboard, let's say to continue, play C3 to switch to metronome mode play D2, to settings play Cx2 (those need to be displayed on screen so the user knows what to play. the broader goal here is to turn the entire application into a instrument navigable UX , switch song could have a different tone to trigger, maybe there is also often used settings like "shuffle mode" just develop a ui using the guitar. 
+
+i think displaying some metric over sessions on the screen for a particular exercise or at the end for all the exercises in the session, and performance over time,  and also just stats, 
+
+
+increase visual fidelity of the session done screen, implement micro, macro and mini design elements that guide the attention, maybe some refreshing music in between sessions
+i think it keeps counting time if i afk on the page
+
+
+
+learn bars 1-3 :
+
+cool but why do i have the other bars on my screen , just have the relevant bars displayed
+The language is very patronizing and ai like, like "JUST LISTEN" the just is very patronizing, i think rather than telling the user what to do the primary directive of this project is always to figure out how the application should best react to the user's behaviour and react appropriately.
+
+here on the page it's very importatn that the user can always opt to listen to the part again, and this needs to be easily triggerable with the instrument with playing a designated note (eg E5)
+and maybe there should be guiding signals from the app when long silence has been detected  and in the scores we need to show where the playback is now, like as a visual impact signal so the eyes easily get drawn back to the correct position , and if i struggle to read the notes/ make a mistake i  think it would be cool to see the name of the note i played wrong also written out, as to strengthen the learning impact for sight reading because i'll see notes in red and green and their associated names and associatet them with my hand movement. 
+
+we need audio output control because i'm only able to get the app audio output on the direct line monitor headphones i plug in but i dont really need headphones with my accoustic guitar, i would like to use the output of my mac (all this should be configurable via guitar-as-controller input
+
+these "listen" "your pace" and "in time" "modes" should all be selectable, triggerable by playing tones on the guitar
+
+while playing maybe we need to be more lenient on the first and last tone of a piece because the app often marks the first tone as red even though i'm clearly playing the correct tone, we probably need some edge case handling there
+"nearly" and progress feel really shit because it's like totally out of my control what will happen when, to some degree i like the software hiding it from me but i would still like to get an approximate sense of how i'm doing during the session, like the vibe needs to shift when i'm doing well   so i get encouragement i think we need to make an estimator and track some metrics for performance, this needs to be different for melodies and for scales, and one thing i don't really understand is how the metronome pacing speed is chosen i think it should be chosen somewhat lower than what is played by the player, so they can adjust their speed down to catch it, then increase BPM as the player starts playing cleanly (probably not demand 100% because of detection noise)
+when session ends, the language is terrible, it needs to be a smoother transition, like in a video game where i think pacing between levels is also a really improtant part of the design
+
+we need more visual highlighting in the score where the playback currently is because sometimes i look at the guitar or close my eyes and the i lose track of where we are
+
+for scale work i think even if i get the scale completely green, it always marks the last tone as failed nad i never get encouragement when things are clean which is a bit sad, the metronome functionality
+and the goal with the scale over multiple exercises is to get not just the stupid shape hammered into my head and not even the sightreading for the scale, the point is that i learn the geometric finger patterns that i will likely play this scale in , so the first task needs to be to get the user into a metronome-controlled environment where we can track their bpm over time, we should also integrate different rythms for picking such as in triplets, quarter note and 16th note at appropriate speeds, then we can also include exercises that are melodic patterns rather than just going up and down the scale stoically, like playing in a melodic pattern go up a third go down a second, go up a third... or the same but with stacked diatonic chords from each step of the scale, and also the same with 7th chord arpeggios,
+our learning system should gradually stage various content into different stages as the user progresses through their chosen content, maybe in the beginning the only thing the user cares about is hitting the right notes, then probably hit the notes in rythm, then start playing melodically, as didactically appropriate, somehow all the exercises regarding a certain topic still need to influence each other appropriately because if we just generate a card for every pentatonic, jazz, blues and bla bla scale, it will just never end because the user can't make a dent in the curriculum if it is done naively, just award progress on the exercise completed. on guitar things are connected and if i practice d harmonic minor then of course i learn some stuff about d natural minor at the same time,
+
+in the 2 5 practice mode the switch between the two chords is very jarring there is no way for me to play what i think it wants me to play without it sounding crazy, in general i would like to always be able to trigger it so i can listen again by playinga specific tone on the fretboard for almost every activity. i also want to have an adjustable metronome accessible by playing a certain thing on the guitar from almost anywhere because sometimes i just practice scales outside of the curriculum currently enabled:
+
+For that free-play metronome mode, we can still note down what the user plays as tones in score and try to categorize what key and exercise the user is playing. i primarily practice in c major scale for fluency in thirds, diatonic chords and 7th arpeggios, i imgagine that the curriculum tree of the user looks like the passive tree for path of exile, with its core structure being the circle of fifths, and the repertoire and exercises the user plays filling in the passive tree as you play more and more and learn more songs, like this passive tree system needs then also to be integrated with the karteikasten system so we can have a didactically meaningful curriculum rather than just random exercises, and we can react meaningfully to what the user plays in free play mode, maybe they play some chord progression because they're still super in the beginning, then we can offer a different set of exercises, where we just do chord changes to a metronome etc, and as they master hte chord changes, we introduce scale work etc, it also depends what kind of song they bring, think this through
+
+unplugging nad replugging the interface i think kicks me out and then i have to restart the block and it's super annoying( like i have to reload)
+
+so yeah once we have the user locked into a metronome, we don't let them speed up randomly they have to show they can play clealy, and if they're playing to fast there should be a mood of "slow down" if they're too slow they should get a vibe of speed up but if they consistently go to slow then we should start dropping the BPM and all this should be communicated to the user, if the user starts making a lot of mistakes in hitting the right nodes probably the metronome should go back off and only restart when the user is again confidently playing hte right notes in the V-i section i always want to be able to hear what i'm supposed to play etc accessing the next exercises should also be easy from the guitar
+i think it is also necessary to try to find the correct string on which a note is played, this is currently working so so

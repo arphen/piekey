@@ -1,0 +1,693 @@
+{
+  "format": "fretboard-third-party-notices",
+  "version": 1,
+  "collectedAt": "2026-11-18",
+  "runtimePackages": [
+    {
+      "name": "@babel/runtime",
+      "version": "7.29.10",
+      "license": "MIT",
+      "tarball": "https://registry.npmjs.org/@babel/runtime/-/runtime-7.29.10.tgz",
+      "integrity": "sha512-NpugTzbKgGrNe45Ui32cN8vCFFMxVtP/9rtfwv0nP5FRDAjvYBxJcLVpYA9mr1jxP6cnIT7x9LUzuDTbWYYNRA==",
+      "gitHead": null,
+      "repository": {
+        "url": "https://github.com/babel/babel.git",
+        "type": "git",
+        "directory": "packages/babel-runtime"
+      },
+      "files": [
+        {
+          "file": "notices/runtime/babel__runtime-7.29.10/LICENSE",
+          "sha256": "117da2af0d4ce0fe1c8e19b5cff9dcd806adf973d328d27b11d4448c4ff24f76",
+          "source": "https://registry.npmjs.org/@babel/runtime/-/runtime-7.29.10.tgz",
+          "archiveMember": "package/LICENSE",
+          "kind": "verbatim-license"
+        },
+        {
+          "file": "notices/runtime/babel__runtime-7.29.10/SOURCE_NOTICES.txt",
+          "sha256": "2cc47b16eb0a1f47201abb387e3d4880f6530a839170ce131fa6f0567edf2420",
+          "source": "https://registry.npmjs.org/@babel/runtime/-/runtime-7.29.10.tgz",
+          "kind": "verbatim-comment-excerpts"
+        }
+      ]
+    },
+    {
+      "name": "@msgpack/msgpack",
+      "version": "2.8.0",
+      "license": "ISC",
+      "tarball": "https://registry.npmjs.org/@msgpack/msgpack/-/msgpack-2.8.0.tgz",
+      "integrity": "sha512-h9u4u/jiIRKbq25PM+zymTyW6bhTzELvOoUd+AvYriWOAKpLGnIamaET3pnHYoI5iYphAHBI4ayx0MehR+VVPQ==",
+      "gitHead": "667539b6f7904c06edc13df4e927192f818cf354",
+      "repository": {
+        "url": "git+https://github.com/msgpack/msgpack-javascript.git",
+        "type": "git"
+      },
+      "files": [
+        {
+          "file": "notices/runtime/msgpack__msgpack-2.8.0/LICENSE",
+          "sha256": "d95a411bcdadac85d678a99367ff51719e53539fa5ee9994943cd760c4ae64e4",
+          "source": "https://registry.npmjs.org/@msgpack/msgpack/-/msgpack-2.8.0.tgz",
+          "archiveMember": "package/LICENSE",
+          "kind": "verbatim-license"
+        }
+      ]
+    },
+    {
+      "name": "@tonejs/midi",
+      "version": "2.0.28",
+      "license": "MIT",
+      "tarball": "https://registry.npmjs.org/@tonejs/midi/-/midi-2.0.28.tgz",
+      "integrity": "sha512-RII6YpInPsOZ5t3Si/20QKpNqB1lZ2OCFJSOzJxz38YdY/3zqDr3uaml4JuCWkdixuPqP1/TBnXzhQ39csyoVg==",
+      "gitHead": "6f9f7057d0aa76e471a944a999a5c72004a40dd5",
+      "repository": {
+        "url": "git+https://github.com/Tonejs/Midi.git",
+        "type": "git"
+      },
+      "files": [
+        {
+          "file": "notices/runtime/tonejs__midi-2.0.28/LICENSE.md",
+          "sha256": "6debbf1ddd278dcf5d8e7b6c42c7a827cb944943401fc37ee017e172bbccbaea",
+          "source": "https://registry.npmjs.org/@tonejs/midi/-/midi-2.0.28.tgz",
+          "archiveMember": "package/LICENSE.md",
+          "kind": "verbatim-license"
+        }
+      ]
+    },
+    {
+      "name": "array-flatten",
+      "version": "3.0.0",
+      "license": "MIT",
+      "tarball": "https://registry.npmjs.org/array-flatten/-/array-flatten-3.0.0.tgz",
+      "integrity": "sha512-zPMVc3ZYlGLNk4mpK1NzP2wg0ml9t7fUgDsayR5Y5rSzxQilzR9FGu/EH2jQOcKSAeAfWeylyW8juy3OkWRvNA==",
+      "gitHead": "66299a02d2ce6a9b6998be333581a87affbb8631",
+      "repository": {
+        "url": "git://github.com/blakeembrey/array-flatten.git",
+        "type": "git"
+      },
+      "files": [
+        {
+          "file": "notices/runtime/array-flatten-3.0.0/LICENSE",
+          "sha256": "4eeb3271453a891df609e5a9f4ee79a68307f730c13417a3bfeffa604ac8cf25",
+          "source": "https://registry.npmjs.org/array-flatten/-/array-flatten-3.0.0.tgz",
+          "archiveMember": "package/LICENSE",
+          "kind": "verbatim-license"
+        }
+      ]
+    },
+    {
+      "name": "automation-events",
+      "version": "7.1.19",
+      "license": "MIT",
+      "tarball": "https://registry.npmjs.org/automation-events/-/automation-events-7.1.19.tgz",
+      "integrity": "sha512-cD+TLhJTI0q4AI3ktd353lrGZiVa9AchowSDzQzzGjSoYe22js4vlS32VUtWuaulghi1Yq0KYNWKk9wWuGymPA==",
+      "gitHead": "2667cbba801d6d4a740f53db7035be75cdd9589e",
+      "repository": {
+        "url": "git+https://github.com/chrisguttandin/automation-events.git",
+        "type": "git"
+      },
+      "files": [
+        {
+          "file": "notices/runtime/automation-events-7.1.19/LICENSE",
+          "sha256": "04238a17c611b988a3ef5934e6c247acd4a344c837f60b223f3d9ffb57aa4dde",
+          "source": "https://registry.npmjs.org/automation-events/-/automation-events-7.1.19.tgz",
+          "archiveMember": "package/LICENSE",
+          "kind": "verbatim-license"
+        }
+      ]
+    },
+    {
+      "name": "eventemitter3",
+      "version": "4.0.7",
+      "license": "MIT",
+      "tarball": "https://registry.npmjs.org/eventemitter3/-/eventemitter3-4.0.7.tgz",
+      "integrity": "sha512-8guHBZCwKnFhYdHr2ysuRWErTwhoN2X8XELRlrRwpmfeY2jjuUN4taQMsULKUVo1K4DvZl+0pgfyoysHxvmvEw==",
+      "gitHead": "00ac01a329b7f2fb29058b6a3aff6850ac304f12",
+      "repository": {
+        "url": "git://github.com/primus/eventemitter3.git",
+        "type": "git"
+      },
+      "files": [
+        {
+          "file": "notices/runtime/eventemitter3-4.0.7/LICENSE",
+          "sha256": "3aecc12b1cb28832b5f65ab64291de96568c3f236a74d646281b4491f7bcadbf",
+          "source": "https://registry.npmjs.org/eventemitter3/-/eventemitter3-4.0.7.tgz",
+          "archiveMember": "package/LICENSE",
+          "kind": "verbatim-license"
+        }
+      ]
+    },
+    {
+      "name": "js-tokens",
+      "version": "4.0.0",
+      "license": "MIT",
+      "tarball": "https://registry.npmjs.org/js-tokens/-/js-tokens-4.0.0.tgz",
+      "integrity": "sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==",
+      "gitHead": "0eb6e9daee32160ab0fca979b6dc91a1991b720c",
+      "repository": {
+        "url": "git+https://github.com/lydell/js-tokens.git",
+        "type": "git"
+      },
+      "files": [
+        {
+          "file": "notices/runtime/js-tokens-4.0.0/LICENSE",
+          "sha256": "2213d91c606205c71eb051a199478cdc2adde945893404d7f1421436dd6d5cc1",
+          "source": "https://registry.npmjs.org/js-tokens/-/js-tokens-4.0.0.tgz",
+          "archiveMember": "package/LICENSE",
+          "kind": "verbatim-license"
+        }
+      ]
+    },
+    {
+      "name": "loose-envify",
+      "version": "1.4.0",
+      "license": "MIT",
+      "tarball": "https://registry.npmjs.org/loose-envify/-/loose-envify-1.4.0.tgz",
+      "integrity": "sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==",
+      "gitHead": "a8fdd02e3a435195f526053882d64537d627b3e6",
+      "repository": {
+        "url": "git://github.com/zertosh/loose-envify.git",
+        "type": "git"
+      },
+      "files": [
+        {
+          "file": "notices/runtime/loose-envify-1.4.0/LICENSE",
+          "sha256": "4eb7543b08d955a6d23fcc224601d43ff566e775be918805e26210d7f6eb4893",
+          "source": "https://registry.npmjs.org/loose-envify/-/loose-envify-1.4.0.tgz",
+          "archiveMember": "package/LICENSE",
+          "kind": "verbatim-license"
+        }
+      ]
+    },
+    {
+      "name": "midi-file",
+      "version": "1.2.4",
+      "license": "MIT",
+      "tarball": "https://registry.npmjs.org/midi-file/-/midi-file-1.2.4.tgz",
+      "integrity": "sha512-B5SnBC6i2bwJIXTY9MElIydJwAmnKx+r5eJ1jknTLetzLflEl0GWveuBB6ACrQpecSRkOB6fhTx1PwXk2BVxnA==",
+      "gitHead": "f97a02956bdf09b2b72b9f900a82393973681f02",
+      "repository": {
+        "url": "git+https://github.com/carter-thaxton/midi-file.git",
+        "type": "git"
+      },
+      "files": [
+        {
+          "file": "notices/runtime/midi-file-1.2.4/LICENSE.md",
+          "sha256": "fd9d36e800b506237769b003ca988319db06f585a9ebe27eb739a34f1be30d5f",
+          "source": "https://registry.npmjs.org/midi-file/-/midi-file-1.2.4.tgz",
+          "archiveMember": "package/LICENSE.md",
+          "kind": "verbatim-license"
+        }
+      ]
+    },
+    {
+      "name": "peerjs",
+      "version": "1.5.5",
+      "license": "MIT",
+      "tarball": "https://registry.npmjs.org/peerjs/-/peerjs-1.5.5.tgz",
+      "integrity": "sha512-viMUCPDL6CSfOu0ZqVcFqbWRXNHIbv2lPqNbrBIjbFYrflebOjItJ4hPfhjnuUCstqciHVu9vVJ7jFqqKi/EuQ==",
+      "gitHead": "2d4605470188777e15be4ea47354cf9732b5c394",
+      "repository": {
+        "url": "git+https://github.com/peers/peerjs.git",
+        "type": "git"
+      },
+      "files": [
+        {
+          "file": "notices/runtime/peerjs-1.5.5/LICENSE",
+          "sha256": "9407807dba7f47a79bfb3ac55759d63d77c9371ebd0616d5a093e97d3e810397",
+          "source": "https://registry.npmjs.org/peerjs/-/peerjs-1.5.5.tgz",
+          "archiveMember": "package/LICENSE",
+          "kind": "verbatim-license"
+        },
+        {
+          "file": "notices/runtime/peerjs-1.5.5/SOURCE_NOTICES.txt",
+          "sha256": "23d203bc89e10badda522a9b1c013fbebb3d45786936f06b629e5128226dcfb2",
+          "source": "https://registry.npmjs.org/peerjs/-/peerjs-1.5.5.tgz",
+          "kind": "verbatim-comment-excerpts"
+        }
+      ]
+    },
+    {
+      "name": "peerjs-js-binarypack",
+      "version": "2.1.0",
+      "license": "MIT",
+      "tarball": "https://registry.npmjs.org/peerjs-js-binarypack/-/peerjs-js-binarypack-2.1.0.tgz",
+      "integrity": "sha512-YIwCC+pTzp3Bi8jPI9UFKO0t0SLo6xALnHkiNt/iUFmUUZG0fEEmEyFKvjsDKweiFitzHRyhuh6NvyJZ4nNxMg==",
+      "gitHead": "68d89eafbc890322033902c9b9cd930bf9541569",
+      "repository": {
+        "url": "git+https://github.com/peers/js-binarypack.git",
+        "type": "git"
+      },
+      "files": [
+        {
+          "file": "notices/runtime/peerjs-js-binarypack-2.1.0/LICENSE",
+          "sha256": "9517e6f46b30231a62407f94a8c7adf8b4d14038c01807cd769f1d4de5911ba4",
+          "source": "https://registry.npmjs.org/peerjs-js-binarypack/-/peerjs-js-binarypack-2.1.0.tgz",
+          "archiveMember": "package/LICENSE",
+          "kind": "verbatim-license"
+        }
+      ]
+    },
+    {
+      "name": "qrcode.react",
+      "version": "4.2.0",
+      "license": "ISC",
+      "tarball": "https://registry.npmjs.org/qrcode.react/-/qrcode.react-4.2.0.tgz",
+      "integrity": "sha512-QpgqWi8rD9DsS9EP3z7BT+5lY5SFhsqGjpgW5DY/i3mK4M9DTBNz3ErMi8BWYEfI3L0d8GIbGmcdFAS1uIRGjA==",
+      "gitHead": "f91d2bdcc39def6c5c77178743a44f935a740992",
+      "repository": {
+        "url": "git+https://github.com/zpao/qrcode.react.git",
+        "type": "git"
+      },
+      "files": [
+        {
+          "file": "notices/runtime/qrcode.react-4.2.0/LICENSE",
+          "sha256": "908a4454d01d77cd6a0ae1eea0bafaa74a2e3befdbc4b7b714de2499a22351ce",
+          "source": "https://registry.npmjs.org/qrcode.react/-/qrcode.react-4.2.0.tgz",
+          "archiveMember": "package/LICENSE",
+          "kind": "verbatim-license"
+        },
+        {
+          "file": "notices/runtime/qrcode.react-4.2.0/SOURCE_NOTICES.txt",
+          "sha256": "8470c1b9cabff63d06543471a48cb22101383e7e3f8c3706d1d809ee0691f9c4",
+          "source": "https://registry.npmjs.org/qrcode.react/-/qrcode.react-4.2.0.tgz",
+          "kind": "verbatim-comment-excerpts"
+        }
+      ]
+    },
+    {
+      "name": "react",
+      "version": "18.3.1",
+      "license": "MIT",
+      "tarball": "https://registry.npmjs.org/react/-/react-18.3.1.tgz",
+      "integrity": "sha512-wS+hAgJShR0KhEvPJArfuPVN1+Hz1t0Y6n5jLrGQbkb4urgPE/0Rve+1kMB1v/oWgHgm4WIcV+i7F2pTVj+2iQ==",
+      "gitHead": "a87edf62d7d69705ddbcec9a24f0780b3db7535f",
+      "repository": {
+        "url": "git+https://github.com/facebook/react.git",
+        "type": "git",
+        "directory": "packages/react"
+      },
+      "files": [
+        {
+          "file": "notices/runtime/react-18.3.1/LICENSE",
+          "sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85",
+          "source": "https://registry.npmjs.org/react/-/react-18.3.1.tgz",
+          "archiveMember": "package/LICENSE",
+          "kind": "verbatim-license"
+        },
+        {
+          "file": "notices/runtime/react-18.3.1/SOURCE_NOTICES.txt",
+          "sha256": "dfb26ba915ef735da840ab2fd3d3264e309bbb0ec62516db50f32d6b61bbaf23",
+          "source": "https://registry.npmjs.org/react/-/react-18.3.1.tgz",
+          "kind": "verbatim-comment-excerpts"
+        }
+      ]
+    },
+    {
+      "name": "react-dom",
+      "version": "18.3.1",
+      "license": "MIT",
+      "tarball": "https://registry.npmjs.org/react-dom/-/react-dom-18.3.1.tgz",
+      "integrity": "sha512-5m4nQKp+rZRb09LNH59GM4BxTh9251/ylbKIbpe7TpGxfJ+9kv6BLkLBXIjjspbgbnIBNqlI23tRnTWT0snUIw==",
+      "gitHead": "a87edf62d7d69705ddbcec9a24f0780b3db7535f",
+      "repository": {
+        "url": "git+https://github.com/facebook/react.git",
+        "type": "git",
+        "directory": "packages/react-dom"
+      },
+      "files": [
+        {
+          "file": "notices/runtime/react-dom-18.3.1/LICENSE",
+          "sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85",
+          "source": "https://registry.npmjs.org/react-dom/-/react-dom-18.3.1.tgz",
+          "archiveMember": "package/LICENSE",
+          "kind": "verbatim-license"
+        },
+        {
+          "file": "notices/runtime/react-dom-18.3.1/SOURCE_NOTICES.txt",
+          "sha256": "fa0a2f8c87231a7db4244e6420a7784d144bd5b2f1a223071af68fef429cb243",
+          "source": "https://registry.npmjs.org/react-dom/-/react-dom-18.3.1.tgz",
+          "kind": "verbatim-comment-excerpts"
+        }
+      ]
+    },
+    {
+      "name": "scheduler",
+      "version": "0.23.2",
+      "license": "MIT",
+      "tarball": "https://registry.npmjs.org/scheduler/-/scheduler-0.23.2.tgz",
+      "integrity": "sha512-UOShsPwz7NrMUqhR6t0hWjFduvOzbtv7toDH1/hIrfRNIDBnnBWd0CwJTGvTpngVlmwGCdP9/Zl/tVrDqcuYzQ==",
+      "gitHead": "a87edf62d7d69705ddbcec9a24f0780b3db7535f",
+      "repository": {
+        "url": "git+https://github.com/facebook/react.git",
+        "type": "git",
+        "directory": "packages/scheduler"
+      },
+      "files": [
+        {
+          "file": "notices/runtime/scheduler-0.23.2/LICENSE",
+          "sha256": "52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85",
+          "source": "https://registry.npmjs.org/scheduler/-/scheduler-0.23.2.tgz",
+          "archiveMember": "package/LICENSE",
+          "kind": "verbatim-license"
+        },
+        {
+          "file": "notices/runtime/scheduler-0.23.2/SOURCE_NOTICES.txt",
+          "sha256": "a1134fc5b7d54f0516ecf9781eb289a86d1313b04f2f1d69e9543093025d277f",
+          "source": "https://registry.npmjs.org/scheduler/-/scheduler-0.23.2.tgz",
+          "kind": "verbatim-comment-excerpts"
+        }
+      ]
+    },
+    {
+      "name": "sdp",
+      "version": "3.2.3",
+      "license": "MIT",
+      "tarball": "https://registry.npmjs.org/sdp/-/sdp-3.2.3.tgz",
+      "integrity": "sha512-UYuY3JFaVa7Zc+rxxi8iblwD7mdloGxCzMEQIJPcCLiHKjjqMqLsruMkI+emgnYARkfHk4o7seEETABc4bwokg==",
+      "gitHead": "e8811ec0ae4a8e337f78ab9dd77b49a8e55531f7",
+      "repository": {
+        "url": "git+https://github.com/fippo/sdp.git",
+        "type": "git"
+      },
+      "files": [
+        {
+          "file": "notices/runtime/sdp-3.2.3/LICENSE",
+          "sha256": "798e82590af6a84bfbde3d6bb0fb9162c519edf16122404fea00acefdc55cbd9",
+          "source": "https://registry.npmjs.org/sdp/-/sdp-3.2.3.tgz",
+          "archiveMember": "package/LICENSE",
+          "kind": "verbatim-license"
+        }
+      ]
+    },
+    {
+      "name": "standardized-audio-context",
+      "version": "25.3.77",
+      "license": "MIT",
+      "tarball": "https://registry.npmjs.org/standardized-audio-context/-/standardized-audio-context-25.3.77.tgz",
+      "integrity": "sha512-Ki9zNz6pKcC5Pi+QPjPyVsD9GwJIJWgryji0XL9cAJXMGyn+dPOf6Qik1AHei0+UNVcc4BOCa0hWLBzlwqsW/A==",
+      "gitHead": "d7afa16ede1a50288e3b91fce6e6c3cba5da1bd1",
+      "repository": {
+        "url": "git+https://github.com/chrisguttandin/standardized-audio-context.git",
+        "type": "git"
+      },
+      "files": [
+        {
+          "file": "notices/runtime/standardized-audio-context-25.3.77/LICENSE",
+          "sha256": "8d1fa516b18bd6ed3fb06ad3f8d95c41d465f3762ccb66d433b12ee08750a382",
+          "source": "https://registry.npmjs.org/standardized-audio-context/-/standardized-audio-context-25.3.77.tgz",
+          "archiveMember": "package/LICENSE",
+          "kind": "verbatim-license"
+        }
+      ]
+    },
+    {
+      "name": "tone",
+      "version": "15.1.22",
+      "license": "MIT",
+      "tarball": "https://registry.npmjs.org/tone/-/tone-15.1.22.tgz",
+      "integrity": "sha512-TCScAGD4sLsama5DjvTUXlLDXSqPealhL64nsdV1hhr6frPWve0DeSo63AKnSJwgfg55fhvxj0iPPRwPN5o0ag==",
+      "gitHead": "d2d52ffa8803b35debd9f19f2da08ad1c3540de0",
+      "repository": {
+        "url": "git+https://github.com/Tonejs/Tone.js.git",
+        "type": "git"
+      },
+      "files": [
+        {
+          "file": "notices/runtime/tone-15.1.22/LICENSE.md",
+          "sha256": "391ed5af60b7b5d1f74b31040c5fa645e6e238f3d9b4c971941a262a675bbdcd",
+          "source": "https://registry.npmjs.org/tone/-/tone-15.1.22.tgz",
+          "archiveMember": "package/LICENSE.md",
+          "kind": "verbatim-license"
+        },
+        {
+          "file": "notices/runtime/tone-15.1.22/build__Tone.js.LICENSE.txt",
+          "sha256": "1134a6b5614278c592b6ba0168868b7080660d76ce883600e7746fa0afe5338e",
+          "source": "https://registry.npmjs.org/tone/-/tone-15.1.22.tgz",
+          "archiveMember": "package/build/Tone.js.LICENSE.txt",
+          "kind": "verbatim-license"
+        },
+        {
+          "file": "notices/runtime/tone-15.1.22/SOURCE_NOTICES.txt",
+          "sha256": "ebd932b980a0a937604829f3fb936298da2612ec74d5ff9ada73c893037dd208",
+          "source": "https://registry.npmjs.org/tone/-/tone-15.1.22.tgz",
+          "kind": "verbatim-comment-excerpts"
+        }
+      ]
+    },
+    {
+      "name": "tslib",
+      "version": "2.9.1",
+      "license": "0BSD",
+      "tarball": "https://registry.npmjs.org/tslib/-/tslib-2.9.1.tgz",
+      "integrity": "sha512-a4Ux9VKuIMHsOS7ENbEq6hK2ZGYIT27Rtl0E4eD9KqwxhKiQeMZE/9xb3IdYwWaSOyIBQLExhQgXDTYoiCxnWA==",
+      "gitHead": null,
+      "repository": {
+        "url": "git+https://github.com/Microsoft/tslib.git",
+        "type": "git"
+      },
+      "files": [
+        {
+          "file": "notices/runtime/tslib-2.9.1/CopyrightNotice.txt",
+          "sha256": "da16ddb65f8ca390998fb99223d0112498b56b45784d00afd77ff8ce1ac4de8b",
+          "source": "https://registry.npmjs.org/tslib/-/tslib-2.9.1.tgz",
+          "archiveMember": "package/CopyrightNotice.txt",
+          "kind": "verbatim-license"
+        },
+        {
+          "file": "notices/runtime/tslib-2.9.1/LICENSE.txt",
+          "sha256": "210b19e543130388c68654b7497e967119ce17145f66ab7d85688fbd70f08751",
+          "source": "https://registry.npmjs.org/tslib/-/tslib-2.9.1.tgz",
+          "archiveMember": "package/LICENSE.txt",
+          "kind": "verbatim-license"
+        },
+        {
+          "file": "notices/runtime/tslib-2.9.1/SOURCE_NOTICES.txt",
+          "sha256": "6043d159330bba0f427c547f9a34c8b574e9fd87fc0046d9ee4f758d9a2d95a5",
+          "source": "https://registry.npmjs.org/tslib/-/tslib-2.9.1.tgz",
+          "kind": "verbatim-comment-excerpts"
+        }
+      ]
+    },
+    {
+      "name": "vexflow",
+      "version": "4.2.5",
+      "license": "MIT",
+      "tarball": "https://registry.npmjs.org/vexflow/-/vexflow-4.2.5.tgz",
+      "integrity": "sha512-+P+V2VWFyKcpW4Pwbs0p7nwICRQCzLWvkiPi4RpFlMXh/MRsiN1r7X6yvl1WauoJ4J6pVsnCzTAhC4m1ASlTng==",
+      "gitHead": "67d49027443341578f2979fef3fd305d2a9ddf7a",
+      "repository": {
+        "url": "git+https://github.com/0xfe/vexflow.git",
+        "type": "git"
+      },
+      "files": [
+        {
+          "file": "notices/runtime/vexflow-4.2.5/LICENSE",
+          "sha256": "f5b8d8a302220da84066034456fef99821840affcc1fa2d3df94c3c0e81831e5",
+          "source": "https://registry.npmjs.org/vexflow/-/vexflow-4.2.5.tgz",
+          "archiveMember": "package/LICENSE",
+          "kind": "verbatim-license"
+        },
+        {
+          "file": "notices/runtime/vexflow-4.2.5/SOURCE_NOTICES.txt",
+          "sha256": "c1e4e9f81f361ea8c56cdd8c5df50753846043b91dae88defe670534455a38ba",
+          "source": "https://registry.npmjs.org/vexflow/-/vexflow-4.2.5.tgz",
+          "kind": "verbatim-comment-excerpts"
+        }
+      ]
+    },
+    {
+      "name": "webrtc-adapter",
+      "version": "9.0.6",
+      "license": "BSD-3-Clause",
+      "tarball": "https://registry.npmjs.org/webrtc-adapter/-/webrtc-adapter-9.0.6.tgz",
+      "integrity": "sha512-CHbl2ZQbxx164IgWRgzJno4hWtM4tFbRam1QfI3Yxhs3w/DvqluVxVWeXs3oL5/fbGkSNLKo0Ty5MgUWceNhog==",
+      "gitHead": "c2d3c50815c2c61ed7db9885ce34ecae4cae631a",
+      "repository": {
+        "url": "git+https://github.com/webrtchacks/adapter.git",
+        "type": "git"
+      },
+      "files": [
+        {
+          "file": "notices/runtime/webrtc-adapter-9.0.6/LICENSE.md",
+          "sha256": "00a46c6cfc219593b97586398b477e188391556e70487225d3ff9d60ccda6dce",
+          "source": "https://registry.npmjs.org/webrtc-adapter/-/webrtc-adapter-9.0.6.tgz",
+          "archiveMember": "package/LICENSE.md",
+          "kind": "verbatim-license"
+        },
+        {
+          "file": "notices/runtime/webrtc-adapter-9.0.6/SOURCE_NOTICES.txt",
+          "sha256": "c009ff9f8094b57ec92280bdac2a362a0c96974730e8367cad2173a4451b2f00",
+          "source": "https://registry.npmjs.org/webrtc-adapter/-/webrtc-adapter-9.0.6.tgz",
+          "kind": "verbatim-comment-excerpts"
+        }
+      ]
+    }
+  ],
+  "buildHelpers": [
+    {
+      "name": "vite",
+      "version": "5.4.21",
+      "license": "MIT",
+      "tarball": "https://registry.npmjs.org/vite/-/vite-5.4.21.tgz",
+      "integrity": "sha512-o5a9xKjbtuhY6Bi5S3+HvbRERmouabWbyUcpXXUA1u+GNUKoROi9byOJ8M0nHbHYHkYICiMlqxkg1KkYmm25Sw==",
+      "files": [
+        {
+          "file": "notices/build/vite-5.4.21/LICENSE.md",
+          "sha256": "04d9940b3b8b372bff74437c3b153eda8a89642669c4209a4f67135eb3132bc9",
+          "source": "https://registry.npmjs.org/vite/-/vite-5.4.21.tgz",
+          "archiveMember": "package/LICENSE.md",
+          "kind": "verbatim-license"
+        }
+      ]
+    }
+  ],
+  "embeddedAttributions": [
+    {
+      "name": "QR Code Generator / Project Nayuki",
+      "via": "qrcode.react 4.2.0",
+      "license": "MIT",
+      "file": "notices/embedded/qrcodegen-MIT.txt",
+      "sha256": "ba5a977288ff7463c51ea0cc5bf5a34372707985655c1ccc054f2a0caa3d9bff",
+      "source": "https://raw.githubusercontent.com/zpao/qrcode.react/f91d2bdcc39def6c5c77178743a44f935a740992/src/third-party/qrcodegen/LICENSE",
+      "kind": "verbatim-license"
+    },
+    {
+      "name": "Babel regenerator helpers",
+      "via": "@babel/runtime 7.29.10",
+      "license": "MIT",
+      "file": "notices/embedded/babel-regenerator-MIT.txt",
+      "sha256": "4be9d87b56a306293223b490c0d0b245e9e94f39884147bf051a6c7b825aeb30",
+      "source": "https://raw.githubusercontent.com/babel/babel/7fb1b975177c66cc801082db380f701e1bca0eeb/packages/babel-helpers/LICENSE",
+      "kind": "verbatim-license"
+    },
+    {
+      "name": "ReverbGen / Alan deLespinasse (Tone upstream inspiration attribution)",
+      "via": "tone 15.1.22",
+      "license": "Apache-2.0",
+      "file": "notices/embedded/reverbgen-Apache-2.0.txt",
+      "sha256": "b40930bbcf80744c86c46a12bc9da056641d722716c378f5659b9e555ef833e1",
+      "source": "https://raw.githubusercontent.com/adelespinasse/reverbGen/3a8390228910c15839ee580524fed3adcb38e9a4/LICENSE.txt",
+      "kind": "verbatim-license"
+    }
+  ],
+  "musicFonts": [
+    {
+      "name": "Bravura outlines",
+      "via": "vexflow 4.2.5",
+      "sourceRevision": "67d49027443341578f2979fef3fd305d2a9ddf7a",
+      "license": "OFL-1.1",
+      "file": "notices/fonts/vexflow-4.2.5/Bravura-LICENSE.txt",
+      "sha256": "eaf7e8faffbe4e404fc19e625c89cef03992dc736051ae7e2fefe205cd6c93db",
+      "source": "https://raw.githubusercontent.com/0xfe/vexflow/67d49027443341578f2979fef3fd305d2a9ddf7a/tools/fonts/@/bravura/LICENSE.txt",
+      "kind": "verbatim-license"
+    },
+    {
+      "name": "Gonville original font/source provenance",
+      "via": "vexflow 4.2.5",
+      "sourceRevision": "67d49027443341578f2979fef3fd305d2a9ddf7a",
+      "license": "Unrestricted font output; MIT source",
+      "file": "notices/fonts/vexflow-4.2.5/Gonville-original-LICENSE.txt",
+      "sha256": "b151e7a321e4b4095abca498165155823b9e3bcbfa7f33fe2486c37694ed9800",
+      "source": "https://raw.githubusercontent.com/0xfe/vexflow/67d49027443341578f2979fef3fd305d2a9ddf7a/tools/fonts/@/gonville/LICENSE.txt",
+      "kind": "verbatim-license"
+    },
+    {
+      "name": "GonvilleSmufl outlines (VexFlow Gonville font)",
+      "via": "vexflow 4.2.5",
+      "sourceRevision": "67d49027443341578f2979fef3fd305d2a9ddf7a",
+      "license": "OFL-1.1",
+      "file": "notices/fonts/vexflow-4.2.5/GonvilleSmufl-LICENSE.txt",
+      "sha256": "d912ea6ab445d6310e3b00c6d4cf9c13580e5feae9221cb27b7f2938ef3f5aeb",
+      "source": "https://raw.githubusercontent.com/0xfe/vexflow/67d49027443341578f2979fef3fd305d2a9ddf7a/tools/fonts/@/gonvillesmufl/LICENSE.txt",
+      "kind": "verbatim-license"
+    },
+    {
+      "name": "Leland outlines",
+      "via": "vexflow 4.2.5",
+      "sourceRevision": "67d49027443341578f2979fef3fd305d2a9ddf7a",
+      "license": "OFL-1.1",
+      "file": "notices/fonts/vexflow-4.2.5/Leland-LICENSE.txt",
+      "sha256": "e77bc3c994c027465162e21d76fcc3b74d87833212f6082eb261b0f838260643",
+      "source": "https://raw.githubusercontent.com/0xfe/vexflow/67d49027443341578f2979fef3fd305d2a9ddf7a/tools/fonts/@/leland/LICENSE.txt",
+      "kind": "verbatim-license"
+    },
+    {
+      "name": "Petaluma outlines and PetalumaScript text metrics",
+      "via": "vexflow 4.2.5",
+      "sourceRevision": "67d49027443341578f2979fef3fd305d2a9ddf7a",
+      "license": "OFL-1.1",
+      "file": "notices/fonts/vexflow-4.2.5/Petaluma-LICENSE.txt",
+      "sha256": "5789e74d38031e93a4fbdb0a72392d1fd58cf15c29da3efa695c5099433ad0ce",
+      "source": "https://raw.githubusercontent.com/0xfe/vexflow/67d49027443341578f2979fef3fd305d2a9ddf7a/tools/fonts/@/petaluma/LICENSE.txt",
+      "kind": "verbatim-license"
+    },
+    {
+      "name": "Roboto Slab text metrics",
+      "via": "vexflow 4.2.5",
+      "sourceRevision": "67d49027443341578f2979fef3fd305d2a9ddf7a",
+      "license": "Apache-2.0",
+      "file": "notices/fonts/vexflow-4.2.5/RobotoSlab-LICENSE.txt",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "source": "https://raw.githubusercontent.com/0xfe/vexflow/67d49027443341578f2979fef3fd305d2a9ddf7a/tools/fonts/@/robotoslab/LICENSE.txt",
+      "kind": "verbatim-license"
+    }
+  ],
+  "remoteFonts": [
+    {
+      "name": "Sora",
+      "license": "OFL-1.1",
+      "sourceRevision": "75706cfdd7c49a2be20f66c1e24c26f4f39a33b8",
+      "file": "notices/fonts/google/sora-OFL.txt",
+      "sha256": "ba0b9729c9428ba79a0459ab8ec575791b51509dbec213e383d0316d37fec299",
+      "source": "https://raw.githubusercontent.com/google/fonts/75706cfdd7c49a2be20f66c1e24c26f4f39a33b8/ofl/sora/OFL.txt",
+      "kind": "verbatim-license"
+    },
+    {
+      "name": "Space Mono",
+      "license": "OFL-1.1",
+      "sourceRevision": "75706cfdd7c49a2be20f66c1e24c26f4f39a33b8",
+      "file": "notices/fonts/google/spacemono-OFL.txt",
+      "sha256": "8e4ee42b2553e1e01504e61cb0d46d148cd8c9e5eacaa3622a7df2d4f2955b9f",
+      "source": "https://raw.githubusercontent.com/google/fonts/75706cfdd7c49a2be20f66c1e24c26f4f39a33b8/ofl/spacemono/OFL.txt",
+      "kind": "verbatim-license"
+    },
+    {
+      "name": "Fraunces",
+      "license": "OFL-1.1",
+      "sourceRevision": "75706cfdd7c49a2be20f66c1e24c26f4f39a33b8",
+      "file": "notices/fonts/google/fraunces-OFL.txt",
+      "sha256": "bdf4c22802eaf804f998195871c6b8938aac2ac14b2d78a8bd66a6f1eced833b",
+      "source": "https://raw.githubusercontent.com/google/fonts/75706cfdd7c49a2be20f66c1e24c26f4f39a33b8/ofl/fraunces/OFL.txt",
+      "kind": "verbatim-license"
+    },
+    {
+      "name": "Inter",
+      "license": "OFL-1.1",
+      "sourceRevision": "75706cfdd7c49a2be20f66c1e24c26f4f39a33b8",
+      "file": "notices/fonts/google/inter-OFL.txt",
+      "sha256": "5b9321a4298cfeb6b34354164a1c3afc3db114569984c502b9b35d988fd58c57",
+      "source": "https://raw.githubusercontent.com/google/fonts/75706cfdd7c49a2be20f66c1e24c26f4f39a33b8/ofl/inter/OFL.txt",
+      "kind": "verbatim-license"
+    },
+    {
+      "name": "JetBrains Mono",
+      "license": "OFL-1.1",
+      "sourceRevision": "75706cfdd7c49a2be20f66c1e24c26f4f39a33b8",
+      "file": "notices/fonts/google/jetbrainsmono-OFL.txt",
+      "sha256": "b2fe5e8987594e9ffd1d2ca52a2f5d73eb8335243893c5d6254b5ad69269591d",
+      "source": "https://raw.githubusercontent.com/google/fonts/75706cfdd7c49a2be20f66c1e24c26f4f39a33b8/ofl/jetbrainsmono/OFL.txt",
+      "kind": "verbatim-license"
+    }
+  ],
+  "supplementalLicenses": [
+    {
+      "name": "Complete SIL Open Font License 1.1",
+      "license": "OFL-1.1",
+      "file": "notices/fonts/OFL-1.1.txt",
+      "sha256": "297f6f51e5c5fce6d9c737279e080efb42ab2e6bb60b5bff310e7313c5f74319",
+      "source": "https://raw.githubusercontent.com/0xfe/vexflow/67d49027443341578f2979fef3fd305d2a9ddf7a/tools/fonts/@/bravura/LICENSE.txt",
+      "sourceSection": "Complete SIL OPEN FONT LICENSE Version 1.1 body, from title through disclaimer",
+      "kind": "verbatim-license-section"
+    }
+  ]
+}

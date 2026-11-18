@@ -1,0 +1,9 @@
+Embedded copyright/license comments retained from the exact locked npm archive.
+
+Source archive member: package/build/cjs/vexflow-bravura.js
+
+/*!
+ * VexFlow 4.2.5   2024-05-12T08:56:23.690Z   5b5b43b18254cc5cf607a0977823900a375b48ed
+ * Copyright (c) 2010 Mohit Muthanna Cheppudira <mohit@muthanna.com>
+ * https://www.vexflow.com   https://github.com/0xfe/vexflow
+ */

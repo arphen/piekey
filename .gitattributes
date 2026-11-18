@@ -1,0 +1,3 @@
+# Preserve upstream legal texts exactly as recorded in notices/inventory.json.
+notices/** -text -whitespace
+LICENSE -text
