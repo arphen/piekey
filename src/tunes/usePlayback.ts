@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Tone from "tone";
 import { ensureAudio } from "../audio/context";
 import { pluckBuffer } from "../audio/pluck";
-import { bassBuffer, clickBuffer, keysBuffer, OneShots } from "../audio/samples";
+import { bassBuffer, clickBuffer, hatBuffer, keysBuffer, OneShots } from "../audio/samples";
 import type { NoteResult } from "../core/contract";
 import { midiOf } from "../listen/pitch";
 import { detectNotes, strongPitchClasses } from "../listen/spectrum";
@@ -34,6 +34,7 @@ export interface PlaybackMix {
   bass?: boolean; // the timeline's bass line, when it has one (default on)
   guide?: boolean; // the timeline's unscored guide melody (default on)
   fill?: boolean; // a quiet click on the beats where no chord sounds, so the time is never lost
+  pulse?: boolean; // a soft hat on every beat the click is not on, gaps included: the beat is never guessed
   shadow?: Support | null; // with `melody` off: the melody under the player, as loud as they need it
   gap?: { on: number; off: number } | null; // beats with the band, then beats without it (still scored): the player keeps the time
 }
@@ -284,11 +285,16 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
           const division = m.clickSubdivision ?? 1;
           for (const c of clicks) for (let part = 0; part < division; part++) {
             const when = c.t + part / division;
-            if (inRange(when, lo, hi) && !quiet(when)) shots.play(clickBuffer(part === 0 && c.accent), out, at(when), part ? 0.18 : c.accent ? 0.5 : 0.35);
+            if (!inRange(when, lo, hi)) continue;
+            if (!quiet(when)) shots.play(clickBuffer(part === 0 && c.accent), out, at(when), part ? 0.18 : c.accent ? 0.5 : 0.35);
+            else if (m.pulse && part === 0) shots.play(hatBuffer(), out, at(when), c.accent ? 0.45 : 0.28);
           }
-        } else if (m.fill)
+        } else if (m.pulse) {
+          for (const c of clicks) if (inRange(c.t, lo, hi)) shots.play(hatBuffer(), out, at(c.t), c.accent ? 0.45 : 0.28);
+        } else if (m.fill) {
           for (const c of clicks)
             if (inRange(c.t, lo, hi) && !quiet(c.t) && ![...t.comp, ...(t.bass ?? [])].some((x) => x.t <= c.t + 1e-9 && c.t < x.t + x.dur - 1e-9)) shots.play(clickBuffer(c.accent), out, at(c.t), c.accent ? 0.4 : 0.26);
+        }
         if (m.bass !== false) for (const v of t.bass ?? []) if (inRange(v.t, lo, hi) && !quiet(v.t)) shots.play(bassBuffer(v.midi), out, at(v.t), 0.75, v.dur * spb * 0.9, 0.08);
         if (m.guide !== false) for (const g of t.guide ?? []) if (inRange(g.t, lo, hi) && !quiet(g.t)) shots.play(pluckBuffer(g.midi), out, at(g.t), 0.7, g.dur * spb * 0.95 + 0.04, 0.08);
       };

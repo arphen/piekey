@@ -242,7 +242,7 @@ describe("offline shell visibility", () => {
     await pwa.checkForOfflineUpdate();
     expect(registration.update).toHaveBeenCalledOnce();
     expect(pwa.getOfflineSnapshot().state).toBe("update-ready");
-    expect(pwa.getOfflineSnapshot().message).toContain("Close every app window");
+    expect(pwa.getOfflineSnapshot().message).toContain("Close all windows");
   });
 
   it("makes registration failures visible and lets an idle user retry installation", async () => {

@@ -16,20 +16,20 @@ export function subscribeOffline(listener: () => void): () => void { listeners.a
 
 function readRegistration(): void {
   if (!registration) return;
-  if (registration.waiting && registration.active) set("update-ready", "Update downloaded. Close every app window, then reopen to use it.");
-  else if (registration.active?.state === "activated") set("ready", "App shell available offline on this browser.");
-  else set("preparing", "Preparing offline shell… Keep this window open until it is ready.");
+  if (registration.waiting && registration.active) set("update-ready", "A new version is ready. Close all windows of this app and reopen it.");
+  else if (registration.active?.state === "activated") set("ready", "Works offline in this browser.");
+  else set("preparing", "Saving the app for offline use. Keep this window open.");
 }
 function watchWorker(worker: ServiceWorker | null): void {
   if (!worker) return;
   worker.addEventListener("statechange", () => {
-    if (worker.state === "redundant" && !registration?.active) set("error", "Offline shell installation failed. Keep an online connection and retry.");
+    if (worker.state === "redundant" && !registration?.active) set("error", "Could not save the app for offline use. Stay online and retry.");
     else readRegistration();
   });
 }
 
 async function installShell(): Promise<void> {
-  set("preparing", "Preparing offline shell…");
+  set("preparing", "Saving the app for offline use…");
   try {
     const value = await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, { scope: import.meta.env.BASE_URL, updateViaCache: "none" });
     registration = value;
@@ -38,7 +38,7 @@ async function installShell(): Promise<void> {
     navigator.serviceWorker.addEventListener("controllerchange", readRegistration);
     readRegistration();
   } catch {
-    set("error", "Offline shell could not be installed. The app can still be used online; retry when connected.");
+    set("error", "Could not save the app for offline use. It still works online.");
   }
 }
 
@@ -48,7 +48,7 @@ export function registerOfflineShell(): void {
   started = true;
   if (!import.meta.env.PROD) return;
   if (!window.isSecureContext || !("serviceWorker" in navigator)) {
-    set("unavailable", "Offline shell unavailable here. Use a supported browser over HTTPS.");
+    set("unavailable", "Offline use is not available in this browser.");
     return;
   }
   const register = () => { void installShell(); };

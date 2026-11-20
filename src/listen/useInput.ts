@@ -62,6 +62,16 @@ async function audioInputs(): Promise<{ id: string; label: string }[]> {
     .map((d, i) => ({ id: d.deviceId, label: d.label || `Input ${i + 1}` }));
 }
 
+/** What the browser's microphone failures mean for the player, and what to do about them. */
+function inputErrorText(e: unknown): string {
+  const name = e instanceof DOMException || e instanceof Error ? e.name : "";
+  if (name === "NotAllowedError" || name === "SecurityError")
+    return `The browser has blocked the microphone for ${location.host}. Click the lock icon in the address bar, allow the microphone, then reload.`;
+  if (name === "NotFoundError" || name === "OverconstrainedError") return "No audio input found. Check the cable or the system sound settings.";
+  if (name === "NotReadableError") return "Another app is using the audio input. Close it and try again.";
+  return e instanceof Error && e.message ? e.message : "Could not open the audio input.";
+}
+
 function openStream(deviceId: string | null) {
   return navigator.mediaDevices.getUserMedia({
     audio: {
@@ -260,7 +270,7 @@ export function useInput(opts: { fftSize: number; intervalMs: number }): InputAp
         teardown();
         statusRef.current = "error";
         setStatus("error");
-        setError(e instanceof Error ? e.message : "Could not open the audio input.");
+        setError(inputErrorText(e));
       }
     },
     [teardown, opts.fftSize, opts.intervalMs],
