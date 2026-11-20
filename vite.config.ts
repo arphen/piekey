@@ -6,6 +6,12 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
+/** Static hosts that serve the app from a subdirectory (GitHub Pages project sites) set BASE_PATH. */
+const base = (() => {
+  const path = process.env.BASE_PATH?.trim();
+  if (!path || path === "/") return "/";
+  return `/${path.replace(/^\/+|\/+$/g, "")}/`;
+})();
 const sourceUrl = (() => {
   try {
     const revision = execFileSync("git", ["rev-parse", "HEAD"], { cwd: projectRoot, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
@@ -99,6 +105,7 @@ self.addEventListener("fetch", event => {
 }
 
 export default defineConfig({
+  base,
   plugins: [react(), releaseNotices(), offlineShell()],
   define: { "import.meta.env.VITE_SOURCE_URL": JSON.stringify(sourceUrl) },
 });

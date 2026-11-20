@@ -105,12 +105,34 @@ Custom signaling and STUN/TURN are configured at build time with `VITE_SYNC_SIGN
 `VITE_SYNC_SIGNALING_KEY`, and `VITE_WEBRTC_ICE_SERVERS` (a JSON array of standard `RTCIceServer`
 objects with `urls` and optional `username`/`credential`). These are public build settings.
 
+## Deploy to GitHub Pages
+
+The repository includes `.github/workflows/pages.yml`. On every push to `main` it runs
+`make check`, builds with the repository's Pages base path, and deploys `dist/` through GitHub
+Actions. The project site is served at `https://<owner>.github.io/piekey/` unless a custom domain
+is configured; a custom domain gets the root base path automatically.
+
+One-time setup in the GitHub repository:
+
+1. Open **Settings → Pages** and set **Build and deployment → Source** to **GitHub Actions**.
+2. Push to `main`, or run **Deploy to GitHub Pages** from the Actions tab.
+
+GitHub Pages serves the site over HTTPS, so microphone, install and offline-shell flows have the
+origin they require. Local practice data is scoped to the origin: a deployment on a new hostname
+starts with an empty library. Export a `.fretpack` from the old origin and import it there to
+carry existing practice across.
+
+For other static hosts, serve `dist/` at the site root. If the app lives in a subdirectory, build
+with `BASE_PATH=/subdirectory/`; `vite.config.ts` passes it to Vite, and the generated manifest,
+license links, service worker and asset URLs follow that base path.
+
 ## Phone and offline use
 
-This source repository does not provision hosting. A laptop's `localhost` URL cannot open the app
-on a phone. The phone needs the production build served from a reachable, trusted HTTPS address
-for its microphone and install/offline features. The Devices panel can remember that app address;
-entering an address does not deploy the app.
+The GitHub Pages workflow above can provide a trusted HTTPS production origin. A laptop's
+`localhost` URL still cannot open the app on a phone, and entering an address in Devices does not
+deploy anything. The phone needs the production build served from a reachable, trusted HTTPS
+address for its microphone and install/offline features. The Devices panel can remember that app
+address.
 
 Run `npm run build:quiet`, then serve the generated `dist/` contents at the root of a static HTTPS
 site. Open that address on the phone, then use the browser's install/Add to Home Screen action.

@@ -20,7 +20,7 @@ broken. Update it when a feature's status changes; wishes belong in [BACKLOG.md]
 | `npm run build:quiet` | **PASS** | Production build passed; Vite retains its existing >500 kB chunk-size warning. |
 | Focused iteration checks | **PASS** | Typecheck plus storage, goal/planner, session trust, recording, platform, scheduler, archive and mounted score-browsing suites passed while integrating. Full gate below supersedes individual iteration counts. |
 | Current browser preview | **PASS, bounded** | Prior review covered 320×844, 390×844 and 1440×1000. This continuation reviewed the guitar room/instruments at 1280×720 and 390×844: GPU water initialized, meter/count-in/pulse/subdivision/stop and tuner switching worked; manual tune choice moved Free play into the selected tune without showing the shell, and Ready opened embedded instruments. A fresh final load reported no console warnings/errors. Earlier intermediate HMR errors were resolved before this check. Viewport emulation is not a physical phone or instrument test. |
-| Offline shell / physical sync | **Code-verified; runtime-unverified** | Worker generation includes local fonts/lazy assets. Actual phone HTTPS, install/offline/update, cross-network/TURN and active-window handoff remain unverified. |
+| Offline shell / physical sync | **Code-verified; runtime-unverified** | Worker generation includes local fonts/lazy assets. A GitHub Pages workflow is configured but not run here. Actual phone HTTPS, install/offline/update, cross-network/TURN and active-window handoff remain unverified. |
 | Audio / mic / devices | **Runtime-unverified** | No physical guitar, routing, reconnect, audible balance, recording, tuner, microphone scoring or audio/visual alignment was tested. See [SUPPORTED_SETUPS.md](SUPPORTED_SETUPS.md), whose outcomes remain NOT RUN. |
 
 Continuation review also exercised brief preparation/Copy, selected period, original study notes
@@ -601,10 +601,12 @@ migrate only after the new score storage and index have both saved successfully.
   close; full-screen practice blocks opening the dialog. There is no continuous/background
   replication. Use one active app window per device for an exchange;
   simultaneous cross-tab editing has not been verified.
-- Source publication does not provision hosting. A phone cannot use a laptop's localhost
-  address. Host a production build at a reachable trusted HTTPS origin before phone microphone,
-  install/Add to Home Screen and QR flows can be verified. The local dialog can remember that URL;
-  entering it does not publish the app. `.fretpack` transfers remain usable between local browsers.
+- The repository includes a GitHub Pages workflow (`.github/workflows/pages.yml`) that gates on
+  `make check`, builds with the Pages base path and deploys `dist/`; the workflow itself has not
+  been run or verified here. A phone cannot use a laptop's localhost address. Host the production
+  build at a reachable trusted HTTPS origin before phone microphone, install/Add to Home Screen
+  and QR flows can be verified. The local dialog can remember that URL; entering it does not
+  publish the app. `.fretpack` transfers remain usable between local browsers.
 - `pwa.ts`, the web manifest/icons and the build-generated service worker provide a production
   offline shell after a successful cache installation. The worker is disabled in development;
   updates wait for old windows to close and do not reload a session. Sync rendezvous still needs
@@ -706,9 +708,10 @@ failure paths use controlled test doubles. There is no Playwright/CI configurati
 7. **Unverified runtime behavior.** Audio routing, mic detection, device unplug/replug, fullscreen
    and browser autoplay policies are implemented from code but not verified here. Physical output
    changes behind the browser's system-default route cannot be identified for recalibration.
-8. **No phone hosting or physical sync verification yet.** A production HTTPS origin is needed;
+8. **No verified phone hosting or physical sync yet.** A GitHub Pages deployment workflow is
+   configured but has not been run here. A reachable production HTTPS origin is still needed;
    public signaling availability, restrictive NAT/TURN, large real recording libraries, installed
-   mobile app storage and active-window handoff still need physical end-to-end checks.
+   mobile app storage and active-window handoff need physical end-to-end checks.
 
 ## Cleanup candidates (not done)
 
