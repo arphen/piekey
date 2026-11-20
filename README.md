@@ -27,8 +27,10 @@ its existing chord quiz. Scales also has a shape explorer. The chromatic A440 tu
 open inside the guitar room, pause its current exercise and return to it. Both are reachable from
 the guitar menu as well as the visible instrument controls. The metronome has tap tempo,
 beats-per-bar selection, count-in and subdivisions; its weighted sweep and resonances follow
-the heard output clock. **Rendered water** adds an optional GPU water surface, off by default.
-It uses a capped resolution and frame rate, rests when inactive, and stops when the page is hidden.
+the heard output clock. The **room** can stay a still photograph (default), become a capped GPU
+**water** surface, or become a **living** pool — the algae photograph on a fluid simulation that
+ripples with each note heard and slowly glows over minutes of steady playing (optionally only
+while the laptop is plugged in). All modes stop when the page is hidden.
 The shell's **Tools** button opens the same instruments; Devices remains outside practice.
 
 The full-screen coach is played from the guitar, with ordinary buttons alongside its gestures.
@@ -47,7 +49,7 @@ Score imports are parsed and saved in the browser, without uploading them to the
 The library persists across browser restarts; clearing the site's browser data removes it.
 Imported scores are browser data, separate from this source repository and its production build.
 The app includes two original studies: **Blue Hour**, a 12-bar C jazz blues with accompaniment,
-and **First Steps**, an eight-bar C major melody over gentle chord pulses. They remain available from Song's Library,
+and **First Steps**, an eight-bar C major melody over soft chords. They remain available from Song's Library,
 including after importing personal tunes. Listen, open the score, start practice, or download
 their MusicXML. Study notes offer a melody fingering, a listening cue, a simpler entry and a
 creative variation. Reopening preserves saved versions and progress; updated bundled arrangements

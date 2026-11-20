@@ -1,0 +1,17 @@
+/* The living pool: one canvas per practice room, drawn inside the visible atmosphere. */
+.pa-pool-slot { inset: 0; }
+.pa-pool { position: absolute; inset: 0; display: block; width: 100%; height: 100%; opacity: 0; transition: opacity 1.5s; }
+.practice-atmosphere[data-pool="ready"] .pa-pool { opacity: 1; }
+/* The photographic layers stay underneath until the pool has faded in, then rest. */
+.practice-atmosphere[data-pool="ready"] > :is(.pa-dawn, .pa-water, .pa-leaf, .pa-current, .pa-beat-resonance) { visibility: hidden; transition: visibility 0s 1.6s; }
+
+/* The living pool keeps its own calm lenses behind text, so the room's shade can lift. */
+.practice-atmosphere[data-pool="ready"] > .pa-shade { opacity: 0.65; }
+/* As the pool glows, the room's shade deepens behind the material so text keeps its contrast. */
+.practice-atmosphere[data-pool="ready"] > .pa-shade::after { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 46%, #0a0e0d 18%, transparent 78%); opacity: calc(var(--pool-glow, 0) * 0.6); }
+
+/* The room breathes with the pool: colour and opacity only, never layout. */
+.beat-pulse-dots li.is-now:not(.is-accent) > i { box-shadow: 0 0 calc(14px + var(--pool-glow, 0) * 18px) rgba(var(--pool-tint, 208, 231, 170), calc(0.21 + var(--pool-glow, 0) * 0.3)); }
+.beat-pulse-resonance > i { border-color: color-mix(in srgb, var(--pulse-ink) calc(100% - var(--pool-glow, 0) * 45%), rgb(var(--pool-tint, 186, 201, 171))); }
+
+@media (prefers-reduced-motion: reduce) { .pa-pool { transition: none; } }

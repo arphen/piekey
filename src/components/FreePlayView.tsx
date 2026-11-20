@@ -8,12 +8,13 @@ import { InputBar } from "./InputBar";
 import { SongCoachRoom } from "./SongCoach";
 import { TunePicker } from "./TunePicker";
 import { PracticeWindowBoundary } from "../platform/PracticeWindowBoundary";
+import { PoolRoom } from "../pool/PoolRoom";
 import { settlePracticeWrites } from "../platform/practiceWindow";
 import "../song/song.css";
 
 /** The existing free-play engine, reachable without importing a tune or opening a card box. */
 export function FreePlayView({ input, onClose }: { input: InputApi; onClose(): void }) {
-  return <PracticeWindowBoundary onExit={onClose}><FreePlayRoom input={input} onClose={onClose} /></PracticeWindowBoundary>;
+  return <PracticeWindowBoundary onExit={onClose}><PoolRoom input={input}><FreePlayRoom input={input} onClose={onClose} /></PoolRoom></PracticeWindowBoundary>;
 }
 
 function FreePlayRoom({ input, onClose }: { input: InputApi; onClose(): void }) {

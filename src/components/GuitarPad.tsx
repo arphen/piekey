@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
+import { usePoolCalm } from "../pool/PoolRoom";
 import { midiOf } from "../listen/pitch";
 import type { InputApi } from "../listen/useInput";
 import { mod, pitchClassToName } from "../musicTheory";
@@ -13,6 +14,10 @@ import { SUMMON_NOTE } from "../song/notekeys";
 const SUMMON_MS = 1300; // the menu note held this long arms the pad: longer than any note in an exercise
 const PRESS_MS = 600; // a string held this long is a press
 const GAP_MS = 160; // dropouts shorter than this don't break a hold
+const FAST_TAPS = 3; // D♯5 struck this many times in quick succession also calls the menu
+const FAST_TAP_MS = 70; // a strike sounding this long is a tap
+const FAST_APART_MS = 450; // between one strike's end and the next one's start
+const FAST_TOTAL_MS = 2200; // the whole run
 const PRIME_FRAMES = 4; // a note already ringing when controls appear is not a fresh press
 /** The pad's six buttons, low E string to high e: each string's first fret. */
 export const PAD_NOTES = [41, 46, 51, 56, 60, 65];
@@ -91,7 +96,7 @@ function useHeld(input: InputApi, enabled: boolean, ms: number, read: (midi: num
   }, [enabled, listening, subscribe, ms, fresh]);
 }
 
-export const SUMMON_HINT = "hold D♯5 (high e, fret 11) · release · hold again";
+export const SUMMON_HINT = "D♯5 (high e, fret 11) three times quickly · or hold, release, hold";
 
 /**
  * A held musical note only arms the menu. Actual silence and a second hold confirm intent.
@@ -113,11 +118,34 @@ export function useSummon(input: InputApi, enabled: boolean, onSummon: () => voi
     let deadline = 0;
     let rate: number | null = null;
     const reset = () => { phase = "hold"; since = null; quiet = null; progress(0); };
+    // three quick strikes of the menu note: the fast way in. Music never sounds it (see `blocked`).
+    let taps = 0;
+    let tapsAt = 0; // when the run began
+    let tapOn: number | null = null; // when the strike now sounding began
+    let tapEnd = 0;
+    let counted = false;
+    const fastReset = () => { taps = 0; tapOn = null; counted = false; if (phase === "hold" && since === null) progress(0); };
+    const fast = (midi: number | null, now: number): boolean => {
+      if (taps > 0 && (now - tapsAt > FAST_TOTAL_MS || (tapOn === null && now - tapEnd > FAST_APART_MS))) fastReset();
+      if (midi === SUMMON_NOTE) {
+        if (tapOn === null) { tapOn = now; counted = false; if (taps === 0) tapsAt = now; }
+        tapEnd = now;
+        if (!counted && now - tapOn >= FAST_TAP_MS) {
+          counted = true;
+          taps++;
+          if (phase === "hold" && since === null) progress(taps / FAST_TAPS * 0.5);
+          if (taps >= FAST_TAPS) { fastReset(); return true; }
+        }
+      } else if (tapOn !== null && now - tapEnd > 40) { tapOn = null; counted = false; if (midi !== null) fastReset(); }
+      else if (midi !== null && taps > 0) fastReset();
+      return false;
+    };
     return subscribe((frame) => {
       if (rate !== null && rate !== frame.sampleRate) reset();
       rate = frame.sampleRate;
       const midi = midiOf(frame);
-      if (blocked?.current) { if (phase !== "hold" || since !== null) reset(); return; }
+      if (blocked?.current) { if (phase !== "hold" || since !== null) reset(); fastReset(); return; }
+      if (fast(midi, frame.now)) { reset(); action.current(); return; }
       if (phase !== "hold" && frame.now > deadline) reset();
       if (phase === "release") {
         if (midi === null) {
@@ -318,6 +346,7 @@ export interface PadRow {
 /** Six strings, six actions: `rows[0]` is the low E string. Hold its first fret (or click its row) to fire it. */
 export function GuitarPad({ input, title, rows, onFire }: { input: InputApi; title: string; rows: PadRow[]; onFire(string: number): void }) {
   const els = useRef<(HTMLButtonElement | null)[]>([]);
+  usePoolCalm(true);
   useHeld(
     input,
     true,
@@ -328,7 +357,7 @@ export function GuitarPad({ input, title, rows, onFire }: { input: InputApi; tit
     true,
   );
   return (
-    <div className="ss-pad" role="menu" aria-label={title}>
+    <div className="ss-pad" role="menu" aria-label={title} data-pool="calm">
       <p className="ss-pad-title">{title}</p>
       <div className="ss-pad-strings">
         {[5, 4, 3, 2, 1, 0].map((i) => (

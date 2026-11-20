@@ -10,7 +10,7 @@ does not tell them what to do.
 | --- | --- | --- |
 | A note held ~0.4 s (shown on screen next to what it works) | exercises | hear it again · your pace · in time · next exercise |
 | The same, by note name in any octave | before and after a session | carry on · free play · settings · other tune · shuffle |
-| D♯5 (high e, fret 11) held 1.3 s, released into quiet, then held again 0.6 s | exercises, free play, instruments | the six-string menu (tempo, click, tuner, sound output, …) |
+| D♯5 (high e, fret 11) struck three times quickly, or held 1.3 s, released into quiet, then held again 0.6 s | exercises, free play, instruments | the six-string menu (tempo, click, tuner, sound output, …) |
 | A free note tapped twice | exercises, open drawer | gear, calibration, the drawer's switches |
 | F (any octave) held | ready screen | session length: 10 / 25 / 45 minutes |
 
@@ -22,7 +22,10 @@ free, so chord cards keep their keys; tone keys use the same pitch classes. In f
 whole-tune cards and improvisation every note is music; direct held-note and double-tap
 shortcuts are disabled. The deliberate guitar menu remains available.
 It is called with D♯5 (`SUMMON_NOTE`, high e fret 11): fretted and above the default fret-10
-range, because open strings ring on and get tuned. No note key or tone key uses it, and the
+range, because open strings ring on and get tuned. The fast way in is three separate strikes of
+it (each ≥70 ms, under 450 ms apart, within 2.2 s); any other pitch between them cancels, and
+the coach ignores it while the music itself can sound D♯5. The "Sound & setup" page has a
+Settings row that opens the settings drawer. No note key or tone key uses it, and the
 coach ignores it while the current or previous target can sound it. Its first hold only arms
 it; at least 150 ms of quiet and a fresh second hold within five seconds confirm it. A
 different intervening pitch cancels. One sustained musical note cannot open the menu. The menu
@@ -148,11 +151,22 @@ The metronome uses the existing playback engine: 2–7 quarter-note beats per ba
 first beat, subdivisions, one-bar count-in and tap tempo. Changing meter stops it so the next
 Start begins a fresh bar. Its engraved dial, weighted sweep, beat markers and room resonance
 follow heard beats, including count-in; no presentation timer supplies musical time.
-**Rendered water** is an optional device-local GPU layer, off by default. It uses analytic waves
-at capped resolution (at most 1,000 pixels on the long edge) and 30 fps, with no extra audio
-analysis. It rests without active playing/click, stops in hidden pages and renders a still
-surface for reduced motion. GPU denial or context loss falls back to the photographic room.
-Colour still needs sustained active playing; enabling rendering or hearing the click earns none.
+The **room** has four device-local modes, chosen from the instruments' guitar pad ("Room"), the
+instruments footer or the session settings: **Still** (default, the photographic room),
+**Water** (analytic GPU waves, capped at 1,000 pixels and 30 fps), **Living** and **Living on
+power** (Living only while a charger is reported; otherwise Water). The living pool floats the
+algae photograph on a fluid simulation, flowing gently from the moment it opens: notes make ripples on a sunflower spiral of the phrase,
+the heard beat lights the metronome's glass dial on the same frame, sends a ring out from its rim
+and sloshes with its sweep (the dial's dot is fastest into the ends of its arc, on the click), the
+tuner shows the string's real beating as moving rings that freeze within ±3 cents, and over about
+two minutes of steady, in-key pitched playing the algae marble, glow and grow rising blobs. It
+uses the shared per-frame pitch cache and free-play onsets (no second detector or audio context),
+reacts to onsets and heard beats only, and never predicts a beat from the player's notes.
+Intensity is earned only by the player's pitched playing during their turn: enabling the mode,
+the click, a demo, waiting or an open menu earn nothing, and menus calm the pool. Calm lenses keep
+text at its resting contrast. Reduced motion draws one still frame; hidden pages draw nothing;
+GPU denial, a second context loss or an overloaded lowest tier rest the room as Water. The pool
+never influences scoring, tempo, scheduling, evidence, boxes or goals.
 
 ## Other kinds of exercise
 

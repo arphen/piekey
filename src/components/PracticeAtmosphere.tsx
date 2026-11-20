@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, type CSSProperties } from "react";
 import type { InputApi } from "../listen/useInput";
 import type { BeatSignal } from "../song/pulse";
-import { useRenderedRoom } from "../song/renderedRoom";
+import { useRoomRender } from "../pool/mode";
+import { usePoolPublisher } from "../pool/PoolRoom";
 import { RenderedWater } from "./RenderedWater";
 import "../song/atmosphere.css";
 
@@ -13,7 +14,10 @@ export function PracticeAtmosphere({ input, warmth, flow, playing, beat, bpm }: 
   const state = useRef({ warmth, flow, playing });
   state.current = { warmth, flow, playing };
   const energy = useRef<{ level: number; heard: number; played: number; wake?: () => void }>({ level: 0, heard: -Infinity, played: 0 });
-  const rendered = useRenderedRoom();
+  const render = useRoomRender();
+  const living = render.effective === "living";
+  // Inside a pool room this atmosphere publishes to the shared pool, and its canvas moves in here.
+  const pooled = usePoolPublisher(room, { playing, warmth, flow, beat, bpm });
 
   useEffect(() => {
     if (input.status !== "listening" || input.paused) {
@@ -33,7 +37,7 @@ export function PracticeAtmosphere({ input, warmth, flow, playing, beat, bpm }: 
 
   useEffect(() => {
     const el = room.current;
-    if (!el) return;
+    if (!el || living) return; // the living pool draws its own breath and bloom
     const media = window.matchMedia?.("(prefers-reduced-motion: reduce)");
     let frame = 0;
     let last = performance.now();
@@ -61,7 +65,7 @@ export function PracticeAtmosphere({ input, warmth, flow, playing, beat, bpm }: 
     };
     frame = requestAnimationFrame(paint);
     return () => cancelAnimationFrame(frame);
-  }, []);
+  }, [living]);
 
   return (
     <div className="practice-atmosphere" ref={room} aria-hidden="true" data-nav-skip>
@@ -69,7 +73,7 @@ export function PracticeAtmosphere({ input, warmth, flow, playing, beat, bpm }: 
       <div className="pa-water" />
       <div className="pa-water pa-water-colour" />
       <div className="pa-leaf" />
-      {rendered.enabled ? <RenderedWater playing={playing} warmth={warmth} flow={flow} beat={beat} level={energy} /> : null}
+      {render.effective === "water" ? <RenderedWater playing={playing} warmth={warmth} flow={flow} beat={beat} level={energy} /> : null}
       <svg className="pa-current" viewBox="0 0 1600 1000" preserveAspectRatio="none">
         <g>
           <path d="M-140 900 C200 420 440 1150 850 680 S1400 550 1730 40" />
@@ -81,6 +85,7 @@ export function PracticeAtmosphere({ input, warmth, flow, playing, beat, bpm }: 
         </g>
       </svg>
       {beat?.active ? <div key={beat.serial} className={`pa-beat-resonance ${beat.index === 0 ? "is-downbeat" : ""}`} style={{ "--beat-decay": `${Math.min(.85, 55 / (bpm || 80))}s` } as CSSProperties}><i /><i /></div> : null}
+      {pooled ? <div className="pa-pool-slot" /> : null}
       <div className="pa-shade" />
     </div>
   );
@@ -104,7 +109,7 @@ export function BeatPulse({ beat, bpm, compact = false }: { beat: BeatSignal; bp
       role="img"
       aria-label={`${bpm ? `${bpm} beats per minute` : "Waiting for a tempo"}${active ? `, ${beat.beats} beats per bar${beat.counting ? ", count-in" : ""}` : ", pulse resting"}`}
     >
-      <div className="beat-pulse-face" aria-hidden="true">
+      <div className="beat-pulse-face" aria-hidden="true" data-pool={compact ? undefined : "glass rock calm"} data-pool-anchor={compact ? undefined : "metronome"}>
         <svg className="beat-pulse-dial" viewBox="0 0 320 320" fill="none">
           <defs>
             <linearGradient id={`${id}-metal`} x1="24" y1="14" x2="286" y2="306" gradientUnits="userSpaceOnUse"><stop stopColor="#dbd7bc" stopOpacity=".65" /><stop offset=".34" stopColor="#9cae94" stopOpacity=".1" /><stop offset=".7" stopColor="#a8b89b" stopOpacity=".28" /><stop offset="1" stopColor="#d3ae7a" stopOpacity=".5" /></linearGradient>
@@ -126,7 +131,7 @@ export function BeatPulse({ beat, bpm, compact = false }: { beat: BeatSignal; bp
         <span className="beat-pulse-number">{bpm || "—"}</span>
         <span className="beat-pulse-unit">beats / min</span>
       </div>
-      <ol className="beat-pulse-dots" aria-hidden="true">
+      <ol className="beat-pulse-dots" aria-hidden="true" data-pool="calm">
         {Array.from({ length: beat.beats }, (_, i) => <li key={i} className={`${active && i === beat.index ? "is-now" : ""} ${i === 0 ? "is-accent" : ""}`}><i key={active && i === beat.index ? beat.serial : "rest"} /><span>{i + 1}</span></li>)}
       </ol>
     </div>

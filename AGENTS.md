@@ -57,6 +57,10 @@ exact phrases in `SongCoach`; do not restore an inline Learn flow. Ear (`src/ear
 17. `src/tools/GuitarTools.tsx` — shared `GuitarToolsRoom` inside the existing practice boundary.
     Suspend the host engine while instruments own the input. `PracticeAtmosphere` owns decorative
     output-clock resonance; optional `RenderedWater` is capped GPU presentation, never a clock.
+18. `src/pool/` — optional living pool: one `PoolRoom` per practice room, rooms publish through
+    `usePoolPublisher`, the engine loads lazily (`host.ts`, `engine/*`). Decoration only: it pulses
+    only on a heard `BeatSignal`, never on a beat inferred from notes, earns intensity only from
+    pitched playing during the player's turn, and nothing reads pool state back into practice.
 
 ## Repository map and project docs (read this second)
 
@@ -165,7 +169,9 @@ component tests run under jsdom. No CI configuration is committed; `make check` 
   non-exact melody notes. The menu summon is D♯5 hold/release/hold; menu rows are first frets.
   Never put a command on an open-string pitch. Tune changes retain the outer practice boundary and never exit fullscreen.
   Modal suspension blocks scoring, playback and automatic wake/reconnect until the modal closes;
-  resume only a pause owned by that modal. Renderer preferences are device-local and default off.
+  resume only a pause owned by that modal. Renderer preferences are device-local and default off
+  (`guitar-room-render`, `guitar-pool-tier`); the pool uses the shared input and `pitchOf` cache,
+  never its own detector, and `[data-pool]` marks rocks, calm lenses and glass on room elements.
 - Outside sessions the shell is played too (`src/nav/`, notes from fret 12 up): keep controls real
   `button`/`select` elements so the cursor reaches them, and mark decoration `data-nav-skip`.
 - TypeScript is strict. Avoid `any`; prefer the contract types. Keep `npm run typecheck` green.

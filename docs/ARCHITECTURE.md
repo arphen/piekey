@@ -256,8 +256,37 @@ static texture and discrete beat markers. `RenderedWater` is an optional WebGL c
 score, using fixed-cost analytic waves, shared RMS and heard-beat envelopes. Resolution is capped
 at 1,000 pixels on the long edge and rendering at 30 fps; inactive/hidden/reduced-motion rooms
 stop the animation. Resource cleanup, context-loss fallback and capability guards keep it
-independent from practice. `song/renderedRoom.ts` stores its default-off preference on this
-device only; it is outside the portable-state allowlist. `song/coach-flow.css` owns Ready/Running
+independent from practice.
+
+**Living pool** (`src/pool/`). `pool/mode.ts` stores one device-local room mode in
+`guitar-room-render` — Still (default), Water (`RenderedWater`), Living, or Living on power — and
+reads the old `guitar-rendered-room` switch only to carry an "on" over as Water. Living needs
+WebGL2 with renderable half floats and no software rasteriser; Living on power also needs the
+Battery Status API to report a charger (`pool/power.ts`), else it resolves to Water. One
+`PoolRoom` provider wraps each practice room (`SongCoach` outside the keyed room, `FreePlayView`,
+standalone `GuitarTools`; nested providers defer to the outer one). Each `PracticeAtmosphere`
+publishes `{ playing, warmth, flow, beat, bpm }` to the provider's `PoolBus`; the last mounted
+publisher wins and the provider's single canvas is moved into its `.pa-pool-slot` (a WebGL context
+survives reparenting), so fluid state persists across session, free play, instruments and tune
+changes. `pool/host.ts` and `pool/engine/*` load by dynamic `import()` only when Living is
+effective. The host subscribes to the shared input only while Living, reads pitch from the
+per-frame `pitchOf` cache during the publisher's `playing` turn, and runs `pool/groove.ts` (pure:
+`createOnsets`, `guessKey`, `steadyGap`/`readGrid` from `song/freeplay.ts`) to a slow groove that
+needs about two minutes of pitched playing; `pool/params.ts` maps it to the look. At rest the
+photograph is already visible and gently flowing; glow, bloom and blobs are earned. Notes drop ripple stones on a phrase phyllotaxis; heard
+`BeatSignal` serials light the dial's rim on the same frame and drop a ring already at the rim; tuner readings drive a moiré at
+the real beat frequency; SongCoach emits a `bloom` on a clean outcome and a `sweep` on a card
+change. Nothing is read back. The engine (`engine/renderer.ts`, DOM-free) runs stable fluids,
+a two-phase flow map over the crisp photograph (two advected displacement fields, each restarting
+unseen every flow period and crossfaded, so the image keeps flowing without tearing), a ripple height field, note dye, heat
+with buoyant blobs, 34 GPU leaves cut from the algae photograph, bloom and a soft-knee composite.
+`[data-pool]` tokens on room elements become rocks (fluid obstacles), calm lenses (pull back toward
+the resting look so text keeps its contrast) or glass (magnify; the metronome dial). Quality tiers
+Q0–Q3 are governed from GPU timer queries and the pool's own JS time and persist in
+`guitar-pool-tier`; hidden pages stop, release after 30 s; a second context loss or Q0 overrun
+rests the room as Water for the visit. `--pool-glow`/`--pool-tint` on the room root change only
+colour and opacity. In development `window.__pool` drives the visuals without a guitar.
+`song/coach-flow.css` owns Ready/Running
 layout and action affordances; `song/freeplay-room.css` owns the free-play invitation and gradual
 reveal of notation/measurements. The presentation reuses the existing engines and gestures.
 `useSummon` requires `SUMMON_NOTE` (D♯5, high e fret 11) held 1.3 s, at least 150 ms of quiet
@@ -320,7 +349,11 @@ applied by the detector. String attribution is inferred by `song/fingering.ts`, 
 | --- | --- |
 | `src/components/SongCoach.tsx` | Full-screen session UI, ready screen, running screen, done screen wiring, settings drawer, six-string pad, calibration, free-play switch. Large; treat as orchestration, not domain logic. |
 | `src/components/SessionSummary.tsx` | Done screen: tiles, movement, trend, tree, guitar actions, interlude. |
-| `src/components/PracticeAtmosphere.tsx` | Shared decorative RMS/flow atmosphere and heard-beat `BeatPulse`; no practice decisions. |
+| `src/components/PracticeAtmosphere.tsx` | Shared decorative RMS/flow atmosphere and heard-beat `BeatPulse`; publishes to the room's pool; no practice decisions. |
+| `src/pool/mode.ts`, `src/pool/power.ts` | Device-local room mode (Still/Water/Living/Living on power), legacy migration, GPU probe, charger state. |
+| `src/pool/PoolRoom.tsx`, `src/pool/bus.ts` | One pool per room: publisher stack, events, calm tokens, shared-input forwarding; hooks `usePoolPublisher`, `usePoolCalm`, `usePoolEmit`. |
+| `src/pool/groove.ts`, `src/pool/params.ts`, `src/pool/golden.ts` | Pure mood estimator, groove → look mapping and golden-ratio placements. |
+| `src/pool/host.ts`, `src/pool/engine/*` | Lazily loaded renderer lifecycle (rAF, tiers, visibility, context loss, anchors) and the DOM-free WebGL2 engine. |
 | `src/song/useSession.ts` | Session engine: queue, phases, takes, tempo, silence, input loss, spots, outcomes, persistence. |
 | `src/song/deck.ts` | Builds exercise cards from a lead sheet: scales, harmony (incl. improvise), chords (voicings, comping), melody (incl. run-through), reading, ear, fretboard. |
 | `src/song/leitner.ts` | Card box, session planning, result application, kinship carry-over, storage. |

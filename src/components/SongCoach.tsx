@@ -42,6 +42,8 @@ import { PracticeWindowBoundary } from "../platform/PracticeWindowBoundary";
 import { settlePracticeWrites } from "../platform/practiceWindow";
 import { TunePicker } from "./TunePicker";
 import { GuitarToolsRoom } from "../tools/GuitarTools";
+import { PoolRoom, usePoolCalm, usePoolEmit } from "../pool/PoolRoom";
+import { ROOM_MODES, useRoomRender, type RoomMode } from "../pool/mode";
 import { Glyph } from "./Glyph";
 import "../song/song.css";
 import "../song/coach-flow.css";
@@ -313,7 +315,8 @@ function useHold(input: InputApi, enabled: boolean, onHold: () => void, except: 
 const seenIn = (tuneId: string) => Object.fromEntries(Object.entries(loadStore(tuneId).cards).map(([id, st]) => [id, st.seen]));
 
 export function SongCoach(props: SongCoachProps) {
-  return <PracticeWindowBoundary onExit={props.onClose}><SongCoachRoom key={props.sheet.id} {...props} /></PracticeWindowBoundary>;
+  // The pool sits outside the keyed room so its water keeps moving when the tune changes.
+  return <PracticeWindowBoundary onExit={props.onClose}><PoolRoom input={props.input}><SongCoachRoom key={props.sheet.id} {...props} /></PoolRoom></PracticeWindowBoundary>;
 }
 
 /** The practice room must remain inside a stable PracticeWindowBoundary while changing tunes. */
@@ -361,6 +364,19 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
   const switchStopped = useRef(false);
   const themeSources = useMemo(() => [{ id: sheet.id, title: sheet.title, tl }, ...others.map((other) => ({ id: other.sheet.id, title: other.sheet.title, tl: other.tl }))], [sheet.id, sheet.title, tl, others]);
   const session = useSession(deck, tuneIds, input, { gap: gapIds, arrangementFingerprint, arrangementFingerprints, tempoBounds: activeGoal?.tempo, suspended: choosingTune || Boolean(tools) || free || menu || pad !== null || calib });
+  // Decoration only: the pool hears that a card passed cleanly or changed, and nothing comes back.
+  usePoolCalm(menu || calib);
+  const emitPool = usePoolEmit();
+  const pooled = useRef<{ outcome: unknown; pos: number | null }>({ outcome: session.outcome, pos: null });
+  useEffect(() => {
+    if (session.outcome === pooled.current.outcome) return;
+    pooled.current.outcome = session.outcome;
+    if (session.outcome?.result === "clean") emitPool({ kind: "bloom", strength: 1, at: "focus" });
+  }, [session.outcome, emitPool]);
+  useEffect(() => {
+    if (pooled.current.pos !== null && pooled.current.pos !== session.pos) emitPool({ kind: "sweep", direction: 1 });
+    pooled.current.pos = session.pos;
+  }, [session.pos, emitPool]);
 
   useEffect(() => {
     const on = () => setFull(Boolean(document.fullscreenElement));
@@ -660,7 +676,7 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
         { label: "Tune & session" },
         { label: "Sound output", value: outputs.supported ? outputs.label : "system output" },
         { label: "Free play" },
-        { label: "Shuffle", value: session.settings.shuffle ? "on" : "off" },
+        { label: "Settings" },
         { label: "Calibrate guitar" },
         { label: session.ending ? "Finishing after this pass" : "Finish after this pass" },
       ],
@@ -668,7 +684,7 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
         () => setPad(3),
         outputs.cycle,
         openFree,
-        () => session.updateSettings({ shuffle: !session.settings.shuffle }),
+        () => (setPad(null), openMenu()), // the exercise is already held still by the pad
         () => (setPad(null), setCalib(true)), // stays paused until the guitar has been heard
         () => (closePad(), session.finishAfterPass()),
       ],
@@ -1149,7 +1165,7 @@ function Running({
         })}
       </ol>
 
-      <header className="ss-head" key={`${s.pos}:${card.id}`}>
+      <header className="ss-head" key={`${s.pos}:${card.id}`} data-pool="calm">
         <div className="ss-phasebar">
           <span className="ss-exercise-count">{String(s.pos + 1).padStart(2, "0")} <em>/ {String(s.queue.length).padStart(2, "0")}</em></span>
           <span className="ss-phase-name" aria-live="polite"><i />{phase}</span>
@@ -1237,7 +1253,7 @@ function Running({
         </span>
       </div>
 
-      <footer className="ss-foot">
+      <footer className="ss-foot" data-pool="calm">
         <span className="ss-call">
           <Ear input={input} size="small" ring={ring} tag={earTag} />
           <span className="ss-menu-access">
@@ -1266,7 +1282,7 @@ function Running({
             </ol>
           ) : null}
         </div>
-        <div className="ss-side">
+        <div className="ss-side" data-pool="calm">
           <span className="ss-aid" style={{ opacity: s.phase === "time" ? Math.min(1, (s.shadow?.level() ?? 0) * 1.8) : 0 }} title="playing along with you, as much as you need">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M3 12c2-5 4-5 6 0s4 5 6 0 4-5 6 0" />
@@ -1488,7 +1504,7 @@ function LineStage({ card, session: s, sheet, labels }: { card: Card; session: S
   return (
     <div className="ss-line">
       {card.family === "scales" ? null : <Harm ctx={ctx} scale />}
-      <div className="ss-score ss-score--line" data-scroll-host ref={host}>
+      <div className="ss-score ss-score--line" data-scroll-host ref={host} data-pool="rock calm" data-pool-anchor="focus">
         <Score
           exercise={written}
           activeStep={s.active >= 0 ? s.active - card.first : -1}
@@ -1632,7 +1648,7 @@ function MelodyStage({ card, session: s, sheet: source }: { card: Card; session:
   return (
     <div className="ss-melody">
       <Harm ctx={ctx} />
-      <div className="ss-score" data-scroll-host ref={host}>
+      <div className="ss-score" data-scroll-host ref={host} data-pool="rock calm" data-pool-anchor="focus">
         <Score
           exercise={cut.exercise}
           activeStep={activeNotes[0] ?? -1}
@@ -1802,6 +1818,8 @@ function Seg<T extends string | number | null>({ label, value, options, onChange
   );
 }
 
+const ROOM_LABEL: Record<RoomMode, string> = { still: "still", water: "water", living: "living", "living-power": "living on power" };
+
 function Drawer({
   deck,
   session: s,
@@ -1839,6 +1857,7 @@ function Drawer({
 }) {
   const byId = useMemo(() => new Map(deck.cards.map((c) => [c.id, c])), [deck]);
   const { settings, updateSettings, store } = s;
+  const room = useRoomRender();
   const live = s.running && !s.finished;
   const list = s.running ? s.queue : plan;
   const counts = boxCounts(deck, store);
@@ -1964,6 +1983,7 @@ function Drawer({
           <Switch on={full} onChange={onFull}>
             Full screen
           </Switch>
+          <Seg label="Room" value={room.mode} options={ROOM_MODES.map((mode): { value: RoomMode; label: string; title?: string } => ({ value: mode, label: ROOM_LABEL[mode], title: mode === room.mode ? room.value : undefined }))} onChange={room.set} />
         </section>
 
         <section>

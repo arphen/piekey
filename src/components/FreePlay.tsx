@@ -170,7 +170,7 @@ export function FreePlay({ input, deck, onClose, onPractise, active = true, onCh
   return (
     <div className={`ss-free fp-room ${arrived ? "has-playing" : "is-arriving"} ${pad !== null ? "has-menu" : ""} ${v.on ? "is-on" : ""} ${v.mood ? `is-${v.mood}` : ""} ${v.band ? "has-band" : ""}`}>
       <PracticeAtmosphere input={input} warmth={Math.min(1, v.secs / 180)} flow={flow} playing={roomActive && listening && pad === null && arrived} beat={v.beatSignal} bpm={v.bpm} />
-      <header className="fp-heading">
+      <header className="fp-heading" data-pool="calm">
         {scale ? <p className="ss-kicker">Free play</p> : null}
         <h1 className="ss-display">{scale ? scale.name : "Free play"}</h1>
         {arrived && facts ? <p className="ss-sub">{facts}</p> : null}
@@ -182,9 +182,9 @@ export function FreePlay({ input, deck, onClose, onPractise, active = true, onCh
 
       {arrived ? (
         <div className="fp-session">
-          {v.count > 2 ? <div className="ss-score ss-score--free"><Score exercise={sheet} activeStep={-1} results={NONE} showFingering={false} /></div> : null}
+          {v.count > 2 ? <div className="ss-score ss-score--free" data-pool="rock calm" data-pool-anchor="focus"><Score exercise={sheet} activeStep={-1} results={NONE} showFingering={false} /></div> : null}
           <div className={`fp-deck ${v.onGrid === null ? "is-finding" : ""}`}>
-            <div className="fp-side fp-timing">
+            <div className="fp-side fp-timing" data-pool="calm">
               {v.onGrid !== null ? <><p className="fp-overline">Your timing</p><Lane timing={v.timing} alignment={(v.alignment ?? 0) / (60000 / v.bpm / v.division)} /><p className="fp-cap">{Math.round(v.onGrid * 100)}% near alignment{v.spread !== null ? ` · ±${Math.round(v.spread)} ms spread` : ""}{v.alignment !== null ? ` · ${v.alignment >= 0 ? "+" : ""}${Math.round(v.alignment)} ms alignment` : ""}</p></> : null}
             </div>
             <div className="fp-click">
@@ -192,7 +192,7 @@ export function FreePlay({ input, deck, onClose, onPractise, active = true, onCh
               <p className="fp-mood" aria-live="polite">{clickLine(v)}</p>
               {v.on && v.mode === "follows" ? <div className="fp-settle" style={{ "--settle": arc } as CSSProperties} aria-label={v.held ? "tempo held" : "click follows your tempo"}><i /><span>{v.held ? "tempo held" : "following your tempo"}</span></div> : null}
             </div>
-            <div className="fp-side fp-session-stats">
+            <div className="fp-side fp-session-stats" data-pool="calm">
               <p className="fp-overline">This play</p>
               <dl className="fp-stats">
                 {v.on ? <div><dd>{v.bars}</dd><dt>bars in a row</dt></div> : null}
@@ -217,7 +217,7 @@ export function FreePlay({ input, deck, onClose, onPractise, active = true, onCh
         </div>
       )}
 
-      <footer className="fp-room-foot">
+      <footer className="fp-room-foot" data-pool="calm">
         <div className="fp-input-anchor">{arrived ? <><Ear input={input} size="small" ring={ring} /><span>{listening ? "Listening" : "Reconnect"}</span></> : null}</div>
         <div className="fp-menu-anchor"><button type="button" onClick={() => setPad(0)} aria-label="Open free play menu"><span className="fp-menu-note">D♯<span>5</span></span>Menu<span aria-hidden="true">↗</span></button><span>{SUMMON_HINT}</span></div>
         <p className="fp-band-state"><i className={v.band ? "is-live" : ""} />Band {v.band ? "playing" : v.bandOn ? "listening" : "off"}</p>

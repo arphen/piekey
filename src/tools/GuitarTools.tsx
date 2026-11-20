@@ -5,7 +5,8 @@ import { GuitarPad, SUMMON_HINT, useSummon, type PadRow } from "../components/Gu
 import { InputBar } from "../components/InputBar";
 import type { InputApi } from "../listen/useInput";
 import { PracticeWindowBoundary } from "../platform/PracticeWindowBoundary";
-import { useRenderedRoom } from "../song/renderedRoom";
+import { PoolRoom, usePoolEmit } from "../pool/PoolRoom";
+import { useRoomRender } from "../pool/mode";
 import type { Timeline } from "../tunes/order";
 import { usePlayback, type PlaybackMix } from "../tunes/usePlayback";
 import { clampToolBpm, MAX_TOOL_BPM, MIN_TOOL_BPM, tapTempo } from "./timing";
@@ -27,7 +28,7 @@ interface GuitarToolsRoomProps {
 }
 
 export function GuitarTools(props: GuitarToolsRoomProps) {
-  return <PracticeWindowBoundary onExit={props.onClose}><GuitarToolsRoom {...props} /></PracticeWindowBoundary>;
+  return <PracticeWindowBoundary onExit={props.onClose}><PoolRoom input={props.input}><GuitarToolsRoom {...props} /></PoolRoom></PracticeWindowBoundary>;
 }
 
 /** The same instruments can open inside an already protected practice room. */
@@ -42,7 +43,8 @@ export function GuitarToolsRoom({ input, onClose, initialTool = "tuner", initial
   const [pad, setPad] = useState<0 | 1 | null>(null);
   const room = useRef<HTMLElement>(null);
   const padTrigger = useRef<HTMLElement | null>(null);
-  const rendered = useRenderedRoom();
+  const render = useRoomRender();
+  const emitPool = usePoolEmit();
   const taps = useRef<number[]>([]);
   const timeline = useMemo<Timeline>(() => ({ slots: [{ bar: 0, pass: 1, run: 0, start: 0, beats }], targets: [], comp: [], total: beats }), [beats]);
   const playback = usePlayback(timeline, { bpm, melody: false, chords: false, click: true, countIn, clickSubdivision: division }, input, false, false);
@@ -142,21 +144,28 @@ export function GuitarToolsRoom({ input, onClose, initialTool = "tuner", initial
     },
     {
       title: "Rhythm & return",
-      rows: [{ label: "Instrument controls" }, { label: "Subdivision", value: DIVISION_LABEL[division] }, { label: "Count-in", value: countIn ? "one bar" : "off" }, { label: "Rendered water", value: rendered.enabled ? "on" : "off" }, { label: "Beats per bar", value: `${beats}` }, { label: "Return to practice" }],
-      fire: [() => setPad(0), cycleDivision, () => setCountIn((value) => !value), rendered.toggle, cycleMeter, close],
+      rows: [{ label: "Instrument controls" }, { label: "Subdivision", value: DIVISION_LABEL[division] }, { label: "Count-in", value: countIn ? "one bar" : "off" }, { label: "Room", value: render.value }, { label: "Beats per bar", value: `${beats}` }, { label: "Return to practice" }],
+      fire: [() => setPad(0), cycleDivision, () => setCountIn((value) => !value), render.cycle, cycleMeter, close],
     },
   ];
   const pitch = tuner.state === "pitch" ? tuner.pitch : null;
   const listening = input.status === "listening" && !input.paused;
   const cents = pitch?.cents ?? 0;
   const settled = listening && pitch !== null && Math.abs(cents) <= 3;
+  // The pool shows the string's beating; at most ten readings a second, and nothing comes back.
+  const tuned = useRef(0);
+  useEffect(() => {
+    if (!listening || !pitch || performance.now() - tuned.current < 100) return;
+    tuned.current = performance.now();
+    emitPool({ kind: "tune", cents: pitch.cents, frequency: pitch.frequency });
+  }, [listening, pitch, emitPool]);
   const tunerText = !listening ? input.paused ? "Resume listening below." : "Enable listening below." : tuner.state === "quiet" ? "One string. Let it ring." : tuner.state === "uncertain" ? "One clear string at a time." : settled ? "In tune" : cents > 0 ? "A little lower" : "A little higher";
   const inputText = input.status === "starting" ? "Opening input…" : input.paused ? "Input paused" : listening ? "Guitar listening" : input.status === "error" ? "Reconnect guitar" : "Input off";
 
   return <main ref={room} tabIndex={-1} className={`ss guitar-tools instrument-room is-${tool} ${settled ? "is-in-tune" : ""}`} role="dialog" aria-modal="true" aria-labelledby="guitar-tools-title">
     <PracticeAtmosphere input={input} warmth={0} flow={0} playing={listening && pad === null} beat={tool === "metronome" ? beat : undefined} bpm={bpm} />
     <div className="guitar-tools-flow" aria-hidden={pad !== null || undefined} style={{ visibility: pad !== null ? "hidden" : undefined }}>
-      <header className="guitar-tools-head">
+      <header className="guitar-tools-head" data-pool="calm">
         <div><p className="guitar-tools-kicker">Your practice room</p><h1 id="guitar-tools-title">Instruments</h1></div>
         <button type="button" className="guitar-tools-return" onClick={close} aria-label="Return to practice"><Glyph name="arrow" size={18} /><span>Return</span></button>
       </header>
@@ -166,16 +175,16 @@ export function GuitarToolsRoom({ input, onClose, initialTool = "tuner", initial
       </nav>
       {tool === "tuner" ? <section className="guitar-tools-tuner" aria-label="chromatic tuner">
         <p className="guitar-tools-overline">Chromatic · A 440</p>
-        <div className="guitar-tools-pitch" aria-live="off">
+        <div className="guitar-tools-pitch" aria-live="off" data-pool="calm">
           <p className="guitar-tools-note">{listening && pitch ? <>{pitch.noteName.replace("#", "♯")}<small>{pitch.octave}</small></> : "—"}</p>
           <p className="guitar-tools-cents">{listening && pitch ? <><span>{cents > 0 ? "+" : ""}{cents}</span> cents <i />{pitch.frequency.toFixed(1)} Hz</> : "Pluck a string"}</p>
         </div>
-        <div className="guitar-tools-meter" aria-hidden="true" style={{ "--tuner-position": `${50 + Math.max(-50, Math.min(50, cents))}%` } as CSSProperties}>
+        <div className="guitar-tools-meter" aria-hidden="true" data-pool="calm" data-pool-anchor="tuner" style={{ "--tuner-position": `${50 + Math.max(-50, Math.min(50, cents))}%` } as CSSProperties}>
           <div className="guitar-tools-meter-track"><span className="guitar-tools-tune-zone" /><i className={listening && pitch ? "is-reading" : ""} /><b /></div>
           <div className="guitar-tools-meter-labels"><span>♭ −50</span><span>0</span><span>+50 ♯</span></div>
         </div>
         <p className="guitar-tools-status" role="status">{tunerText}</p>
-        <ol className="guitar-tools-strings" aria-label="Standard guitar tuning, low to high">
+        <ol className="guitar-tools-strings" aria-label="Standard guitar tuning, low to high" data-pool="calm">
           {STRINGS.map((string, index) => <li key={string.midi} className={listening && pitch?.midi === string.midi ? "is-heard" : ""}><span className="guitar-tools-string-number">{6 - index}</span><span className="guitar-tools-string-note">{string.note}<small>{string.octave}</small></span><i style={{ height: `${2.5 - index * 0.3}px` }} /></li>)}
         </ol>
         <p className="guitar-tools-string-caption">Standard tuning · low to high</p>
@@ -184,7 +193,7 @@ export function GuitarToolsRoom({ input, onClose, initialTool = "tuner", initial
           <label className="guitar-tools-bar-length"><select aria-label="Beats per bar" value={beats} onChange={(event) => changeMeter(Number(event.target.value) as BeatsPerBar)}>{METERS.map((value) => <option key={value} value={value}>{value}</option>)}</select><span>beats / bar</span></label>
           <BeatPulse beat={beat} bpm={bpm} />
         </div>
-        <div className="guitar-tools-settings">
+        <div className="guitar-tools-settings" data-pool="calm">
         <div className="guitar-tools-tempo">
           <button type="button" className="guitar-tools-tempo-step" aria-label="4 beats per minute slower" onClick={() => changeTempo(bpm - 4)}>−<small>4</small></button>
           <label>Tempo <span><input aria-label="Tempo in beats per minute" type="number" min={MIN_TOOL_BPM} max={MAX_TOOL_BPM} value={tempoDraft ?? bpm} onChange={(event) => editTempo(event.currentTarget.value)} onBlur={commitTempo} /><small>bpm</small></span></label>
@@ -198,9 +207,9 @@ export function GuitarToolsRoom({ input, onClose, initialTool = "tuner", initial
         <p className="guitar-tools-status" role="status">{error || (playback.playing ? playback.counting ? "Counting in…" : "Click playing" : "Ready when you are")}</p>
         </div>
       </section>}
-      <footer className="guitar-tools-foot">
+      <footer className="guitar-tools-foot" data-pool="calm">
         <button type="button" className="guitar-tools-guitar" onClick={() => setPad(0)} aria-label="Open guitar instrument controls"><svg viewBox="0 0 42 42" aria-hidden="true"><circle cx="21" cy="21" r="17" /><circle ref={ring} className="guitar-tools-summon" cx="21" cy="21" r="17" pathLength="1" /><path d="M14 16h14M14 21h14M14 26h14" /></svg><span>Guitar controls<small>{SUMMON_HINT}</small></span></button>
-        <div className="guitar-tools-room-options"><span className={`guitar-tools-input-state ${listening ? "is-listening" : ""}`}><i />{inputText}</span><button type="button" className="guitar-tools-render" aria-pressed={rendered.enabled} onClick={rendered.toggle}>Rendered water<span>{rendered.enabled ? "On" : "Off"}</span></button></div>
+        <div className="guitar-tools-room-options"><span className={`guitar-tools-input-state ${listening ? "is-listening" : ""}`}><i />{inputText}</span><button type="button" className="guitar-tools-render" aria-pressed={render.mode !== "still"} onClick={render.cycle}>Room<span>{render.value}</span></button></div>
         <div className="guitar-tools-input">{input.paused ? <button type="button" className="guitar-tools-resume" onClick={() => void input.start()}>Resume listening</button> : <InputBar input={input} prominent={!listening} />}</div>
       </footer>
     </div>

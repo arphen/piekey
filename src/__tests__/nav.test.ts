@@ -106,4 +106,36 @@ describe("guitar navigation", () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it("opens the menu on three quick strikes of the menu note, not on two or on a stray note between", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const read = vi.spyOn(pitch, "midiOf").mockImplementation((frame) => frame.buf[0] < 0 ? null : frame.buf[0]);
+    const listeners = new Set<(frame: InputFrame) => void>();
+    const input: InputApi = {
+      status: "listening", error: null, devices: [], deviceId: null, paused: false,
+      level: { current: 0 }, setDeviceId() {}, async start() {}, stop() {}, autoStart() {},
+      subscribe(fn) { listeners.add(fn); return () => { listeners.delete(fn); }; },
+    };
+    const onSummon = vi.fn();
+    function Menu() {
+      useSummon(input, true, onSummon);
+      return null;
+    }
+    const root = createRoot(document.body.appendChild(document.createElement("div")));
+    const emit = (midi: number | null, now: number) => listeners.forEach((hear) => hear({ buf: Float32Array.of(midi ?? -1), sampleRate: 48000, rms: midi === null ? 0 : 0.1, now }));
+    const strike = (at: number) => { emit(SUMMON_NOTE, at); emit(SUMMON_NOTE, at + 90); emit(null, at + 150); emit(null, at + 200); };
+    try {
+      await act(async () => root.render(createElement(Menu)));
+      await act(async () => { strike(0); strike(300); });
+      expect(onSummon).not.toHaveBeenCalled();
+      await act(async () => { emit(64, 640); strike(700); strike(1000); });
+      expect(onSummon).not.toHaveBeenCalled();
+      await act(async () => { strike(3000); strike(3300); strike(3600); });
+      expect(onSummon).toHaveBeenCalledTimes(1);
+    } finally {
+      await act(async () => root.unmount());
+      read.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
 });

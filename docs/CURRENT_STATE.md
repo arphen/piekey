@@ -410,6 +410,16 @@ Ready screen
   Existing RMS frames give it small smoothed movements; sustained playing and flow gradually
   reveal colour. It is decorative, performs no pitch analysis, and respects reduced motion.
   `BeatPulse` shares the output-clock beat display. Real-guitar responsiveness remains unverified.
+- **Living pool** (room mode Living / Living on power; default Still). Verified in headless Chrome
+  on an Apple M3 (ANGLE Metal) with the synthetic free-play player and `window.__pool`: at rest
+  the algae photograph is visible and flows (two-phase flow map); notes make ripples on a phrase spiral; groove 0.3/0.6/0.9 marble,
+  glow and raise blobs while calm lenses keep text readable; heard-beat stones under the glass
+  metronome dial; tuner moiré. Measured against the same harness: input-frame p95 25.9–26.2 ms vs
+  25.8–25.9 ms for Still, main-thread busy unchanged (18%), browser CPU while playing 48% (Still
+  44–47%, Water 55%), idle 23% at the 20 fps cap (Still 14%), GPU 2.2 ms/frame rising to 2.8 ms at
+  groove 0.9 on tier Q2. The dial's beat marks land 6–8 ms (p50) after the click's output-clock
+  time in headless Chrome; real speaker latency is not measured. Not verified: real microphone input, real power switching, Safari/Firefox,
+  phones, context-loss recovery on real hardware, and GPU numbers outside headless Chrome.
 
 ### Shell navigation (outside sessions)
 
@@ -549,7 +559,9 @@ card. Progressions are not logged to `guitar-freeplay` or the map yet.
 | `guitar-skills` | `song/leitner.ts` | Shared scale card states and credit. |
 | `guitar-freeplay` | `song/freeplay.ts` | Free-play log (`FreeEntry[]`), capped. |
 | `guitar-freeplay-prefs` | `song/useFreePlay.ts` | Band on/off. |
-| `guitar-rendered-room` | `song/renderedRoom.ts` | Optional GPU room preference, default off and device-local; excluded from sync/backup. |
+| `guitar-room-render` | `pool/mode.ts` | Room mode `still`/`water`/`living`/`living-power`, default still; device-local, excluded from sync/backup. |
+| `guitar-pool-tier` | `pool/host.ts` | Living pool's last quality tier (0–3); device-local, excluded from sync/backup. |
+| `guitar-rendered-room` | (none) | Earlier on/off rendered-water switch; read only to carry "on" over as Water. |
 | `guitar-output` | `audio/output.ts` | Chosen output device id. |
 | `guitar-input` | `listen/useInput.ts` | Chosen input device id. |
 | `guitar-calibration` | `listen/calibration.ts` | Per-string detector profile bound to input device/sample rate. |

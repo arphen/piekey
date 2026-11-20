@@ -97,7 +97,8 @@
 .beat-pulse-swing { position: absolute; inset: 0; transform: rotate(0); pointer-events: none; }
 .beat-pulse-swing > i { position: absolute; top: 3.2%; left: 50%; width: 1px; height: 5.3%; background: linear-gradient(#d7dfc3, #d7dfc300); transform: translateX(-50%); opacity: .2; }
 .beat-pulse-swing > b { position: absolute; top: 5.3%; left: 50%; width: 5px; height: 5px; border-radius: 50%; background: #a8b69b; transform: translate(-50%, -50%); opacity: .5; }
-.beat-pulse-swing.is-moving { animation: beat-swing var(--beat-duration) cubic-bezier(.42, 0, .58, 1) both; }
+/* Fastest into the ends of the arc, where the click is: the strike reads on the beat, not between. */
+.beat-pulse-swing.is-moving { animation: beat-swing var(--beat-duration) cubic-bezier(.22, .68, .78, .32) both; }
 .beat-pulse-swing.is-moving > i { opacity: .85; }
 .beat-pulse-swing.is-moving > b { background: #dfe6cb; opacity: 1; box-shadow: 0 0 4px #dfedbe70, 0 0 14px #d1e6ae40; }
 .beat-pulse.is-downbeat .beat-pulse-swing.is-moving > b { background: #f0dbaa; box-shadow: 0 0 5px #efdab366, 0 0 20px #e1c08a30; }
