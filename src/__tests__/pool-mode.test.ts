@@ -12,12 +12,12 @@ describe("room render mode", () => {
   });
   afterEach(() => { vi.unstubAllGlobals(); resetRoomForTests(); resetPowerForTests(); });
 
-  it("carries an earlier rendered-water switch over until a mode is chosen", () => {
-    expect(parseRoomMode(null, null)).toBe("still");
+  it("carries an earlier rendered-water switch over until a mode is chosen, and otherwise lives on power", () => {
+    expect(parseRoomMode(null, null)).toBe("living-power");
     expect(parseRoomMode(null, "on")).toBe("water");
     expect(parseRoomMode(null, "off")).toBe("still");
     expect(parseRoomMode("living", "on")).toBe("living");
-    expect(parseRoomMode("garbage", "on")).toBe("still");
+    expect(parseRoomMode("garbage", "on")).toBe("living-power");
   });
 
   it("cycles still, water, living, living on power, and stores the choice beside the legacy key", () => {

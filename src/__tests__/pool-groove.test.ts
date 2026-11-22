@@ -31,7 +31,10 @@ describe("pool groove", () => {
     expect(g.state.activeMs).toBe(0);
   });
 
-  it("rises through two minutes of steady eighths in one key, and only during the player's turn", () => {
+  it("rises within about half a minute of steady eighths in one key, and only during the player's turn", () => {
+    const soon = createGroove();
+    perform(soon, 0, 35000, steady(0, 35000, 300));
+    expect(soon.state.groove).toBeGreaterThan(0.6);
     const playing = createGroove();
     expect(perform(playing, 0, 120000, steady(0, 120000, 300))).toBeGreaterThan(300);
     expect(playing.state.groove).toBeGreaterThan(0.7);
@@ -102,6 +105,6 @@ describe("pool parameters", () => {
 
   it("leaves glow, bloom and rising blobs for the player to earn", () => {
     expect(poolParams(0)).toMatchObject({ emission: 0, bloom: 0, lava: 0 });
-    expect(poolParams(0.5).lava).toBe(0);
+    expect(poolParams(0.25).lava).toBe(0);
   });
 });

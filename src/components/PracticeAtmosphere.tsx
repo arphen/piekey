@@ -53,9 +53,9 @@ export function PracticeAtmosphere({ input, warmth, flow, playing, beat, bpm }: 
       const heard = s.playing && now - energy.current.heard < 900;
       if (heard) energy.current.played += dt;
       // Listening to a demo and leaving the room open cannot warm it up.
-      const warm = Math.min(unit(s.warmth), unit(energy.current.played / 150000));
+      const warm = Math.min(unit(s.warmth), unit(energy.current.played / 30000));
       const target = heard ? Math.pow(warm, 1.6) * unit((s.flow - 0.48) / 0.44) : 0;
-      bloom += (target - bloom) * (1 - Math.exp(-dt / (target > bloom ? 11000 : 14000)));
+      bloom += (target - bloom) * (1 - Math.exp(-dt / (target > bloom ? 4000 : 12000)));
       breath += ((heard ? energy.current.level : 0) - breath) * (1 - Math.exp(-dt / 600));
       if (!media?.matches && s.playing) drift += dt / 1000;
       el.style.setProperty("--bloom", bloom.toFixed(3));

@@ -190,7 +190,10 @@ algae photograph on a fluid simulation, flowing gently from the moment it opens:
 the heard beat lights the metronome's glass dial on the same frame, sends a ring out from its rim
 and sloshes with its sweep (the dial's dot is fastest into the ends of its arc, on the click), the
 tuner shows the string's real beating as moving rings that freeze within ±3 cents, and over about
-two minutes of steady, in-key pitched playing the algae marble, glow and grow rising blobs. It
+half a minute of steady, in-key pitched playing the algae marble, glow and grow rising blobs. Every
+heard beat also throws the spiral eddies one way and the next swings them back, more as the groove
+builds, so the poison-green algae sway on the pulse against the dark water. With nothing chosen the
+room is Living on power (Water on battery). It
 uses the shared per-frame pitch cache and free-play onsets (no second detector or audio context),
 reacts to onsets and heard beats only, and never predicts a beat from the player's notes.
 Intensity is earned only by the player's pitched playing during their turn: enabling the mode,

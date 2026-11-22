@@ -270,7 +270,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/pool/golden.ts` — `PHI:3`, `GOLDEN_ANGLE:4`, `FIBONACCI:5`, `PHRASE_WRAP:6`, `phyllotaxis:11`, `spiral:19`, `goldenSpread:26`, `wander:29`, `mulberry32:36`
 - `src/pool/groove.ts` — `GrooveFrame:7`, `GrooveContext:8`, `GrooveOnset:13`, `GrooveState:15`, `createGroove:58`
 - `src/pool/host.ts` — `createHost:41`, `PoolHost:45`
-- `src/pool/mode.ts` — `RoomMode:6`, `RoomEffective:7`, `ROOM_MODES:8`, `parseRoomMode:23`, `nextRoomMode:28`, `setRoomMode:42`, `cycleRoomMode:48`, `probeLiving:51`, `markLivingDegraded:66`, `RoomInputs:77`, `RoomResolution:78`, `resolveRoom:80`, `useRoomRender:102`, `resetRoomForTests:113`
+- `src/pool/mode.ts` — `RoomMode:6`, `RoomEffective:7`, `ROOM_MODES:8`, `parseRoomMode:27`, `nextRoomMode:32`, `setRoomMode:46`, `cycleRoomMode:52`, `probeLiving:55`, `markLivingDegraded:70`, `RoomInputs:81`, `RoomResolution:82`, `resolveRoom:84`, `useRoomRender:106`, `resetRoomForTests:117`
 - `src/pool/params.ts` — `GROOVE_ANCHORS:4`, `ANCHORS:6`, `PoolParams:25`, `at:31`, `poolParams:37`, `tintFor:51`
 - `src/pool/pool.css`
 - `src/pool/power.ts` — `PowerSource:5`, `readPower:32`, `subscribePower:34`, `usePowerSource:40`, `resetPowerForTests:45`

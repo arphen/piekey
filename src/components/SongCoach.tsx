@@ -763,7 +763,7 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
       role="dialog"
       aria-label="practice session"
     >
-      {!free && !choosingTune && !tools ? <PracticeAtmosphere input={input} warmth={Math.min(1, session.elapsed() / 180000)} flow={inExercise ? session.flow : 0} playing={inExercise && (session.phase === "pace" || session.phase === "time") && !session.paused && !session.away && !session.listeningOff && pad === null && !menu && !calib} beat={inExercise && !session.paused && pad === null && !menu && !calib ? session.beat : undefined} bpm={session.bpm} /> : null}
+      {!free && !choosingTune && !tools ? <PracticeAtmosphere input={input} warmth={Math.min(1, session.elapsed() / 45000)} flow={inExercise ? session.flow : 0} playing={inExercise && (session.phase === "pace" || session.phase === "time") && !session.paused && !session.away && !session.listeningOff && pad === null && !menu && !calib} beat={inExercise && !session.paused && pad === null && !menu && !calib ? session.beat : undefined} bpm={session.bpm} /> : null}
       <div style={{ display: choosingTune || tools ? "none" : "contents" }} aria-hidden={choosingTune || Boolean(tools) || undefined}>
       {free ? (
         <FreePlay input={input} deck={deck} onClose={closeFree} onPractise={practise} active={!choosingTune && !tools} onChooseTune={onTune ? openTunePicker : undefined} onToolsChange={setFreeInstruments} />

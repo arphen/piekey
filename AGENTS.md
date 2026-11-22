@@ -169,8 +169,9 @@ component tests run under jsdom. No CI configuration is committed; `make check` 
   non-exact melody notes. The menu summon is D♯5 hold/release/hold; menu rows are first frets.
   Never put a command on an open-string pitch. Tune changes retain the outer practice boundary and never exit fullscreen.
   Modal suspension blocks scoring, playback and automatic wake/reconnect until the modal closes;
-  resume only a pause owned by that modal. Renderer preferences are device-local and default off
-  (`guitar-room-render`, `guitar-pool-tier`); the pool uses the shared input and `pitchOf` cache,
+  resume only a pause owned by that modal. Renderer preferences are device-local
+  (`guitar-room-render`, `guitar-pool-tier`); with nothing chosen the room is Living on power
+  (water on battery or a weak GPU); the pool uses the shared input and `pitchOf` cache,
   never its own detector, and `[data-pool]` marks rocks, calm lenses and glass on room elements.
 - Outside sessions the shell is played too (`src/nav/`, notes from fret 12 up): keep controls real
   `button`/`select` elements so the cursor reaches them, and mark decoration `data-nav-skip`.

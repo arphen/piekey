@@ -265,7 +265,7 @@ stop the animation. Resource cleanup, context-loss fallback and capability guard
 independent from practice.
 
 **Living pool** (`src/pool/`). `pool/mode.ts` stores one device-local room mode in
-`guitar-room-render` — Still (default), Water (`RenderedWater`), Living, or Living on power — and
+`guitar-room-render` — Still, Water (`RenderedWater`), Living, or Living on power (default) — and
 reads the old `guitar-rendered-room` switch only to carry an "on" over as Water. Living needs
 WebGL2 with renderable half floats and no software rasteriser; Living on power also needs the
 Battery Status API to report a charger (`pool/power.ts`), else it resolves to Water. One
@@ -277,8 +277,9 @@ survives reparenting), so fluid state persists across session, free play, instru
 changes. `pool/host.ts` and `pool/engine/*` load by dynamic `import()` only when Living is
 effective. The host subscribes to the shared input only while Living, reads pitch from the
 per-frame `pitchOf` cache during the publisher's `playing` turn, and runs `pool/groove.ts` (pure:
-`createOnsets`, `guessKey`, `steadyGap`/`readGrid` from `song/freeplay.ts`) to a slow groove that
-needs about two minutes of pitched playing; `pool/params.ts` maps it to the look. At rest the
+`createOnsets`, `guessKey`, `steadyGap`/`readGrid` from `song/freeplay.ts`) to a groove that
+needs about half a minute of pitched playing; heard beats kick the vortices and alternate swirls
+at the spiral eddies, scaled by the groove; `pool/params.ts` maps it to the look. At rest the
 photograph is already visible and gently flowing; glow, bloom and blobs are earned. Notes drop ripple stones on a phrase phyllotaxis; heard
 `BeatSignal` serials light the dial's rim on the same frame and drop a ring already at the rim; tuner readings drive a moiré at
 the real beat frequency; SongCoach emits a `bloom` on a clean outcome and a `sweep` on a card

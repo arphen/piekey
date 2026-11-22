@@ -372,7 +372,7 @@ than `frame.now`.
   `mode` for tint.
 - **Clean** `Q`: session `flow` when provided, otherwise the mean clarity of onset frames.
 - `raw = C^0.7 · (0.4·S + 0.35·T + 0.25·Q)`.
-- `earned = unit(activeMs / 120 000)^0.7`. It takes about 2 minutes of real playing to reach full
+- `earned = unit(activeMs / 30 000)^0.7` (was 120 000 in the first version; shortened 2026-11-22 at the user's request). It takes about half a minute of real playing to reach full
   intensity.
 - `target = playing ? min(raw, earned) : 0`.
 - `groove` approaches `target` exponentially with τ = 20 s rising and 10 s falling, or 8 s after

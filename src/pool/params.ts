@@ -5,20 +5,20 @@ export const GROOVE_ANCHORS = [0, 0.25, 0.5, 0.75, 1] as const;
 
 export const ANCHORS = {
   drift: [0.05, 0.06, 0.08, 0.11, 0.14], // screen widths per minute
-  vorticity: [4, 6, 10, 18, 28], // confinement ε
-  vortices: [2, 3, 3, 5, 8], // ambient vortices, a Fibonacci count
-  orbit: [0.02, 0.03, 0.06, 0.1, 0.16], // vortex orbit, rad/s
+  vorticity: [5, 8, 14, 22, 32], // confinement ε
+  vortices: [2, 3, 5, 5, 8], // ambient vortices, a Fibonacci count
+  orbit: [0.025, 0.04, 0.08, 0.13, 0.2], // vortex orbit, rad/s
   velocityHalfLife: [3, 3.5, 4, 6, 8], // s
   flowPeriod: [14, 12, 10, 8, 6], // s for each flow phase before it restarts unseen
-  saturation: [0.88, 0.96, 1.05, 1.15, 1.3],
-  sepia: [0.08, 0.05, 0.03, 0.01, 0],
-  brightness: [0.5, 0.54, 0.58, 0.62, 0.66], // photograph opacity over the dark water
-  contrast: [1.15, 1.2, 1.3, 1.4, 1.5], // a tone curve that keeps the water gaps dark
+  saturation: [1, 1.12, 1.25, 1.38, 1.52], // poison green against the dark water, from the start
+  sepia: [0.04, 0.02, 0, 0, 0],
+  brightness: [0.54, 0.58, 0.63, 0.68, 0.72], // photograph opacity over the dark water
+  contrast: [1.3, 1.4, 1.52, 1.62, 1.72], // a tone curve that keeps the water gaps dark
   spread: [0.65, 0.8, 0.95, 1, 1], // how far the photograph reaches beyond the room's lower-right
-  emission: [0, 0.05, 0.2, 0.5, 0.9],
-  bloom: [0, 0, 0.15, 0.4, 0.7],
+  emission: [0, 0.15, 0.4, 0.7, 1],
+  bloom: [0, 0.08, 0.3, 0.55, 0.8],
   rippleHalfLife: [0.6, 0.8, 1.1, 1.5, 2],
-  lava: [0, 0, 0, 0.4, 1],
+  lava: [0, 0, 0.3, 0.7, 1],
   floaters: [8, 13, 21, 34, 34],
 } as const satisfies Record<string, readonly number[]>;
 

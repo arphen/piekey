@@ -73,6 +73,9 @@ export class PoolHost {
   private push: [number, number] = [0, 0];
   private beatSerial = -1;
   private beatAt: number | undefined;
+  private beatKick = 0; // a heard beat lurches the whole pool, decaying within a fraction of a beat
+  private beatSway = 0; // which way the eddies were last thrown: they swing back on the next beat
+  private beatDance = 0; // a beat waiting to throw the eddies, at its strength
   private tune: Tune = { cents: null, frequency: null, at: -Infinity };
   private tunerPhase = 0;
   private tunerAmount = 0;
@@ -437,6 +440,12 @@ export class PoolHost {
         this.flash(dial, amp);
         this.swirls.push({ x: dial.x, y: dial.y, impulse: (beat.serial % 2 ? 1 : -1) * 0.025 * amp, radius: dial.r * 1.6 });
       } else this.stones.push({ x: aspect / 2, y: 0.02, radius: 0.06, amp: amp * 0.35, tint });
+      // and the whole pool dances to it, more as the playing earns it
+      if (!beat.counting) {
+        this.beatKick = Math.max(this.beatKick, amp);
+        this.beatDance = amp;
+        this.beatSway = beat.serial % 2 ? 1 : -1;
+      }
       this.lastEvent = now;
     } else if (!beat?.active) this.beatSerial = beat?.serial ?? -1;
   }
@@ -509,8 +518,9 @@ export class PoolHost {
     this.glassy += ((inTune ? 1 : 0) - this.glassy) * (1 - Math.exp(-dt / 0.8));
     const still = Math.max(this.calm, this.glassy * 0.8);
 
-    // ambient vortices on a slowly turning golden spiral; onsets spin them up
-    const kick = Math.min(1.5, state.kick);
+    // ambient vortices on a slowly turning golden spiral; onsets spin them up, heard beats throw them
+    this.beatKick *= Math.exp(-dt / 0.22);
+    const kick = Math.min(1.8, state.kick + this.beatKick * (0.25 + 0.75 * g) * (1 - this.calm));
     this.turn += params.orbit * (1 + kick) * dt;
     const count = params.vortices * (1 - still);
     const vortices: Vortex[] = [];
@@ -529,6 +539,12 @@ export class PoolHost {
       }
       vortices.push({ x, y, spin: (i % 2 ? -1 : 1) * weight * (0.35 + 0.45 * g) * (1 + kick * 0.8), radius: 0.11 + 0.025 * i });
     }
+    // a beat throws the eddies one way, the next swings them back: the algae sway on the pulse
+    if (this.beatDance > 0) {
+      const strength = this.beatDance * (0.2 + 0.8 * g) * (1 - still);
+      vortices.slice(0, 3).forEach((v, i) => this.swirls.push({ x: v.x, y: v.y, impulse: this.beatSway * (i % 2 ? -1 : 1) * 0.03 * strength, radius: v.radius * 1.4 }));
+      this.beatDance = 0;
+    }
 
     // the constellation drifts, wandering on golden-ratio periods
     const heading = -0.35 + 0.9 * wander(t, 23);
@@ -536,7 +552,7 @@ export class PoolHost {
     this.driftVelocity = [Math.cos(heading) * speed, Math.sin(heading) * speed * 0.6];
     this.drift = [this.drift[0] + this.driftVelocity[0] * dt, this.drift[1] + this.driftVelocity[1] * dt];
 
-    const heat = Math.max(0, g - 0.55) * (0.4 + state.energy) * params.lava;
+    const heat = Math.max(0, g - 0.35) * (0.4 + state.energy) * params.lava;
     const emitters = heat > 0.001 ? Array.from({ length: 5 }, (_, k) => ({ x: aspect * goldenSpread(k + 1), y: 0.015, rate: heat * 1.6 * (0.6 + 0.4 * wander(t, 23 * (k + 1) * 0.37, k)), radius: 0.045 })) : [];
     this.rings = this.rings.map((r) => ({ ...r, age: r.age + dt })).filter((r) => r.age < 6);
     // a beat's light is brightest on its own frame and gone within a fraction of a beat

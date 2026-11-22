@@ -39,7 +39,7 @@
 }
 
 .pa-water-colour {
-  filter: saturate(1.1);
+  filter: saturate(1.7) contrast(1.3) brightness(1.1); /* poison green against the dark water */
   opacity: calc(var(--bloom) * 0.46);
 }
 

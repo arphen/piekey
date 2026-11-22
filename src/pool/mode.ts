@@ -19,17 +19,21 @@ const degradedListeners = new Set<() => void>();
 
 const isMode = (value: string | null): value is RoomMode => ROOM_MODES.includes(value as RoomMode);
 
-/** The stored mode; an earlier "Rendered water: on" reads as Water until a mode is chosen. */
+/**
+ * The stored mode; an earlier "Rendered water: on" reads as Water until a mode is chosen. With
+ * nothing chosen the pool lives while the laptop is plugged in (water on battery, or where the
+ * GPU cannot), so the room can dance without asking for it.
+ */
 export function parseRoomMode(stored: string | null, legacy: string | null): RoomMode {
   if (isMode(stored)) return stored;
-  return stored === null && legacy === "on" ? "water" : "still";
+  return stored === null && legacy === "on" ? "water" : stored === null && legacy === "off" ? "still" : "living-power";
 }
 
 export const nextRoomMode = (mode: RoomMode): RoomMode => ROOM_MODES[(ROOM_MODES.indexOf(mode) + 1) % ROOM_MODES.length];
 
 function readMode(): RoomMode {
   if (transient !== undefined) return transient;
-  try { return parseRoomMode(localStorage.getItem(KEY), localStorage.getItem(LEGACY)); } catch { return "still"; }
+  try { return parseRoomMode(localStorage.getItem(KEY), localStorage.getItem(LEGACY)); } catch { return "living-power"; }
 }
 
 function subscribeMode(listener: () => void): () => void {

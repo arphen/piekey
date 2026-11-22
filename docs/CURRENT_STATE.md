@@ -560,7 +560,7 @@ card. Progressions are not logged to `guitar-freeplay` or the map yet.
 | `guitar-skills` | `song/leitner.ts` | Shared scale card states and credit. |
 | `guitar-freeplay` | `song/freeplay.ts` | Free-play log (`FreeEntry[]`), capped. |
 | `guitar-freeplay-prefs` | `song/useFreePlay.ts` | Band on/off. |
-| `guitar-room-render` | `pool/mode.ts` | Room mode `still`/`water`/`living`/`living-power`, default still; device-local, excluded from sync/backup. |
+| `guitar-room-render` | `pool/mode.ts` | Room mode `still`/`water`/`living`/`living-power`, default living-power (water on battery); device-local, excluded from sync/backup. |
 | `guitar-pool-tier` | `pool/host.ts` | Living pool's last quality tier (0–3); device-local, excluded from sync/backup. |
 | `guitar-rendered-room` | (none) | Earlier on/off rendered-water switch; read only to carry "on" over as Water. |
 | `guitar-output` | `audio/output.ts` | Chosen output device id. |
