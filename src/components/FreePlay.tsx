@@ -188,7 +188,7 @@ export function FreePlay({ input, deck, onClose, onPractise, active = true, onCh
               {v.onGrid !== null ? <><p className="fp-overline">Your timing</p><Lane timing={v.timing} alignment={(v.alignment ?? 0) / (60000 / v.bpm / v.division)} /><p className="fp-cap">{Math.round(v.onGrid * 100)}% near alignment{v.spread !== null ? ` · ±${Math.round(v.spread)} ms spread` : ""}{v.alignment !== null ? ` · ${v.alignment >= 0 ? "+" : ""}${Math.round(v.alignment)} ms alignment` : ""}</p></> : null}
             </div>
             <div className="fp-click">
-              <BeatPulse beat={v.beatSignal} bpm={v.on ? v.bpm : undefined} />
+              <BeatPulse beat={v.beatSignal} bpm={v.on ? v.bpm : undefined} onTempo={nudge} />
               <p className="fp-mood" aria-live="polite">{clickLine(v)}</p>
               {v.on && v.mode === "follows" ? <div className="fp-settle" style={{ "--settle": arc } as CSSProperties} aria-label={v.held ? "tempo held" : "click follows your tempo"}><i /><span>{v.held ? "tempo held" : "following your tempo"}</span></div> : null}
             </div>

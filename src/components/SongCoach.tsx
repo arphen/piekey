@@ -1125,6 +1125,8 @@ function Running({
   onTools(tool: RoomTool): void;
 }) {
   const byId = useMemo(() => new Map(deck.cards.map((c) => [c.id, c])), [deck]);
+  // a tempo set by hand shows itself, even while the dial would otherwise show the player's own pulse
+  const [setByHand, setSetByHand] = useState<string | null>(null);
   const card = s.card;
   if (!card) return null;
   const say = coachLine(card, s, s.passes[s.passes.length - 1]);
@@ -1143,7 +1145,12 @@ function Running({
   const stateOf = (id: string) => (s.phase === id ? "is-now" : order.indexOf(s.phase) > order.indexOf(id) ? "is-done" : "");
   const counting = s.phase === "time" && !s.paused ? s.playback.counting : 0;
   const pips = s.phase === "pace" && card.view !== "chords" && s.needClean > 1;
-  const own = s.phase === "pace" && s.pulse !== null;
+  const handKey = `${card.id}:${s.phase}`;
+  const own = s.phase === "pace" && s.pulse !== null && setByHand !== handKey;
+  const stepTempo = (delta: number) => {
+    setSetByHand(handKey);
+    s.tempo(delta);
+  };
   const mixed = new Set(s.queue.map((id) => byId.get(id)?.tuneId)).size > 1;
   const listening = input.status === "listening" && !input.paused;
   const phaseName = {
@@ -1290,7 +1297,7 @@ function Running({
           </span>
           {s.phase === "time" ? <BeatMeter drift={s.playback.drift} beatMs={60000 / s.bpm} /> : null}
           <span className={`ss-tempo-cluster ${own ? "is-own" : ""}`} title={own ? "your own tempo" : s.target > s.bpm ? `the click, on its way to ${s.target}` : "tempo"}>
-            <BeatPulse beat={s.beat} bpm={own ? s.pulse ?? s.bpm : s.bpm} />
+            <BeatPulse beat={s.beat} bpm={own ? s.pulse ?? s.bpm : s.bpm} onTempo={stepTempo} />
             {s.phase === "time" && s.target > s.bpm ? <em>→ {s.target}</em> : null}
           </span>
           <BoxPips box={s.box} />

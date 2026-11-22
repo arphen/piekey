@@ -140,6 +140,9 @@ next safe boundary. **Stop now** remains available. Neither action awards an unf
 - **How it is going** is one number (`song/estimator.ts`) that warms the room and widens the line
   under the material: right notes for melodies; right notes, unbroken runs and sitting on the
   click for scales.
+- **Tempo by hand.** Wherever the tempo dial shows (an exercise, free play), quiet − and + steps
+  beside its number move the tempo 4 bpm, as the guitar menu and the − / + keys do. At the
+  player's own pace the dial then shows the tempo set, not the measured pulse.
 - **Visible beat.** The pulse follows the beat being heard from the audio output clock, including
   count-in. That clock is the device's own (`heardTime`, read from the browser context behind
   Tone's wrapper, which reports none), shown a paint ahead so it lands as it sounds. Scoring and

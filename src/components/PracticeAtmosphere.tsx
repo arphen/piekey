@@ -98,8 +98,10 @@ const DIAL_TICKS = Array.from({ length: 72 }, (_, i) => ({
   medium: i % 3 === 0,
 }));
 
-/** A weighted sweep and resonance begin on each heard beat. Nothing loops independently. */
-export function BeatPulse({ beat, bpm, compact = false }: { beat: BeatSignal; bpm?: number; compact?: boolean }) {
+const TEMPO_STEP = 4; // as the guitar menu and the keys move it
+
+/** A weighted sweep and resonance begin on each heard beat. Nothing loops independently. `onTempo`: quiet slower/faster steps beside the dial. */
+export function BeatPulse({ beat, bpm, compact = false, onTempo }: { beat: BeatSignal; bpm?: number; compact?: boolean; onTempo?: (delta: number) => void }) {
   const active = beat.active && beat.index >= 0;
   const id = useId().replace(/:/g, "");
   const duration = 60 / (bpm || 80);
@@ -107,10 +109,15 @@ export function BeatPulse({ beat, bpm, compact = false }: { beat: BeatSignal; bp
     <div
       className={`beat-pulse ${compact ? "beat-pulse--compact" : ""} ${active ? "is-active" : ""} ${beat.index === 0 ? "is-downbeat" : ""}`}
       style={{ "--beat-decay": `${Math.min(.8, duration * .95)}s`, "--beat-duration": `${duration}s`, "--swing-from": `${beat.serial % 2 ? -58 : 58}deg`, "--swing-to": `${beat.serial % 2 ? 58 : -58}deg` } as CSSProperties}
-      role="img"
-      aria-label={`${bpm ? `${bpm} beats per minute` : "Waiting for a tempo"}${active ? `, ${beat.beats} beats per bar${beat.counting ? ", count-in" : ""}` : ", pulse resting"}`}
     >
-      <div className="beat-pulse-face" aria-hidden="true" data-pool={compact ? undefined : "glass rock calm"} data-pool-anchor={compact ? undefined : "metronome"}>
+      <div className="beat-pulse-dialbox">
+      <div
+        className="beat-pulse-face"
+        role="img"
+        aria-label={`${bpm ? `${bpm} beats per minute` : "Waiting for a tempo"}${active ? `, ${beat.beats} beats per bar${beat.counting ? ", count-in" : ""}` : ", pulse resting"}`}
+        data-pool={compact ? undefined : "glass rock calm"}
+        data-pool-anchor={compact ? undefined : "metronome"}
+      >
         <svg className="beat-pulse-dial" viewBox="0 0 320 320" fill="none">
           <defs>
             <linearGradient id={`${id}-metal`} x1="24" y1="14" x2="286" y2="306" gradientUnits="userSpaceOnUse"><stop stopColor="#dbd7bc" stopOpacity=".65" /><stop offset=".34" stopColor="#9cae94" stopOpacity=".1" /><stop offset=".7" stopColor="#a8b89b" stopOpacity=".28" /><stop offset="1" stopColor="#d3ae7a" stopOpacity=".5" /></linearGradient>
@@ -131,6 +138,17 @@ export function BeatPulse({ beat, bpm, compact = false }: { beat: BeatSignal; bp
         <span className="beat-pulse-position">{active ? beat.counting ? "COUNT IN" : String(beat.index + 1).padStart(2, "0") : "TEMPO"}</span>
         <span className="beat-pulse-number">{bpm || "—"}</span>
         <span className="beat-pulse-unit">beats / min</span>
+      </div>
+      {onTempo ? (
+        <>
+          <button type="button" className="beat-pulse-step is-slower" aria-label={`${TEMPO_STEP} beats per minute slower`} title="Slower" onClick={() => onTempo(-TEMPO_STEP)}>
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 8h8" /></svg>
+          </button>
+          <button type="button" className="beat-pulse-step is-faster" aria-label={`${TEMPO_STEP} beats per minute faster`} title="Faster" onClick={() => onTempo(TEMPO_STEP)}>
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 8h8M8 4v8" /></svg>
+          </button>
+        </>
+      ) : null}
       </div>
       <ol className="beat-pulse-dots" aria-hidden="true" data-pool="calm">
         {Array.from({ length: beat.beats }, (_, i) => <li key={i} className={`${active && i === beat.index ? "is-now" : ""} ${i === 0 ? "is-accent" : ""}`}><i key={active && i === beat.index ? beat.serial : "rest"} /><span>{i + 1}</span></li>)}
