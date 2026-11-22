@@ -105,6 +105,13 @@ next safe boundary. **Stop now** remains available. Neither action awards an unf
   only beyond its own measurement noise (twice its standard error from scatter around the fitted
   line), so noisy short phrases are not failed by chance. Alignment does not earn a larger increase. Held
   voicings and improvisation keep their own acceptance rules.
+- **The beat.** Hearing the passage and playing it in time both carry a pulse when no click is
+  asked for: a soft kick and hat on every beat, with a quiet eighth between beats slower than
+  84 bpm, so rests are heard as time. In a gap only a soft hat stays.
+- **Coming round.** A looped phrase (melody, reading, ear) has a counted bar between passes: the
+  count-in clicks and the big number return, the finished pass keeps its colours through it, and
+  its score lands before the next pass starts. Scales, harmony drills and chord changes cycle on
+  without a break.
 - **Gaps.** Once an exercise is well known (box 4) the band drops out for two bars in four (four in
   eight in the top box) while it plays in time; the notes are still judged, so the time is the
   player's. During a focus on time every focus card plays this way.
@@ -130,8 +137,10 @@ next safe boundary. **Stop now** remains available. Neither action awards an unf
   under the material: right notes for melodies; right notes, unbroken runs and sitting on the
   click for scales.
 - **Visible beat.** The pulse follows the beat being heard from the audio output clock, including
-  count-in. It rests with paused/stopped audio and gap practice; no separate animation clock
-  supplies time to the player.
+  count-in. Each heard beat also lights the whole room from its edges (warm on the bar's first
+  beat, cool while counting in), so the beat is felt while the eyes stay on the music. It rests
+  with paused/stopped audio and gap practice; no separate animation clock supplies time to the
+  player.
 
 ## The practice room
 

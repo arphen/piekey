@@ -84,9 +84,10 @@ export function PracticeAtmosphere({ input, warmth, flow, playing, beat, bpm }: 
           <path d="M-140 1000 C250 570 540 1200 950 780 S1500 650 1730 190" />
         </g>
       </svg>
-      {beat?.active ? <div key={beat.serial} className={`pa-beat-resonance ${beat.index === 0 ? "is-downbeat" : ""}`} style={{ "--beat-decay": `${Math.min(.85, 55 / (bpm || 80))}s` } as CSSProperties}><i /><i /></div> : null}
       {pooled ? <div className="pa-pool-slot" /> : null}
       <div className="pa-shade" />
+      {/* Above the shade, at the edges of sight: the beat is felt while the eyes stay on the music. */}
+      {beat?.active ? <div key={beat.serial} className={`pa-beat-resonance ${beat.counting ? "is-counting" : beat.index === 0 ? "is-downbeat" : ""}`} style={{ "--beat-decay": `${Math.min(.85, 55 / (bpm || 80))}s` } as CSSProperties}><i /><i /></div> : null}
     </div>
   );
 }

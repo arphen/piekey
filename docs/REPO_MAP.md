@@ -201,7 +201,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/components/LeadSheet.tsx` — `LeadSheet:35`, `ChordSymbol:210`
 - `src/components/LearnView.tsx` — `LearnView:33`
 - `src/components/OverviewView.tsx` — `OverviewView:53`
-- `src/components/PracticeAtmosphere.tsx` — `PracticeAtmosphere:12`, `BeatPulse:101`
+- `src/components/PracticeAtmosphere.tsx` — `PracticeAtmosphere:12`, `BeatPulse:102`
 - `src/components/PracticeBriefPanel.tsx` — `PracticeBriefPanel:6`
 - `src/components/PracticeHistory.tsx` — `PracticeHistory:59`
 - `src/components/ProgressView.tsx` — `ProgressView:170`
@@ -318,7 +318,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/song/useGoalEvidence.ts` — `useGoalEvidence:13`
 - `src/song/useGoals.ts` — `useGoals:4`
 - `src/song/usePracticeHistory.ts` — `usePracticeHistory:11`
-- `src/song/useSession.ts` — `Phase:52`, `Outcome:93`, `SessionOptions:123`, `useSession:132`, `SessionApi:1278`
+- `src/song/useSession.ts` — `Phase:52`, `Outcome:93`, `SessionOptions:123`, `useSession:132`, `SessionApi:1280`
 - `src/song/useThemePicker.ts` — `useThemePicker:14`
 - `src/song/voicings.ts` — `VoicingNote:10`, `Voicing:17`, `voiceChords:75`
 - `src/storage.ts` — `StorageIssue:4`, `pendingStorageWrites:14`, `getStoredItem:15`, `storedKeys:18`, `retryStorageWrites:32`, `getStorageIssues:38`, `subscribeStorageIssues:39`, `reportStorageError:44`, `clearStorageError:53`, `setStoredItem:59`, `removeStoredItem:74`
@@ -352,7 +352,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/tunes/tunes.css`
 - `src/tunes/unzip.ts` — `unzip:4`
 - `src/tunes/useCoach.ts` — `Phase:13`, `useCoach:42`
-- `src/tunes/usePlayback.ts` — `PlaybackMix:27`, `PassScore:42`, `usePlayback:127`
+- `src/tunes/usePlayback.ts` — `PlaybackMix:28`, `PassScore:44`, `usePlayback:132`
 
 ## tunes
 

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Tone from "tone";
 import { ensureAudio } from "../audio/context";
 import { pluckBuffer } from "../audio/pluck";
-import { bassBuffer, clickBuffer, hatBuffer, keysBuffer, OneShots } from "../audio/samples";
+import { bassBuffer, clickBuffer, hatBuffer, keysBuffer, kickBuffer, OneShots } from "../audio/samples";
 import type { NoteResult } from "../core/contract";
 import { midiOf } from "../listen/pitch";
 import { detectNotes, strongPitchClasses } from "../listen/spectrum";
@@ -17,7 +17,8 @@ import { IDLE_BEAT, type BeatSignal } from "../song/pulse";
 // Plays a lead sheet in playing order on the audio clock: melody (plucked string), the chords
 // part (keys) and an optional click, with count-in and looping. A short lookahead loop schedules
 // buffers a quarter second ahead, so tempo, loop and mix changes land on the next notes: the
-// tempo can move while the band plays, without a restart.
+// tempo can move while the band plays, without a restart. A looped phrase may breathe: a counted
+// bar between passes, so the player has time to come back to its first note.
 // While listening, each melody note is scored in time: green when its pitch sounds around it.
 // The edges of the range are judged loosely: the first note may come in early, the last may land
 // late, and a finished pass keeps its colours for a moment so its last note is seen too.
@@ -34,7 +35,8 @@ export interface PlaybackMix {
   bass?: boolean; // the timeline's bass line, when it has one (default on)
   guide?: boolean; // the timeline's unscored guide melody (default on)
   fill?: boolean; // a quiet click on the beats where no chord sounds, so the time is never lost
-  pulse?: boolean; // a soft hat on every beat the click is not on, gaps included: the beat is never guessed
+  pulse?: boolean; // a felt kick and hat on every beat the click is not on (eighths when slow; the hat alone in gaps): the beat is never guessed
+  breath?: boolean; // looping: a counted bar between passes, to come back to the top of the phrase
   shadow?: Support | null; // with `melody` off: the melody under the player, as loud as they need it
   gap?: { on: number; off: number } | null; // beats with the band, then beats without it (still scored): the player keeps the time
 }
@@ -60,6 +62,7 @@ const CHORD_FRAMES = 2; // frames of the whole chord ringing that count as playe
 const CHORD_GATE_RMS = 0.002;
 const STRIKE_RATIO = 1.7; // louder than the quietest of the last few frames by this much: a new attack
 const HOLD_MS = 650; // a finished pass keeps its colours this long into the next one
+const SLOW_SPB = 60 / 84; // beats slower than this get a quiet eighth between them: long silences lose the time
 
 interface Seg {
   r: number; // from this beat past t0 on,
@@ -91,6 +94,8 @@ interface Session {
   t0: number; // context time of the range start (after count-in)
   from: number; // range in beats
   length: number;
+  breath: number; // counted beats between looped passes
+  period: number; // beats from one pass to the next: the passage and its breath
   loop: boolean;
   first: number; // targets at the edges of the range
   last: number;
@@ -200,6 +205,7 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
       const length = t.slots[b].start + t.slots[b].beats - from;
       const spb0 = 60 / mixRef.current.bpm;
       const countBeats = mixRef.current.countIn ? Math.max(2, Math.round(t.slots[a].beats)) : 0;
+      const breath = loop && mixRef.current.breath ? Math.max(2, Math.round(t.slots[a].beats)) : 0;
       const t0 = ctx.currentTime + 0.15 + countBeats * spb0;
       const inRange = (x: number, lo: number, hi: number) => x >= lo - 1e-9 && x < hi - 1e-9;
       const ranged = t.targets.map((n, i) => (inRange(n.t, from, from + length) ? i : -1)).filter((i) => i >= 0);
@@ -225,6 +231,8 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
         t0,
         from,
         length,
+        breath,
+        period: length + breath,
         loop,
         first: ranged[0] ?? -1,
         last: ranged[ranged.length - 1] ?? -1,
@@ -264,9 +272,21 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
         const at = (beat: number) => timeOf(iterStart + beat - s.from);
         const spb = segAt(iterStart + lo - s.from).spb;
         const perfOf = (time: number) => ctxToPerf(ctx, time);
+        const pass = Math.round(iterStart / Math.max(1e-9, s.period));
+        const end = s.from + s.length;
+        // the breath after a looped pass: a bar counted in to the next one, nothing else
+        if (s.breath) {
+          const division = m.clickSubdivision ?? 1;
+          for (let k = 0; k < s.breath; k++) for (let part = 0; part < division; part++) {
+            const when = end + k + part / division;
+            if (inRange(when, Math.max(lo, end), hi)) shots.play(clickBuffer(k === 0 && part === 0), out, at(when), part === 0 ? 0.6 : 0.22);
+          }
+        }
+        hi = Math.min(hi, end);
+        if (lo >= hi - 1e-9) return;
         // in a gap the band and the click leave the player alone; the notes are still judged
         const cycle = m.gap ? m.gap.on + m.gap.off : 0;
-        const quiet = (beat: number) => cycle > 0 && ((((iterStart + beat - s.from) % cycle) + cycle) % cycle) >= m.gap!.on - 1e-9; // counted across loops
+        const quiet = (beat: number) => cycle > 0 && ((((pass * s.length + beat - s.from) % cycle) + cycle) % cycle) >= m.gap!.on - 1e-9; // counted across loops, breaths left out
         t.targets.forEach((n, i) => {
           if (!inRange(n.t, lo, hi)) return;
           const time = at(n.t);
@@ -275,22 +295,32 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
             [...n.chord.voicing].sort((x, y) => x - y).forEach((midi, k) => shots.play(pluckBuffer(midi), out, time + k * 0.03, 0.55 * vol, n.dur * spb * 0.95, 0.12));
           else if (vol > 0) shots.play(pluckBuffer(n.midi), out, time, 0.9 * vol, n.dur * spb * 0.95 + 0.04, 0.08);
           const before = i === s.first ? (s.loop ? t.targets[s.last] : null) : t.targets[i - 1];
-          const previousStart = before ? perfOf(timeOf(iterStart + before.t - s.from - (i === s.first ? s.length : 0))) : null;
+          const previousStart = before ? perfOf(timeOf(iterStart + before.t - s.from - (i === s.first ? s.period : 0))) : null;
           const after = i === s.last ? (s.loop ? t.targets[s.first] : null) : t.targets[i + 1];
-          const nextStart = after ? perfOf(timeOf(iterStart + after.t - s.from + (i === s.last ? s.length : 0))) : null;
-          s.pending.push({ target: i, start: perfOf(time), end: perfOf(time + n.dur * spb), iter: Math.round(iterStart / Math.max(1e-9, s.length)), previousStart, nextStart });
+          const nextStart = after ? perfOf(timeOf(iterStart + after.t - s.from + (i === s.last ? s.period : 0))) : null;
+          s.pending.push({ target: i, start: perfOf(time), end: perfOf(time + n.dur * spb), iter: pass, previousStart, nextStart });
         });
         if (m.chords) for (const c of t.comp) if (inRange(c.t, lo, hi) && !quiet(c.t)) for (const midi of c.midis) shots.play(keysBuffer(midi), out, at(c.t), 0.2, c.dur * spb, 0.15);
+        // the pulse: felt on every beat, and between them when they are far apart; in a gap only the hat stays
+        const pulse = (c: (typeof clicks)[number]) => {
+          if (quiet(c.t)) return shots.play(hatBuffer(), out, at(c.t), c.accent ? 0.45 : 0.28);
+          shots.play(kickBuffer(), out, at(c.t), c.accent ? 0.6 : 0.4);
+          shots.play(hatBuffer(), out, at(c.t), c.accent ? 0.9 : 0.65);
+        };
         if (m.click) {
           const division = m.clickSubdivision ?? 1;
           for (const c of clicks) for (let part = 0; part < division; part++) {
             const when = c.t + part / division;
             if (!inRange(when, lo, hi)) continue;
             if (!quiet(when)) shots.play(clickBuffer(part === 0 && c.accent), out, at(when), part ? 0.18 : c.accent ? 0.5 : 0.35);
-            else if (m.pulse && part === 0) shots.play(hatBuffer(), out, at(when), c.accent ? 0.45 : 0.28);
+            else if (m.pulse && part === 0) pulse(c);
           }
         } else if (m.pulse) {
-          for (const c of clicks) if (inRange(c.t, lo, hi)) shots.play(hatBuffer(), out, at(c.t), c.accent ? 0.45 : 0.28);
+          for (const c of clicks) {
+            if (inRange(c.t, lo, hi)) pulse(c);
+            const off = c.t + 0.5;
+            if (spb >= SLOW_SPB && inRange(off, lo, hi) && !quiet(off)) shots.play(hatBuffer(), out, at(off), 0.35);
+          }
         } else if (m.fill) {
           for (const c of clicks)
             if (inRange(c.t, lo, hi) && !quiet(c.t) && ![...t.comp, ...(t.bass ?? [])].some((x) => x.t <= c.t + 1e-9 && c.t < x.t + x.dur - 1e-9)) shots.play(clickBuffer(c.accent), out, at(c.t), c.accent ? 0.4 : 0.26);
@@ -406,12 +436,15 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
 
         const horizon = rOf(now + LOOKAHEAD_S);
         while (s.nextR < horizon && (s.loop || s.nextR < s.length)) {
-          const iterStart = Math.floor(s.nextR / s.length) * s.length;
-          const segEnd = Math.min(horizon, iterStart + s.length);
-          const iter = Math.floor(iterStart / s.length);
-          const scheduledBpm = 60 / segAt(s.nextR).spb;
-          const tempo = scheduledTempos.get(iter);
-          scheduledTempos.set(iter, tempo ? { min: Math.min(tempo.min, scheduledBpm), max: Math.max(tempo.max, scheduledBpm) } : { min: scheduledBpm, max: scheduledBpm });
+          const iterStart = Math.floor(s.nextR / s.period) * s.period;
+          const segEnd = Math.min(horizon, iterStart + s.period);
+          const iter = Math.round(iterStart / s.period);
+          // a pass's tempo is the tempo of its notes; the breath after it may already count the next
+          if (s.nextR < iterStart + s.length - 1e-9) {
+            const scheduledBpm = 60 / segAt(s.nextR).spb;
+            const tempo = scheduledTempos.get(iter);
+            scheduledTempos.set(iter, tempo ? { min: Math.min(tempo.min, scheduledBpm), max: Math.max(tempo.max, scheduledBpm) } : { min: scheduledBpm, max: scheduledBpm });
+          }
           schedule(s.from + s.nextR - iterStart, s.from + segEnd - iterStart, iterStart);
           s.nextR = segEnd;
         }
@@ -422,18 +455,23 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
         const r = rOf(heard);
         // Count-in buffers were scheduled at the opening tempo, even if the player changes it.
         const countPosition = (heard - s.t0) / spb0;
-        const count = countBeats && countPosition < 0 ? Math.min(countBeats, Math.ceil(-countPosition)) : 0;
+        const iter = r < 0 ? 0 : Math.floor(r / s.period);
+        const pos = r < 0 ? 0 : r - iter * s.period; // beats into this pass
+        const breathing = s.loop && s.breath > 0 && r >= 0 && pos >= s.length - 1e-9; // counting in to the next pass
+        const count = breathing ? Math.max(1, Math.min(s.breath, Math.ceil(s.period - pos - 1e-9))) : countBeats && countPosition < 0 ? Math.min(countBeats, Math.ceil(-countPosition)) : 0;
         if (count !== countRef.current) setCounting((countRef.current = count));
-        const iter = r < 0 ? 0 : Math.floor(r / s.length);
-        const beat = s.from + (r < 0 ? 0 : s.loop ? r - iter * s.length : Math.min(r, s.length - 1e-6));
+        const beat = s.from + (r < 0 ? 0 : s.loop ? Math.min(pos, s.length - 1e-6) : Math.min(r, s.length - 1e-6));
         // Read the same output clock as the notation cursor; never pulse on lookahead scheduling.
         const gap = mixRef.current.gap;
         const gapCycle = gap ? gap.on + gap.off : 0;
-        const quietBeat = r >= 0 && gapCycle > 0 && r % gapCycle >= gap!.on - 1e-9;
+        const quietBeat = r >= 0 && !breathing && gapCycle > 0 && (iter * s.length + pos) % gapCycle >= gap!.on - 1e-9;
         let point: { id: string; index: number; beats: number; counting: boolean } | null = null;
         if (ctx.state === "running" && !quietBeat) {
           if (countPosition >= -countBeats && countPosition < 0) point = { id: `count:${Math.floor(countPosition)}`, index: countBeats + Math.floor(countPosition), beats: countBeats, counting: true };
-          else if (r >= 0 && (s.loop || r < s.length)) {
+          else if (breathing) {
+            const k = Math.min(s.breath - 1, Math.floor(pos - s.length + 1e-9));
+            point = { id: `breath:${iter}:${k}`, index: k, beats: s.breath, counting: true };
+          } else if (r >= 0 && (s.loop || r < s.length)) {
             let lo = 0;
             let hi = beatGrid.length;
             while (lo < hi) {
@@ -454,26 +492,29 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
           setBeat(beatRef.current);
         }
         let target = -1;
-        for (let i = 0; i < t.targets.length; i++) {
+        if (!breathing) for (let i = 0; i < t.targets.length; i++) {
           const n = t.targets[i];
           if (n.t > beat + 1e-9) break;
           if (n.t >= s.from - 1e-9 && n.t + n.dur > beat) target = i;
         }
-        const slot = r < 0 ? -1 : t.slots.findIndex((sl) => beat >= sl.start - 1e-9 && beat < sl.start + sl.beats - 1e-9);
+        const slot = r < 0 || breathing ? -1 : t.slots.findIndex((sl) => beat >= sl.start - 1e-9 && beat < sl.start + sl.beats - 1e-9);
         if (target !== activeRef.current.target || slot !== activeRef.current.slot) {
           activeRef.current = { target, slot };
           setActive(activeRef.current);
         }
 
         const perfNow = performance.now();
-        // a new loop pass: the finished one is scored and keeps its colours for a moment
-        if (s.loop && iter > s.pass.iter) {
+        // a new loop pass: the finished one is scored and keeps its colours for a moment, or through
+        // the breath before the next, which belongs to the pass it counts in
+        const passIter = breathing ? iter + 1 : iter;
+        if (s.loop && passIter > s.pass.iter) {
           settle(true);
           const done = s.pass;
-          s.pass = { iter, results: blank(), wrong: [], offsets: [], at: t.targets.map(() => null), start: perfNow };
+          const begins = breathing ? ctxToPerf(ctx, timeOf(passIter * s.period)) : perfNow;
+          s.pass = { iter: passIter, results: blank(), wrong: [], offsets: [], at: t.targets.map(() => null), start: begins };
           if (s.pending.some((p) => p.iter === done.iter)) s.closing = done;
           else tally(done, true);
-          s.held = { results: done.results, until: perfNow + HOLD_MS };
+          s.held = { results: done.results, until: Math.max(perfNow + HOLD_MS, begins) };
           show();
         }
         if (s.held && perfNow >= s.held.until) {

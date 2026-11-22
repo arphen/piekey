@@ -15,7 +15,7 @@ import * as guitarTools from "../tools/GuitarTools";
 import { usePlayback } from "../tunes/usePlayback";
 import type { Timeline } from "../tunes/order";
 
-const { scheduledClicks } = vi.hoisted(() => ({ scheduledClicks: [] as { at: number; gain: number }[] }));
+const { scheduledClicks } = vi.hoisted(() => ({ scheduledClicks: [] as { at: number; gain: number; buffer?: unknown }[] }));
 const { freeRoom } = vi.hoisted(() => ({ freeRoom: { view: undefined as unknown as FreeView, active: [] as boolean[] } }));
 
 vi.mock("../song/useFreePlay", () => ({ useFreePlay: (_input: unknown, active: boolean) => {
@@ -37,8 +37,9 @@ vi.mock("tone", () => ({
   },
 }));
 vi.mock("../audio/context", () => ({ ensureAudio() {} }));
-vi.mock("../audio/samples", () => ({ clickBuffer() {}, OneShots: class {
-  play(_buffer: unknown, _out: unknown, at: number, gain: number) { scheduledClicks.push({ at, gain }); }
+vi.mock("../audio/pluck", () => ({ pluckBuffer: () => "pluck" }));
+vi.mock("../audio/samples", () => ({ clickBuffer: (accent: boolean) => accent ? "accent" : "click", hatBuffer: () => "hat", kickBuffer: () => "kick", OneShots: class {
+  play(buffer: unknown, _out: unknown, at: number, gain: number) { scheduledClicks.push({ at, gain, buffer }); }
   stopAll() {}
 } }));
 
@@ -237,6 +238,44 @@ describe("input lifecycle", () => {
     expect(playback.lastPass).toMatchObject({ bpm: 60, tempoStable: false });
     for (const time of [14.6, 15.1, 15.6, 16.1]) await hearAt(time);
     expect(playback.lastPass).toMatchObject({ bpm: 120, tempoStable: true });
+  });
+
+  it("counts a bar in between looped phrase passes and plays nothing of the bars after the phrase", async () => {
+    const ctx = new FakeContext();
+    ctx.state = "running";
+    const phrase: Timeline = {
+      slots: [{ bar: 0, pass: 1, run: 0, start: 0, beats: 4 }, { bar: 1, pass: 1, run: 0, start: 4, beats: 4 }],
+      targets: [{ midi: 60, notes: [0], bar: 0, slot: 0, t: 0, dur: 1 }, { midi: 62, notes: [1], bar: 0, slot: 0, t: 2, dur: 2 }, { midi: 64, notes: [2], bar: 1, slot: 1, t: 4, dur: 1 }],
+      comp: [], total: 8,
+    };
+    function Phrase() {
+      playback = usePlayback(phrase, { bpm: 120, melody: false, chords: false, click: false, countIn: false, pulse: true, breath: true }, input, false, false);
+      return null;
+    }
+    await act(async () => root.render(<Phrase />));
+    await act(async () => playback.play(0, 0, true));
+    // heard = currentTime - outputLatency; the phrase sounds 10.15–12.15, its breath 12.15–14.15
+    const hearAt = async (time: number) => { await act(async () => { ctx.currentTime = time + 0.1; vi.advanceTimersByTime(25); }); };
+    for (let time = 10.2; time < 12.15; time += 0.2) await hearAt(time);
+    expect(playback.counting).toBe(0);
+    await hearAt(12.2);
+    expect(playback.counting).toBe(4);
+    expect(playback.beat).toMatchObject({ index: 0, beats: 4, counting: true, active: true });
+    expect(playback.activeTarget).toBe(-1);
+    for (const time of [12.6, 13.0, 13.4]) await hearAt(time);
+    await hearAt(13.7);
+    expect(playback.counting).toBe(1);
+    expect(playback.beat).toMatchObject({ index: 3, counting: true });
+    await hearAt(14.2);
+    expect(playback.counting).toBe(0);
+    expect(playback.beat).toMatchObject({ index: 0, counting: false });
+    expect(playback.activeTarget).toBe(0);
+    const near = (a: number, b: number) => Math.abs(a - b) < 1e-6;
+    const breath = scheduledClicks.filter((c) => c.at > 12.15 - 1e-6 && c.at < 14.15 - 1e-6);
+    expect(breath.map((c) => c.buffer)).toEqual(["accent", "click", "click", "click"]);
+    expect(breath.map((c) => c.at).every((at, k) => near(at, 12.15 + k * 0.5))).toBe(true);
+    expect(scheduledClicks.filter((c) => c.buffer === "kick" && near(c.at, 14.15))).toHaveLength(1); // the next pass starts on its beat
+    await act(async () => playback.stop());
   });
 });
 

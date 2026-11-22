@@ -301,7 +301,9 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     fill: phase === "listen" || phase === "time",
     chords: true,
     click: phase === "time" && (Boolean(card?.click) || card?.family === "scales") && click,
-    pulse: phase === "time",
+    pulse: phase === "listen" || phase === "time", // rests are heard as time, at any tempo
+    // a phrase comes round with a counted bar to get back to its first note; drills and changes cycle on
+    breath: phase === "time" && Boolean(card && card.view !== "chords" && (card.family === "melody" || card.family === "reading" || card.family === "ear")),
     countIn: true,
     bass: true,
     guide: !memoryExercise || phase === "listen",
