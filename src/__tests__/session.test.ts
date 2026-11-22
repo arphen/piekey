@@ -164,6 +164,14 @@ describe("note keys", () => {
     expect([76, 41]).not.toContain(taken.pace);
   });
 
+  it("stay off every fret of the string a neck prompt is searched on", () => {
+    const deck = buildDeck(sheet(), buildTimeline(sheet()));
+    const low = deck.cards.find((card) => card.id === "fb:string:5")!;
+    const keys = Object.values(assignNoteKeys(["hear", "pace", "time", "next"], commandMidis(low)));
+    for (const key of keys) if (key !== null) expect(key < 40 || key > 55).toBe(true); // low E, frets 0–15
+    expect(keys.filter((key) => key !== null)).toHaveLength(4);
+  });
+
   it("never land on a note the card or its band sounds", () => {
     const deck = buildDeck(sheet(), buildTimeline(sheet()));
     for (const card of deck.cards) {

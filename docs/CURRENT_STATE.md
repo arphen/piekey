@@ -230,7 +230,8 @@ with the synthetic player; **runtime-unverified** with a real guitar, mic and sp
   IndexedDB) and the overview plays the first and latest take.
 - **Improvising** (`sec:…:improv`): any notes over a section; a chord tone on beats one and three
   lands; the chord's notes are lit on the neck; note keys are off.
-- **Fretboard family** (`fb:*`): notes on each string (exact pitch), thirds by shape (exact),
+- **Fretboard family** (`fb:*`): notes on each string (any octave; the string's frets carry no
+  note keys), thirds by shape (exact),
   3rds/7ths of the tune's chords; timed per box.
 - **Ear**: two-note calls first, the tune's chords as arpeggio calls, phrases in its other keys.
 - **Overview**: path towards playing each tune whole, and a "Your playing" section (axes, minutes a

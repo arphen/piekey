@@ -17,8 +17,9 @@ does not tell them what to do.
 Note keys (`song/notekeys.ts`) have home notes outside what exercises play (E5; F2, G2, G♯2). A
 card that sounds a key's home note, itself or through its band, gets the nearest free note
 instead. Allocation reserves every octave of what the player plays: chord tones, improvisation
-choices and, unless the card is exact, melody notes. Tones a chord scorer only tolerates stay
-free, so chord cards keep their keys; tone keys use the same pitch classes. In free play,
+choices and, unless the card is exact, melody notes. A note asked for on the neck is searched
+for, so every fret (0–15) of its string, or two semitones around a position's answers, stays free
+of keys too. Tones a chord scorer only tolerates stay free, so chord cards keep their keys; tone keys use the same pitch classes. In free play,
 whole-tune cards and improvisation every note is music; direct held-note and double-tap
 shortcuts are disabled. The deliberate guitar menu remains available.
 It is called with D♯5 (`SUMMON_NOTE`, high e fret 11): fretted and above the default fret-10
@@ -208,7 +209,8 @@ never influences scoring, tempo, scheduling, evidence, boxes or goals.
 - **Improvising.** Any notes over a section; the chord's notes are lit, a chord tone on one and
   three lands. Nothing is written, so there is no support melody and no part is taken out.
 - **Fretboard.** A note name (and string), or a note shown and its 3rd asked for, or a chord's 3rd or
-  7th; answered by playing, timed. Clean means right and quick enough for the box.
+  7th; answered by playing, timed. A note on a given string counts in any octave (fret 1 or 13 is
+  the same answer, and a low acoustic string is often heard an octave up); a 3rd must be above. Clean means right and quick enough for the box.
 
 ## The curriculum
 

@@ -280,7 +280,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/song/atmosphere.css`
 - `src/song/coach-flow.css`
 - `src/song/cues.ts` — `padChord:29`, `bassHint:36`, `hintNote:42`, `tickIn:48`, `chime:58`, `glint:66`, `interlude:75`, `hush:95`, `say:101`
-- `src/song/deck.ts` — `Family:27`, `Kind:28`, `Rhythm:29`, `Context:31`, `Card:38`, `Deck:79`, `FAMILY_LABEL:86`, `KIND_LABEL:87`, `buildDeck:299`, `rhythmSourceId:1060`, `rhythmStudy:1066`, `noteName:1135`, `mixDecks:1146`, `Focus:1175`, `FOCUS_FAMILIES:1176`, `FOCUS_LABEL:1182` (+1 more)
+- `src/song/deck.ts` — `Family:27`, `Kind:28`, `Rhythm:29`, `Context:31`, `Card:38`, `Deck:79`, `FAMILY_LABEL:86`, `KIND_LABEL:87`, `buildDeck:299`, `rhythmSourceId:1062`, `rhythmStudy:1068`, `noteName:1137`, `mixDecks:1148`, `Focus:1177`, `FOCUS_FAMILIES:1178`, `FOCUS_LABEL:1184` (+1 more)
 - `src/song/ear.ts` — `EarTier:8`, `EAR_TIERS:16`, `scaleNotes:24`, `earPhrase:36`, `echoOfTune:89`
 - `src/song/estimator.ts` — `Estimator:6`, `createEstimator:20`
 - `src/song/evidence.ts` — `Tally:10`, `Timing:12`, `Evidence:20`, `EvidenceLog:43`, `createEvidence:54`, `timingOf:98`
@@ -297,7 +297,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/song/leitner.ts` — `Result:18`, `CardState:20`, `Settings:30`, `AttemptConditions:41`, `Attempt:52`, `SessionEntry:70`, `Store:79`, `BOX_DAYS:89`, `BOXES:90`, `loadStore:134`, `saveStore:153`, `loadStores:175`, `chronologicalAttempts:192`, `saveStores:205`, `saveMeta:225`, `allStores:231` (+10 more)
 - `src/song/lines.ts` — `LineNote:10`, `Span:16`, `ScaleDrill:22`, `scaleLine:42`, `arpLine:84`, `guideLine:97`, `chainLine:127`
 - `src/song/notation.ts` — `KEY_FIFTHS:8`, `signatureOf:21`, `lineSheet:48`, `signatureFor:104`, `playedSheet:110`
-- `src/song/notekeys.ts` — `OPEN_STRINGS:10`, `SUMMON_NOTE:13`, `KEY_HOMES:19`, `usedMidis:27`, `commandMidis:43`, `assignNoteKeys:59`, `spotOf:77`
+- `src/song/notekeys.ts` — `OPEN_STRINGS:10`, `SUMMON_NOTE:13`, `KEY_HOMES:19`, `usedMidis:27`, `commandMidis:48`, `assignNoteKeys:74`, `spotOf:92`
 - `src/song/planner.ts` — `Length:15`, `LENGTHS:16`, `LENGTH_MINUTES:17`, `Role:19`, `Block:21`, `Arc:27`, `SessionPlan:33`, `cardSeconds:64`, `nextArc:81`, `loadArc:91`, `saveArc:99`, `newCards:112`, `PlanOptions:120`, `planBlocks:129`
 - `src/song/practiceHistory.ts` — `PracticeTempoPoint:6`, `ExerciseHistory:17`, `PracticeStoreProjection:29`, `PracticeHistoryResult:31`, `projectPracticeStore:58`, `groupPracticeHistory:106`, `projectPracticeHistory:138`
 - `src/song/profile.ts` — `Axis:11`, `MistakeClass:12`, `AxisLevel:14`, `Weakness:21`, `Ceiling:29`, `SkillProfile:34`, `AXES:40`, `allAttempts:50`, `axesOf:55`, `buildProfile:119`

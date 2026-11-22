@@ -484,13 +484,14 @@ describe("the neck, asked about", () => {
     }
   });
 
-  it("is a family of cards in the box, low strings first, timed answers on exact pitch", () => {
+  it("is a family of cards in the box, low strings first, a string's notes in any octave", () => {
     const s = sheet();
     const deck = buildDeck(s, buildTimeline(s));
     const fb = deck.cards.filter((c) => c.family === "fretboard");
     expect(fb[0].id).toBe("fb:string:5");
     expect(fb.find((c) => c.id === "fb:string:4")?.needs).toBe("fb:string:5");
-    expect(fb.find((c) => c.id === "fb:string:5")?.exact).toBe(true);
+    expect(fb.find((c) => c.id === "fb:string:5")?.exact).toBe(false);
+    expect(fb.find((c) => c.id === "fb:thirds")?.exact).toBe(true); // the 3rd above, not below
     expect(fb.find((c) => c.id === "fb:tones")?.exact).toBe(false);
     expect(fb.every((c) => c.prompts?.length === c.last - c.first + 1)).toBe(true);
   });

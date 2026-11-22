@@ -967,7 +967,9 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
       const id = `fb:string:${string}`;
       const prompts = stringPrompts(homeScale.pcs, string, MAX_FRET, name, rand(id));
       const steps = prompts.map((pr, k) => ({ string, fret: pr.midi - OPEN_MIDI[string], pc: mod(pr.midi), midi: pr.midi, startBeat: k, durationBeats: 1 }));
-      const card = fretCard(id, "onstring", prompts, { title: `Notes on the ${STRING_NAMES[string]} string`, detail: "Each note where it lives on this string, as soon as you find it.", why: "Knowing where every note is turns shapes into choices.", needs: prev }, true, steps);
+      // the string is given, so the note counts in any octave: fret 1 or 13, and a low string's
+      // octave the detector may hear on an acoustic, are the same answer
+      const card = fretCard(id, "onstring", prompts, { title: `Notes on the ${STRING_NAMES[string]} string`, detail: "Each note where it lives on this string, as soon as you find it.", why: "Knowing where every note is turns shapes into choices.", needs: prev }, false, steps);
       if (card) {
         fretDeck.push(card);
         prev = id;
