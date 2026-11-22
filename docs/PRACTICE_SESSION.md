@@ -148,6 +148,10 @@ away. Asking for in time while a pass is already playing changes nothing: the pa
 - **How it is going** is one number (`song/estimator.ts`) that warms the room and widens the line
   under the material: right notes for melodies; right notes, unbroken runs and sitting on the
   click for scales.
+- **Ghost playhead.** In time a faint line glides through the score where the music being heard
+  is, from one note toward the next (`playback.beatAt`, read from the device clock on each frame).
+  It is absent in count-ins, breaths and gaps. A note that lands right flares and throws a few
+  sparks; a missed one dims like an ember. Reduced motion shows neither.
 - **Tempo by hand.** Wherever the tempo dial shows (an exercise, free play), quiet − and + steps
   beside its number move the tempo 4 bpm, as the guitar menu and the − / + keys do. At the
   player's own pace the dial then shows the tempo set, not the measured pulse.

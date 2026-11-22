@@ -210,7 +210,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/components/RenderedWater.tsx` — `RenderedWaterProps:63`, `RenderedWater:72`
 - `src/components/SaveNotice.tsx` — `SaveNotice:7`
 - `src/components/ScalesView.tsx` — `ScalesView:12`
-- `src/components/Score.tsx` — `Score:134`
+- `src/components/Score.tsx` — `Score:136`
 - `src/components/SessionSummary.tsx` — `SessionSummary:85`
 - `src/components/ShapesView.tsx` — `ShapesView:16`
 - `src/components/SkillTree.tsx` — `SkillTree:18`

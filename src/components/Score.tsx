@@ -37,6 +37,7 @@ interface ScoreProps {
   cursor?: boolean; // a lit column behind the active note: where the eyes come back to
   cursorPulse?: number; // changes when the cursor should call for attention
   barsPerLine?: number; // short excerpts can fill their available width
+  playhead?: () => number | null; // where the heard music is, as a printed note index and the way to the next (3.4): a faint line glides there
 }
 
 const BARS_PER_LINE_WIDE = 4;
@@ -46,6 +47,7 @@ const MARK_ROOM = 34; // above the staff for endings and rehearsal marks
 const FIRST_BAR_EXTRA = 70; // room for clef + key signature
 const STRING_MARKS = ["①", "②", "③", "④", "⑤", "⑥"]; // string 0 = high e
 const CURSOR_WIDTH = 34;
+const PLAYHEAD_WIDTH = 2;
 
 function prettyChord(symbol: string): string {
   return symbol
@@ -148,6 +150,7 @@ export function Score({
   cursor = false,
   cursorPulse = 0,
   barsPerLine,
+  playhead,
 }: ScoreProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const noteEls = useRef<SVGElement[]>([]);
@@ -155,7 +158,9 @@ export function Score({
   const barEls = useRef<SVGRectElement[]>([]);
   const noteSpans = useRef<{ top: number; height: number }[]>([]); // the staff each note sits on
   const cursorEl = useRef<SVGRectElement | null>(null);
+  const playheadEl = useRef<SVGRectElement | null>(null);
   const [width, setWidth] = useState(0);
+  const hasPlayhead = Boolean(playhead);
 
   useLayoutEffect(() => {
     const host = hostRef.current;
@@ -397,6 +402,15 @@ export function Score({
     barEls.current = rects;
     noteSpans.current = drawn.map((d) => ({ top: d.top, height: d.height }));
     cursorEl.current = null;
+    playheadEl.current = null;
+    if (hasPlayhead) {
+      const g = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      g.setAttribute("class", "score-playhead");
+      g.setAttribute("width", String(PLAYHEAD_WIDTH));
+      g.setAttribute("rx", "1");
+      svg.insertBefore(g, svg.firstChild);
+      playheadEl.current = g;
+    }
     if (cursor) {
       const c = document.createElementNS("http://www.w3.org/2000/svg", "rect");
       c.setAttribute("class", "score-cursor");
@@ -405,7 +419,50 @@ export function Score({
       svg.insertBefore(c, svg.firstChild);
       cursorEl.current = c;
     }
-  }, [exercise, width, barsPerLine, showFingering, noteLabels, cursor]);
+  }, [exercise, width, barsPerLine, showFingering, noteLabels, cursor, hasPlayhead]);
+
+  // The ghost playhead: read on every frame from the heard music, moved, never redrawn. Between two
+  // notes on a line it glides from one head to the next; after a line's last note, to its bar's end.
+  useEffect(() => {
+    const el = playheadEl.current;
+    if (!el || !playhead) return;
+    const heads: (number | null)[] = noteEls.current.map((note) => {
+      try {
+        const b = note.querySelector<SVGGraphicsElement>(".vf-notehead")?.getBBox?.();
+        return b ? b.x + b.width / 2 : null;
+      } catch {
+        return null; // not laid out (tests)
+      }
+    });
+    const barEnd = (bar: number) => {
+      const r = barEls.current.find((x) => x.dataset.bar === String(bar));
+      return r ? Number(r.getAttribute("x")) + Number(r.getAttribute("width")) : null;
+    };
+    let frame = 0;
+    let shown = "";
+    const draw = () => {
+      frame = requestAnimationFrame(draw);
+      const at = playhead();
+      const k = at === null ? -1 : Math.max(0, Math.min(heads.length - 1, Math.floor(at)));
+      const from = k >= 0 ? heads[k] : null;
+      const span = noteSpans.current[k];
+      if (at === null || from === null || !span) {
+        if (shown !== "off") el.classList.remove("is-on");
+        shown = "off";
+        return;
+      }
+      const next = noteSpans.current[k + 1]?.top === span.top ? heads[k + 1] : barEnd(noteBars.current[k]);
+      const x = from + ((next ?? from) - from) * Math.max(0, Math.min(1, at - k)) - PLAYHEAD_WIDTH / 2;
+      const key = `${x.toFixed(1)}:${span.top}`;
+      if (key === shown) return;
+      if (shown === "off" || shown === "") el.classList.add("is-on");
+      shown = key;
+      el.setAttribute("height", String(span.height));
+      el.style.transform = `translate(${x}px, ${span.top}px)`;
+    };
+    frame = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(frame);
+  }, [playhead, exercise, width, barsPerLine, showFingering, noteLabels]);
 
   // Playback cursor + mic results, applied without re-rendering.
   const activeKey = (activeNotes ?? [activeStep]).join(",");

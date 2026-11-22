@@ -262,6 +262,7 @@ describe("input lifecycle", () => {
     expect(playback.counting).toBe(4);
     expect(playback.beat).toMatchObject({ index: 0, beats: 4, counting: true, active: true });
     expect(playback.activeTarget).toBe(-1);
+    expect(playback.beatAt()).toBeNull(); // no music to follow in the breath
     for (const time of [12.6, 13.0, 13.4]) await hearAt(time);
     await hearAt(13.7);
     expect(playback.counting).toBe(1);
@@ -270,6 +271,7 @@ describe("input lifecycle", () => {
     expect(playback.counting).toBe(0);
     expect(playback.beat).toMatchObject({ index: 0, counting: false });
     expect(playback.activeTarget).toBe(0);
+    expect(playback.beatAt()).toBeCloseTo(0.14, 2); // heard 14.2 s and a paint ahead: 0.14 beats into the pass
     const near = (a: number, b: number) => Math.abs(a - b) < 1e-6;
     const breath = scheduledClicks.filter((c) => c.at > 12.15 - 1e-6 && c.at < 14.15 - 1e-6);
     expect(breath.map((c) => c.buffer)).toEqual(["accent", "click", "click", "click"]);

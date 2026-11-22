@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import * as Tone from "tone";
 import { ensureAudio } from "../audio/context";
 import { useOutputs } from "../audio/output";
-import type { FretNote, Position, ReadingBar } from "../core/contract";
+import type { FretNote, NoteResult, Position, ReadingBar } from "../core/contract";
 import { OPEN_MIDI } from "../core/scales";
 import { midiOf } from "../listen/pitch";
 import type { InputApi } from "../listen/useInput";
@@ -1437,6 +1437,47 @@ function ScoreShadows({ host, wrong, keySignature }: { host: RefObject<HTMLDivEl
   );
 }
 
+const GLINT_MS = 900;
+const SPARKS = [0, 45, 90, 135, 180, 225, 270, 315];
+
+/** A note as it lands: a glimmer of sparks when it is right, a dimming ember when it is not. */
+function ScoreGlints({ host, results, reset }: { host: RefObject<HTMLDivElement>; results: readonly NoteResult[]; reset: string }) {
+  const [bursts, setBursts] = useState<{ key: string; x: number; y: number; kind: "hit" | "miss" }[]>([]);
+  const before = useRef<{ reset: string; results: readonly NoteResult[] }>({ reset, results });
+  const serial = useRef(0);
+  const timers = useRef(new Set<number>());
+  useEffect(() => {
+    const prev = before.current;
+    before.current = { reset, results };
+    const el = host.current;
+    if (!el || prev.reset !== reset) return; // a new exercise or way of working: nothing has just landed
+    const h = el.getBoundingClientRect();
+    const fresh = results.flatMap((r, n) => {
+      if (!r || prev.results[n] === r) return [];
+      const head = el.querySelector(`[data-note="${n}"] .vf-notehead`)?.getBoundingClientRect();
+      if (!head) return [];
+      return [{ key: `${serial.current++}`, x: head.left - h.left + el.scrollLeft + head.width / 2, y: head.top - h.top + el.scrollTop + head.height / 2, kind: r }];
+    });
+    if (!fresh.length) return;
+    setBursts((now) => [...now.slice(-24), ...fresh]);
+    const keys = new Set(fresh.map((b) => b.key));
+    // each burst goes by itself, whatever lands meanwhile
+    timers.current.add(window.setTimeout(() => setBursts((now) => now.filter((b) => !keys.has(b.key))), GLINT_MS));
+  }, [results, reset]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => timers.current.forEach((id) => window.clearTimeout(id)), []);
+  return (
+    <>
+      {bursts.map((b) => (
+        <span key={b.key} className={`ss-glint is-${b.kind}`} style={{ left: b.x, top: b.y }} aria-hidden="true">
+          <b />
+          {b.kind === "hit" ? <u /> : null}
+          {(b.kind === "hit" ? SPARKS : SPARKS.slice(0, 4)).map((a, i) => <i key={a} style={{ "--a": `${a + (i % 2 ? 12 : 0)}deg`, "--d": `${b.kind === "hit" ? 18 + (i % 3) * 7 : 10}px` } as CSSProperties} />)}
+        </span>
+      ))}
+    </>
+  );
+}
+
 /** Scales, arpeggios and lines: read off the staff. The neck below shows where the hands are, and where they went wrong. */
 function LineStage({ card, session: s, sheet, labels }: { card: Card; session: SessionApi; sheet: LeadSheet; labels: LabelMode }) {
   const p = card.p;
@@ -1488,6 +1529,29 @@ function LineStage({ card, session: s, sheet, labels }: { card: Card; session: S
   }, [s.shadows, s.results, card, heads]);
   const host = useRef<HTMLDivElement>(null);
   const playingBar = s.playback.playing ? (card.tl.slots[s.playback.activeSlot] ? s.playback.activeSlot - card.from : -1) : -1;
+  // in time, a faint line follows the music being heard: from one printed note toward the next
+  const { beatAt } = s.playback;
+  const timed = s.phase === "time";
+  const playhead = useMemo(() => {
+    if (!timed) return undefined;
+    const notes = card.tl.targets.slice(card.first, card.last + 1);
+    const end = card.tl.slots[card.to].start + card.tl.slots[card.to].beats;
+    return () => {
+      const beat = beatAt();
+      if (beat === null || !notes.length) return null;
+      let lo = 0;
+      let hi = notes.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1;
+        if (notes[mid].t <= beat + 1e-9) lo = mid + 1;
+        else hi = mid;
+      }
+      const k = lo - 1;
+      if (k < 0) return 0;
+      const until = k + 1 < notes.length ? notes[k + 1].t : end;
+      return k + Math.min(1, (beat - notes[k].t) / Math.max(1e-6, until - notes[k].t));
+    };
+  }, [timed, card, beatAt]);
 
   // what was played instead: a shadow on the neck, with a thread to the note that was meant
   const ghosts = useMemo(() => {
@@ -1523,8 +1587,10 @@ function LineStage({ card, session: s, sheet, labels }: { card: Card; session: S
           noteLabels={degrees}
           cursor
           cursorPulse={s.nudge}
+          playhead={playhead}
         />
         <ScoreShadows host={host} wrong={wrong} keySignature={sheet.keySignature} />
+        <ScoreGlints host={host} results={results} reset={`${card.id}:${s.phase}`} />
       </div>
       <div className={`ss-board ss-board--aside ${neck === "away" ? "is-away" : ""} ${card.spot ? "is-spot" : ""}`}>
         <Fretboard
