@@ -1,8 +1,8 @@
 import type { Family } from "../song/deck";
 
 export type GlyphName = "melody" | "chords" | "harmony" | "scales" | "reading" | "ear" | "free";
-export type TutorTargetTab = "tunes" | "changes" | "scales" | "ear" | "reading" | "free";
-export type TutorModeId = "song" | "changes" | "scales" | "ear" | "reading" | "free";
+export type TutorTargetTab = "tunes" | "changes" | "scales" | "ear" | "reading" | "free" | "triads";
+export type TutorModeId = "song" | "changes" | "scales" | "ear" | "reading" | "free" | "triads";
 
 export interface TutorMode {
   id: TutorModeId;
@@ -69,6 +69,15 @@ export const TUTOR_MODES: TutorMode[] = [
     targetTab: "reading",
     color: "#8cc4ea",
     glyph: "reading",
+  },
+  {
+    id: "triads",
+    label: "Triads",
+    blurb: "By heart · card box",
+    requiresTune: false,
+    targetTab: "triads",
+    color: "#d9b26a",
+    glyph: "harmony",
   },
   {
     id: "free",

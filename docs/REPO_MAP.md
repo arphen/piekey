@@ -134,7 +134,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 
 ## src
 
-- `src/App.tsx` — `App:36`
+- `src/App.tsx` — `App:37`
 - `src/__tests__/attacks.test.ts`
 - `src/__tests__/audio-scoring.test.ts`
 - `src/__tests__/calibration.test.ts`
@@ -168,6 +168,8 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/__tests__/sync.test.ts`
 - `src/__tests__/tones.test.ts`
 - `src/__tests__/tools.test.ts`
+- `src/__tests__/triads-view.test.tsx`
+- `src/__tests__/triads.test.ts`
 - `src/__tests__/tutor.test.ts`
 - `src/agent/brief.ts` — `BriefMaterial:5`, `BriefDays:11`, `BriefScope:12`, `PracticeBriefInput:14`, `PracticeBrief:72`, `buildPracticeBrief:202`
 - `src/audio/backing.ts` — `BackingKind:5`, `BackingEvent:7`, `compVoicing:39`, `generateBacking:52`
@@ -216,6 +218,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/components/SkillTree.tsx` — `SkillTree:18`
 - `src/components/SongCoach.tsx` — `openPractice:235`, `SongCoach:317`, `SongCoachRoom:323`
 - `src/components/Transport.tsx` — `Transport:18`
+- `src/components/TriadsView.tsx` — `TriadsView:107`
 - `src/components/TunePicker.tsx` — `TunePicker:13`
 - `src/components/TuneView.tsx` — `TuneView:44`
 - `src/components/UnitCard.tsx` — `UnitCard:21`
@@ -329,7 +332,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/sync/exchange.ts` — `RecordingDescriptor:12`, `ExchangeProgress:25`, `ExchangeResult:26`, `parseRecordingManifest:36`, `recordingHash:57`, `exchangeState:96`, `createTransferFile:155`, `importTransferFile:168`
 - `src/sync/journal.ts` — `SyncTransaction:4`, `syncableStorageKey:5`, `SyncState:17`, `getSyncState:27`, `subscribeSyncState:28`, `recordStorageChange:169`, `recordLibraryChange:175`, `recordLibraryRemoval:190`, `bootstrapStorage:195`, `bootstrapLibrary:198`, `withSyncSuppressed:202`, `flushSyncJournal:212`, `readSyncJournal:218`, `PracticeTransactionRead:237`, `readPracticeTransactions:242`, `importSyncTransactions:272`
 - `src/sync/merge.ts` — `Projection:278`, `projectTransactions:281`
-- `src/sync/model.ts` — `SyncTransaction:3`, `SyncSnapshot:21`, `SyncConflict:29`, `MergeResult:36`, `syncableStorageKey:46`, `isRecord:50`, `canonical:55`, `parseValue:61`, `validTune:66`, `validAttemptConditions:85`, `validGoalData:160`, `parseSyncSnapshot:209`, `addedRows:241`, `compactValues:253`, `unionTransactions:284`
+- `src/sync/model.ts` — `SyncTransaction:4`, `SyncSnapshot:22`, `SyncConflict:30`, `MergeResult:37`, `syncableStorageKey:47`, `isRecord:51`, `canonical:56`, `parseValue:62`, `validTune:67`, `validAttemptConditions:86`, `validGoalData:161`, `parseSyncSnapshot:211`, `addedRows:243`, `compactValues:255`, `unionTransactions:286`
 - `src/sync/state.ts` — `MergeResult:7`, `SyncConflict:7`, `SyncSnapshot:7`, `SyncTransaction:7`, `parseSyncSnapshot:8`, `flushSyncJournal:9`, `getSyncState:9`, `subscribeSyncState:9`, `initializeSyncJournal:15`, `captureSnapshot:29`, `mergeSnapshot:94`
 - `src/sync/sync.css`
 - `src/sync/transport.ts` — `PairedDevice:3`, `PairInvite:10`, `SyncConnection:18`, `SyncTransportOptions:29`, `SyncTransport:42`, `syncNetworkConfig:51`, `encodePairInvite:149`, `decodePairInvite:153`, `createSyncTransport:458`
@@ -337,6 +340,11 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/tools/timing.ts` — `MIN_TOOL_BPM:1`, `MAX_TOOL_BPM:2`, `clampToolBpm:4`, `tapTempo:9`
 - `src/tools/tools.css`
 - `src/tools/useTuner.ts` — `TunerReading:6`, `useTuner:9`
+- `src/triads/box.ts` — `TOP_BOX:5`, `emptyTriads:5`, `validTriadStore:5`, `TriadState:5`, `TriadStore:5`, `TRIADS_KEY:14`, `TRIAD_BOX_DAYS:15`, `FAST_MS:16`, `loadTriads:20`, `saveTriads:29`, `addDays:37`, `openRings:47`, `answerTriad:58`, `Drill:76`, `newDrill:81`, `nextTriad:84` (+2 more)
+- `src/triads/model.ts` — `Naming:4`, `TOP_BOX:6`, `TriadState:8`, `TriadStore:16`, `emptyTriads:22`, `validTriadState:27`, `validTriadStore:33`
+- `src/triads/triads.css`
+- `src/triads/triads.ts` — `Quality:10`, `TriadKey:12`, `TRIAD_KEYS:19`, `RINGS:34`, `Triad:39`, `TriadCard:46`, `pcOf:60`, `degreeTriad:76`, `triadCard:90`, `TRIAD_CARDS:95`, `TRIAD_BY_ID:96`, `choicesFor:104`, `vexOf:113`, `germanName:124`, `Naming:135`, `noteName:137`
+- `src/triads/useTriads.ts` — `TriadAnswer:23`, `useTriads:29`
 - `src/tunes/agentPrompt.ts` — `MUSICXML_AGENT_PROMPT:2`
 - `src/tunes/backup.ts` — `PracticeBackup:10`, `createBackup:78`, `parseBackup:94`, `restoreBackup:131`
 - `src/tunes/chordName.ts` — `nameVoicing:31`

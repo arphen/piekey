@@ -30,7 +30,7 @@ exact phrases in `SongCoach`; do not restore an inline Learn flow. Ear (`src/ear
 ## Critical entry points
 
 1. `src/main.tsx` — mounts React and loads global styles.
-2. `src/App.tsx` — thin shell: three primary tabs (Practice, Songs, Progress), with Changes, Scales, Reading and Ear under Explore, the one shared mic input, and `GuitarNav`. It also holds the key for the Scales shape explorer. Feature state belongs in the feature's hook, not here.
+2. `src/App.tsx` — thin shell: three primary tabs (Practice, Songs, Progress), with Changes, Scales, Reading, Ear and Triads under Explore, the one shared mic input, and `GuitarNav`. It also holds the key for the Scales shape explorer. Feature state belongs in the feature's hook, not here.
 3. `src/core/contract.ts` — the typed boundary between logic (`core`, `audio`) and UI (`App`, `components`). Change only by agreement, then update every consumer.
 4. `src/core/index.ts` — public music-domain API (`getKey`, `getTune`, `buildPattern`, `fretboardNotes`, ...).
 5. `src/audio/usePlayer.ts` — transport/playback API (`play`, `stop`, `setLoop`, `setPattern`, mix). `src/audio/backing.ts` generates the band.

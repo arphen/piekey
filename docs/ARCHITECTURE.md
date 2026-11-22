@@ -26,6 +26,7 @@ main.tsx
        ├─ Scales    ── ScalesView → FocusView(scales) | ShapesView → harmonicMinorShapes → usePlayer
        ├─ Reading   ── FocusView(reading) → SongCoach(focus) over familiesOnly(deck)
        ├─ Explore: Ear ── EarHub → FocusView(ear) | EarView → useEarTrainer
+       ├─ Explore: Triads ── TriadsView → useTriads → triads/box (card box) + triads/triads (pure)
        └─ Tools     ── GuitarTools → useTuner / usePlayback (shared input/context)
 ```
 
@@ -409,6 +410,7 @@ applied by the detector. String attribution is inferred by `song/fingering.ts`, 
 | `src/reading/generate.ts` | Older deterministic reading melodies (only `Score`'s test uses it). |
 | `src/follow/follower.ts` | Wait-for-me matcher: index, results, misses, retakes, wrong note. |
 | `src/ear/*` | Ear-training theory, library, engine, session hook. |
+| `src/triads/*` | Triad by-heart drill: pure spelling/choices (`triads.ts`, spelled by `song/harmony.ts` `makeScale`), stored shape and sync validator (`model.ts`), seeded card box and order round the circle of fifths (`box.ts`), drill hook with tap/key/strum answers (`useTriads.ts`). |
 
 ## The session state machine
 

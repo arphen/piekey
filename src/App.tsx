@@ -3,6 +3,7 @@ import { getKey } from "./core";
 import type { KeyInfo } from "./core/contract";
 import { GuitarNav } from "./components/GuitarNav";
 import { EarHub } from "./components/EarHub";
+import { TriadsView } from "./components/TriadsView";
 import { FocusView } from "./components/FocusView";
 import { KeyContext, RomanContext } from "./components/keyContext";
 import { OverviewView } from "./components/OverviewView";
@@ -152,6 +153,8 @@ export default function App() {
             <ScalesView key={stateRevision} keyInfo={key} input={input} onKey={changeKey} onOpenTunes={openTunes} />
           ) : tab === "reading" ? (
             <FocusView key={stateRevision} focus="reading" input={input} onOpenTunes={openTunes} />
+          ) : tab === "triads" ? (
+            <TriadsView key={stateRevision} input={input} onExit={() => setTab("tutor")} />
           ) : (
             <EarHub key={stateRevision} input={input} onOpenTunes={openTunes} />
           )}

@@ -345,6 +345,20 @@ dedicated "play the progression" card exists yet; a tune with no chord symbols h
 
 **Gaps:** no mic scoring, no guitar controller, no persisted per-shape practice history.
 
+### Triads
+
+- By-heart triad drill (`src/triads/*`, `TriadsView`): "ii of C major", four triads written on a
+  treble staff with accidentals and names (German H/B by default, toggle), 13 major keys × 7 degrees.
+- Distractors: the same root in the other quality and the key's degrees either side.
+- Card box (`triads/box.ts`, `guitar-triads-v1`, synced and backed up, merged card by card): a quick
+  right answer (≤ 3 s) on a due card climbs a box; slow stays; wrong returns to box 1 and comes back
+  after three other cards. Keys open from C outward both ways round the circle of fifths once 80 % of
+  the open cards are known. The drill never runs dry (due, then new, then weakest).
+- Answers: tap, keys 1–4, the shell cursor, or strumming the triad (exactly one choice's three pitch
+  classes ringing after a fresh attack). The answer's chord sounds after each answer.
+- Verified: unit tests for spelling, choices, boxes and order; a component test of the loop; a
+  headless phone-width render. Unverified: strum answering with a real guitar, a physical phone.
+
 ### Ear
 
 **Echo cards (call-and-response, new)** — the `ear` deck family (`song/ear.ts`, `deck.ts`):
@@ -567,6 +581,7 @@ card. Progressions are not logged to `guitar-freeplay` or the map yet.
 | `guitar-input` | `listen/useInput.ts` | Chosen input device id. |
 | `guitar-calibration` | `listen/calibration.ts` | Per-string detector profile bound to input device/sample rate. |
 | `guitar-ear-v1` | `ear/useEarTrainer.ts` | Ear-training progress/settings. |
+| `guitar-triads-v1` | `triads/box.ts` | Triad drill card box and note-name choice; synced, validated by `triads/model.ts`. |
 | `guitar-changes`, `guitar-changes-times` | (none) | Written by the removed ii–V–I drill; no longer read or written. |
 | `guitar-tunes-v2` | `tunes/library.ts` | Imported tune index: stable id/name, part/voice and small XML or large-XML reference. |
 | `guitar-tune` | `TuneView.tsx` | Currently selected tune id. |
