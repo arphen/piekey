@@ -24,7 +24,8 @@ Source repository: [arphen/piekey](https://github.com/arphen/piekey).
 **Changes, Scales, Reading, Ear and Triads** remain accessible through Practice’s Explore shortcuts.
 **Triads** is a by-heart drill: "ii of C major" and four written triads to choose from (tap, keys
 1–4, the guitar's cursor, or strum the triad), filed in a card box, keys opening from C outward round
-the circle of fifths; it works on a phone without the guitar.
+the circle of fifths, then the same the other way round, minor keys and inversions as each is
+learned; well-known triads are played from memory at the guitar; it works on a phone without it.
 Changes/Scales/Reading narrow the same `SongCoach` session; Ear includes tune-based echo cards and
 its existing chord quiz. Scales also has a shape explorer. The chromatic A440 tuner and metronome
 open inside the guitar room, pause its current exercise and return to it. Both are reachable from

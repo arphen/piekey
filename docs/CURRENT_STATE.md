@@ -348,16 +348,27 @@ dedicated "play the progression" card exists yet; a tune with no chord symbols h
 ### Triads
 
 - By-heart triad drill (`src/triads/*`, `TriadsView`): "ii of C major", four triads written on a
-  treble staff with accidentals and names (German H/B by default, toggle), 13 major keys × 7 degrees.
-- Distractors: the same root in the other quality and the key's degrees either side.
+  treble staff with accidentals and names (German H/B by default, toggle).
+- Six layers (`LAYERS`), 728 cards: major (13 keys × 7), major "which degree?" (the triad shown,
+  four romans), minor (13 relative minors, i ii° III iv V VI vii°, V and vii° from the harmonic
+  minor), minor "which degree?", major inversions (⁶ and ⁶₄), minor inversions. A layer's ring opens
+  when its previous ring is known and the layer before knows that ring: a wave down the circle and
+  into later layers. Existing major card IDs are unchanged.
+- Distractors: the same root in the other quality and the key's degrees either side; inversions
+  also offer the same triad turned another way.
+- At the guitar, cards in box 4+ (named, root position) are asked without choices: strum it from
+  memory; any other three pitch classes ringing together are wrong. Choices return on request or
+  after 8 s. Away from the guitar nothing changes.
 - Card box (`triads/box.ts`, `guitar-triads-v1`, synced and backed up, merged card by card): a quick
   right answer (≤ 3 s) on a due card climbs a box; slow stays; wrong returns to box 1 and comes back
-  after three other cards. Keys open from C outward both ways round the circle of fifths once 80 % of
-  the open cards are known. The drill never runs dry (due, then new, then weakest).
+  after three other cards. The drill never runs dry (due, then new from the earliest open layer, then
+  weakest).
 - Answers: tap, keys 1–4, the shell cursor, or strumming the triad (exactly one choice's three pitch
   classes ringing after a fresh attack). The answer's chord sounds after each answer.
-- Verified: unit tests for spelling, choices, boxes and order; a component test of the loop; a
-  headless phone-width render. Unverified: strum answering with a real guitar, a physical phone.
+- Verified: unit tests for spelling (minor, inversions, E♯/B♯/C♭/double sharps), choices, boxes,
+  order and the opening wave; component tests of the loop and play-only; headless renders of named,
+  "which degree" and inversion cards (with `navigator.locks` stubbed: headless Chrome leaves the
+  practice-window check pending). Unverified: strum answering with a real guitar, a physical phone.
 
 ### Ear
 

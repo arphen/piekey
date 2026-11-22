@@ -48,3 +48,14 @@ it("asks I of C first, files a quick right answer a box up, and moves on to ii",
   expect(host.querySelector(".triads-result")?.textContent).toBe("D · F · A");
   expect(JSON.parse(localStorage.getItem(TRIADS_KEY)!).cards["triad:C:1"]).toMatchObject({ box: 1, right: 0 });
 });
+
+it("asks a well-known triad without choices at the guitar, and gives them back on request", async () => {
+  localStorage.setItem(TRIADS_KEY, JSON.stringify({ v: 1, cards: { "triad:C:4": { box: 4, due: "2000-01-01", seen: 6, right: 6 } } }));
+  const guitar = { ...input, status: "listening" } as InputApi;
+  await act(async () => root.render(<TriadsView input={guitar} />));
+  expect(host.querySelector(".triads-roman")?.textContent).toBe("V");
+  expect(host.querySelector(".triads-play")?.textContent).toContain("Play it");
+  expect(host.querySelectorAll(".triads-choice")).toHaveLength(0);
+  await act(async () => host.querySelector<HTMLButtonElement>(".triads-play button")!.click());
+  expect(host.querySelectorAll(".triads-choice")).toHaveLength(4);
+});

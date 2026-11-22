@@ -9,12 +9,37 @@
 .triads-boxes li b { color: var(--ink); font-weight: 400; }
 .triads-boxes li.is-here { color: var(--triad); }
 .triads-boxes li.is-here > i { background: var(--triad); box-shadow: 0 0 10px color-mix(in srgb, var(--triad) 50%, transparent); }
+.triads-layers { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; color: color-mix(in srgb, var(--ink-faint) 80%, transparent); font: 400 10px/1.3 var(--font-mono); }
+.triads-layers li { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.triads-layers li.is-here { color: var(--triad); }
+.triads-rings { display: inline-flex; gap: 3px; }
+.triads-rings i { width: 7px; height: 7px; border: 1px solid color-mix(in srgb, var(--ink-faint) 50%, transparent); border-radius: 50%; }
+.triads-rings i.is-open { border-color: var(--triad); background: color-mix(in srgb, var(--triad) 55%, transparent); }
 .triads-keys { display: flex; flex-wrap: wrap; gap: 4px 8px; margin: 0; color: color-mix(in srgb, var(--ink-faint) 60%, transparent); font: 400 11px/1.4 var(--font-mono); }
 .triads-keys span.is-open { color: var(--triad); }
 
 .triads-ask { display: grid; justify-items: center; gap: 2px; text-align: center; }
 .triads-roman { margin: 0; color: var(--triad); font: 400 clamp(64px, 14vh, 120px)/0.95 var(--font-display); letter-spacing: -0.03em; }
 .triads-of { margin: 0; color: var(--ink); font: 400 clamp(18px, 3vh, 26px)/1.2 var(--font-display); }
+.triads-of small { display: block; margin-top: 4px; color: var(--ink-faint); font: 400 12px/1.2 var(--font-mono); letter-spacing: 0.08em; }
+.triads-figure { display: inline-flex; flex-direction: column; margin-left: 0.04em; font-size: 0.36em; line-height: 0.95; vertical-align: 0.9em; }
+.triads-figure sup, .triads-figure sub { position: static; font-size: 1em; }
+.triads-ask.is-degree { gap: 10px; }
+.triads-shown { display: grid; justify-items: center; gap: 6px; }
+.triads-shown .triad-staff { width: 180px; }
+.triads-choices.is-romans .triads-choice { min-height: 110px; align-content: center; }
+.triads-choice-roman { color: var(--triad); font: 400 clamp(38px, 7vh, 56px)/1 var(--font-display); }
+
+/* known this well, at the guitar: no choices, play it */
+.triads-play { position: relative; display: grid; justify-items: center; gap: 10px; min-height: 172px; align-content: center; }
+.triads-play p { margin: 0; color: var(--triad); font: 400 22px/1.2 var(--font-display); }
+.triads-play button { min-height: 32px; padding: 0 14px; border: 1px solid var(--line); border-radius: 8px; background: none; color: var(--ink-faint); font: 400 12px/1 var(--font-ui); cursor: pointer; }
+.triads-play-ring { position: relative; width: 64px; height: 64px; }
+.triads-play-ring > i { position: absolute; inset: 0; border: 1.5px solid var(--triad); border-radius: 50%; animation: triads-listen 2.2s ease-out infinite; }
+.triads-play-ring > i + i { animation-delay: 1.1s; }
+@keyframes triads-listen { from { transform: scale(0.5); opacity: 0.9; } to { transform: scale(1.4); opacity: 0; } }
+.triads-result.is-right { color: var(--good); }
+.triads-result.is-wrong { color: var(--warn); }
 
 .triads-choices { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .triads-choice { position: relative; display: grid; justify-items: center; gap: 8px; min-height: 172px; padding: 12px 6px 14px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255, 240, 220, 0.025); color: var(--ink); font: inherit; cursor: pointer; transition: border-color 0.2s, background 0.2s, transform 0.12s, opacity 0.3s; }
@@ -55,4 +80,5 @@
 @media (prefers-reduced-motion: reduce) {
   .triads-choice, .triads-choice.is-right, .triads-choice.is-wrong { animation: none; }
   .triads-glint { display: none; }
+  .triads-play-ring > i { animation: none; }
 }
