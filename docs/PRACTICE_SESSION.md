@@ -87,7 +87,10 @@ next safe boundary. **Stop now** remains available. Neither action awards an unf
 
 ## One exercise
 
-`intro → (listen) → your pace → in time → result`, by itself (`song/useSession.ts`).
+`intro → (listen) → (your pace) → in time → result`, by itself (`song/useSession.ts`). Once the
+music has been heard, just now or on an earlier visit, it goes straight to in time; your pace comes
+first only for music never heard, new-every-time cards and a part taken out, and stays one note key
+away. Asking for in time while a pass is already playing changes nothing: the pass carries on.
 
 - **Your pace.** The cursor waits for each note. Going back is followed, not punished. A take
   starts on a fresh attack, so a string still ringing is not its first note. A take is clean when

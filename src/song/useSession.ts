@@ -275,6 +275,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
                 ? 1
                 : 0;
   const doListen = Boolean(card?.listen && (level <= 1 || card.family === "ear")); // an echo is always heard first
+  const heardBefore = Boolean(card && (storeRef.current.cards[card.id]?.seen ?? 0) > 0);
 
   // notes that work the session instead of the exercise: never heard as part of it
   const keys = useMemo(() => assignNoteKeys(KEY_IDS, card ? commandMidis(card) : []), [card]);
@@ -508,10 +509,12 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
         setPhase(back);
       } else if (from === "intro" && doListen) setPhase("listen");
       else if (selfGuided) enterTime();
-      else if ((from === "intro" || from === "listen") && needClean > 0) setPhase("pace");
+      // Once the music has been heard (just now, or on an earlier visit) it is played in time. New
+      // notes every time, a part taken out, and music never heard are read through first.
+      else if (needClean > 0 && (spot || card.fresh || (from === "intro" && !heardBefore))) setPhase("pace");
       else enterTime();
     },
-    [card, doListen, needClean, stop, enterTime, restartFollow, restartChords, selfGuided],
+    [card, doListen, needClean, stop, enterTime, restartFollow, restartChords, selfGuided, spot, heardBefore],
   );
 
   const conclude = useCallback(
@@ -1123,6 +1126,8 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
   const go = useCallback(
     (to: "pace" | "time") => {
       if (!card || phase === "result") return;
+      // already playing in time: the pass carries on rather than jumping back to the top
+      if (to === "time" && phase === "time" && playback.playing && !paused && !waiting) return;
       returnTo.current = null;
       stop();
       hush();
@@ -1140,7 +1145,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
       } else if (phase === "time") setLoopKey((k) => k + 1);
       else enterTime();
     },
-    [card, phase, stop, restartFollow, restartChords, enterTime],
+    [card, phase, stop, restartFollow, restartChords, enterTime, playback.playing, paused, waiting],
   );
 
   const again = useCallback(() => {

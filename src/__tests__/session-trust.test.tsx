@@ -301,6 +301,19 @@ describe("session assessment trust", () => {
     expect(session.store.cards[card.id].bestCleanBpm).toBe(before + 4);
   });
 
+  it("plays a new melody in time straight after hearing it", async () => {
+    const melody = deck.cards.find((candidate) => candidate.family === "melody" && candidate.listen && candidate.pace && !candidate.fresh && !candidate.memory)!;
+    input.status = "listening";
+    await act(async () => session.begin([melody.id]));
+    await act(async () => vi.advanceTimersByTime(3500));
+    expect(session.phase).toBe("listen");
+    playback.playing = true;
+    await render();
+    playback.playing = false;
+    await render();
+    expect(session.phase).toBe("time");
+  });
+
   it("slows a step without lowering the first time's goal, and holds the tempo when the timing was not caught", async () => {
     input.status = "listening";
     await act(async () => session.begin([card.id]));

@@ -392,7 +392,7 @@ the card box; `ear/engine.ts` still uses unseeded randomness. Echo cards are **T
 ```
 Ready screen
   └─ held note or Start
-       intro → (listen) → your pace → in time → result → next card …
+       intro → (listen) → (your pace) → in time → result → next card …
                                                    └─ session done → SessionSummary
 ```
 

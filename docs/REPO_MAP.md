@@ -318,7 +318,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/song/useGoalEvidence.ts` — `useGoalEvidence:13`
 - `src/song/useGoals.ts` — `useGoals:4`
 - `src/song/usePracticeHistory.ts` — `usePracticeHistory:11`
-- `src/song/useSession.ts` — `Phase:52`, `Outcome:94`, `SessionOptions:124`, `useSession:133`, `SessionApi:1291`
+- `src/song/useSession.ts` — `Phase:52`, `Outcome:94`, `SessionOptions:124`, `useSession:133`, `SessionApi:1296`
 - `src/song/useThemePicker.ts` — `useThemePicker:14`
 - `src/song/voicings.ts` — `VoicingNote:10`, `Voicing:17`, `voiceChords:75`
 - `src/storage.ts` — `StorageIssue:4`, `pendingStorageWrites:14`, `getStoredItem:15`, `storedKeys:18`, `retryStorageWrites:32`, `getStorageIssues:38`, `subscribeStorageIssues:39`, `reportStorageError:44`, `clearStorageError:53`, `setStoredItem:59`, `removeStoredItem:74`

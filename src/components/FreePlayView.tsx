@@ -39,6 +39,8 @@ function FreePlayRoom({ input, onClose }: { input: InputApi; onClose(): void }) 
     return () => { disposed = true; };
   }, []);
   const sources = useMemo(() => music.map(({ sheet, tl }) => ({ id: sheet.id, title: sheet.title, tl })), [music]);
+  // stable between renders: a new list rebuilds every deck, and the exercise playing restarts from its top
+  const others = useMemo(() => music.filter(({ sheet }) => sheet.id !== selected), [music, selected]);
   const current = music.find(({ sheet }) => sheet.id === selected);
   const chooseTune = async (id: string) => {
     if (!music.some(({ sheet }) => sheet.id === id)) throw new Error("That tune is no longer available. Choose another tune.");
@@ -56,7 +58,7 @@ function FreePlayRoom({ input, onClose }: { input: InputApi; onClose(): void }) 
   }, [onClose, picking, selected, instruments]);
 
   if (current) return <SongCoachRoom key={current.sheet.id} sheet={current.sheet} tl={current.tl} input={input}
-    onClose={onClose} tunes={sources} onTune={chooseTune} others={music.filter(({ sheet }) => sheet.id !== selected)} />;
+    onClose={onClose} tunes={sources} onTune={chooseTune} others={others} />;
 
   return (
     <main className="ss fp-standalone" role="dialog" aria-label="free play">
