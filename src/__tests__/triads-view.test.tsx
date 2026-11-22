@@ -79,3 +79,13 @@ it("turns to a chosen key on the circle, unfolds its triads, and drills that key
   await click(host.querySelector(".triads-circle"));
   expect(host.querySelector(".wheel-center")?.textContent).toContain("Drill");
 });
+
+it("answers the pointer anywhere on a wedge, not only on its label", async () => {
+  await act(async () => root.render(<TriadsView input={input} />));
+  const wedges = host.querySelectorAll(".wheel-wedge");
+  await act(async () => { wedges[3].dispatchEvent(new MouseEvent("click", { bubbles: true })); }); // the fourth major key, D
+  expect(host.querySelector(".wheel-panel-key")?.textContent).toContain("D-Dur");
+  await act(async () => { host.querySelectorAll(".wheel-degree-wedge")[4].dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+  expect(host.querySelector(".triads-of")?.textContent).toBe("in D-Dur");
+  expect(host.querySelector(".triads-roman")?.textContent).toBe("V");
+});

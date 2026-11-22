@@ -88,6 +88,9 @@
 .wheel { --wheel: min(92vw, 540px, 72vh); --spin: 0deg; --turn: 0.8s cubic-bezier(0.2, 0.8, 0.2, 1); position: relative; width: var(--wheel); aspect-ratio: 1; margin: 4px auto 0; }
 .wheel-spin { position: absolute; inset: 0; transform: rotate(var(--spin)); transition: transform var(--turn); }
 .wheel svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.wheel-wedge, .wheel-degree-wedge { pointer-events: visiblePainted; cursor: pointer; }
+.wheel-wedge.is-hover { opacity: 1; stroke: color-mix(in srgb, var(--triad) 80%, transparent); stroke-width: 1.2; fill: hsl(var(--hue) 40% calc(14% + var(--depth) * 26%) / 0.9); }
+.wheel-degree-wedge.is-hover { fill: rgba(217, 178, 106, calc(0.16 + var(--box) * 0.3)); stroke: rgba(231, 201, 138, 0.8); }
 .wheel-wedge {
   fill: hsl(var(--hue) 34% calc(9% + var(--depth) * 26%) / calc(0.35 + var(--depth) * 0.5));
   stroke: hsl(var(--hue) 30% 40% / 0.18); stroke-width: 0.6;
@@ -96,7 +99,7 @@
 .wheel-wedge.is-open { opacity: 1; stroke: hsl(var(--hue) 40% 55% / 0.35); }
 .wheel-wedge.is-here { stroke: #e7c98a; stroke-width: 1.6; fill: hsl(var(--hue) 40% calc(16% + var(--depth) * 26%) / 0.95); filter: drop-shadow(0 0 6px #e7c98a66); }
 .wheel.is-open .wheel-wedge:not(.is-here) { opacity: 0.32; }
-.wheel.is-open .wheel-wedge.is-minor { opacity: 0; } /* the chosen key's triads unfold over the inner ring */
+.wheel.is-open .wheel-wedge.is-minor { opacity: 0; pointer-events: none; } /* the chosen key's triads unfold over the inner ring */
 
 .wheel-spot { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform: rotate(var(--a)); }
 .wheel-spot > button {
@@ -123,7 +126,8 @@
 .wheel-center.is-key b { color: #f3dfae; font-size: clamp(13px, calc(var(--wheel) * 0.038), 20px); text-align: center; }
 
 /* a chosen key unfolds its seven triads in the middle */
-.wheel-inset { position: absolute; inset: 0; animation: wheel-unfold 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.wheel-inset { position: absolute; inset: 0; pointer-events: none; animation: wheel-unfold 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.wheel-inset button { pointer-events: auto; } /* the layer itself must not cover the rim's keys */
 @keyframes wheel-unfold { from { transform: scale(0.55) rotate(-25deg); opacity: 0; } to { transform: none; opacity: 1; } }
 .wheel-degree-wedge { fill: rgba(217, 178, 106, calc(0.05 + var(--box) * 0.3)); stroke: rgba(217, 178, 106, 0.35); stroke-width: 0.6; }
 .wheel-core { fill: rgba(10, 14, 13, 0.9); stroke: rgba(217, 178, 106, 0.3); stroke-width: 0.6; }

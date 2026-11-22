@@ -53,6 +53,8 @@ export function TriadWheel({ onDrill }: { onDrill(focus: Focus | null): void }) 
   const due = useMemo(() => dueCount(store, day), [store, day]);
   const known = useMemo(() => TRIAD_CARDS.filter((c) => (store.cards[c.id]?.box ?? 0) >= 2).length, [store]);
   const [chosen, setChosen] = useState<string | null>(null);
+  const [hover, setHover] = useState<string | null>(null); // a wedge and its label light together
+  const pick = (id: string) => setChosen(chosen === id ? null : id);
   const key = chosen ? TRIAD_KEY_BY_ID.get(chosen)! : null;
   const pos = key ? wheelPosition(key) : 0;
   const spin = key ? -(pos <= 6 ? pos : pos - 12) * 30 : 0;
@@ -67,13 +69,18 @@ export function TriadWheel({ onDrill }: { onDrill(focus: Focus | null): void }) 
     const s = stats.get(keyId(k))!;
     const depth = s.total ? s.known / s.total : 0;
     const hue = (wheelPosition(k) * 30 + 40) % 360;
-    const here = chosen === keyId(k);
+    const id = keyId(k);
+    const here = chosen === id;
+    // the whole wedge answers the pointer; its label is the button for the keyboard and the guitar
     return (
       <path
-        key={keyId(k)}
+        key={id}
         d={sector(r0, r1, angle - span / 2 + GAP / 2, angle + span / 2 - GAP / 2)}
-        className={`wheel-wedge ${minor ? "is-minor" : ""} ${s.open ? "is-open" : ""} ${here ? "is-here" : ""}`}
+        className={`wheel-wedge ${minor ? "is-minor" : ""} ${s.open ? "is-open" : ""} ${here ? "is-here" : ""} ${hover === id ? "is-hover" : ""}`}
         style={{ "--hue": hue, "--depth": depth.toFixed(3) } as CSSProperties}
+        onClick={() => pick(id)}
+        onMouseEnter={() => setHover(id)}
+        onMouseLeave={() => setHover((h) => (h === id ? null : h))}
       />
     );
   };
@@ -85,7 +92,9 @@ export function TriadWheel({ onDrill }: { onDrill(focus: Focus | null): void }) 
         <button
           type="button"
           className={`wheel-key ${minor ? "is-minor" : ""} ${s.open ? "is-open" : ""} ${chosen === id ? "is-here" : ""}`}
-          onClick={() => setChosen(chosen === id ? null : id)}
+          onClick={() => pick(id)}
+          onMouseEnter={() => setHover(id)}
+          onMouseLeave={() => setHover((h) => (h === id ? null : h))}
           aria-label={`${keyName(k, naming)}${s.open ? "" : ", not yet opened"}, ${s.known} of ${s.total} known`}
           aria-pressed={chosen === id}
         >
@@ -126,13 +135,21 @@ export function TriadWheel({ onDrill }: { onDrill(focus: Focus | null): void }) 
           <div className="wheel-inset" key={chosen}>
             <svg viewBox="0 0 400 400" aria-hidden="true" data-nav-skip>
               {degrees.map(({ d, box }) => (
-                <path key={d} d={sector(R_DEG, R_MID - 2, d * (360 / 7) - 360 / 14 + GAP, d * (360 / 7) + 360 / 14 - GAP)} className="wheel-degree-wedge" style={{ "--box": box / 5 } as CSSProperties} />
+                <path
+                  key={d}
+                  d={sector(R_DEG, R_MID - 2, d * (360 / 7) - 360 / 14 + GAP, d * (360 / 7) + 360 / 14 - GAP)}
+                  className={`wheel-degree-wedge ${hover === `deg:${d}` ? "is-hover" : ""}`}
+                  style={{ "--box": box / 5 } as CSSProperties}
+                  onClick={() => onDrill({ key: keyId(key), degree: d })}
+                  onMouseEnter={() => setHover(`deg:${d}`)}
+                  onMouseLeave={() => setHover((h) => (h === `deg:${d}` ? null : h))}
+                />
               ))}
               <circle cx={C} cy={C} r={R_DEG - 3} className="wheel-core" />
             </svg>
             {degrees.map(({ d, triad, roman, box }) => (
               <span key={d} className="wheel-spot is-flat" style={{ "--a": `${d * (360 / 7)}deg`, "--r": (R_DEG + R_MID) / 2 / 400 } as CSSProperties}>
-                <button type="button" className={`wheel-degree ${box >= 2 ? "is-known" : ""}`} onClick={() => onDrill({ key: keyId(key), degree: d })} aria-label={`${roman} of ${keyName(key, naming)}: ${triad.notes.map((n) => noteName(n, naming)).join(" ")}, box ${box}`}>
+                <button type="button" className={`wheel-degree ${box >= 2 ? "is-known" : ""}`} onClick={() => onDrill({ key: keyId(key), degree: d })} onMouseEnter={() => setHover(`deg:${d}`)} onMouseLeave={() => setHover((h) => (h === `deg:${d}` ? null : h))} aria-label={`${roman} of ${keyName(key, naming)}: ${triad.notes.map((n) => noteName(n, naming)).join(" ")}, box ${box}`}>
                   <b>{roman}</b>
                   <small>{triad.notes.map((n) => noteName(n, naming)).join(" ")}</small>
                 </button>
