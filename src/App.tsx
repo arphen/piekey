@@ -139,7 +139,7 @@ export default function App() {
           <PlatformStatus />
 
           {devicesOpen ? <main className="device-sync-placeholder" aria-hidden="true" /> : toolsOpen ? <GuitarTools input={input} onClose={() => setToolsOpen(false)} /> : tab === "tutor" ? (
-            <OverviewView key={stateRevision} onOpenMode={openMode} onOpenSong={openSong} onListenSong={listenSong} onOpenProgress={() => setTab("progress")} onStartPractice={startPractice} onPreparePractice={() => openPractice(input)} />
+            <OverviewView key={stateRevision} input={input} onOpenMode={openMode} onOpenSong={openSong} onListenSong={listenSong} onOpenProgress={() => setTab("progress")} onStartPractice={startPractice} onPreparePractice={() => openPractice(input)} />
           ) : tab === "progress" ? (
             <ProgressView key={stateRevision} onOpenSong={openSong} onStartPractice={startPractice} />
           ) : tab === "tunes" ? (

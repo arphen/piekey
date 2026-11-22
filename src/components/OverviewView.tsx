@@ -9,6 +9,7 @@ import { cachedSong, useSongSummaries } from "../overview/useSongSummaries";
 import { relativeDay } from "../overview/visual";
 import { loadLibraryAsync, parseTuneEntry, saveLibrary } from "../tunes/library";
 import { BLUE_HOUR_ENTRY, DEMO_TUNES } from "../tunes/demos";
+import type { InputApi } from "../listen/useInput";
 import { Glyph } from "./Glyph";
 import { UnitCard } from "./UnitCard";
 import { Score } from "./Score";
@@ -50,7 +51,21 @@ function EmptyLibrary({ onOpen }: { onOpen: () => void }) {
   );
 }
 
+function ConnectGuitar({ input }: { input: InputApi }) {
+  const starting = input.status === "starting";
+  return (
+    <div className="tutor-connect">
+      <button type="button" className="tutor-connect-btn" onClick={() => void input.start()} disabled={starting}>
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M9 3v9a3 3 0 0 0 6 0V3a3 3 0 0 0-6 0ZM5 10v2a7 7 0 0 0 14 0v-2M12 19v3m-4 0h8" /></svg>
+        {starting ? "Connecting…" : input.status === "error" ? "Retry guitar input" : "Connect your guitar"}
+      </button>
+      {input.status === "error" && input.error ? <p className="tutor-error" role="alert">{input.error}</p> : null}
+    </div>
+  );
+}
+
 export function OverviewView({
+  input,
   onOpenMode,
   onOpenSong,
   onListenSong,
@@ -58,6 +73,7 @@ export function OverviewView({
   onStartPractice,
   onPreparePractice,
 }: {
+  input?: InputApi;
   onOpenMode: (target: TutorTargetTab) => void;
   onOpenSong: (tuneId: string) => void;
   onListenSong?: (tuneId: string) => void;
@@ -122,6 +138,7 @@ export function OverviewView({
             </div>
           </> : null}
           {error ? <p className="tutor-error" role="alert">{error}</p> : null}
+          {input && input.status !== "listening" ? <ConnectGuitar input={input} /> : null}
           <div className="tutor-actions">
             <button
               type="button"

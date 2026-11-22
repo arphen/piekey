@@ -35,6 +35,11 @@
 .tutor-secondary, .tutor-link { padding: 0; }
 .tutor-secondary:hover, .tutor-link:hover { color: var(--ink); }
 .tutor-link { min-height: 30px; font-size: 11px; }
+.tutor-connect { margin-top: 22px; }
+.tutor-connect-btn { display: inline-flex; align-items: center; gap: 10px; min-height: 42px; padding: 0 18px 0 14px; border: 1px solid #d4bf8f; border-radius: 4px; background: none; color: #d4bf8f; font-size: 12px; }
+.tutor-connect-btn:hover:not(:disabled) { background: rgba(212, 191, 143, 0.12); color: #e3d2ab; }
+.tutor-connect-btn svg { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.tutor-connect .tutor-error { margin: 8px 0 0; }
 .tutor-error { max-width: 40ch; color: var(--warn); font-size: 12px; }
 .tutor-manuscript { min-width: 0; align-self: center; padding-top: 5px; }
 .tutor-excerpt { position: relative; overflow: hidden; min-height: 130px; }

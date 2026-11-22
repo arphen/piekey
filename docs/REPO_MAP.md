@@ -200,7 +200,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/components/InputBar.tsx` — `InputBar:17`
 - `src/components/LeadSheet.tsx` — `LeadSheet:35`, `ChordSymbol:210`
 - `src/components/LearnView.tsx` — `LearnView:33`
-- `src/components/OverviewView.tsx` — `OverviewView:53`
+- `src/components/OverviewView.tsx` — `OverviewView:67`
 - `src/components/PracticeAtmosphere.tsx` — `PracticeAtmosphere:12`, `BeatPulse:102`
 - `src/components/PracticeBriefPanel.tsx` — `PracticeBriefPanel:6`
 - `src/components/PracticeHistory.tsx` — `PracticeHistory:59`
