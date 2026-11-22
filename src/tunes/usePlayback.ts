@@ -11,6 +11,7 @@ import type { InputApi } from "../listen/useInput";
 import type { Timeline } from "./order";
 import type { Support } from "../song/support";
 import { createOnsets } from "../song/freeplay";
+import { createAttacks } from "../listen/attacks";
 import { judgePitch } from "./scoring";
 import { IDLE_BEAT, type BeatSignal } from "../song/pulse";
 
@@ -537,15 +538,17 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
     const presence = new Float32Array(12);
     const levels: number[] = [];
     const onsets = createOnsets();
+    const attacks = createAttacks();
     samples.current = [];
     return subscribe((f) => {
       const floor = levels.length ? Math.min(...levels) : Infinity;
       levels.push(f.rms);
       if (levels.length > 4) levels.shift();
-      const strike = f.rms > CHORD_GATE_RMS * 3 && f.rms > floor * STRIKE_RATIO;
+      const struck = attacks(f);
+      const strike = (f.rms > CHORD_GATE_RMS * 3 && f.rms > floor * STRIKE_RATIO) || struck.length > 0;
       const heard = midiOf(f);
       const midi = heard !== null && ignoreRef.current?.has(heard) ? null : heard;
-      const onset = onsets({ midi, rms: f.rms, now: f.now });
+      const onset = onsets({ midi, rms: f.rms, now: f.now, attacks: struck });
       let pcs: number[] | null = null;
       if (tlRef.current.targets.some((x) => x.chord)) {
         const frame = f.rms < CHORD_GATE_RMS ? [] : strongPitchClasses(detectNotes(f.buf, f.sampleRate));

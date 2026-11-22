@@ -1,4 +1,5 @@
 import { heardPerf, inputLag, PAINT_LEAD_S } from "../audio/latency";
+import { createAttacks } from "../listen/attacks";
 import { getStoredItem, setStoredItem } from "../storage";
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as Tone from "tone";
@@ -260,8 +261,9 @@ export function useFreePlay(input: InputApi, active: boolean) {
   useEffect(() => {
     if (!active || !listening) return;
     const onset = createOnsets();
+    const attacks = createAttacks();
     return subscribe((f) => {
-      const o = onset({ midi: midiOf(f), rms: f.rms, now: f.now });
+      const o = onset({ midi: midiOf(f), rms: f.rms, now: f.now, attacks: attacks(f) });
       if (!o) return;
       const s = st.current;
       s.onsets.push(o);

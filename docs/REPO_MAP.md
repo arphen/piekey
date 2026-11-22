@@ -135,6 +135,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 ## src
 
 - `src/App.tsx` — `App:36`
+- `src/__tests__/attacks.test.ts`
 - `src/__tests__/audio-scoring.test.ts`
 - `src/__tests__/calibration.test.ts`
 - `src/__tests__/coach-entry.test.tsx`
@@ -173,7 +174,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/audio/context.ts` — `ensureAudio:14`
 - `src/audio/demo.ts` — `DEMO_BPM:10`, `DemoPlayback:57`, `playDemo:66`, `demoNow:117`
 - `src/audio/exportMidi.ts` — `exportBackingMidi:5`
-- `src/audio/latency.ts` — `loadLatency:35`, `saveLatency:39`, `inputLag:52`, `latencyMeasured:60`, `fitLatency:67`, `nativeContext:85`, `heardTime:94`, `heardPerf:102`, `PAINT_LEAD_S:110`, `ctxToPerf:117`
+- `src/audio/latency.ts` — `loadLatency:39`, `saveLatency:43`, `inputLag:56`, `latencyMeasured:64`, `fitLatency:71`, `nativeContext:89`, `heardTime:98`, `heardPerf:106`, `PAINT_LEAD_S:114`, `ctxToPerf:117`
 - `src/audio/output.ts` — `SYSTEM_OUTPUT:11`, `OutputDevice:13`, `canChooseOutput:34`, `savedOutput:36`, `listOutputs:44`, `setOutput:68`, `restoreOutput:84`, `watchOutputs:102`, `useOutputs:110`
 - `src/audio/pluck.ts` — `BufferPluck:60`, `pluckBuffer:93`
 - `src/audio/recorder.ts` — `TakeMeta:9`, `StoredTake:20`, `RecordingSaveStatus:21`, `Recording:22`, `getPendingTakes:29`, `getRecordingSaves:30`, `subscribeRecordingSaves:31`, `toDrop:73`, `saveTake:79`, `finishTake:117`, `retryPendingTakes:128`, `readAllTakes:144`, `readExportableTakes:157`, `storeTransferredTake:164`, `listTakes:176`, `takeAudio:189` (+1 more)
@@ -181,7 +182,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/audio/setup.ts` — `InputSetup:2`, `AudioSetup:7`, `currentInputSetup:14`, `currentAudioSetup:15`, `setInputSetup:16`, `setOutputSetup:17`, `sameInputSetup:18`, `sameAudioSetup:20`
 - `src/audio/usePlayer.ts` — `usePlayer:49`
 - `src/audio/useTakePlayback.ts` — `useTakePlayback:23`
-- `src/components/Calibrate.tsx` — `Calibrate:32`
+- `src/components/Calibrate.tsx` — `Calibrate:34`
 - `src/components/ChordBox.tsx` — `ChordBox:15`
 - `src/components/DeviceSync.tsx` — `DeviceSync:13`
 - `src/components/DeviceSyncPanel.tsx` — `DeviceSyncPanel:15`
@@ -238,6 +239,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/follow/follower.ts` — `FollowState:46`, `initFollow:72`, `stepFollow:233`, `takeFrom:268`
 - `src/follow/useFollower.ts` — `useFollower:7`
 - `src/fonts.css`
+- `src/listen/attacks.ts` — `Attack:14`, `createAttacks:31`
 - `src/listen/calibration.ts` — `StringTake:17`, `StringReport:22`, `Profile:29`, `soundsLike:72`, `fitProfile:77`, `loadProfile:114`, `applyProfile:124`, `saveProfile:129`, `initCalibration:142`
 - `src/listen/pitch.ts` — `pitchOf:9`, `midiOf:19`
 - `src/listen/spectrum.ts` — `HeardNote:6`, `fft:32`, `spectrumDb:69`, `detectNotes:90`, `strongPitchClasses:133`
@@ -286,7 +288,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/song/evidence.ts` — `Tally:10`, `Timing:12`, `Evidence:20`, `EvidenceLog:43`, `createEvidence:54`, `timingOf:98`
 - `src/song/fingering.ts` — `MAX_FRET:8`, `Fingered:10`, `Window:15`, `windowAt:21`, `chooseWindow:24`, `fitWindow:36`, `fingerLine:66`, `notesIn:118`
 - `src/song/freeplay-room.css`
-- `src/song/freeplay.ts` — `Onset:24`, `createOnsets:30`, `KeyGuess:80`, `guessKey:103`, `Pattern:131`, `PATTERN_LABEL:132`, `guessPattern:137`, `Division:164`, `DIVISION_LABEL:165`, `Grid:170`, `readGrid:180`, `steadyGap:211`, `CLICK_MIN:218`, `CLICK_MAX:219`, `clickFor:224`, `Mood:235` (+14 more)
+- `src/song/freeplay.ts` — `Onset:25`, `createOnsets:39`, `KeyGuess:105`, `guessKey:128`, `Pattern:156`, `PATTERN_LABEL:157`, `guessPattern:162`, `Division:189`, `DIVISION_LABEL:190`, `Grid:195`, `readGrid:205`, `steadyGap:236`, `CLICK_MIN:243`, `CLICK_MAX:244`, `clickFor:249`, `Mood:260` (+14 more)
 - `src/song/fretboard.ts` — `Prompt:11`, `STRING_NAMES:18`, `stringPrompts:24`, `thirdPrompts:40`, `tonePrompts:57`
 - `src/song/goalEvidence.ts` — `GoalEvidence:5`, `projectGoalEvidence:9`
 - `src/song/goals.ts` — `GoalKind:7`, `Goal:8`, `GoalStore:18`, `GOAL_LABELS:22`, `GOALS_KEY:25`, `LOCAL_GOAL_LIMIT:26`, `arrangementIdentity:34`, `createGoal:75`, `getGoals:90`, `subscribeGoals:115`, `saveGoal:134`, `setActiveGoal:146`, `goalMatches:153`, `loadActiveGoal:157`, `goalDeck:163`, `goalProgress:173`
@@ -314,7 +316,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/song/tree.ts` — `TreeNode:13`, `TreeEdge:25`, `TreeInput:31`, `TREE_SIZE:39`, `buildTree:72`
 - `src/song/tune-picker.css`
 - `src/song/useChordFollower.ts` — `ChordGoal:9`, `useChordFollower:21`
-- `src/song/useFreePlay.ts` — `ClickMode:51`, `FreeView:54`, `useFreePlay:249`
+- `src/song/useFreePlay.ts` — `ClickMode:52`, `FreeView:55`, `useFreePlay:250`
 - `src/song/useGoalEvidence.ts` — `useGoalEvidence:13`
 - `src/song/useGoals.ts` — `useGoals:4`
 - `src/song/usePracticeHistory.ts` — `usePracticeHistory:11`
@@ -352,7 +354,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/tunes/tunes.css`
 - `src/tunes/unzip.ts` — `unzip:4`
 - `src/tunes/useCoach.ts` — `Phase:13`, `useCoach:42`
-- `src/tunes/usePlayback.ts` — `PlaybackMix:28`, `PassScore:44`, `usePlayback:126`
+- `src/tunes/usePlayback.ts` — `PlaybackMix:29`, `PassScore:45`, `usePlayback:127`
 
 ## tunes
 

@@ -4,6 +4,7 @@ import { ensureAudio } from "../audio/context";
 import { ctxToPerf, fitLatency, saveLatency } from "../audio/latency";
 import { clickBuffer, OneShots } from "../audio/samples";
 import { fitProfile, saveProfile, soundsLike, type Profile, type StringTake } from "../listen/calibration";
+import { createAttacks } from "../listen/attacks";
 import { midiOf } from "../listen/pitch";
 import type { InputApi } from "../listen/useInput";
 import { analysePitch } from "../pitchDetection";
@@ -25,6 +26,7 @@ const SHOW_MS = 3200; // the result stays up this long
 const CLICKS = 10;
 const CLICK_BPM = 80;
 const TAP_LEAD_S = 1.2; // before the first click
+const ATTACK_LOOKBACK_MS = 160; // a pitch is found up to this long after its string was struck
 const TAP_GAP_MS = 180; // a new note no sooner than this after the last
 
 type Mark = "todo" | "now" | "ok" | "again";
@@ -125,14 +127,21 @@ export function Calibrate({ input, onDone }: { input: InputApi; onDone(p: Profil
     let floor = Infinity;
     let armed = false;
     let lastNote = -Infinity;
+    let struck: number | null = null;
+    const attacks = createAttacks();
     const off = subscribe((f) => {
-      // a fresh attack, then the first frame that has a pitch: the moment a note is known
-      if (f.rms > floor * PICK_RATIO && f.rms > 0.006 && f.now - lastNote > TAP_GAP_MS) armed = true;
+      // a fresh attack, then the first frame that has a pitch: the note began where the string was
+      // struck, as the practice session times it (listen/attacks.ts)
+      const found = attacks(f);
+      if (found.length && found[found.length - 1].at - lastNote > TAP_GAP_MS) struck = found[found.length - 1].at;
+      if (found.length || (f.rms > floor * PICK_RATIO && f.rms > 0.006)) if (f.now - lastNote > TAP_GAP_MS) armed = true;
       floor = Math.min(floor * 1.02, f.rms || floor);
       if (armed && midiOf(f) !== null) {
-        heard.push(f.now);
-        lastNote = f.now;
+        const at = struck !== null && f.now - struck <= ATTACK_LOOKBACK_MS ? struck : f.now;
+        heard.push(at);
+        lastNote = at;
         armed = false;
+        struck = null;
       }
     });
     const end = window.setTimeout(() => {

@@ -2,6 +2,7 @@ import { mod } from "../musicTheory";
 import { getStoredItem, setStoredItem } from "../storage";
 import { makeScale, type Scale } from "./harmony";
 import { fitTiming, timingPhaseLimit, timingTolerance } from "../tunes/scoring";
+import type { Attack } from "../listen/attacks";
 
 // Free play: nobody said what to play, so the app works it out from the notes. Pure functions
 // over what was heard: which notes began when, what key they are in, what kind of exercise they
@@ -26,21 +27,37 @@ export interface Onset {
   at: number; // ms
 }
 
-/** Turns frames of pitch and level into note beginnings: a new pitch, or the same one picked again. */
-export function createOnsets(): (frame: { midi: number | null; rms: number; now: number }) => Onset | null {
+const ATTACK_LOOKBACK_MS = 160; // a pitch is found up to this long after its string was struck
+const REPICK_FRAMES = 3; // the same pitch struck again holds a frame longer: the window still shows the note before
+
+/**
+ * Turns frames of pitch and level into note beginnings: a new pitch, or the same one picked again.
+ * With `attacks` (listen/attacks.ts), a note begins where its string was struck, to a few ms,
+ * instead of at the frame that found its pitch; and a string struck again on the same pitch is a
+ * new note even when the level hardly moves, as in fast triplets.
+ */
+export function createOnsets(): (frame: { midi: number | null; rms: number; now: number; attacks?: readonly Attack[] }) => Onset | null {
   let run: number | null = null;
   let runFrames = 0;
   let runStart = 0;
+  let need = STABLE_FRAMES;
+  let changed = false; // this run began with a new pitch, not the same one struck again
+  let fromAttack = false; // and its beginning is an attack, not the frame that found it
   let silent = 0;
   let fired = false;
   let last: number | null = null;
   let rearmed = true;
   let levels: number[] = [];
   let wasLoud = false;
+  let recent: number[] = []; // attacks lately
+  let used = -Infinity; // the attack the last new pitch began on
   return (f) => {
+    recent = recent.filter((t) => t >= f.now - 2 * ATTACK_LOOKBACK_MS);
+    for (const a of f.attacks ?? []) recent.push(a.at);
+    const struck = Boolean(f.attacks?.length);
     const floor = levels.length ? Math.min(...levels) : Infinity;
     const loud = f.rms > PICK_MIN_RMS && f.rms > floor * PICK_RATIO;
-    const pick = loud && !wasLoud;
+    const pick = (loud && !wasLoud) || struck;
     wasLoud = loud;
     levels = [...levels, f.rms].slice(-LEVEL_WINDOW);
     if (f.midi === null) {
@@ -51,19 +68,27 @@ export function createOnsets(): (frame: { midi: number | null; rms: number; now:
     }
     silent = 0;
     if (f.midi !== run || pick) {
+      changed = f.midi !== run;
+      const lo = Math.max(f.now - ATTACK_LOOKBACK_MS, used);
+      let attack: number | null = null;
+      for (let i = recent.length - 1; i >= 0 && attack === null; i--) if (recent[i] > lo && recent[i] <= f.now) attack = recent[i];
       run = f.midi;
       runFrames = 1;
-      runStart = f.now;
+      runStart = attack ?? f.now;
+      fromAttack = attack !== null;
+      need = !changed && struck ? REPICK_FRAMES : STABLE_FRAMES;
       fired = false;
       if (pick) rearmed = true;
       return null;
     }
     runFrames++;
-    if (runFrames < STABLE_FRAMES || fired || (f.midi === last && !rearmed)) return null;
+    if (runFrames < need || fired || (f.midi === last && !rearmed)) return null;
     fired = true;
     last = f.midi;
     rearmed = false;
     levels = [f.rms];
+    // a repeat keeps its attack available: if the pitch then turns out to be new, it began there
+    if (changed && fromAttack) used = runStart;
     return { midi: f.midi, at: runStart };
   };
 }

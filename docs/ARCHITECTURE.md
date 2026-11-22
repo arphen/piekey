@@ -76,6 +76,12 @@ the explicit Listen/Loop/Practice actions use those bounds. A custom passage is 
 `buildDeck` only for an explicit launch, so it cannot enlarge the ordinary introduction or a
 goal's essential tasks. Selection does not create another practice engine or rewrite the score.
 
+Note beginnings come from `song/freeplay.ts` `createOnsets`, which pairs each heard pitch with
+the attack `listen/attacks.ts` found in the newest samples of the frame (high-frequency energy,
+~3 ms steps), so a note is timed at the pick and a repeated pitch is a new note. Scoring,
+calibration and the visible beat read the output device's own clock (`audio/latency.ts`
+`heardTime`/`ctxToPerf`) through the native context behind Tone's wrapper.
+
 Temporary timing alignment is fitted by `tunes/scoring.ts` and reused by Free play. Timed matching
 keeps adjacent attacks disjoint; readiness distinguishes bounded phase, residual scatter and drift.
 Free play also verifies distinct contiguous grid cells and successive-window alignment. Raw offsets

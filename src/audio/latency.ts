@@ -1,17 +1,21 @@
-// How late the app hears a note after the string sounds: the input's buffers plus the pitch
-// detector's window. Playback subtracts it before judging whether a note sat on the beat. Without a
-// measurement it is a guess (50 ms); calibration measures it by having the player play along to a
-// few clicks (`fitLatency`). The click's own output delay is already accounted for by `ctxToPerf`.
+// How late the app hears a note after the string sounds: the input's buffers. Notes are timed at
+// their attack (listen/attacks.ts), so the pitch detector's window no longer adds to it. Playback
+// subtracts it before judging whether a note sat on the beat. Without a measurement it is a guess
+// (30 ms); calibration measures it by having the player play along to a few clicks
+// (`fitLatency`). The click's own output delay is accounted for by `ctxToPerf`, read from the
+// output device's own clock. Measurements made before attacks were timed (no `method`) included
+// the pitch window and a 50 ms output guess, so they no longer apply.
 import { currentAudioSetup, sameAudioSetup, type AudioSetup } from "./setup";
 
 const STORAGE = "guitar-latency";
-const GUESS_MS = 50;
+const GUESS_MS = 30;
+const METHOD = 2; // attack-timed notes, output read from the device
 const MIN_PAIRS = 5;
 const MAX_SCATTER_MS = 45; // notes this scattered around the clicks say nothing about the lag
 const EARLY_MS = 150; // a note this far before a click still belongs to it
 const LATE_MS = 400;
 
-interface Measurement { ms: number; at: string; setup?: AudioSetup }
+interface Measurement { ms: number; at: string; setup?: AudioSetup; method?: number }
 let visit: Measurement | null = null;
 let cached: { key: string; ms: number | null } | null = null;
 
@@ -26,7 +30,7 @@ function storedMeasurement(): string | null {
 function valueForSetup(raw: string | null): number | null {
   try {
     const v = JSON.parse(raw ?? "null") as Measurement | null;
-    return v && Number.isFinite(v.ms) && v.ms >= 0 && v.ms <= 250 && sameAudioSetup(v.setup, currentAudioSetup()) ? v.ms : null;
+    return v && v.method === METHOD && Number.isFinite(v.ms) && v.ms >= 0 && v.ms <= 250 && sameAudioSetup(v.setup, currentAudioSetup()) ? v.ms : null;
   } catch {
     return null;
   }
@@ -38,7 +42,7 @@ export function loadLatency(): number | null {
 
 export function saveLatency(ms: number) {
   if (!Number.isFinite(ms) || ms < 0 || ms > 250) return;
-  visit = { ms, at: new Date().toISOString(), setup: currentAudioSetup() ?? undefined };
+  visit = { ms, at: new Date().toISOString(), setup: currentAudioSetup() ?? undefined, method: METHOD };
   cached = null;
   try {
     localStorage.setItem(STORAGE, JSON.stringify(visit));
@@ -109,13 +113,7 @@ export function heardPerf(ctx: AudioContext, time: number): number {
 /** A beat shown this much before it is heard is painted as it is heard: half a 25 ms tick and a frame. */
 export const PAINT_LEAD_S = 0.02;
 
-/**
- * When an audio-clock time comes out of the speakers, on the performance.now() clock, as scoring
- * and calibration have always read it. Through Tone's wrapper this is the fixed 50 ms guess; the
- * calibrated lag absorbs the rest, so changing it would shift every stored calibration.
- */
+/** When an audio-clock time comes out of the speakers, on the performance.now() clock: for scoring and calibration. */
 export function ctxToPerf(ctx: AudioContext, time: number): number {
-  const s = ctx.getOutputTimestamp?.();
-  if (s && s.contextTime && s.performanceTime) return s.performanceTime + (time - s.contextTime) * 1000;
-  return performance.now() + (time - ctx.currentTime + (ctx.outputLatency ?? 0.05)) * 1000;
+  return heardPerf(ctx, time);
 }

@@ -127,6 +127,11 @@ away. Asking for in time while a pass is already playing changes nothing: the pa
   phase within the smallest of 200 ms, 30% of a beat and 45% of nearby attack spacing; scatter and
   drift limits still apply. Calibration's play-along supplies effective compensation, including
   the player's response to the reference; it does not isolate hardware latency.
+  A note is timed where its string was struck (`listen/attacks.ts`: the highs of the pick, read in
+  ~3 ms steps from the newest samples of each frame), not at the frame that later finds its pitch,
+  and the same pitch struck again (triplets, repeated notes) is a new attack even when the level
+  hardly moves. A calibration measured before this (or the 50 ms output guess it absorbed) no
+  longer applies; until the play-along runs again the input lag is a 30 ms guess.
   Tuning/noise calibration belongs to the opened input and sample rate; measured lag also belongs
   to the selected output. Changing that setup makes lag a guess until measured again.
   Assessed BPM comes from the completed pass's actual scheduled tempo, not its final control value.
@@ -148,8 +153,9 @@ away. Asking for in time while a pass is already playing changes nothing: the pa
   player's own pace the dial then shows the tempo set, not the measured pulse.
 - **Visible beat.** The pulse follows the beat being heard from the audio output clock, including
   count-in. That clock is the device's own (`heardTime`, read from the browser context behind
-  Tone's wrapper, which reports none), shown a paint ahead so it lands as it sounds. Scoring and
-  calibration keep their own calibrated mapping (`ctxToPerf`). Each heard beat also lights the whole room from its edges (warm on the bar's first
+  Tone's wrapper, which reports none), shown a paint ahead so it lands as it sounds; scoring and
+  calibration read the same device clock (`ctxToPerf`). Each heard beat also lights the whole room
+  from its edges (warm on the bar's first
   beat, cool while counting in), so the beat is felt while the eyes stay on the music. It rests
   with paused/stopped audio and gap practice; no separate animation clock supplies time to the
   player.

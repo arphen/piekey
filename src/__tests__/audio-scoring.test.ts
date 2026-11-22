@@ -113,12 +113,12 @@ describe("calibration belongs to the opened hardware", () => {
     saveLatency(85);
     expect(inputLag()).toBe(85);
     setInputSetup({ deviceId: "built-in", sampleRate: 48000 });
-    expect(inputLag()).toBe(50);
+    expect(inputLag()).toBe(30);
     setInputSetup({ deviceId: "guitar", sampleRate: 44100 });
     expect(loadLatency()).toBeNull();
     setInputSetup({ deviceId: "guitar", sampleRate: 48000 });
     setOutputSetup("headphones");
-    expect(inputLag()).toBe(50);
+    expect(inputLag()).toBe(30);
     setOutputSetup("speakers");
     expect(inputLag()).toBe(85);
     const restored = JSON.parse(localStorage.getItem("guitar-latency")!);
@@ -141,5 +141,12 @@ describe("calibration belongs to the opened hardware", () => {
     localStorage.setItem("guitar-calibration", JSON.stringify(profile));
     expect(loadLatency()).toBeNull();
     expect(loadProfile()).toBeNull();
+  });
+
+  it("no longer trusts a lag measured before notes were timed at their attack", () => {
+    saveLatency(85);
+    const measured = JSON.parse(localStorage.getItem("guitar-latency")!);
+    localStorage.setItem("guitar-latency", JSON.stringify({ ...measured, method: undefined }));
+    expect(loadLatency()).toBeNull();
   });
 });
