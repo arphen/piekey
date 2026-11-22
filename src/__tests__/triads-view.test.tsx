@@ -32,8 +32,11 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
+const click = async (el: Element | null | undefined) => { await act(async () => (el as HTMLButtonElement).click()); };
+
 it("asks I of C first, files a quick right answer a box up, and moves on to ii", async () => {
   await act(async () => root.render(<TriadsView input={input} />));
+  await click(host.querySelector(".wheel-center"));
   expect(host.querySelector(".triads-roman")?.textContent).toBe("I");
   expect(host.querySelector(".triads-of")?.textContent).toBe("in C-Dur");
   const right = [...host.querySelectorAll<HTMLButtonElement>(".triads-choice")].find((b) => b.getAttribute("aria-label")?.endsWith("C · E · G"))!;
@@ -53,9 +56,26 @@ it("asks a well-known triad without choices at the guitar, and gives them back o
   localStorage.setItem(TRIADS_KEY, JSON.stringify({ v: 1, cards: { "triad:C:4": { box: 4, due: "2000-01-01", seen: 6, right: 6 } } }));
   const guitar = { ...input, status: "listening" } as InputApi;
   await act(async () => root.render(<TriadsView input={guitar} />));
+  await click(host.querySelector(".wheel-center"));
   expect(host.querySelector(".triads-roman")?.textContent).toBe("V");
   expect(host.querySelector(".triads-play")?.textContent).toContain("Play it");
   expect(host.querySelectorAll(".triads-choice")).toHaveLength(0);
   await act(async () => host.querySelector<HTMLButtonElement>(".triads-play button")!.click());
   expect(host.querySelectorAll(".triads-choice")).toHaveLength(4);
+});
+
+it("turns to a chosen key on the circle, unfolds its triads, and drills that key from the one chosen", async () => {
+  await act(async () => root.render(<TriadsView input={input} />));
+  expect(host.querySelectorAll(".wheel-key")).toHaveLength(26); // 13 major, 13 minor
+  await click([...host.querySelectorAll(".wheel-key")].find((b) => b.getAttribute("aria-label")?.startsWith("e-Moll")));
+  const degrees = [...host.querySelectorAll(".wheel-degree")];
+  expect(degrees.map((b) => b.querySelector("b")?.textContent)).toEqual(["i", "ii°", "III", "iv", "V", "VI", "vii°"]);
+  expect(degrees[4].querySelector("small")?.textContent).toBe("H Dis Fis");
+  expect(host.querySelector(".wheel-panel-actions")?.textContent).toContain("G-Dur");
+  await click(degrees[4]);
+  expect(host.querySelector(".triads-focus")?.textContent).toBe("e-Moll");
+  expect(host.querySelector(".triads-roman")?.textContent).toBe("V");
+  expect(host.querySelector(".triads-of")?.textContent).toBe("in e-Moll");
+  await click(host.querySelector(".triads-circle"));
+  expect(host.querySelector(".wheel-center")?.textContent).toContain("Drill");
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { answerTriad, emptyTriads, newDrill, nextTriad, openMap, openRings, validTriadStore, type TriadStore } from "../triads/box";
-import { choicesFor, germanName, keyName, MINOR_KEYS, pcOf, TRIAD_BY_ID, TRIAD_CARDS, TRIAD_KEYS, vexOf } from "../triads/triads";
+import { answerTriad, emptyTriads, keyStats, newDrill, nextTriad, openMap, openRings, validTriadStore, type TriadStore } from "../triads/box";
+import { choicesFor, germanName, keyId, keyName, MINOR_KEYS, parallelOf, pcOf, relativeOf, signatureOf, TRIAD_BY_ID, TRIAD_CARDS, TRIAD_KEY_BY_ID, TRIAD_KEYS, vexOf, wheelPosition } from "../triads/triads";
 
 const card = (key: string, degree: number) => TRIAD_BY_ID.get(`triad:${key}:${degree}`)!;
 const DAY = "2026-11-22";
@@ -111,5 +111,28 @@ describe("triads by heart", () => {
     expect(openRings(store, 1)).toBe(2); // its C is known and major knows G and F
     expect(openRings(store, 2)).toBe(1); // A minor, behind "which degree" in C
     expect(openRings(store, 3)).toBe(0);
+  });
+
+  it("places keys on the circle with their relatives, parallels and signatures", () => {
+    const k = (id: string) => TRIAD_KEY_BY_ID.get(id)!;
+    expect(["C", "Am", "G", "Em", "F", "Dm", "F♯", "G♭", "D♯m", "E♭m", "D♭", "B♭m"].map((id) => wheelPosition(k(id)))).toEqual([0, 0, 1, 1, 11, 11, 6, 6, 6, 6, 7, 7]);
+    expect(keyId(relativeOf(k("G")))).toBe("Em");
+    expect(keyId(relativeOf(k("Em")))).toBe("G");
+    expect(keyId(relativeOf(k("G♭")))).toBe("E♭m");
+    expect(keyId(relativeOf(k("F♯")))).toBe("D♯m");
+    expect(keyId(parallelOf(k("E"))!)).toBe("Em");
+    expect(keyId(parallelOf(k("Cm"))!)).toBe("C");
+    expect(["C", "A", "F♯m", "E♭m", "Dm", "B♭"].map((id) => signatureOf(k(id)))).toEqual(["", "3♯", "3♯", "6♭", "1♭", "2♭"]);
+  });
+
+  it("drills a chosen key in every layer, whatever has opened, and counts what is known of it", () => {
+    const drill = newDrill();
+    const first = nextTriad(emptyTriads(), drill, DAY, { key: "Em" });
+    expect(first.id).toBe("triad:Em:0");
+    const store = answerTriad(emptyTriads(), "triad:Em:4", true, 800, DAY);
+    const stat = keyStats(store, DAY).get("Em")!;
+    expect(stat).toMatchObject({ known: 1, total: 28, open: false, due: 0 });
+    expect(stat.boxes[4]).toBe(2);
+    expect(keyStats(store, DAY).get("C")!.open).toBe(true);
   });
 });

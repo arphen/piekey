@@ -363,6 +363,12 @@ dedicated "play the progression" card exists yet; a tune with no chord symbols h
   right answer (≤ 3 s) on a due card climbs a box; slow stays; wrong returns to box 1 and comes back
   after three other cards. The drill never runs dry (due, then new from the earliest open layer, then
   weakest).
+- Home is a circle of fifths (`TriadWheel`): major keys on the rim with key signatures, relative
+  minors inside, each wedge lit by how much of the key is known and dim until opened. Choosing a
+  key turns it to the top and unfolds its seven triads (roman, notes, box) in the middle; a triad
+  starts a drill of that key from it, the centre drills the whole key (every layer, whatever has
+  opened), relative/parallel swap below. The closed wheel's centre is the progressive drill with its
+  due count; the drill's "Circle" button returns. All keys and triads are buttons (shell cursor).
 - Answers: tap, keys 1–4, the shell cursor, or strumming the triad (exactly one choice's three pitch
   classes ringing after a fresh attack). The answer's chord sounds after each answer.
 - Verified: unit tests for spelling (minor, inversions, E♯/B♯/C♭/double sharps), choices, boxes,

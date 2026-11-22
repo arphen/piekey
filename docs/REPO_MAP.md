@@ -218,7 +218,8 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/components/SkillTree.tsx` — `SkillTree:18`
 - `src/components/SongCoach.tsx` — `openPractice:235`, `SongCoach:317`, `SongCoachRoom:323`
 - `src/components/Transport.tsx` — `Transport:18`
-- `src/components/TriadsView.tsx` — `TriadsView:140`
+- `src/components/TriadWheel.tsx` — `TriadWheel:48`
+- `src/components/TriadsView.tsx` — `TriadsView:153`
 - `src/components/TunePicker.tsx` — `TunePicker:13`
 - `src/components/TuneView.tsx` — `TuneView:44`
 - `src/components/UnitCard.tsx` — `UnitCard:21`
@@ -340,11 +341,11 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/tools/timing.ts` — `MIN_TOOL_BPM:1`, `MAX_TOOL_BPM:2`, `clampToolBpm:4`, `tapTempo:9`
 - `src/tools/tools.css`
 - `src/tools/useTuner.ts` — `TunerReading:6`, `useTuner:9`
-- `src/triads/box.ts` — `TOP_BOX:5`, `emptyTriads:5`, `validTriadStore:5`, `TriadState:5`, `TriadStore:5`, `TRIADS_KEY:14`, `TRIAD_BOX_DAYS:15`, `FAST_MS:16`, `loadTriads:20`, `saveTriads:29`, `addDays:37`, `openMap:55`, `openRings:69`, `openCards:76`, `answerTriad:82`, `Drill:100` (+4 more)
+- `src/triads/box.ts` — `TOP_BOX:5`, `emptyTriads:5`, `validTriadStore:5`, `TriadState:5`, `TriadStore:5`, `TRIADS_KEY:14`, `TRIAD_BOX_DAYS:15`, `FAST_MS:16`, `loadTriads:20`, `saveTriads:29`, `addDays:37`, `openMap:55`, `openRings:69`, `openCards:76`, `answerTriad:82`, `Drill:100` (+8 more)
 - `src/triads/model.ts` — `Naming:4`, `TOP_BOX:6`, `TriadState:8`, `TriadStore:16`, `emptyTriads:22`, `validTriadState:27`, `validTriadStore:33`
 - `src/triads/triads.css`
-- `src/triads/triads.ts` — `Quality:14`, `Mode:15`, `Ask:16`, `Inversion:17`, `TriadKey:19`, `TRIAD_KEYS:29`, `MINOR_KEYS:35`, `RINGS:40`, `FIGURE:47`, `LAYERS:50`, `Triad:59`, `TriadCard:67`, `Choice:78`, `pcOf:89`, `invert:105`, `degreeTriad:114` (+9 more)
-- `src/triads/useTriads.ts` — `PLAY_BOX:26`, `TriadAnswer:29`, `useTriads:37`
+- `src/triads/triads.ts` — `Quality:14`, `Mode:15`, `Ask:16`, `Inversion:17`, `TriadKey:19`, `TRIAD_KEYS:29`, `MINOR_KEYS:35`, `RINGS:40`, `FIGURE:47`, `LAYERS:50`, `Triad:59`, `TriadCard:67`, `Choice:78`, `pcOf:89`, `invert:105`, `degreeTriad:114` (+15 more)
+- `src/triads/useTriads.ts` — `PLAY_BOX:26`, `TriadAnswer:29`, `useTriads:38`
 - `src/tunes/agentPrompt.ts` — `MUSICXML_AGENT_PROMPT:2`
 - `src/tunes/backup.ts` — `PracticeBackup:10`, `createBackup:78`, `parseBackup:94`, `restoreBackup:131`
 - `src/tunes/chordName.ts` — `nameVoicing:31`

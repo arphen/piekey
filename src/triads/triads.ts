@@ -198,6 +198,35 @@ export type { Naming } from "./model";
 import type { Naming } from "./model";
 export const noteName = (note: string, naming: Naming) => (naming === "german" ? germanName(note) : note);
 
+/** A key's identity in card IDs and focus: "C", "Am", "F♯m". */
+export const keyId = (k: TriadKey) => `${k.name}${k.mode === "minor" ? "m" : ""}`;
+export const TRIAD_KEY_BY_ID: ReadonlyMap<string, TriadKey> = new Map([...TRIAD_KEYS, ...MINOR_KEYS].map((k) => [keyId(k), k]));
+
+/** Where a key sits on the circle of fifths, clockwise from the top: C and A minor 0, G and E minor 1, ... F♯/G♭ and D♯/E♭ minor 6. */
+export const wheelPosition = (k: TriadKey) => ((k.mode === "major" ? k.tonic : k.tonic + 3) * 7) % 12;
+
+/** The key signature in a glance: "3♯", "2♭", "" for none. */
+export function signatureOf(k: TriadKey): string {
+  const major = k.mode === "major" ? k : relativeOf(k);
+  const names = makeScale(major.tonic, "major", major.name).names.join("");
+  const sharps = (names.match(/♯/g) ?? []).length;
+  const flats = (names.match(/♭/g) ?? []).length;
+  return sharps ? `${sharps}♯` : flats ? `${flats}♭` : "";
+}
+
+/** The relative and the parallel key: C major's A minor and C minor. */
+export function relativeOf(k: TriadKey): TriadKey {
+  const list = k.mode === "major" ? MINOR_KEYS : TRIAD_KEYS;
+  const pos = wheelPosition(k);
+  const same = list.filter((m) => wheelPosition(m) === pos);
+  return same.find((m) => (m.name.includes("♭") || m.name === "F") === (k.name.includes("♭") || k.name === "F")) ?? same[0];
+}
+export function parallelOf(k: TriadKey): TriadKey | null {
+  const list = k.mode === "major" ? MINOR_KEYS : TRIAD_KEYS;
+  const same = list.filter((m) => m.tonic === k.tonic);
+  return same.find((m) => m.name === k.name) ?? same[0] ?? null;
+}
+
 /** "C major" / "C-Dur", "F♯ minor" / "fis-Moll". */
 export function keyName(k: TriadKey, naming: Naming): string {
   if (naming === "english") return `${k.name} ${k.mode}`;

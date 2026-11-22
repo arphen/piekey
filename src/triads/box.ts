@@ -1,5 +1,5 @@
 import { getStoredItem, setStoredItem } from "../storage";
-import { LAYERS, RINGS, TRIAD_BY_ID, TRIAD_CARDS, type TriadCard } from "./triads";
+import { keyId, LAYERS, RINGS, TRIAD_BY_ID, TRIAD_CARDS, type TriadCard } from "./triads";
 import { TOP_BOX, emptyTriads, validTriadStore, type TriadStore } from "./model";
 
 export { TOP_BOX, emptyTriads, validTriadStore, type TriadState, type TriadStore } from "./model";
@@ -104,9 +104,18 @@ export interface Drill {
 
 export const newDrill = (): Drill => ({ turn: 0, asked: new Map() });
 
-/** The next card: due ones (lowest box, longest unasked) first, then a new one, then the weakest of the rest. */
-export function nextTriad(store: TriadStore, drill: Drill, day: string): TriadCard {
-  const open = openCards(store);
+/** A key chosen on the circle: everything about it, whatever has opened elsewhere. */
+export interface Focus {
+  key: string; // keyId: "Em"
+  degree?: number; // where to begin
+}
+
+/**
+ * The next card: due ones (lowest box, longest unasked) first, then a new one, then the weakest of
+ * the rest. With a focus, from that key's cards in every layer, named triads before the rest.
+ */
+export function nextTriad(store: TriadStore, drill: Drill, day: string, focus?: Focus | null): TriadCard {
+  const open = focus ? TRIAD_CARDS.filter((c) => keyId(c.key) === focus.key) : openCards(store);
   const fresh = (c: TriadCard) => drill.turn - (drill.asked.get(c.id) ?? -Infinity) > RECENT;
   const order = (a: TriadCard, b: TriadCard) =>
     boxOf(store, a.id) - boxOf(store, b.id) || (drill.asked.get(a.id) ?? -1) - (drill.asked.get(b.id) ?? -1) || INDEX.get(a.id)! - INDEX.get(b.id)!;
@@ -126,3 +135,36 @@ export function boxCounts(store: TriadStore): number[] {
 }
 
 export const triadCardById = (id: string) => TRIAD_BY_ID.get(id);
+
+export interface KeyStat {
+  known: number; // its cards at box 2 or more, every layer
+  total: number;
+  open: boolean; // its named triads have opened in the wave
+  due: number;
+  boxes: number[]; // box of each degree's named triad, I to vii°
+}
+
+/** For the circle: how well each key is known, whether it has opened, what is due. */
+export function keyStats(store: TriadStore, day: string): Map<string, KeyStat> {
+  const open = openMap(store);
+  const out = new Map<string, KeyStat>();
+  for (const c of TRIAD_CARDS) {
+    const id = keyId(c.key);
+    const stat = out.get(id) ?? { known: 0, total: 0, open: false, due: 0, boxes: Array<number>(7).fill(0) };
+    const state = store.cards[c.id];
+    stat.total++;
+    if ((state?.box ?? 0) >= 2) stat.known++;
+    if (state && state.box >= 1 && state.due <= day) stat.due++;
+    if (c.ask === "name" && c.inversion === 0) {
+      stat.boxes[c.degree] = state?.box ?? 0;
+      if (open[c.layer][c.key.ring]) stat.open = true;
+    }
+    out.set(id, stat);
+  }
+  return out;
+}
+
+/** Open cards due today: what the drill has waiting. */
+export function dueCount(store: TriadStore, day: string): number {
+  return openCards(store).filter((c) => { const s = store.cards[c.id]; return s && s.box >= 1 && s.due <= day; }).length;
+}

@@ -82,3 +82,73 @@
   .triads-glint { display: none; }
   .triads-play-ring > i { animation: none; }
 }
+
+/* ---------- the circle of fifths: the way into the triads ---------- */
+.triads-home { justify-items: center; }
+.wheel { --wheel: min(92vw, 540px, 72vh); --spin: 0deg; --turn: 0.8s cubic-bezier(0.2, 0.8, 0.2, 1); position: relative; width: var(--wheel); aspect-ratio: 1; margin: 4px auto 0; }
+.wheel-spin { position: absolute; inset: 0; transform: rotate(var(--spin)); transition: transform var(--turn); }
+.wheel svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.wheel-wedge {
+  fill: hsl(var(--hue) 34% calc(9% + var(--depth) * 26%) / calc(0.35 + var(--depth) * 0.5));
+  stroke: hsl(var(--hue) 30% 40% / 0.18); stroke-width: 0.6;
+  transition: fill 0.4s, stroke 0.4s, opacity 0.4s; opacity: 0.55;
+}
+.wheel-wedge.is-open { opacity: 1; stroke: hsl(var(--hue) 40% 55% / 0.35); }
+.wheel-wedge.is-here { stroke: #e7c98a; stroke-width: 1.6; fill: hsl(var(--hue) 40% calc(16% + var(--depth) * 26%) / 0.95); filter: drop-shadow(0 0 6px #e7c98a66); }
+.wheel.is-open .wheel-wedge:not(.is-here) { opacity: 0.32; }
+.wheel.is-open .wheel-wedge.is-minor { opacity: 0; } /* the chosen key's triads unfold over the inner ring */
+
+.wheel-spot { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform: rotate(var(--a)); }
+.wheel-spot > button {
+  position: absolute; left: 0; top: 0;
+  transform: translate(-50%, -50%) translateY(calc(var(--wheel) * var(--r) * -1)) rotate(calc(-1 * (var(--a) + var(--spin))));
+  transition: transform var(--turn), color 0.2s, background 0.2s, border-color 0.2s, opacity 0.3s;
+}
+.wheel-spot.is-flat > button { transform: translate(-50%, -50%) translateY(calc(var(--wheel) * var(--r) * -1)) rotate(calc(-1 * var(--a))); }
+
+.wheel-key { display: grid; justify-items: center; gap: 1px; min-width: 44px; min-height: 44px; padding: 4px; border: 1px solid transparent; border-radius: 50%; background: none; color: color-mix(in srgb, var(--ink) 55%, transparent); font: inherit; cursor: pointer; }
+.wheel-key b { font: 400 clamp(17px, calc(var(--wheel) * 0.055), 28px)/1 var(--font-display); }
+.wheel-key small { color: var(--ink-faint); font: 400 clamp(8px, calc(var(--wheel) * 0.019), 11px)/1 var(--font-mono); letter-spacing: 0.04em; }
+.wheel-key.is-minor b { font-size: clamp(13px, calc(var(--wheel) * 0.04), 20px); }
+.wheel-key.is-open { color: var(--ink); }
+.wheel-key:hover, .wheel-key:focus-visible { border-color: color-mix(in srgb, var(--triad) 50%, transparent); background: rgba(16, 22, 21, 0.55); color: var(--ink); }
+.wheel-key.is-here { color: #f3dfae; }
+.wheel.is-open .wheel-key:not(.is-here) { opacity: 0.6; }
+
+.wheel-center { position: absolute; left: 50%; top: 50%; display: grid; place-content: center; justify-items: center; gap: 4px; width: calc(var(--wheel) * 0.39); aspect-ratio: 1; border: 1px solid color-mix(in srgb, var(--triad) 40%, transparent); border-radius: 50%; background: radial-gradient(circle at 50% 35%, rgba(217, 178, 106, 0.16), rgba(16, 22, 21, 0.85) 70%); color: var(--triad); font: inherit; cursor: pointer; transform: translate(-50%, -50%); transition: border-color 0.2s, box-shadow 0.2s; }
+.wheel-center b { font: 400 clamp(22px, calc(var(--wheel) * 0.07), 36px)/1 var(--font-display); }
+.wheel-center small { color: var(--ink-faint); font: 400 clamp(10px, calc(var(--wheel) * 0.024), 13px)/1 var(--font-mono); letter-spacing: 0.08em; }
+.wheel-center:hover, .wheel-center:focus-visible { border-color: var(--triad); box-shadow: 0 0 28px rgba(217, 178, 106, 0.28); }
+.wheel-center.is-key { width: calc(var(--wheel) * 0.235); background: radial-gradient(circle at 50% 35%, rgba(217, 178, 106, 0.22), rgba(16, 22, 21, 0.92) 70%); }
+.wheel-center.is-key b { color: #f3dfae; font-size: clamp(13px, calc(var(--wheel) * 0.038), 20px); text-align: center; }
+
+/* a chosen key unfolds its seven triads in the middle */
+.wheel-inset { position: absolute; inset: 0; animation: wheel-unfold 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes wheel-unfold { from { transform: scale(0.55) rotate(-25deg); opacity: 0; } to { transform: none; opacity: 1; } }
+.wheel-degree-wedge { fill: rgba(217, 178, 106, calc(0.05 + var(--box) * 0.3)); stroke: rgba(217, 178, 106, 0.35); stroke-width: 0.6; }
+.wheel-core { fill: rgba(10, 14, 13, 0.9); stroke: rgba(217, 178, 106, 0.3); stroke-width: 0.6; }
+.wheel-degree { display: grid; justify-items: center; gap: 2px; min-width: 48px; min-height: 48px; padding: 4px 6px; border: 1px solid transparent; border-radius: 12px; background: none; color: var(--ink); font: inherit; cursor: pointer; }
+.wheel-degree b { color: #f3dfae; font: 400 clamp(16px, calc(var(--wheel) * 0.05), 26px)/1 var(--font-display); }
+.wheel-degree small { color: color-mix(in srgb, var(--ink) 75%, transparent); font: 400 clamp(8px, calc(var(--wheel) * 0.021), 12px)/1.1 var(--font-ui); white-space: nowrap; }
+.wheel-degree.is-known small { color: #dfeccd; }
+.wheel-degree:hover, .wheel-degree:focus-visible { border-color: rgba(217, 178, 106, 0.6); background: rgba(16, 22, 21, 0.6); }
+
+.wheel-panel { display: grid; justify-items: center; gap: 8px; min-height: 92px; text-align: center; }
+.wheel-panel-key { display: flex; align-items: baseline; gap: 10px; margin: 0; color: var(--ink); font: 400 clamp(22px, 3.4vh, 30px)/1.1 var(--font-display); }
+.wheel-panel-key span { color: var(--ink-faint); font: 400 12px/1 var(--font-mono); }
+.wheel-panel-stats { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 16px; margin: 0; color: var(--ink-faint); font: 400 11px/1.4 var(--font-mono); }
+.wheel-panel-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.wheel-panel-actions button { display: grid; gap: 2px; min-height: 42px; padding: 6px 14px; border: 1px solid var(--line); border-radius: 10px; background: none; color: var(--ink); font: 400 14px/1.1 var(--font-display); cursor: pointer; }
+.wheel-panel-actions button small { color: var(--ink-faint); font: 400 9px/1 var(--font-mono); letter-spacing: 0.08em; }
+.wheel-panel-actions button:hover, .wheel-panel-actions button:focus-visible { border-color: color-mix(in srgb, var(--triad) 55%, transparent); }
+
+/* the drill's way back to the circle */
+.triads-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.triads-circle { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: none; color: var(--ink-faint); font: 400 12px/1 var(--font-ui); cursor: pointer; }
+.triads-circle:hover, .triads-circle:focus-visible { border-color: color-mix(in srgb, var(--triad) 55%, transparent); color: var(--ink); }
+.triads-focus { color: var(--triad); font: 400 18px/1.1 var(--font-display); }
+
+@media (prefers-reduced-motion: reduce) {
+  .wheel-spin, .wheel-spot > button { transition: none; }
+  .wheel-inset { animation: none; }
+}

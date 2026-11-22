@@ -7,8 +7,8 @@ import type { InputApi } from "../listen/useInput";
 import { padChord } from "../song/cues";
 import { today } from "../song/leitner";
 import { mod } from "../musicTheory";
-import { answerTriad, boxCounts, loadTriads, newDrill, nextTriad, openMap, saveTriads, type TriadStore } from "./box";
-import { choicesFor, type Naming, type Triad } from "./triads";
+import { answerTriad, boxCounts, loadTriads, newDrill, nextTriad, openMap, saveTriads, type Focus, type TriadStore } from "./box";
+import { choicesFor, TRIAD_BY_ID, type Naming, type Triad } from "./triads";
 
 // The triad drill as a hook. Answered by tapping (a phone at night), the keys 1–4, the guitar's
 // navigation cursor, or by strumming the triad: when the strings ring exactly one choice's three
@@ -34,12 +34,13 @@ export interface TriadAnswer {
 
 const pcsOf = (t: Triad) => new Set(t.midis.map((m) => mod(m)));
 
-export function useTriads(input: InputApi) {
+/** `focus`: a key chosen on the circle, and the degree to begin with; none is the whole drill as it has opened. */
+export function useTriads(input: InputApi, focus: Focus | null = null) {
   const [store, setStore] = useState<TriadStore>(loadTriads);
   const storeRef = useRef(store);
   storeRef.current = store;
   const drill = useRef(newDrill());
-  const [card, setCard] = useState(() => nextTriad(store, drill.current, today()));
+  const [card, setCard] = useState(() => (focus?.degree !== undefined ? TRIAD_BY_ID.get(`triad:${focus.key}:${focus.degree}`) : undefined) ?? nextTriad(store, drill.current, today(), focus));
   const [answer, setAnswer] = useState<TriadAnswer | null>(null);
   const [shown, setShown] = useState(0); // each showing of a card, even the same one again
   const [revealed, setRevealed] = useState(false);
@@ -53,12 +54,12 @@ export function useTriads(input: InputApi) {
   const advance = useCallback(() => {
     timer.current = null;
     drill.current.asked.set(card.id, drill.current.turn++);
-    setCard(nextTriad(storeRef.current, drill.current, today()));
+    setCard(nextTriad(storeRef.current, drill.current, today(), focus));
     setShown((n) => n + 1);
     setRevealed(false);
     setAnswer(null);
     shownAt.current = performance.now();
-  }, [card]);
+  }, [card, focus]);
 
   const settle = useCallback(
     (right: boolean, picked: number | null) => {

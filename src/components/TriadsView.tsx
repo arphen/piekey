@@ -1,9 +1,10 @@
-import { useLayoutEffect, useRef, type CSSProperties } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { Accidental, Formatter, Renderer, Stave, StaveNote, Voice } from "vexflow";
 import type { InputApi } from "../listen/useInput";
 import { PracticeWindowBoundary } from "../platform/PracticeWindowBoundary";
-import { TOP_BOX } from "../triads/box";
-import { keyName, LAYERS, MINOR_KEYS, noteName, TRIAD_KEYS, vexOf, type Naming, type Triad } from "../triads/triads";
+import { TOP_BOX, type Focus } from "../triads/box";
+import { keyName, LAYERS, MINOR_KEYS, noteName, TRIAD_KEY_BY_ID, TRIAD_KEYS, vexOf, type Naming, type Triad } from "../triads/triads";
+import { TriadWheel } from "./TriadWheel";
 import { useTriads } from "../triads/useTriads";
 import "../triads/triads.css";
 
@@ -54,8 +55,9 @@ function Roman({ roman, inversion }: { roman: string; inversion: 0 | 1 | 2 }) {
   );
 }
 
-function TriadDrill({ input }: { input: InputApi }) {
-  const t = useTriads(input);
+function TriadDrill({ input, focus, onCircle }: { input: InputApi; focus: Focus | null; onCircle(): void }) {
+  const t = useTriads(input, focus);
+  const focused = focus ? TRIAD_KEY_BY_ID.get(focus.key) ?? null : null;
   const { card, choices, correct, answer, naming, session, counts } = t;
   const quick = session.fastMs.length ? session.fastMs.reduce((a, b) => a + b, 0) / session.fastMs.length / 1000 : null;
   const of = naming === "german" ? "in" : "of";
@@ -63,6 +65,10 @@ function TriadDrill({ input }: { input: InputApi }) {
   const answerText = right?.triad ? names(right.triad, naming) : right?.roman ?? "";
   return (
     <main className="triads" style={{ "--triad-box": t.state?.box ?? 0 } as CSSProperties}>
+      <nav className="triads-top">
+        <button type="button" className="triads-circle" onClick={onCircle}><span aria-hidden="true">◎</span>Circle</button>
+        {focused ? <span className="triads-focus">{keyName(focused, naming)}</span> : null}
+      </nav>
       <header className="triads-head">
         <ol className="triads-boxes" aria-label="Card box">
           {counts.map((n, box) => (
@@ -137,10 +143,17 @@ function TriadDrill({ input }: { input: InputApi }) {
 }
 
 /** Triads by heart, in its own practice boundary: one writer of the card box at a time. */
+/** The circle first; a key, a triad of it, or the centre's drill from there; and back. */
+function TriadsHome({ input }: { input: InputApi }) {
+  const [drill, setDrill] = useState<{ focus: Focus | null } | null>(null);
+  if (!drill) return <TriadWheel onDrill={(focus) => setDrill({ focus })} />;
+  return <TriadDrill key={drill.focus ? `${drill.focus.key}:${drill.focus.degree ?? ""}` : "all"} input={input} focus={drill.focus} onCircle={() => setDrill(null)} />;
+}
+
 export function TriadsView({ input, onExit }: { input: InputApi; onExit?: () => void }) {
   return (
     <PracticeWindowBoundary onExit={onExit ?? (() => undefined)}>
-      <TriadDrill input={input} />
+      <TriadsHome input={input} />
     </PracticeWindowBoundary>
   );
 }

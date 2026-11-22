@@ -26,7 +26,7 @@ main.tsx
        ├─ Scales    ── ScalesView → FocusView(scales) | ShapesView → harmonicMinorShapes → usePlayer
        ├─ Reading   ── FocusView(reading) → SongCoach(focus) over familiesOnly(deck)
        ├─ Explore: Ear ── EarHub → FocusView(ear) | EarView → useEarTrainer
-       ├─ Explore: Triads ── TriadsView → useTriads → triads/box (card box) + triads/triads (pure)
+       ├─ Explore: Triads ── TriadsView → TriadWheel (circle of fifths) | drill: useTriads(focus) → triads/box + triads/triads
        └─ Tools     ── GuitarTools → useTuner / usePlayback (shared input/context)
 ```
 
