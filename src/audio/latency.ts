@@ -78,7 +78,42 @@ export function fitLatency(clicks: number[], heard: number[]): number | null {
   return Math.max(0, Math.min(250, Math.round(mid)));
 }
 
-/** When an audio-clock time comes out of the speakers, on the performance.now() clock. */
+/**
+ * Tone hands out a wrapper of the browser's AudioContext that has neither getOutputTimestamp()
+ * nor outputLatency; only the native context behind it knows when sound leaves the device.
+ */
+export function nativeContext(ctx: AudioContext): AudioContext {
+  const raw = ctx as unknown as Record<string, unknown>;
+  const inner = raw._nativeAudioContext ?? raw._nativeContext;
+  return inner && typeof inner === "object" ? (inner as AudioContext) : ctx;
+}
+
+const outputDelay = (c: AudioContext) => (c.outputLatency || 0) + (c.baseLatency || 0) || 0.05;
+
+/** The audio-clock time coming out of the device right now: what is being heard, for what is shown. */
+export function heardTime(ctx: AudioContext): number {
+  const native = nativeContext(ctx);
+  const s = native.getOutputTimestamp?.();
+  if (s && s.contextTime && s.performanceTime) return s.contextTime + (performance.now() - s.performanceTime) / 1000;
+  return native.currentTime - outputDelay(native);
+}
+
+/** When an audio-clock time comes out of the device, on the performance.now() clock, for what is shown. */
+export function heardPerf(ctx: AudioContext, time: number): number {
+  const native = nativeContext(ctx);
+  const s = native.getOutputTimestamp?.();
+  if (s && s.contextTime && s.performanceTime) return s.performanceTime + (time - s.contextTime) * 1000;
+  return performance.now() + (time - native.currentTime + outputDelay(native)) * 1000;
+}
+
+/** A beat shown this much before it is heard is painted as it is heard: half a 25 ms tick and a frame. */
+export const PAINT_LEAD_S = 0.02;
+
+/**
+ * When an audio-clock time comes out of the speakers, on the performance.now() clock, as scoring
+ * and calibration have always read it. Through Tone's wrapper this is the fixed 50 ms guess; the
+ * calibrated lag absorbs the rest, so changing it would shift every stored calibration.
+ */
 export function ctxToPerf(ctx: AudioContext, time: number): number {
   const s = ctx.getOutputTimestamp?.();
   if (s && s.contextTime && s.performanceTime) return s.performanceTime + (time - s.contextTime) * 1000;

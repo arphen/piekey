@@ -301,6 +301,29 @@ describe("session assessment trust", () => {
     expect(session.store.cards[card.id].bestCleanBpm).toBe(before + 4);
   });
 
+  it("slows a step without lowering the first time's goal, and holds the tempo when the timing was not caught", async () => {
+    input.status = "listening";
+    await act(async () => session.begin([card.id]));
+    await act(async () => session.go("time"));
+    await act(async () => vi.advanceTimersByTime(950));
+    const start = session.bpm;
+    const goal = session.target;
+    await pass(card, { hit: 6, total: 10 });
+    await pass(card, { hit: 6, total: 10 });
+    expect(session.bpm).toBe(start - 4);
+    expect(session.target).toBe(goal); // a clean pass earns the way back
+    await pass(card);
+    expect(session.bpm).toBe(start);
+    expect(session.outcome).toBeFalsy();
+    const untimed = { at: card.tl.targets.map(() => null) };
+    await pass(card, untimed);
+    await pass(card, untimed);
+    expect(session.bpm).toBe(start); // right notes, too few attacks caught: neither up nor down
+    expect(session.outcome).toBeFalsy();
+    await pass(card, untimed);
+    expect(session.outcome).toMatchObject({ result: "ok" });
+  });
+
   it("fades new memory work only after full steady passes and schedules its later review", async () => {
     input.status = "listening";
     await act(async () => session.updateSettings({ guide: true }));

@@ -1,4 +1,4 @@
-import { inputLag } from "../audio/latency";
+import { heardPerf, inputLag, PAINT_LEAD_S } from "../audio/latency";
 import { getStoredItem, setStoredItem } from "../storage";
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as Tone from "tone";
@@ -108,7 +108,8 @@ const STRUM_MIN_PCS = 3; // fewer is a note and its overtones
 
 interface Beat {
   n: number;
-  perf: number; // performance.now() when it is heard
+  perf: number; // performance.now() when it is heard, as onsets are matched to it
+  heard: number; // when the device sounds it, a paint early: when its pulse is shown
   ms: number; // length of the beat it starts
 }
 
@@ -406,13 +407,13 @@ export function useFreePlay(input: InputApi, active: boolean) {
             if (inBar === 0 || inBar === 2) shots.play(bassBuffer(inBar === 0 ? chord.bass : chord.fifth), out, t, 0.6, spb * 1.8, 0.1);
             else shots.play(hatBuffer(), out, t, 0.22);
           }
-          s.beats.push({ n: s.n, perf: perfOf(t), ms: spb * 1000 });
+          s.beats.push({ n: s.n, perf: perfOf(t), heard: heardPerf(ctx, t) - PAINT_LEAD_S * 1000, ms: spb * 1000 });
           if (s.beats.length > 48) s.beats.shift();
           s.nextTime += spb;
           s.n++;
         }
         let sounding: Beat | undefined;
-        for (let i = s.beats.length - 1; i >= 0 && !sounding; i--) if (s.beats[i].perf <= now) sounding = s.beats[i];
+        for (let i = s.beats.length - 1; i >= 0 && !sounding; i--) if (s.beats[i].heard <= now) sounding = s.beats[i];
         const beat = sounding ? sounding.n % 4 : -1;
         if (sounding && (!s.beatSignal.active || sounding.n !== lastSounded)) {
           lastSounded = sounding.n;

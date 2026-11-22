@@ -1,4 +1,4 @@
-import { ctxToPerf, inputLag } from "../audio/latency";
+import { ctxToPerf, heardTime, inputLag, PAINT_LEAD_S } from "../audio/latency";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Tone from "tone";
 import { ensureAudio } from "../audio/context";
@@ -117,12 +117,6 @@ interface Sample {
 }
 
 const rawContext = () => Tone.getContext().rawContext as AudioContext;
-
-/** The context time being heard now and its performance.now() moment, once the output clock runs. */
-function outputStamp(ctx: AudioContext): { ctx: number; perf: number } | null {
-  const s = ctx.getOutputTimestamp?.();
-  return s && s.contextTime && s.performanceTime ? { ctx: s.contextTime, perf: s.performanceTime } : null;
-}
 
 const median = (xs: number[]) => {
   const s = [...xs].sort((a, b) => a - b);
@@ -449,9 +443,8 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
           s.nextR = segEnd;
         }
 
-        // what is being heard right now
-        const stamp = outputStamp(ctx);
-        const heard = stamp ? stamp.ctx + (performance.now() - stamp.perf) / 1000 : now - (ctx.outputLatency ?? 0.05);
+        // what is being heard right now (from the device's own clock), a paint ahead so it shows as it sounds
+        const heard = heardTime(ctx) + PAINT_LEAD_S;
         const r = rOf(heard);
         // Count-in buffers were scheduled at the opening tempo, even if the player changes it.
         const countPosition = (heard - s.t0) / spb0;

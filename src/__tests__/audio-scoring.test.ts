@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { inputLag, loadLatency, saveLatency } from "../audio/latency";
+import { heardTime, inputLag, loadLatency, saveLatency } from "../audio/latency";
 import { setInputSetup, setOutputSetup } from "../audio/setup";
 import { loadProfile, saveProfile, type Profile } from "../listen/calibration";
 import { DEFAULT_TUNING } from "../pitchDetection";
@@ -76,6 +76,19 @@ describe("earning a faster tempo", () => {
     for (const offset of [-750, 750]) expect(timingReady(Array<number>(8).fill(offset), 80)).toBe(false);
     expect(timingReady(Array<number>(8).fill(150), 80, true, 187.5)).toBe(false);
     expect(timingReady([150, 150], 80)).toBe(false); // too short to establish an offset
+    // uneven playing is measured; attacks the detector missed are not held against the player
+    expect(assessTiming([0, -100, 100, -100, 0], 120).measured).toBe(true);
+    expect(assessTiming([0, 0, 0, 0, null, null, null, null], 120).measured).toBe(false);
+  });
+
+  it("reads what is heard from the native context behind Tone's wrapper, which reports no output clock", () => {
+    vi.spyOn(performance, "now").mockReturnValue(1000);
+    const native = { currentTime: 10, outputLatency: 0.02, baseLatency: 0.04, getOutputTimestamp: () => ({ contextTime: 9.8, performanceTime: 950 }) };
+    const wrapper = { currentTime: 10, baseLatency: 0.04, _nativeAudioContext: native } as unknown as AudioContext;
+    expect(heardTime(wrapper)).toBeCloseTo(9.85); // the device's own stamp, not a 50 ms guess
+    const early = { currentTime: 10, _nativeAudioContext: { ...native, getOutputTimestamp: () => ({ contextTime: 0, performanceTime: 0 }) } } as unknown as AudioContext;
+    expect(heardTime(early)).toBeCloseTo(9.94); // before the stamp runs: both reported latencies
+    vi.restoreAllMocks();
   });
 });
 

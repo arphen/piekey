@@ -173,7 +173,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/audio/context.ts` — `ensureAudio:14`
 - `src/audio/demo.ts` — `DEMO_BPM:10`, `DemoPlayback:57`, `playDemo:66`, `demoNow:117`
 - `src/audio/exportMidi.ts` — `exportBackingMidi:5`
-- `src/audio/latency.ts` — `loadLatency:35`, `saveLatency:39`, `inputLag:52`, `latencyMeasured:60`, `fitLatency:67`, `ctxToPerf:82`
+- `src/audio/latency.ts` — `loadLatency:35`, `saveLatency:39`, `inputLag:52`, `latencyMeasured:60`, `fitLatency:67`, `nativeContext:85`, `heardTime:94`, `heardPerf:102`, `PAINT_LEAD_S:110`, `ctxToPerf:117`
 - `src/audio/output.ts` — `SYSTEM_OUTPUT:11`, `OutputDevice:13`, `canChooseOutput:34`, `savedOutput:36`, `listOutputs:44`, `setOutput:68`, `restoreOutput:84`, `watchOutputs:102`, `useOutputs:110`
 - `src/audio/pluck.ts` — `BufferPluck:60`, `pluckBuffer:93`
 - `src/audio/recorder.ts` — `TakeMeta:9`, `StoredTake:20`, `RecordingSaveStatus:21`, `Recording:22`, `getPendingTakes:29`, `getRecordingSaves:30`, `subscribeRecordingSaves:31`, `toDrop:73`, `saveTake:79`, `finishTake:117`, `retryPendingTakes:128`, `readAllTakes:144`, `readExportableTakes:157`, `storeTransferredTake:164`, `listTakes:176`, `takeAudio:189` (+1 more)
@@ -314,11 +314,11 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/song/tree.ts` — `TreeNode:13`, `TreeEdge:25`, `TreeInput:31`, `TREE_SIZE:39`, `buildTree:72`
 - `src/song/tune-picker.css`
 - `src/song/useChordFollower.ts` — `ChordGoal:9`, `useChordFollower:21`
-- `src/song/useFreePlay.ts` — `ClickMode:51`, `FreeView:54`, `useFreePlay:248`
+- `src/song/useFreePlay.ts` — `ClickMode:51`, `FreeView:54`, `useFreePlay:249`
 - `src/song/useGoalEvidence.ts` — `useGoalEvidence:13`
 - `src/song/useGoals.ts` — `useGoals:4`
 - `src/song/usePracticeHistory.ts` — `usePracticeHistory:11`
-- `src/song/useSession.ts` — `Phase:52`, `Outcome:93`, `SessionOptions:123`, `useSession:132`, `SessionApi:1280`
+- `src/song/useSession.ts` — `Phase:52`, `Outcome:94`, `SessionOptions:124`, `useSession:133`, `SessionApi:1291`
 - `src/song/useThemePicker.ts` — `useThemePicker:14`
 - `src/song/voicings.ts` — `VoicingNote:10`, `Voicing:17`, `voiceChords:75`
 - `src/storage.ts` — `StorageIssue:4`, `pendingStorageWrites:14`, `getStoredItem:15`, `storedKeys:18`, `retryStorageWrites:32`, `getStorageIssues:38`, `subscribeStorageIssues:39`, `reportStorageError:44`, `clearStorageError:53`, `setStoredItem:59`, `removeStoredItem:74`
@@ -347,12 +347,12 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/tunes/musicxml.ts` — `CompEvent:11`, `LeadSheet:18`, `MusicXmlOptions:32`, `MusicXmlPart:37`, `MusicXmlSource:44`, `parseMusicXml:284`, `loadTuneFile:600`
 - `src/tunes/order.ts` — `Slot:8`, `Target:17`, `Voice:30`, `Timeline:36`, `playOrder:48`, `buildTimeline:128`, `slotOfBar:172`, `firstTargetAt:177`, `printedResults:186`
 - `src/tunes/passage.ts` — `PassageRange:5`, `validPassage:7`, `passageOccurrences:13`, `passageLabel:23`, `passageId:33`, `parsePassageId:37`, `passageTimeline:46`
-- `src/tunes/scoring.ts` — `matchesPitch:4`, `PitchSample:7`, `PitchWindow:13`, `judgePitch:29`, `TimingFit:51`, `fitTiming:60`, `timingTolerance:76`, `timingPhaseLimit:78`, `assessTiming:85`, `timingReady:98`
+- `src/tunes/scoring.ts` — `matchesPitch:4`, `PitchSample:7`, `PitchWindow:13`, `judgePitch:29`, `TimingFit:51`, `fitTiming:60`, `timingTolerance:76`, `timingPhaseLimit:78`, `assessTiming:85`, `timingReady:99`
 - `src/tunes/starter.ts` — `STARTER_ENTRY:23`
 - `src/tunes/tunes.css`
 - `src/tunes/unzip.ts` — `unzip:4`
 - `src/tunes/useCoach.ts` — `Phase:13`, `useCoach:42`
-- `src/tunes/usePlayback.ts` — `PlaybackMix:28`, `PassScore:44`, `usePlayback:132`
+- `src/tunes/usePlayback.ts` — `PlaybackMix:28`, `PassScore:44`, `usePlayback:126`
 
 ## tunes
 

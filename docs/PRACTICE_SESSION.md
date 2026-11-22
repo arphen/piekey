@@ -93,9 +93,12 @@ next safe boundary. **Stop now** remains available. Neither action awards an unf
   the notes landed first time, forgiving the first and last note and one stray mark in twelve
   (`song/judge.ts`): detection is least reliable at the edges of a phrase.
 - **In time.** If the player came in with a steady tempo of their own, the click starts ~12 % under
-  it, so they settle down onto it. Only clean passes raise it; two short passes lower it; two
-  passes of mostly wrong notes send the band away until a take at the player's own pace is clean
-  again. The tempo moves while the band plays. The first note may come early, the last may land
+  it, so they settle down onto it. Only clean passes raise it; two short passes lower it a step
+  (4 bpm, as much as a clean pass earns). The first time, where the visit is heading stays put, so
+  clean passes earn the way back; after that it comes down too. Right notes with too few attacks
+  caught to time them hold the tempo without counting as short; three such passes end the
+  exercise as ok. Two passes of mostly wrong notes send the band away until a take at the
+  player's own pace is clean again. The tempo moves while the band plays. The first note may come early, the last may land
   late, and a finished pass keeps its colours for a moment.
   Untied repeated notes need separate attacks; ties remain a single target. Scale, melody and
   comping passes must also establish steady timing before the tempo rises. A bounded constant
@@ -137,7 +140,9 @@ next safe boundary. **Stop now** remains available. Neither action awards an unf
   under the material: right notes for melodies; right notes, unbroken runs and sitting on the
   click for scales.
 - **Visible beat.** The pulse follows the beat being heard from the audio output clock, including
-  count-in. Each heard beat also lights the whole room from its edges (warm on the bar's first
+  count-in. That clock is the device's own (`heardTime`, read from the browser context behind
+  Tone's wrapper, which reports none), shown a paint ahead so it lands as it sounds. Scoring and
+  calibration keep their own calibrated mapping (`ctxToPerf`). Each heard beat also lights the whole room from its edges (warm on the bar's first
   beat, cool while counting in), so the beat is felt while the eyes stay on the music. It rests
   with paused/stopped audio and gap practice; no separate animation clock supplies time to the
   player.

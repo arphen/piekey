@@ -82,16 +82,17 @@ export const timingPhaseLimit = (beatMs: number, spacingMs = beatMs): number => 
  * An attack the onset detector missed (a slur, a ringing repeat) is a detection gap, not a timing
  * error, so 60% of the middle attacks suffice. Drift counts only beyond its own measurement noise.
  */
-export function assessTiming(offsets: readonly (number | null)[], bpm: number, spacingMs = 60000 / bpm): { fit: TimingFit | null; ready: boolean } {
+export function assessTiming(offsets: readonly (number | null)[], bpm: number, spacingMs = 60000 / bpm): { fit: TimingFit | null; ready: boolean; measured: boolean } {
   const middle = offsets.length >= 5 ? offsets.slice(1, -1) : offsets;
   const fit = fitTiming(middle);
   if (!fit || !Number.isFinite(bpm) || bpm <= 0 || !Number.isFinite(spacingMs) || spacingMs <= 0)
-    return { fit, ready: false };
+    return { fit, ready: false, measured: false };
   const limit = timingTolerance(60000 / bpm, spacingMs);
   // A very short card can retain its centred timing policy, but cannot establish an offset.
   const phase = fit.n >= 3 ? timingPhaseLimit(60000 / bpm, spacingMs) : Math.min(limit, timingPhaseLimit(60000 / bpm, spacingMs));
   const enough = fit.n >= Math.min(3, middle.length) && fit.n >= middle.length * 0.6;
-  return { fit, ready: enough && fit.spread <= limit && Math.abs(fit.drift) <= Math.max(limit, 2 * fit.driftError) && Math.abs(fit.offset) <= phase };
+  // measured: enough attacks were caught to say anything; not ready while measured is uneven playing
+  return { fit, ready: enough && fit.spread <= limit && Math.abs(fit.drift) <= Math.max(limit, 2 * fit.driftError) && Math.abs(fit.offset) <= phase, measured: enough };
 }
 
 /** The legacy measured flag does not turn observed alignment into a player-timing verdict. */

@@ -64,10 +64,11 @@ const PULSE_SPREAD = 0.35; // how far apart the slowest and fastest of them may 
 const UNDER = 0.88; // the click starts this far under the player's own tempo
 const STEP_UP = 4; // bpm a clean pass earns
 const STEP_UP_FAR = 8; // while the tempo is far below where it is heading, after a steady pass
-const STEP_DOWN = 6;
+const STEP_DOWN = 4; // as gentle as a step up: two short passes cost one clean one
 const MIN_BPM = 40;
 const MAX_BPM = 240;
 const MAX_MISSED_PASSES = 7;
+const UNTIMED_PASSES = 3; // right notes this often without their timing caught: the exercise is ok, and moves on
 const MESSY = 0.5; // a pass under this share is mostly wrong notes: tempo is not the problem
 const SILENT_PASSES = 3; // then the band waits for you
 const HEARD_FRAMES = 6; // frames with a pitch for a pass to count as played
@@ -184,6 +185,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
   const runBars = useRef<Outcome["bars"]>(undefined); // the last run-through, bar by bar
   const missRun = useRef(0); // passes in a row that fell short
   const rhythmMisses = useRef(0); // right pitches without a steady pulse do not earn a faster click
+  const untimed = useRef(0); // right pitches with too few attacks caught to time them
   const returnTo = useRef<Phase | null>(null); // where a "hear it again" goes back to
   const lostInput = useRef(false);
   const ownTempo = useRef<number | null>(null); // the last steady tempo at the player's own pace
@@ -439,6 +441,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     timeStarts.current = 0;
     missRun.current = 0;
     rhythmMisses.current = 0;
+    untimed.current = 0;
     returnTo.current = null;
     ownTempo.current = null;
     memoryVisit.current = cardKey;
@@ -846,6 +849,12 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
       else finish();
       return;
     }
+    // the right notes with too few attacks caught to time them: the tempo holds, nothing is held against it
+    if (score >= card.pass && !onTime && !timing.measured) {
+      missRun.current = 0;
+      if (++untimed.current >= UNTIMED_PASSES) conclude("ok", score);
+      return;
+    }
     if (score >= card.pass && !onTime) rhythmMisses.current++;
     const missed = all.filter((s) => s < card.pass).length + rhythmMisses.current;
     const sp = !spot && spotted < MAX_SPOTS && card.kind !== "improv" ? trouble?.pass(p.results) ?? null : null;
@@ -882,11 +891,13 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
       clock.current.event = performance.now();
       setPhase("pace");
     } else if (missRun.current >= 2 && bpm > minTempo) {
-      // falling short at this tempo: it comes down, and so does where this visit is heading
+      // falling short at this tempo: it comes down a step. The first time, where this visit is
+      // heading stays put and clean passes earn the way back; after that it comes down too, so the
+      // exercise can end where the playing is.
       missRun.current = 0;
       const slower = Math.max(minTempo, bpm - STEP_DOWN);
       setBpm(slower);
-      setTarget(slower);
+      if (slowed >= 1) setTarget(slower);
       setSlowed((s) => s + 1);
     }
   }, [playback.lastPass]); // eslint-disable-line react-hooks/exhaustive-deps

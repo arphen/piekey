@@ -169,7 +169,7 @@ describe("input lifecycle", () => {
     const hearAt = async (time: number) => {
       await act(async () => { ctx.currentTime = time; vi.advanceTimersByTime(25); });
     };
-    await hearAt(10.24); // the first scheduled click has not reached the speakers
+    await hearAt(10.22); // the first scheduled click has not reached the speakers, even a paint ahead
     expect(playback.beat.active).toBe(false);
     await hearAt(10.26);
     expect(playback.beat).toMatchObject({ index: 0, active: true, counting: true });
