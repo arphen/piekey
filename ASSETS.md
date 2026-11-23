@@ -6,8 +6,9 @@ Project-owned code, documentation, original music and visual assets are licensed
 | Material | Provenance | License scope |
 | --- | --- | --- |
 | `src/assets/water-texture.webp`, `src/assets/leaf-texture.webp` | Derived from original photographs owned by the project owner. | AGPL-3.0-only, included with the project. |
+| `src/assets/pond-swirl.webp`, `src/assets/pond-marble.webp`, `src/assets/pond-neon.webp`, `src/assets/pond-bands.webp` | Derived from original pond photographs owned by the project owner (the same series as the water texture): cropped, scaled to 960×1280, lightly denoised. | AGPL-3.0-only, included with the project. |
 | Instrument dial in `src/components/PracticeAtmosphere.tsx` and procedural water shader in `src/components/RenderedWater.tsx` | Original project SVG and analytic-wave shader; no third-party rendering assets, code or textures added. | AGPL-3.0-only. |
-| Living pool shaders and engine in `src/pool/engine/` | Original project code written from the published stable-fluids method (Stam, 1999; GPU Gems ch. 38); no third-party shader code. Floating leaves reuse regions of the existing `water-texture.webp`; no new image assets. | AGPL-3.0-only. |
+| Living pool shaders and engine in `src/pool/engine/` | Original project code written from the published stable-fluids method (Stam, 1999; GPU Gems ch. 38); no third-party shader code. Floating leaves reuse regions of the existing `water-texture.webp`; the pond turns between it and the `pond-*.webp` photographs above. | AGPL-3.0-only. |
 | `public/icon.svg` and its PNG exports | Original project fretboard icon. | AGPL-3.0-only. |
 | First Steps in `src/tunes/starter.ts` | Original eight-bar C major melody and separated two-beat guitar-chord accompaniment written for this app; no third-party score or recording used. | AGPL-3.0-only, including the downloadable score. |
 | Blue Hour in `src/tunes/demos/blue-hour.musicxml` | Original 12-bar C jazz-blues melody and articulated three-note guitar shell accompaniment composed for this app; no third-party transcription, arrangement or recording used. | AGPL-3.0-only, including the downloadable score. |

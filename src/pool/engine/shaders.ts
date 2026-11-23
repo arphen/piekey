@@ -381,6 +381,9 @@ uniform vec4 uFlash[2]; // xy, z radius, w brightness: a heard beat lights the d
 uniform int uFlashCount;
 uniform float uFlowMix; // weight of the first flow phase
 uniform float uCalmDepth; // at rest the room is already quiet; lenses deepen with the groove
+uniform sampler2D uPhotoB; // the photograph the pond is turning into
+uniform float uMorph; // how far, 0–1 (0: no turn under way)
+uniform vec2 uMorphSeed; // this turn's own front and currents
 
 const float TURN_C = 0.97815; // the room's photograph is turned −12°
 const float TURN_S = -0.20791;
@@ -388,6 +391,44 @@ const float TURN_S = -0.20791;
 vec2 photoUv(vec2 c) {
   vec2 r = vec2(TURN_C * c.x - TURN_S * c.y, TURN_S * c.x + TURN_C * c.y);
   return vec2(r.x / (uPhotoScale * 0.75), -r.y / uPhotoScale) + vec2(0.5, 0.46);
+}
+
+float hash12(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+float vnoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash12(i), hash12(i + vec2(1.0, 0.0)), u.x), mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+float fbm3(vec2 p) { return 0.5 * vnoise(p) + 0.3 * vnoise(p * 2.03 + 7.1) + 0.2 * vnoise(p * 4.11 + 3.7); }
+
+// How thick the algae are: bright and greener than anything else.
+float algaeHeight(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)) + 0.8 * max(0.0, c.g - max(c.r, c.b)); }
+
+// The pond turning into another photograph is never a crossfade. Each place turns at its own time,
+// on a slow front of noise; the old algae stream away along a curl of it while the new arrive
+// against it; and where the new algae are thick they surface first and where the old are thick
+// they linger (height blending), so the new shapes grow out of the old ones.
+float morphAt(vec2 n) {
+  if (uMorph <= 0.0) return 0.0;
+  return clamp(uMorph * 1.7 - fbm3(n * 1.6 + uMorphSeed * 17.0) * 0.7, 0.0, 1.0);
+}
+vec2 morphCurrent(vec2 n) {
+  vec2 q = n * 2.2 + uMorphSeed * 11.0;
+  float f = fbm3(q);
+  vec2 g = vec2(fbm3(q + vec2(0.05, 0.0)) - f, fbm3(q + vec2(0.0, 0.05)) - f) / 0.05;
+  return vec2(g.y, -g.x) * 0.05;
+}
+vec3 pondAt(vec2 c, float m, vec2 w) {
+  vec3 a = texture(uPhoto, photoUv(c + w * m)).rgb;
+  if (m <= 0.0) return a;
+  vec3 b = texture(uPhotoB, photoUv(c - w * (1.0 - m))).rgb;
+  float k = (2.0 * m - 1.0) * 1.3 + (algaeHeight(b) - algaeHeight(a)) * 0.9 * 4.0 * m * (1.0 - m);
+  return mix(a, b, smoothstep(-0.14, 0.14, k));
 }
 
 vec3 grade(vec3 c, float saturation, float sepia) {
@@ -453,7 +494,10 @@ void scene(vec2 uv, out vec3 colour, out vec3 glow, out float lens) {
   vec2 still = p + grad * refraction;
   vec2 a = mix(still + marble.xy, centre + (still + marble.xy - centre) / 1.15, glass);
   vec2 b = mix(still + marble.zw, centre + (still + marble.zw - centre) / 1.15, glass);
-  vec3 raw = mix(texture(uPhoto, photoUv(b + uDrift)).rgb, texture(uPhoto, photoUv(a + uDrift)).rgb, uFlowMix);
+  vec2 here = p + uDrift; // where on the drifting pond: a turn's front travels with the water
+  float m = morphAt(here);
+  vec2 w = m > 0.0 && m < 1.0 ? morphCurrent(here) : vec2(0.0);
+  vec3 raw = mix(pondAt(b + uDrift, m, w), pondAt(a + uDrift, m, w), uFlowMix);
   vec2 local = mix(b, a, uFlowMix);
   float mask = roomMask(uv);
   vec4 haze = dawn(uv);

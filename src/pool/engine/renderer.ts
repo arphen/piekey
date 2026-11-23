@@ -47,6 +47,7 @@ export interface FrameState {
   flashes: readonly Flash[];
   rects: readonly PoolRect[];
   tuner: { x: number; y: number; radius: number; amount: number; phase: number; ratio: number } | null;
+  morph: { amount: number; seed: Vec2 } | null; // the pond turning into the next photograph, 0–1
 }
 
 // Yellow and orange leaves in water-texture.webp (image space, y down), found once by analysis.
@@ -65,7 +66,9 @@ export class Renderer {
   private readonly f: ReturnType<typeof formats>;
   private readonly p: Programs;
   private readonly vao: WebGLVertexArrayObject;
-  private photo: WebGLTexture | null = null;
+  private photo: WebGLTexture | null = null; // the pond as it is now
+  private pond: WebGLTexture | null = null; // the photograph it is becoming
+  private origin: WebGLTexture | null = null; // the first photograph: its leaves float as sprites
   private leaf: WebGLTexture | null = null;
   private black: WebGLTexture;
   private tier: Tier = TIERS[2];
@@ -117,8 +120,23 @@ export class Renderer {
   get gpuMs(): number | null { return this.timer.ms; }
 
   setImages(photo: TexImageSource, leaf: TexImageSource): void {
-    this.photo = image(this.gl, photo);
+    this.origin = image(this.gl, photo);
+    this.photo = this.origin;
     this.leaf = image(this.gl, leaf);
+  }
+
+  /** The next photograph the pond turns into; `morph` in the frame state says how far. */
+  setPond(next: TexImageSource): void {
+    if (this.pond && this.pond !== this.photo && this.pond !== this.origin) this.gl.deleteTexture(this.pond);
+    this.pond = image(this.gl, next);
+  }
+
+  /** The turn is complete: the photograph it became is now the pond. */
+  settlePond(): void {
+    if (!this.pond) return;
+    if (this.photo && this.photo !== this.origin) this.gl.deleteTexture(this.photo);
+    this.photo = this.pond;
+    this.pond = null;
   }
 
   setTier(index: number): void {
@@ -390,7 +408,7 @@ export class Renderer {
       gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
       this.bind(u, "uParticles", this.particles.read.texture, 0);
       this.bind(u, "uWaves", waves.read.texture, 1);
-      this.bind(u, "uPhoto", photo, 2);
+      this.bind(u, "uPhoto", this.origin ?? photo, 2);
       this.f1(u, "uAspect", this.aspect);
       this.f1(u, "uPhotoScale", PHOTO_SCALE);
       this.f1(u, "uVisible", visible);
@@ -437,6 +455,10 @@ export class Renderer {
       gl.uniform4fv(this.uniform(u, "uFlash"), f2);
       gl.uniform1i(this.uniform(u, "uFlashCount"), nf);
       this.f1(u, "uFlowMix", this.flowMix);
+      const turning = this.pond && s.morph ? s.morph : null;
+      this.bind(u, "uPhotoB", this.pond ?? photo, 8);
+      this.f1(u, "uMorph", turning ? Math.max(0, Math.min(1, turning.amount)) : 0);
+      this.f2(u, "uMorphSeed", turning?.seed[0] ?? 0, turning?.seed[1] ?? 0);
       this.rects(u, s.rects);
     };
 
@@ -489,7 +511,7 @@ export class Renderer {
     [this.velocity, this.pressure, this.heat, this.marble, this.waves, this.dye, this.particles].forEach((p) => releasePair(gl, p));
     [this.curl, this.divergence, this.bloomA, this.bloomB, this.floaterLayer].forEach((t) => release(gl, t));
     Object.values(this.p).forEach((program) => gl.deleteProgram(program.program));
-    [this.photo, this.leaf, this.black].forEach((t) => t && gl.deleteTexture(t));
+    [...new Set([this.photo, this.pond, this.origin, this.leaf, this.black])].forEach((t) => t && gl.deleteTexture(t));
     gl.deleteVertexArray(this.vao);
     this.velocity = this.pressure = this.heat = this.marble = this.waves = this.dye = this.particles = null;
   }

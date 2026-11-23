@@ -1,12 +1,16 @@
 import photoUrl from "../assets/water-texture.webp";
 import leafUrl from "../assets/leaf-texture.webp";
+import swirlUrl from "../assets/pond-swirl.webp";
+import marbleUrl from "../assets/pond-marble.webp";
+import neonUrl from "../assets/pond-neon.webp";
+import bandsUrl from "../assets/pond-bands.webp";
 import type { InputFrame } from "../listen/useInput";
 import { midiOf, pitchOf } from "../listen/pitch";
 import type { PoolBus, PoolAnchor } from "./bus";
 import { markLivingDegraded } from "./mode";
 import { readPower } from "./power";
 import { createGroove } from "./groove";
-import { goldenSpread, GOLDEN_ANGLE, phyllotaxis, spiral, wander } from "./golden";
+import { goldenSpread, GOLDEN_ANGLE, mulberry32, phyllotaxis, spiral, wander } from "./golden";
 import { poolParams, tintFor } from "./params";
 import { CALM, GLASS, Renderer, ROCK, TIERS, type Flash, type FrameState, type PoolRect, type Ring, type Stone, type Swirl, type Vec3, type Vortex } from "./engine/renderer";
 
@@ -18,6 +22,12 @@ const HIDDEN_RELEASE_MS = 30000;
 const RETIRE_RELEASE_MS = 10000;
 const PHRASE_GAP_MS = 2000;
 const FLAGS: Record<string, number> = { rock: ROCK, calm: CALM, glass: GLASS };
+// The pond slowly becomes each of the owner's photographs in turn, and the first again. Each one
+// is fetched only when its turn is near; a turn speeds up as the groove builds and waits while
+// the room is calmed. Seconds at rest: how long a photograph stays, how long the turn takes.
+const PONDS = [swirlUrl, marbleUrl, neonUrl, bandsUrl, photoUrl];
+const POND_STAY = 48;
+const POND_TURN = 36;
 
 interface Anchor { x: number; y: number; r: number }
 interface Tune { cents: number | null; frequency: number | null; at: number }
@@ -80,6 +90,7 @@ export class PoolHost {
   private tunerPhase = 0;
   private tunerAmount = 0;
   private calm = 0;
+  private pond = { next: 0, phase: 0, turning: false, loading: false, image: null as ImageBitmap | null, seed: [0, 0] as [number, number] };
   private glassy = 0;
   private turn = 0;
   private drift: [number, number] = [0, 0];
@@ -122,7 +133,9 @@ export class PoolHost {
         },
         tune: (cents: number | null, frequency = 110) => { this.tune = { cents, frequency: cents === null ? null : frequency, at: performance.now() }; this.wake(); },
         bloom: () => { this.bus.emit({ kind: "bloom", strength: 1 }); this.wake(); },
-        stats: () => ({ tier: this.tier, ready: this.ready, gpuMs: this.renderer?.gpuMs ?? null, groove: this.level(), size: [this.canvas.width, this.canvas.height], rects: this.rects.length, anchors: [...this.anchors.keys()] }),
+        pond: (phase: number) => { this.pond.phase = phase; this.wake(); }, // jump the photographs' turn
+
+        stats: () => ({ pond: { ...this.pond, image: Boolean(this.pond.image) }, tier: this.tier, ready: this.ready, gpuMs: this.renderer?.gpuMs ?? null, groove: this.level(), size: [this.canvas.width, this.canvas.height], rects: this.rects.length, anchors: [...this.anchors.keys()] }),
       };
     }
     this.adopt();
@@ -143,6 +156,7 @@ export class PoolHost {
       const renderer = new Renderer(gl, floats);
       renderer.setImages(this.images[0], this.images[1]);
       this.renderer = renderer;
+      this.pond = { ...this.pond, phase: 0, turning: false, image: null, loading: false };
       this.sizeCanvas();
       renderer.setTier(this.tier);
       this.ready = true;
@@ -560,11 +574,51 @@ export class PoolHost {
     this.flashes = this.flashes.map((f) => ({ ...f, age: f.age + dt })).filter((f) => f.age < 0.5);
 
     return {
+      morph: this.turnPond(dt, g),
       dt, params, velocityHalfLife: params.velocityHalfLife * (1 - 0.7 * still), kick: kick * 0.6, tint,
       dawn: 0.1 + 0.5 * g, drift: [this.drift[0] - aspect * 0.62, this.drift[1] - 0.5], driftVelocity: this.driftVelocity,
       vortices, stones: this.stones, swirls: this.swirls, push: this.push, emitters, buoyancy: 0.03, rings: this.rings, flashes, rects: this.rects,
       tuner: tuner && this.tunerAmount > 0.01 ? { x: tuner.x, y: tuner.y, radius: Math.max(0.12, tuner.r * 4), amount: this.tunerAmount, phase: this.tunerPhase, ratio: inTune ? 1 : 1 + 0.004 * cents } : null,
     };
+  }
+
+  /** The pond's slow turn from one photograph into the next: stay, fetch the next, turn, settle. */
+  private turnPond(dt: number, groove: number): FrameState["morph"] {
+    const p = this.pond;
+    const renderer = this.renderer;
+    if (!renderer || dt <= 0) return p.turning ? { amount: p.phase, seed: p.seed } : null;
+    const pace = (1 + 1.5 * groove) * (1 - 0.85 * this.calm);
+    if (!p.turning) {
+      p.phase += (dt * pace) / POND_STAY;
+      if (p.phase > 0.6 && !p.image && !p.loading) {
+        p.loading = true;
+        const url = PONDS[p.next % PONDS.length];
+        (url === photoUrl && this.images ? Promise.resolve(this.images[0]) : loadImage(url))
+          .then((image) => { if (!this.disposed) p.image = image; })
+          .catch(() => { p.next++; }) // a photograph that cannot be fetched is skipped
+          .finally(() => { p.loading = false; });
+      }
+      if (p.phase >= 1 && p.image) {
+        renderer.setPond(p.image);
+        if (p.image !== this.images?.[0]) p.image.close();
+        p.image = null;
+        const random = mulberry32(1013 + p.next);
+        p.seed = [random(), random()];
+        p.turning = true;
+        p.phase = 0;
+      }
+      return null;
+    }
+    p.phase += (dt * pace) / POND_TURN;
+    if (p.phase >= 1) {
+      renderer.settlePond();
+      p.turning = false;
+      p.phase = 0;
+      p.next++;
+      return null;
+    }
+    const x = p.phase;
+    return { amount: x * x * (3 - 2 * x), seed: p.seed };
   }
 
   /** --pool-glow and --pool-tint on the room: colour and opacity only, at most 8 Hz. */
