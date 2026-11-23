@@ -256,7 +256,13 @@ describe("input lifecycle", () => {
     await act(async () => playback.play(0, 0, true));
     // heard = currentTime - outputLatency; the phrase sounds 10.15–12.15, its breath 12.15–14.15
     const hearAt = async (time: number) => { await act(async () => { ctx.currentTime = time + 0.1; vi.advanceTimersByTime(25); }); };
-    for (let time = 10.2; time < 12.15; time += 0.2) await hearAt(time);
+    await hearAt(10.3);
+    expect(playback.activeTarget).toBe(0);
+    await hearAt(10.9); // the rest after the first note: it stays the note in play, never "none"
+    expect(playback.activeTarget).toBe(0);
+    await hearAt(11.2);
+    expect(playback.activeTarget).toBe(1);
+    for (let time = 11.4; time < 12.15; time += 0.2) await hearAt(time);
     expect(playback.counting).toBe(0);
     await hearAt(12.2);
     expect(playback.counting).toBe(4);

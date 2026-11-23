@@ -487,11 +487,13 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
           beatRef.current = { ...IDLE_BEAT, serial: beatRef.current.serial };
           setBeat(beatRef.current);
         }
+        // The note last struck stays current through the rest after it: falling back to "none"
+        // in every rest sent the cursor (and a long score's scroll) to the top and back.
         let target = -1;
         if (!breathing) for (let i = 0; i < t.targets.length; i++) {
           const n = t.targets[i];
           if (n.t > beat + 1e-9) break;
-          if (n.t >= s.from - 1e-9 && n.t + n.dur > beat) target = i;
+          if (n.t >= s.from - 1e-9) target = i;
         }
         const slot = r < 0 || breathing ? -1 : t.slots.findIndex((sl) => beat >= sl.start - 1e-9 && beat < sl.start + sl.beats - 1e-9);
         if (target !== activeRef.current.target || slot !== activeRef.current.slot) {
