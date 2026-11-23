@@ -39,6 +39,10 @@ const MIN_GAP = 30; // the closest two of the commonest short notes may sit
 const Z_MIN = 0.72;
 const Z_MAX = 2.6;
 const CHUNK = 1400; // the river is drawn in pieces about this wide
+const GLIDE_MS = 3000; // the compositor is handed this much of the river at a time
+const MEASURE_MS = 500; // the heard tempo is measured over at least this long before it is handed on
+const JUMP_BEATS = 0.12; // the music this far from where its tempo said: it jumped, measure again
+const SHOWN_MARGIN = 1600; // river units kept on the page ahead of the view (a quarter of it behind)
 
 /** Width of a beat: room for the shortest note value the tune uses often, in a calm range. */
 function beatWidth(bars: readonly ReadingBar[]): number {
@@ -403,7 +407,11 @@ export function ScoreFlow({ flow, results, active, clock, heard, follow, hold = 
     el.classList.add("is-calling");
   }, [pulse]);
 
-  // the river moves: exactly with the heard music, easing when it goes to a note or back to the top
+  // the river moves: exactly with the heard music, easing when it goes to a note or back to the top.
+  // While the band plays at a steady tempo the motion is handed to the compositor a few seconds at
+  // a time (a linear Web Animation through the bars ahead), so the line glides even while this thread
+  // is busy with a note landing; each frame only checks it still sits where the music is heard, and
+  // hands on the next stretch before this one runs out. Nothing is written to the page meanwhile.
   const live = useRef({ clock, heard, follow, hold });
   live.current = { clock, heard, follow, hold };
   useEffect(() => {
@@ -417,16 +425,44 @@ export function ScoreFlow({ flow, results, active, clock, heard, follow, hold = 
       return base[j] + f * (base[j + 1] - base[j]);
     };
     const ax = box.w * anchor;
+    const txOf = (x: number) => ax - (x + HEAD) * z;
     const total = Math.max(1e-6, flow.end - flow.start);
     const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    const canGlide = typeof el.animate === "function";
     let x = pos.current ?? Number.NaN; // the first frame lands where the music is
     let shown = "";
     let part = -1;
     let keyShown = "";
     let stickyShown: boolean | null = null;
     let gapShown = false;
+    let fillShown = -1;
+    const near = layout.chunks.map(() => true); // pieces of the river kept on the page
     let last = 0;
     let frame = 0;
+    // the tempo as heard: beats a millisecond, measured from a mark that moves only when the music jumps
+    let mark: { t: number; b: number } | null = null;
+    let rate = 0;
+    let glide: { anim: Animation; t: number; b: number; rate: number } | null = null;
+    let drift = 0; // smoothed px between the glide and the music
+    const land = () => {
+      // the compositor lets go: the page takes over from where the glide is
+      if (!glide) return;
+      glide.anim.cancel();
+      glide = null;
+      shown = "";
+      drift = 0;
+    };
+    const handOn = (now: number, beat: number) => {
+      land();
+      const until = beat + GLIDE_MS * rate;
+      const at = [beat];
+      for (let j = barAt(starts, beat) + 1; j < starts.length && starts[j] < until; j++) at.push(starts[j]);
+      at.push(until);
+      const frames = at.map((b) => ({ transform: `translate3d(${txOf(xOf(b))}px, 0, 0)`, offset: (b - beat) / (until - beat) }));
+      const anim = el.animate(frames, { duration: GLIDE_MS, easing: "linear", fill: "forwards" });
+      anim.startTime = now; // pinned to this frame, the frame its first beat was read in
+      glide = { anim, t: now, b: beat, rate };
+    };
     const step = (now: number) => {
       const { clock: music, heard: sounding, follow: wanted, hold: still } = live.current;
       const dt = last ? Math.min(0.1, (now - last) / 1000) : 1 / 60;
@@ -438,28 +474,68 @@ export function ScoreFlow({ flow, results, active, clock, heard, follow, hold = 
         gapShown = silent;
         nowLine.current?.classList.toggle("is-gap", silent);
       }
+      // keep the heard tempo: a jump (round to the top, a new tempo, a pause) starts measuring again
+      if (beat === null) mark = null;
+      else if (!mark || (rate > 0 && Math.abs(beat - (mark.b + (now - mark.t) * rate)) > JUMP_BEATS) || (rate === 0 && (beat < mark.b - 1e-3 || beat - mark.b > (now - mark.t) / 200))) {
+        mark = { t: now, b: beat };
+        rate = 0;
+        land();
+      } else if (now - mark.t >= MEASURE_MS) rate = (beat - mark.b) / (now - mark.t);
+      if (glide && (beat === null || rate <= 0)) {
+        x = xOf(glide.b + (now - glide.t) * glide.rate);
+        land();
+      }
+
       const target = beat !== null ? xOf(beat) : still ? x : wanted !== null ? xOf(wanted) : xOf(flow.start);
-      const gap = target - x;
-      const far = !Number.isNaN(x) && Math.abs(gap) * z > box.w * 1.2;
-      if (far && !reduced) {
-        // a long way (back to the top for the next pass): fade there instead of rushing past
-        el.classList.remove("is-turning");
-        void el.offsetWidth;
-        el.classList.add("is-turning");
+      if (glide) {
+        // gliding: where the compositor has it now, against where the music is
+        x = xOf(glide.b + (now - glide.t) * glide.rate);
+        const off = (target - x) * z;
+        drift += (off - drift) * 0.2;
+        if (Math.abs(drift) > 1.5 || Math.abs(off) > 6 || now - glide.t > GLIDE_MS - 700) {
+          x = target;
+          handOn(now, beat!);
+        }
+      } else {
+        const gap = target - x;
+        const far = !Number.isNaN(x) && Math.abs(gap) * z > box.w * 1.2;
+        if (far && !reduced) {
+          // a long way (back to the top for the next pass): fade there instead of rushing past
+          el.classList.remove("is-turning");
+          void el.offsetWidth;
+          el.classList.add("is-turning");
+        }
+        if (far || Number.isNaN(x) || reduced || (beat !== null && Math.abs(gap) < 24 / z)) x = target;
+        else x += gap * (1 - Math.exp(-dt / (beat !== null ? 0.16 : 0.24)));
+        if (canGlide && beat !== null && rate > 0 && x === target) handOn(now, beat);
+        else {
+          const key = `${txOf(x).toFixed(1)}`;
+          if (key !== shown) {
+            el.style.transform = `translate3d(${txOf(x)}px, 0, 0)`;
+            shown = key;
+          }
+        }
       }
-      if (far || Number.isNaN(x) || reduced || (beat !== null && Math.abs(gap) < 24 / z)) x = target;
-      else x += gap * (1 - Math.exp(-dt / (beat !== null ? 0.16 : 0.24)));
       pos.current = x;
-      const tx = ax - (x + HEAD) * z;
-      const key = `${tx.toFixed(1)}`;
-      if (key !== shown) {
-        el.style.transform = `translate3d(${tx}px, 0, 0)`;
-        shown = key;
-      }
+      const tx = txOf(x);
+      // only the pieces of the river near the view are on the page: a moving layer is painted whole,
+      // and the whole of a long tune would then be painted, and sorted into layers, on every frame
+      const from = -tx / z - SHOWN_MARGIN / 4; // what has been played leaves on the left, for good
+      const to = (box.w - tx) / z + SHOWN_MARGIN; // what is coming is there before it is in view
+      layout.chunks.forEach((c, i) => {
+        const on = c.x0 + c.width >= from && c.x0 <= to;
+        if (on === near[i]) return;
+        near[i] = on;
+        c.el.style.display = on ? "" : "none";
+      });
       // where in the form: the strip's light and its current part
       const at = beat ?? (still ? null : wanted) ?? flow.start;
       const shownBeat = beat !== null ? beat : Math.max(flow.start, Math.min(flow.end, at));
-      if (formFill.current) formFill.current.style.transform = `scaleX(${Math.max(0, Math.min(1, (shownBeat - flow.start) / total))})`;
+      const fill = Math.max(0, Math.min(1, (shownBeat - flow.start) / total));
+      if (formFill.current && Math.abs(fill - fillShown) > 0.002) {
+        formFill.current.style.transform = `scaleX(${fill})`;
+        fillShown = fill;
+      }
       const p = flow.sections.findIndex((s) => shownBeat >= s.start - 1e-9 && shownBeat < s.start + s.beats - 1e-9);
       if (p !== part) {
         formParts.current.forEach((s, i) => {
@@ -482,7 +558,14 @@ export function ScoreFlow({ flow, results, active, clock, heard, follow, hold = 
       frame = settled && !music ? 0 : requestAnimationFrame(step);
     };
     frame = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(frame);
+      if (glide) {
+        // a new layout or zoom takes over from here: leave the page where the glide was
+        el.style.transform = `translate3d(${txOf(x)}px, 0, 0)`;
+        land();
+      }
+    };
   }, [layout, box.w, z, anchor, flow, clock, heard, follow, hold, track]);
 
   // zoom by hand: pinch on a trackpad (ctrl/⌘ + wheel) or two fingers on a screen

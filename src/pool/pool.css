@@ -4,6 +4,8 @@
 .practice-atmosphere[data-pool="ready"] .pa-pool { opacity: 1; }
 /* The photographic layers stay underneath until the pool has faded in, then rest. */
 .practice-atmosphere[data-pool="ready"] > :is(.pa-dawn, .pa-water, .pa-leaf, .pa-current, .pa-beat-resonance) { visibility: hidden; transition: visibility 0s 1.6s; }
+/* the pool shows the beat itself: the room's resonance is not drawn at all, rather than animated unseen */
+.practice-atmosphere[data-pool="ready"] > .pa-beat-resonance { display: none; }
 
 /* The living pool keeps its own calm lenses behind text, so the room's shade can lift. */
 .practice-atmosphere[data-pool="ready"] > .pa-shade { opacity: 0.65; }

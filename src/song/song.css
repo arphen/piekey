@@ -2141,14 +2141,18 @@
     var(--night);
 }
 
+/* it changes with every note: only transform and opacity move, so the compositor carries it and
+   nothing on the page is laid out or painted again while it eases */
 .ss-flow {
-  width: calc(28px + var(--flow) * 190px);
+  width: 218px;
   height: 2px;
   border-radius: 1px;
   background: var(--fam);
   opacity: calc(0.12 + var(--flow) * 0.8);
-  box-shadow: 0 0 calc(var(--flow) * 16px) color-mix(in srgb, var(--fam) 70%, transparent);
-  transition: width 1.2s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 1.2s, box-shadow 1.2s;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--fam) 55%, transparent);
+  transform: scaleX(calc((28 + var(--flow) * 190) / 218));
+  will-change: transform, opacity;
+  transition: transform 1.2s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 1.2s;
 }
 
 .phase-intro .ss-flow,

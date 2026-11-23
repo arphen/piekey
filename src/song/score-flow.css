@@ -1,5 +1,5 @@
 /* The flowing score. Its colours come from the room's photographs: dark pond water, the algae's
-   poison green as the light of "now", and the yellow leaves that float on it for notes played. */
+   poison green as the light of "now"; a note played right turns clearly green, one missed rust. */
 
 .flow {
   --flow-ink: #ece8d6;
@@ -8,7 +8,7 @@
   --flow-chord: #cfe4a6;
   --flow-leaf: #e9b95c;
   --flow-now: #a8ec62;
-  --flow-hit: #f0c96a;
+  --flow-hit: #7fe08f;
   --flow-miss: #d9724f;
   --flow-water: 6, 13, 10;
   position: relative;
@@ -93,6 +93,7 @@
   background: linear-gradient(90deg, rgba(168, 236, 98, 0), var(--flow-now));
   transform: scaleX(0);
   transform-origin: left;
+  will-change: transform; /* moved on every frame: by the compositor, without painting the page */
   pointer-events: none;
 }
 
@@ -143,9 +144,9 @@
   overflow: visible;
 }
 
-/* engraving: fine staff, ivory notes, chords in pale algae, sections in leaf gold. No filters in
-   here: inside the moving river a filter repaints it on every frame. The light of a note landing is
-   the glint that rises from it and the halo on the line. */
+/* engraving: fine staff, ivory notes, chords in pale algae, sections in leaf gold. No filters and no
+   colour transitions in here: inside the moving river either repaints its whole piece of score on
+   every frame. A result switches colour at once; the light of it landing is the glint above it. */
 .flow .vf-stave path,
 .flow .vf-stave rect {
   fill: var(--flow-line);
@@ -168,7 +169,6 @@
 .flow .vf-score-note-links path {
   fill: var(--flow-ink);
   stroke: var(--flow-ink);
-  transition: fill 0.35s, stroke 0.35s;
 }
 
 .flow .vf-stavenote.is-active path {
@@ -185,6 +185,10 @@
   fill: var(--flow-miss);
   stroke: var(--flow-miss);
 }
+
+/* the glint of a note played right is the same green */
+.flow .ss-glint.is-hit > b { border-color: var(--flow-hit); box-shadow: 0 0 14px rgba(127, 224, 143, 0.45), inset 0 0 9px rgba(127, 224, 143, 0.25); }
+.flow .ss-glint.is-hit > i { background: #e6ffe9; box-shadow: 0 0 6px 2px rgba(127, 224, 143, 0.8); }
 
 .flow .flow-seam {
   fill: color-mix(in srgb, var(--flow-leaf) 38%, transparent);
