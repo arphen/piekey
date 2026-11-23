@@ -453,6 +453,28 @@ Ready screen
   time in headless Chrome; real speaker latency is not measured. Not verified: real microphone input, real power switching, Safari/Firefox,
   phones, context-loss recovery on real hardware, and GPU numbers outside headless Chrome.
 
+### Flowing score (2026-11-23)
+
+Long melody cards (the whole tune, the run-through, sections over eight played bars) read as a
+flowing score instead of a scrolled page: repeats, endings and D.C./D.S. are unrolled so the eyes
+only move forward; a form strip names the parts (rehearsal marks, or parts found from returning
+melody/harmony, e.g. A · B · A′ · B′ · C) and lights the current one; notes are spaced by time and
+the line flows right to left under a still now-line on the heard audio clock; at the player's pace
+it eases to each note found. Zoom is automatic by box (closer as an exercise is known) and moves by
+the menu's Score row, Z/X, ⌘/ctrl-wheel or pinch. Gap bars keep it flowing with a dimmed line.
+Memory work and parts taken out keep the page.
+
+Verified: `flow.test.ts` (unrolling, target mapping, ties across a repeat, printed and found
+sections), a `score.test.tsx` render check, the playback rest-hold assertion, and headless Chrome
+screenshots at laptop, phone landscape and portrait sizes plus a real-time CDP capture of playback.
+A 107-bar unmarked solo costs about 35 ms/s of main thread while flowing (Still room). Not
+verified: on a physical phone, by eye with a guitar in hand, or readability of very dense passages
+(beat width is capped, so 32nd runs sit close; tuplet brackets can touch chord symbols).
+
+Also fixed: during every rest of an in-time pass the session's active note fell back to the first
+note, so a long page scrolled to the top and back. `usePlayback` now keeps the last struck note
+current through rests (the breath between passes still reports none).
+
 ### Shell navigation (outside sessions)
 
 `App` owns one shared mic input; `GuitarNav` (`src/nav/useGuitarNav.ts`, `components/GuitarNav.tsx`)
@@ -593,6 +615,7 @@ card. Progressions are not logged to `guitar-freeplay` or the map yet.
 | `guitar-freeplay-prefs` | `song/useFreePlay.ts` | Band on/off. |
 | `guitar-room-render` | `pool/mode.ts` | Room mode `still`/`water`/`living`/`living-power`, default living-power (water on battery); device-local, excluded from sync/backup. |
 | `guitar-pool-tier` | `pool/host.ts` | Living pool's last quality tier (0–3); device-local, excluded from sync/backup. |
+| `guitar-score-zoom` | `song/scoreZoom.ts` | The flowing score's closeness, as an offset from the box's automatic level; device-local, excluded from sync/backup. |
 | `guitar-rendered-room` | (none) | Earlier on/off rendered-water switch; read only to carry "on" over as Water. |
 | `guitar-output` | `audio/output.ts` | Chosen output device id. |
 | `guitar-input` | `listen/useInput.ts` | Chosen input device id. |

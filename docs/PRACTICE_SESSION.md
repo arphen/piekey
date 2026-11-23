@@ -155,6 +155,19 @@ away. Asking for in time while a pass is already playing changes nothing: the pa
 - **Tempo by hand.** Wherever the tempo dial shows (an exercise, free play), quiet − and + steps
   beside its number move the tempo 4 bpm, as the guitar menu and the − / + keys do. At the
   player's own pace the dial then shows the tempo set, not the measured pulse.
+- **Flowing score.** The whole tune, a run-through and sections longer than eight played bars are
+  read as they are played (`tunes/flow.ts`, `components/ScoreFlow.tsx`): repeats, endings and
+  jumps are unrolled into one forward line, so nothing sends the eyes back; the parts of the form
+  are named in a strip above it (the file's rehearsal marks, or parts found from what comes back
+  in the melody and the chords: A, B, A′…) with the current one lit. Notes are spaced by time and
+  the line flows right to left under a still line where the music is, on the heard output clock;
+  every note reaches the line as it sounds, and a note played right turns the colour of the
+  floating leaves. At the player's own pace the line eases on to each note they find. Round to
+  the top for another pass, the paper fades back rather than rewinding. In a gap the notes keep
+  coming and the line dims: the time is the player's. It sits closer as the exercise moves up the
+  box; the guitar menu's **Score** row (Tune & session page, in place of Return to playing), Z / X,
+  a trackpad pinch or two fingers move it (`guitar-score-zoom`, this device only). Memory work and
+  parts taken out keep the page.
 - **Visible beat.** The pulse follows the beat being heard from the audio output clock, including
   count-in. That clock is the device's own (`heardTime`, read from the browser context behind
   Tone's wrapper, which reports none), shown a paint ahead so it lands as it sounds; scoring and
@@ -190,7 +203,10 @@ algae photograph on a fluid simulation, flowing gently from the moment it opens:
 the heard beat lights the metronome's glass dial on the same frame, sends a ring out from its rim
 and sloshes with its sweep (the dial's dot is fastest into the ends of its arc, on the click), the
 tuner shows the string's real beating as moving rings that freeze within ±3 cents, and over about
-half a minute of steady, in-key pitched playing the algae marble, glow and grow rising blobs. Every
+half a minute of steady, in-key pitched playing the algae marble, glow and grow rising blobs.
+Over minutes the pond itself changes: it turns, place by place, into the next of the owner's pond
+photographs, the old algae streaming away as the new shapes grow out of them, and on to the next;
+playing hurries the turn a little, an open menu holds it. Every
 heard beat also throws the spiral eddies one way and the next swings them back, more as the groove
 builds, so the poison-green algae sway on the pulse against the dark water. With nothing chosen the
 room is Living on power (Water on battery). It

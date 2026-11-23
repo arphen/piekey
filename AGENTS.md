@@ -57,7 +57,11 @@ exact phrases in `SongCoach`; do not restore an inline Learn flow. Ear (`src/ear
 17. `src/tools/GuitarTools.tsx` — shared `GuitarToolsRoom` inside the existing practice boundary.
     Suspend the host engine while instruments own the input. `PracticeAtmosphere` owns decorative
     output-clock resonance; optional `RenderedWater` is capped GPU presentation, never a clock.
-18. `src/pool/` — optional living pool: one `PoolRoom` per practice room, rooms publish through
+18. `src/tunes/flow.ts` + `src/components/ScoreFlow.tsx` — long melody cards read as played:
+    slots unrolled into forward bars, targets mapped to flow notes, printed or found sections; one
+    time-proportional line in SVG pieces scrolled by the heard clock. No CSS `filter` inside the
+    moving river (it repaints the whole score each frame); results toggle classes, never re-layout.
+19. `src/pool/` — optional living pool: one `PoolRoom` per practice room, rooms publish through
     `usePoolPublisher`, the engine loads lazily (`host.ts`, `engine/*`). Decoration only: it pulses
     only on a heard `BeatSignal`, never on a beat inferred from notes, earns intensity only from
     pitched playing during the player's turn, and nothing reads pool state back into practice.
@@ -170,7 +174,7 @@ component tests run under jsdom. No CI configuration is committed; `make check` 
   Never put a command on an open-string pitch. Tune changes retain the outer practice boundary and never exit fullscreen.
   Modal suspension blocks scoring, playback and automatic wake/reconnect until the modal closes;
   resume only a pause owned by that modal. Renderer preferences are device-local
-  (`guitar-room-render`, `guitar-pool-tier`); with nothing chosen the room is Living on power
+  (`guitar-room-render`, `guitar-pool-tier`, `guitar-score-zoom`); with nothing chosen the room is Living on power
   (water on battery or a weak GPU); the pool uses the shared input and `pitchOf` cache,
   never its own detector, and `[data-pool]` marks rocks, calm lenses and glass on room elements.
 - Outside sessions the shell is played too (`src/nav/`, notes from fret 12 up): keep controls real

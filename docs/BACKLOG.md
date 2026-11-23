@@ -437,9 +437,14 @@ looks at the guitar or closes their eyes and loses the place.
 `playingBar`; ReadingView uses neither. The session's cursor pulses on a silence nudge, which is the
 "eyes come back" signal requested.
 
+**Update 2026-11-23.** Long session melody cards now use `ScoreFlow`: a still, lit now-line the
+music flows under, the current part lit in a form strip, and the line calls (`pulse`) after a
+silence. The active note no longer falls back to the first note during rests, which had scrolled
+long pages to the top and back.
+
 **What remains.** Wire the cursor and pulse into every score view; consider a stronger contrast
 band or a short "where are we" animation after a long silence in TuneView/Reading. Do not duplicate
-the cursor implementation; extend `Score`.
+the cursor implementation; extend `Score` (or reuse `ScoreFlow` for long listening views).
 
 ### T16 — Scale work: last note, encouragement, metronome-first, rhythms and melodic patterns
 

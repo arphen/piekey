@@ -116,6 +116,12 @@ numbers, and optional comping voicings. `buildTimeline` expands the playing orde
 - Tunes: score-centered `TuneView` and listening-only `usePlayback`; legacy `LearnView`/`useCoach`
   remain as compatible modules but are not rendered by Song.
 - SongCoach: `buildDeck` turns the `LeadSheet` + `Timeline` into exercise cards.
+- The flowing score: `flowOf` (`src/tunes/flow.ts`, pure) unrolls a card's slots into a forward
+  stream of bars (repeats, endings and jumps resolved; their marks dropped), maps every target to its
+  own flow notes (ties only where the timeline holds one note on) and labels the form: rehearsal
+  marks when the file has them, otherwise parts found from returning material (melody tokens plus
+  root/quality harmony; longest returning stretches cut first, an unmarked stretch into 8-bar
+  phrases), lettered A, A′, B by likeness with a pass count.
 
 It is a *score-first* model: the tune is arbitrary MusicXML, and exercises are derived from it.
 
@@ -187,8 +193,23 @@ SongCoach
   │    ├─ usePlayback (in time, scoring, band, click)
   │    ├─ applyResult / carryOver / headStart → Store
   │    └─ SessionSummary data (log, store, elapsed)
-  └─ Rendering: LineStage / MelodyStage / ChordStage / Score / Fretboard / GuitarPad
+  └─ Rendering: LineStage / MelodyStage / FlowStage / ChordStage / Score / ScoreFlow / Fretboard / GuitarPad
 ```
+
+**The flowing score.** Long melody cards (`flows(card)`: whole tune, run-through, more than eight
+played bars; not memory work or a part taken out) render `FlowStage` → `ScoreFlow` instead of the
+page. `ScoreFlow` draws the flow once with VexFlow on one line, notes placed in proportion to time
+(each bar's beats map linearly onto its span, barline gap included), in SVG pieces about 1,400
+units wide sharing one coordinate system (each piece's `viewBox` starts where it does), so a
+result toggling one note repaints only its piece. Nothing in the river uses a CSS `filter`: inside
+the moving layer it repainted the whole score every frame (measured 200 → 35 ms/s main-thread).
+One rAF loop translates the track: exactly to `playback.beatAt(true)` while music plays (through
+gaps; the strict `beatAt()` only dims the now-line), easing to the waited-for note at the
+player's pace, fading rather than rewinding when the distance exceeds a screen (a new pass). The
+same loop lights the form strip and keeps a sticky clef/key at the left edge. Zoom is a lookahead in
+beats plus a minimum staff scale per level (`song/scoreZoom.ts`): automatic from the card's box,
+offset by the player (menu row, Z/X, ⌘/ctrl-wheel or pinch), stored device-local in
+`guitar-score-zoom`.
 
 `buildDeck` options:
 
@@ -288,6 +309,12 @@ change. Nothing is read back. The engine (`engine/renderer.ts`, DOM-free) runs s
 a two-phase flow map over the crisp photograph (two advected displacement fields, each restarting
 unseen every flow period and crossfaded, so the image keeps flowing without tearing), a ripple height field, note dye, heat
 with buoyant blobs, 34 GPU leaves cut from the algae photograph, bloom and a soft-knee composite.
+The pond also turns through the owner's other pond photographs (`assets/pond-*.webp`, then the
+first again): the host holds each about 48 s, fetches the next only when its turn nears, and turns
+over about 36 s, faster as the groove builds and nearly still while calmed. The composite never
+crossfades: each place turns at its own time on a seeded noise front, the old image streams off
+along a curl of noise while the new arrives against it, and algae thickness height-blends the two
+so new shapes grow out of old ones. The leaf sprites keep sampling the first photograph.
 `[data-pool]` tokens on room elements become rocks (fluid obstacles), calm lenses (pull back toward
 the resting look so text keeps its contrast) or glass (magnify; the metronome dial). Quality tiers
 Q0–Q3 are governed from GPU timer queries and the pool's own JS time and persist in
@@ -346,6 +373,7 @@ applied by the detector. String attribution is inferred by `song/fingering.ts`, 
 | `src/App.tsx` | Tab state, key/Roman prefs, selected bar/chord, loop, position, pattern, reading exercise, shared mic input, stop-on-tab-change. |
 | `src/components/Fretboard.tsx` | Shared fretboard renderer: notes, labels, position window, pattern, active step, ghosts, pulses. |
 | `src/components/Score.tsx` | VexFlow renderer: bars, chords, repeats/endings, tuplets, results, cursor, playhead, focus/hide bars, note labels, fingering. |
+| `src/components/ScoreFlow.tsx` | The flowing score: one time-proportional line in SVG pieces, clock-driven scroll under a still now-line, form strip, sticky clef, zoom gestures. |
 | `src/components/LeadSheet.tsx` | Lead-sheet layout with chord symbols and bar selection. |
 | `src/components/GuitarPad.tsx` | Guitar-as-controller primitives: `useNoteKeys`, `useToneKeys`, `useSummon`, `GuitarPad`, `NoteTag`, `ToneTag`, tone-key assignment. |
 | `src/components/keyContext.ts` | Key/Roman React contexts. |
@@ -397,6 +425,7 @@ applied by the detector. String attribution is inferred by `song/fingering.ts`, 
 | --- | --- |
 | `src/tunes/musicxml.ts` | MusicXML/MXL parsing into `LeadSheet`; chord symbols, comping, bar numbers, repeats/jumps. |
 | `src/tunes/order.ts` | `playOrder`, `buildTimeline`, `slotOfBar`, `firstTargetAt`, `printedResults`. |
+| `src/tunes/flow.ts` | `flowOf`: a card's slots as forward bars, target ↔ flow-note mapping, printed or found sections. |
 | `src/tunes/usePlayback.ts` | Audio-clock playback and in-time scoring. |
 | `src/tunes/useCoach.ts` | Learn-mode plan progression and persisted state. |
 | `src/tunes/learn.ts` | `buildPlan`, chord landings, melody-over-chords reduction. |

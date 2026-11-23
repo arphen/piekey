@@ -142,6 +142,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/__tests__/core.test.ts`
 - `src/__tests__/demos.test.ts`
 - `src/__tests__/ear.test.ts`
+- `src/__tests__/flow.test.ts`
 - `src/__tests__/input-lifecycle.test.tsx`
 - `src/__tests__/musicxml.test.ts`
 - `src/__tests__/nav.test.ts`
@@ -212,11 +213,12 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/components/RenderedWater.tsx` — `RenderedWaterProps:63`, `RenderedWater:72`
 - `src/components/SaveNotice.tsx` — `SaveNotice:7`
 - `src/components/ScalesView.tsx` — `ScalesView:12`
-- `src/components/Score.tsx` — `Score:136`
+- `src/components/Score.tsx` — `drawChord:82`, `Score:136`
+- `src/components/ScoreFlow.tsx` — `ScoreFlow:331`
 - `src/components/SessionSummary.tsx` — `SessionSummary:85`
 - `src/components/ShapesView.tsx` — `ShapesView:16`
 - `src/components/SkillTree.tsx` — `SkillTree:18`
-- `src/components/SongCoach.tsx` — `openPractice:235`, `SongCoach:317`, `SongCoachRoom:323`
+- `src/components/SongCoach.tsx` — `openPractice:238`, `SongCoach:320`, `SongCoachRoom:326`
 - `src/components/Transport.tsx` — `Transport:18`
 - `src/components/TriadWheel.tsx` — `TriadWheel:48`
 - `src/components/TriadsView.tsx` — `TriadsView:153`
@@ -269,11 +271,11 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/pool/PoolRoom.tsx` — `PoolRoom:15`, `usePoolPublisher:51`, `usePoolCalm:65`, `usePoolEmit:71`
 - `src/pool/bus.ts` — `PoolAnchor:8`, `PoolEvent:9`, `PublisherProps:14`, `Publisher:15`, `PoolSink:17`, `PoolBus:22`
 - `src/pool/engine/gl.ts` — `Program:3`, `Target:5`, `Pair:12`, `Format:14`, `formats:16`, `compile:28`, `target:67`, `pair:85`, `complete:91`, `release:96`, `releasePair:102`, `image:109`
-- `src/pool/engine/renderer.ts` — `Tier:9`, `TIERS:10`, `Vec2:17`, `Vec3:18`, `Stone:19`, `Flash:20`, `Vortex:21`, `Swirl:22`, `Emitter:23`, `Ring:24`, `PoolRect:25`, `ROCK:26`, `CALM:27`, `GLASS:28`, `FrameState:31`, `PHOTO_SCALE:57` (+1 more)
-- `src/pool/engine/shaders.ts` — `VERTEX:14`, `CURL:58`, `FORCES:71`, `DIVERGENCE:131`, `PRESSURE:144`, `GRADIENT:160`, `ADVECT:176`, `HEAT:189`, `MARBLE:214`, `WAVES:228`, `DYE:255`, `PARTICLES:279`, `FLOATER_VERTEX:302`, `FLOATER_FRAGMENT:332`, `BRIGHT:514`, `BLUR:522` (+2 more)
+- `src/pool/engine/renderer.ts` — `Tier:9`, `TIERS:10`, `Vec2:17`, `Vec3:18`, `Stone:19`, `Flash:20`, `Vortex:21`, `Swirl:22`, `Emitter:23`, `Ring:24`, `PoolRect:25`, `ROCK:26`, `CALM:27`, `GLASS:28`, `FrameState:31`, `PHOTO_SCALE:58` (+1 more)
+- `src/pool/engine/shaders.ts` — `VERTEX:14`, `CURL:58`, `FORCES:71`, `DIVERGENCE:131`, `PRESSURE:144`, `GRADIENT:160`, `ADVECT:176`, `HEAT:189`, `MARBLE:214`, `WAVES:228`, `DYE:255`, `PARTICLES:279`, `FLOATER_VERTEX:302`, `FLOATER_FRAGMENT:332`, `BRIGHT:558`, `BLUR:566` (+2 more)
 - `src/pool/golden.ts` — `PHI:3`, `GOLDEN_ANGLE:4`, `FIBONACCI:5`, `PHRASE_WRAP:6`, `phyllotaxis:11`, `spiral:19`, `goldenSpread:26`, `wander:29`, `mulberry32:36`
 - `src/pool/groove.ts` — `GrooveFrame:7`, `GrooveContext:8`, `GrooveOnset:13`, `GrooveState:15`, `createGroove:58`
-- `src/pool/host.ts` — `createHost:41`, `PoolHost:45`
+- `src/pool/host.ts` — `createHost:51`, `PoolHost:55`
 - `src/pool/mode.ts` — `RoomMode:6`, `RoomEffective:7`, `ROOM_MODES:8`, `parseRoomMode:27`, `nextRoomMode:32`, `setRoomMode:46`, `cycleRoomMode:52`, `probeLiving:55`, `markLivingDegraded:70`, `RoomInputs:81`, `RoomResolution:82`, `resolveRoom:84`, `useRoomRender:106`, `resetRoomForTests:117`
 - `src/pool/params.ts` — `GROOVE_ANCHORS:4`, `ANCHORS:6`, `PoolParams:25`, `at:31`, `poolParams:37`, `tintFor:51`
 - `src/pool/pool.css`
@@ -312,6 +314,8 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/song/rand.ts` — `seeded:2`, `shuffled:14`
 - `src/song/reading.ts` — `Known:17`, `KNOWN:24`, `knownNotes:46`, `knownLine:61`, `pickKnown:86`, `vary:99`, `ReadSpan:131`, `freshLine:143`
 - `src/song/rhythm.ts` — `isolateRhythm:6`, `rhythmSheet:16`
+- `src/song/score-flow.css`
+- `src/song/scoreZoom.ts` — `LOOKAHEAD:11`, `SCALE:13`, `ZOOM_NAMES:14`, `autoZoom:18`, `zoomLevel:19`, `useScoreZoom:60`
 - `src/song/song.css`
 - `src/song/spot.ts` — `Spot:11`, `Trouble:26`, `spotOf:35`, `createTrouble:47`, `spotCard:98`, `fingerFor:116`
 - `src/song/stats.ts` — `familyOf:9`, `attemptsOf:19`, `CardTrend:23`, `cardTrend:31`, `SessionPoint:47`, `sessionTrend:51`, `totals:55`, `meanShare:67`
@@ -352,6 +356,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/tunes/database.ts` — `writeTuneXml:17`, `readTuneXml:31`
 - `src/tunes/demos.ts` — `DemoStudy:5`, `DemoTune:18`, `BLUE_HOUR_ENTRY:26`, `DEMO_TUNES:33`, `getDemoStudy:65`
 - `src/tunes/demos/blue-hour.musicxml`
+- `src/tunes/flow.ts` — `FlowBar:10`, `FlowSection:20`, `Flow:30`, `flowOf:85`
 - `src/tunes/learn.ts` — `StepKind:11`, `Step:13`, `buildPlan:28`, `melodyOverChords:165`, `chordLandings:188`
 - `src/tunes/library.ts` — `TuneEntry:9`, `LibraryIssue:22`, `LARGE_TUNE_CHARS:32`, `getLibraryIssues:40`, `subscribeLibraryIssues:41`, `isLibraryBusy:57`, `subscribeLibraryOperations:58`, `withLibraryOperation:64`, `readStored:74`, `writeStored:83`, `loadLibrary:128`, `loadLibraryAsync:136`, `loadCompleteLibraryAsync:164`, `saveLibrary:173`, `removeLibraryEntry:223`, `newTuneId:230` (+5 more)
 - `src/tunes/musicxml-assets.d.ts`
