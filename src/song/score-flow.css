@@ -1,0 +1,321 @@
+/* The flowing score. Its colours come from the room's photographs: dark pond water, the algae's
+   poison green as the light of "now", and the yellow leaves that float on it for notes played. */
+
+.flow {
+  --flow-ink: #ece8d6;
+  --flow-soft: #8f9483;
+  --flow-line: rgba(214, 232, 196, 0.24);
+  --flow-chord: #cfe4a6;
+  --flow-leaf: #e9b95c;
+  --flow-now: #a8ec62;
+  --flow-hit: #f0c96a;
+  --flow-miss: #d9724f;
+  --flow-water: 6, 13, 10;
+  position: relative;
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+.ss-melody--flow {
+  width: 100%;
+}
+
+/* a flowing score takes the stage's width: what is coming needs room */
+.ss-material:has(.ss-melody--flow) {
+  width: min(1640px, 100%);
+}
+
+/* round to the top again: the paper fades back in rather than rewinding the whole tune past */
+.flow-track.is-turning {
+  animation: flow-turn 0.8s ease-out;
+}
+
+@keyframes flow-turn {
+  from { opacity: 0; }
+}
+
+/* ---------- the form: every part of the tune, the one being played lit ---------- */
+
+.flow-form {
+  position: relative;
+  display: flex;
+  gap: 3px;
+  width: min(100% - 84px, 760px);
+  height: 24px;
+  margin: 0 auto;
+}
+
+.flow-form > span:not(.flow-form-fill) {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 1 0;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(214, 232, 196, 0.1);
+  border-radius: 7px;
+  background: rgba(var(--flow-water), 0.42);
+  color: var(--flow-soft);
+  font: italic 600 13px/1 var(--font-display);
+  white-space: nowrap;
+  transition: color 0.5s, background 0.5s, border-color 0.5s, box-shadow 0.5s;
+}
+
+.flow-form > span > i {
+  margin-left: 2px;
+  font: 400 9px/1 var(--font-mono);
+  font-style: normal;
+  opacity: 0.7;
+}
+
+.flow-form > span.is-past {
+  color: color-mix(in srgb, var(--flow-leaf) 70%, var(--flow-soft));
+  background: rgba(233, 185, 92, 0.07);
+}
+
+.flow-form > span.is-now {
+  color: var(--flow-ink);
+  border-color: color-mix(in srgb, var(--flow-now) 55%, transparent);
+  background: color-mix(in srgb, var(--flow-now) 15%, rgba(var(--flow-water), 0.5));
+  box-shadow: 0 0 18px color-mix(in srgb, var(--flow-now) 28%, transparent);
+}
+
+.flow-form-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -6px;
+  height: 2px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, rgba(168, 236, 98, 0), var(--flow-now));
+  transform: scaleX(0);
+  transform-origin: left;
+  pointer-events: none;
+}
+
+/* ---------- the river ---------- */
+
+.flow-river {
+  position: relative;
+  height: var(--river-height);
+  touch-action: pan-y;
+}
+
+/* a calm lens of dark water under the notes, deepest at the line, so they read over living algae */
+.flow-river::before {
+  content: "";
+  position: absolute;
+  inset: -22% -3%;
+  background: radial-gradient(80% 70% at var(--anchor) 52%, rgba(var(--flow-water), 0.7), rgba(var(--flow-water), 0.46) 45%, rgba(var(--flow-water), 0.2) 100%);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent), linear-gradient(180deg, transparent, #000 28%, #000 72%, transparent);
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent), linear-gradient(180deg, transparent, #000 28%, #000 72%, transparent);
+  mask-composite: intersect;
+  pointer-events: none;
+}
+
+/* what has been played drifts off into the water; what is coming rises out of it */
+.flow-sky {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, rgba(0, 0, 0, 0.28) calc(var(--anchor) * 0.42), #000 calc(var(--anchor) * 0.92), #000 80%, rgba(0, 0, 0, 0.5) 92%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, rgba(0, 0, 0, 0.28) calc(var(--anchor) * 0.42), #000 calc(var(--anchor) * 0.92), #000 80%, rgba(0, 0, 0, 0.5) 92%, transparent 100%);
+}
+
+.flow-track {
+  position: absolute;
+  left: 0;
+  top: 0;
+  will-change: transform;
+}
+
+.flow-chunk {
+  position: absolute;
+  top: 0;
+}
+
+.flow-paper svg {
+  display: block;
+  overflow: visible;
+}
+
+/* engraving: fine staff, ivory notes, chords in pale algae, sections in leaf gold. No filters in
+   here: inside the moving river a filter repaints it on every frame. The light of a note landing is
+   the glint that rises from it and the halo on the line. */
+.flow .vf-stave path,
+.flow .vf-stave rect {
+  fill: var(--flow-line);
+  stroke: var(--flow-line);
+}
+
+.flow .vf-stavebarline rect,
+.flow .vf-stavebarline path {
+  fill: rgba(214, 232, 196, 0.34);
+  stroke: rgba(214, 232, 196, 0.34);
+}
+
+.flow .vf-clef path,
+.flow .vf-keysignature path,
+.flow .vf-timesignature path {
+  fill: color-mix(in srgb, var(--flow-ink) 82%, transparent);
+}
+
+.flow .vf-stavenote path,
+.flow .vf-score-note-links path {
+  fill: var(--flow-ink);
+  stroke: var(--flow-ink);
+  transition: fill 0.35s, stroke 0.35s;
+}
+
+.flow .vf-stavenote.is-active path {
+  fill: #f6ffe9;
+  stroke: #f6ffe9;
+}
+
+.flow .vf-stavenote.is-hit path {
+  fill: var(--flow-hit);
+  stroke: var(--flow-hit);
+}
+
+.flow .vf-stavenote.is-miss path {
+  fill: var(--flow-miss);
+  stroke: var(--flow-miss);
+}
+
+.flow .flow-seam {
+  fill: color-mix(in srgb, var(--flow-leaf) 38%, transparent);
+}
+
+/* ---------- now: a still line of the algae's light ---------- */
+
+.flow-now {
+  position: absolute;
+  left: var(--anchor);
+  top: var(--now-top);
+  width: 2px;
+  height: var(--now-height);
+  margin-left: -1px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(168, 236, 98, 0), var(--flow-now) 20%, #effbdc 50%, var(--flow-now) 80%, rgba(168, 236, 98, 0));
+  box-shadow: 0 0 10px 1px rgba(168, 236, 98, 0.5), 0 0 40px 8px rgba(168, 236, 98, 0.14);
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.flow-now::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(64px * var(--z));
+  height: calc(64px * var(--z));
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(168, 236, 98, 0.16), rgba(168, 236, 98, 0) 68%);
+  transform: translate(-50%, -50%);
+}
+
+.flow-now {
+  transition: opacity 0.5s;
+}
+
+.flow-now.is-gap {
+  opacity: 0.18;
+}
+
+.flow-now.is-calling {
+  animation: flow-call 1.1s ease-out 2;
+}
+
+@keyframes flow-call {
+  0% { opacity: 1; box-shadow: 0 0 16px 4px rgba(168, 236, 98, 0.85), 0 0 60px 16px rgba(168, 236, 98, 0.3); }
+}
+
+/* where the river's left edge is, the clef and key stay */
+.flow-clef {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
+  transition: opacity 0.6s;
+  pointer-events: none;
+}
+
+.flow-clef.is-on {
+  opacity: 1;
+}
+
+.flow-clef svg {
+  display: block;
+}
+
+.flow-clef .vf-stave path,
+.flow-clef .vf-stave rect {
+  fill: var(--flow-line);
+  stroke: var(--flow-line);
+}
+
+.flow-clef .vf-clef path,
+.flow-clef .vf-keysignature path {
+  fill: var(--flow-soft);
+}
+
+.flow-clef .vf-stavebarline {
+  display: none;
+}
+
+/* closer / wider, for the mouse; gone while it rests */
+.flow-zoom {
+  position: absolute;
+  right: 4px;
+  top: -1px;
+  z-index: 3;
+  display: flex;
+  gap: 6px;
+  opacity: 0.5;
+  transition: opacity 0.6s;
+}
+
+.ss.is-idle .flow-zoom {
+  opacity: 0;
+}
+
+/* on a touch screen two fingers zoom; the form gets the whole width */
+@media (hover: none) {
+  .flow-zoom { display: none; }
+  .flow-form { width: 100%; }
+}
+
+.flow-zoom button {
+  all: unset;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid rgba(214, 232, 196, 0.16);
+  border-radius: 50%;
+  background: rgba(var(--flow-water), 0.5);
+  color: var(--flow-soft);
+  font: 400 15px/1 var(--font-mono);
+  cursor: pointer;
+  transition: color 0.3s, border-color 0.3s;
+}
+
+.flow-zoom button:hover,
+.flow-zoom button:focus-visible {
+  color: var(--flow-ink);
+  border-color: color-mix(in srgb, var(--flow-now) 50%, transparent);
+}
+
+.flow .ss-glint,
+.flow .ss-ghost-note,
+.flow .ss-want-name {
+  z-index: 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-now.is-calling { animation: none; }
+}

@@ -79,7 +79,7 @@ function drawnRight(ctx: ReturnType<Renderer["getContext"]>, text: string, x: nu
 
 
 /** Draws a chord symbol, ♭ ♯ Δ as music-font glyphs (text fonts set them loosely); returns its right edge. */
-function drawChord(ctx: ReturnType<Renderer["getContext"]>, symbol: string, x: number, y: number, color: string): number {
+export function drawChord(ctx: ReturnType<Renderer["getContext"]>, symbol: string, x: number, y: number, color: string): number {
   let cx = x;
   ctx.save();
   ctx.setFillStyle(color);

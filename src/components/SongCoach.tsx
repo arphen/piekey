@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { flushSync } from "react-dom";
 import * as Tone from "tone";
 import { ensureAudio } from "../audio/context";
@@ -12,6 +12,8 @@ import { OPEN_STRINGS, SUMMON_NOTE } from "../song/notekeys";
 import { melodyOverChords } from "../tunes/learn";
 import type { LeadSheet } from "../tunes/musicxml";
 import { printedResults, type Timeline } from "../tunes/order";
+import { flowOf } from "../tunes/flow";
+import { useScoreZoom } from "../song/scoreZoom";
 import { buildDeck, FAMILY_LABEL, familiesOnly, FOCUS_FAMILIES, FOCUS_LABEL, mixDecks, noteName as spelled, rhythmSourceId, type Card, type Context, type Deck, type Focus } from "../song/deck";
 import { rhythmSheet } from "../song/rhythm";
 import { arrangementIdentity, goalDeck, loadActiveGoal } from "../song/goals";
@@ -36,6 +38,7 @@ import { drawerToneKeys, GuitarPad, NoteTag, noteName as keyName, SUMMON_HINT, T
 import { Fretboard, type FretGhost, type FretPulse, type LabelMode } from "./Fretboard";
 import { BeatPulse, PracticeAtmosphere } from "./PracticeAtmosphere";
 import { Score } from "./Score";
+import { ScoreFlow } from "./ScoreFlow";
 import { SessionSummary } from "./SessionSummary";
 import { RecordingRecovery, RecordingStatus } from "./RecordingStatus";
 import { PracticeWindowBoundary } from "../platform/PracticeWindowBoundary";
@@ -642,6 +645,9 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
     session.spotAt(slot, slot);
   };
   const memoryPageControl = Boolean(session.memoryStage && !session.spot);
+  // a flowing score comes closer or steps back: the menu's "Score" row, Z / X, a pinch
+  const flowing = Boolean(cardNow && flows(cardNow));
+  const scoreZoom = useScoreZoom(session.box);
   const padPages: { title: string; rows: PadRow[]; fire: (() => void)[] }[] = [
     {
       title: `${session.card?.title ?? ""} · ♩ ${session.bpm}`,
@@ -691,13 +697,13 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
     },
     {
       title: "Tune & session",
-      rows: [{ label: "Sound & setup" }, { label: onTune ? "Choose tune" : "" }, { label: "Session controls" }, { label: "Tuner" }, { label: "Metronome" }, { label: "Return to playing" }],
-      fire: [() => setPad(2), openTunePicker, () => setPad(1), () => openTools("tuner"), () => openTools("metronome"), () => closePad()],
+      rows: [{ label: "Sound & setup" }, { label: onTune ? "Choose tune" : "" }, { label: "Session controls" }, { label: "Tuner" }, { label: "Metronome" }, flowing ? { label: "Score", value: scoreZoom.name } : { label: "Return to playing" }],
+      fire: [() => setPad(2), openTunePicker, () => setPad(1), () => openTools("tuner"), () => openTools("metronome"), () => (flowing ? scoreZoom.cycle() : closePad())],
     },
   ];
 
   // keys: all optional. Space pauses, arrows (or a page-turner pedal) skip and go again, −/+ tempo, S settings
-  const act = { session, menu, pad, calib, free, freeInstruments, choosingTune, tools, endCalib, close, beginNow, openMenu, closeMenu, openPad, closePad, openFree, closeFree, inExercise, barAlone };
+  const act = { session, menu, pad, calib, free, freeInstruments, choosingTune, tools, endCalib, close, beginNow, openMenu, closeMenu, openPad, closePad, openFree, closeFree, inExercise, barAlone, flowing, scoreZoom };
   const actRef = useRef(act);
   actRef.current = act;
   useEffect(() => {
@@ -746,6 +752,7 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
       else if (k === "c") s.setClick((c) => !c);
       else if (k === "g") s.updateSettings({ guide: !s.settings.guide });
       else if (k === "l") setLabels((l) => (l === "names" ? "degrees" : "names"));
+      else if ((k === "z" || k === "x") && a.flowing) a.scoreZoom.step(k === "z" ? 1 : -1);
       else return;
       e.preventDefault();
       (document.activeElement as HTMLElement | null)?.blur?.();
@@ -1206,7 +1213,9 @@ function Running({
 
       <div className="ss-stage">
         <div className="ss-material">
-          {card.view === "score" ? (
+          {card.view === "score" && flows(card) ? (
+            <FlowStage card={card} session={s} sheet={sheet} />
+          ) : card.view === "score" ? (
             <MelodyStage card={card} session={s} sheet={sheet} />
           ) : card.view === "chords" ? (
             <ChordStage card={card} session={s} />
@@ -1676,6 +1685,73 @@ function excerptOf(sheet: LeadSheet, bars: number[]) {
   const offset = sheet.bars.slice(0, from).reduce((n, b) => n + heads(b), 0); // printed notes before the excerpt
   const cutBars = sheet.bars.slice(from, to + 1).map((b, i) => (i === 0 ? { ...b, keyChange: undefined, timeChange: undefined } : b));
   return { exercise: { bars: cutBars, keySignature, timeSignature }, from, offset, count: cutBars.reduce((n, b) => n + heads(b), 0) };
+}
+
+/**
+ * Melody cards too long for a page (the whole tune, a run-through, a long section) are read as
+ * they are played: repeats unrolled, flowing under a still line. Memory work and parts taken out
+ * keep the page, where hiding and naming notes by bar make sense.
+ */
+const FLOW_BARS = 8;
+function flows(card: Card): boolean {
+  return card.view === "score" && card.family === "melody" && !card.memory && !card.spot && (Boolean(card.run) || card.step?.kind === "tune" || card.to - card.from + 1 > FLOW_BARS);
+}
+
+function FlowStage({ card, session: s, sheet: source }: { card: Card; session: SessionApi; sheet: LeadSheet }) {
+  const sheet = useMemo(() => card.rhythmPitch !== undefined ? rhythmSheet(source, card.rhythmPitch) : source, [source, card.rhythmPitch]);
+  const flow = useMemo(() => flowOf(sheet, card.tl, card.from, card.to, card.first, card.last), [sheet, card]);
+  const over = useMemo(() => melodyOverChords(sheet), [sheet]);
+  const labels = useMemo(() => flow.printed.map((k) => over.degree[k] ?? null), [flow, over]);
+  // each flow note shows the result of the one time through it stands for
+  const results = useMemo(() => {
+    const out: NoteResult[] = flow.printed.map(() => null);
+    flow.notesOf.forEach((ids, i) => {
+      const r = s.results[card.first + i];
+      if (r) ids.forEach((u) => (out[u] = r));
+    });
+    return out;
+  }, [flow, s.results, card.first]);
+  const active = s.active >= card.first ? flow.notesOf[s.active - card.first] ?? [] : [];
+  const ctx = card.context[Math.max(card.first, Math.min(card.last, s.active))];
+  const track = useRef<HTMLDivElement>(null);
+  const heads = useMemo(() => flow.exercise.bars.flatMap((b) => b.notes.filter((n) => !n.rest)), [flow]);
+  const wrong = useMemo(() => {
+    const out: WrongNote[] = [];
+    s.shadows.forEach((midi, i) => {
+      const n = flow.notesOf[i - card.first]?.[0];
+      const t = card.tl.targets[i];
+      if (midi == null || n === undefined || !t || results[n] !== "miss" || !heads[n]) return;
+      out.push({ n, midi, want: t.midi, vexKey: heads[n].vexKey, name: playedName(card.context[i], midi), wantName: spelled(card, i) });
+    });
+    return out;
+  }, [s.shadows, flow, card, results, heads]);
+  const zoom = useScoreZoom(s.box);
+  const { beatAt } = s.playback;
+  const through = useCallback(() => beatAt(true), [beatAt]);
+  const follow = s.phase === "pace" && s.active >= 0 ? card.tl.targets[s.active]?.t ?? null : null;
+  return (
+    <div className="ss-melody ss-melody--flow">
+      <Harm ctx={ctx} />
+      <ScoreFlow
+        flow={flow}
+        results={results}
+        active={active}
+        clock={s.playback.playing ? through : undefined}
+        heard={beatAt}
+        follow={follow}
+        hold={s.phase === "result"}
+        lookahead={zoom.lookahead}
+        scale={zoom.scale}
+        labels={labels}
+        pulse={s.nudge}
+        trackRef={track}
+        onZoom={zoom.step}
+      >
+        <ScoreShadows host={track} wrong={wrong} keySignature={flow.exercise.keySignature} />
+        <ScoreGlints host={track} results={results} reset={`${card.id}:${s.phase}`} />
+      </ScoreFlow>
+    </div>
+  );
 }
 
 function MelodyStage({ card, session: s, sheet: source }: { card: Card; session: SessionApi; sheet: LeadSheet }) {

@@ -150,7 +150,9 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
   const activeRef = useRef(active);
   const countRef = useRef(0);
   const driftRef = useRef<number | null>(null);
-  const position = useRef<(() => number | null) | null>(null); // the timeline beat being heard, while there is one
+  // The timeline beat being heard, while there is one. Through a gap the band is silent and there is
+  // nothing heard to follow; a score that must keep moving may still ask where the music is.
+  const position = useRef<((throughGaps?: boolean) => number | null) | null>(null);
 
   const clicks = useMemo(
     () => tl.slots.flatMap((s) => Array.from({ length: Math.max(1, Math.round(s.beats)) }, (_, b) => ({ t: s.start + b, accent: b === 0, index: b, beats: Math.max(1, Math.round(s.beats)) }))),
@@ -531,7 +533,7 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
 
       // where the music is, read from the device's clock whenever it is asked (a ghost playhead);
       // nothing during a count-in, a breath or a gap, where there is no music to follow
-      position.current = () => {
+      position.current = (throughGaps = false) => {
         if (session.current !== s || ctx.state !== "running") return null;
         const r = rOf(heardTime(ctx) + PAINT_LEAD_S);
         if (r < 0 || (!s.loop && r >= s.length)) return null;
@@ -540,7 +542,7 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
         if (pos >= s.length) return null;
         const gap = mixRef.current.gap;
         const cycle = gap ? gap.on + gap.off : 0;
-        if (cycle > 0 && (iter * s.length + pos) % cycle >= gap!.on - 1e-9) return null;
+        if (!throughGaps && cycle > 0 && (iter * s.length + pos) % cycle >= gap!.on - 1e-9) return null;
         return s.from + pos;
       };
       s.timer = window.setInterval(tick, TICK_MS);
@@ -584,7 +586,7 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
 
   useEffect(() => stop, [stop]);
 
-  const beatAt = useCallback(() => position.current?.() ?? null, []);
+  const beatAt = useCallback((throughGaps = false) => position.current?.(throughGaps) ?? null, []);
 
   return { playing, counting, beat, activeTarget: active.target, activeSlot: active.slot, results, wrong, lastPass, drift, play, stop, beatAt };
 }

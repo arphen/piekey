@@ -67,3 +67,27 @@ it("keeps concealed memory notes and connecting marks hidden after scoring, with
   act(() => root.unmount());
   host.remove();
 });
+
+it("draws the flowing score with one marked note per flow note, the repeat on new paper", async () => {
+  const { ScoreFlow } = await import("../components/ScoreFlow");
+  const { flowOf } = await import("../tunes/flow");
+  const { buildTimeline } = await import("../tunes/order");
+  const key = getKey("A");
+  const ex = generateReading({ tune: getTune(1, key), key, level: 2, loop: { start: 0, end: 3 }, position: positionsFor(key)[0], seed: 3 });
+  ex.bars[0] = { ...ex.bars[0], repeatStart: true };
+  ex.bars[1] = { ...ex.bars[1], repeatEnd: 2 };
+  const sheet = { bars: ex.bars, barNumbers: ex.bars.map((_, i) => String(i + 1)), keySignature: ex.keySignature, timeSignature: "4/4", comp: [] };
+  const tl = buildTimeline(sheet);
+  const flow = flowOf(sheet, tl, 0, tl.slots.length - 1, 0, tl.targets.length - 1);
+  const results = flow.printed.map((_, i) => (i === 0 ? "hit" : null)) as ("hit" | null)[];
+  const host = document.createElement("div");
+  document.body.appendChild(host);
+  const root = createRoot(host);
+  act(() => root.render(<ScoreFlow flow={flow} results={results} active={flow.notesOf[1]} follow={null} lookahead={11} />));
+  const marked = host.querySelectorAll(".vf-stavenote[data-note]");
+  expect(flow.bars.map((b) => b.bar)).toEqual([0, 1, 0, 1, 2, 3]);
+  expect(marked.length).toBe(flow.printed.length);
+  expect(host.querySelectorAll(".vf-stavenote.is-hit")[0]?.getAttribute("data-note")).toBe("0");
+  expect(host.querySelector(".vf-stavenote.is-active")?.getAttribute("data-note")).toBe(String(flow.notesOf[1][0]));
+  act(() => root.unmount());
+});
