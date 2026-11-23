@@ -1,4 +1,5 @@
 import { mod } from "../musicTheory";
+import { flowOf } from "./flow";
 import type { LeadSheet } from "./musicxml";
 import type { Timeline } from "./order";
 
@@ -7,6 +8,8 @@ import type { Timeline } from "./order";
 //   join: the new chunk with the one before, so the seams hold
 //   section: the whole section in time, then from memory (notes hidden, chords showing)
 //   a chunk that repeats earlier music is a quick review; the whole tune closes the plan.
+// The sections are the file's rehearsal marks; a file without any has its parts found in the
+// music (flow.ts: A, B, A′…), so a tune is still learned part by part before it is played whole.
 
 export type StepKind = "new" | "review" | "join" | "section" | "memory" | "tune";
 
@@ -32,10 +35,21 @@ export function buildPlan(sheet: LeadSheet, tl: Timeline): Step[] {
     const b = label(tl.slots[to].bar);
     return a === b ? `bar ${a}` : `bars ${a}–${b}`;
   };
-  const sectionOf = (bar: number) => {
+  const marked = sheet.bars.some((b) => b.section);
+  const markOf = (bar: number) => {
     for (let b = bar; b >= 0; b--) if (sheet.bars[b].section) return sheet.bars[b].section!;
     return sheet.bars.find((b) => b.section)?.section ?? "The tune";
   };
+  // the part each slot is in, and where parts begin: the marks, or the parts found in the music
+  const found = marked || !tl.slots.length ? [] : flowOf(sheet, tl, 0, tl.slots.length - 1, 0, -1).sections;
+  const partOf = (slot: number) => found.findIndex((s) => slot >= s.from && slot <= s.to);
+  const sectionOf = (slot: number): string => {
+    if (marked) return markOf(tl.slots[slot].bar);
+    const part = found[partOf(slot)];
+    if (!part || found.length < 2) return "The tune";
+    return part.pass > 1 ? `${part.label} section (${part.pass})` : `${part.label} section`;
+  };
+  const startsPart = (slot: number) => (marked ? Boolean(sheet.bars[tl.slots[slot].bar].section) : found.length > 1 && found.some((s) => s.from === slot));
 
   // chunks: consecutive slots of bars not met before, cut every 2 bars and at section marks
   const chunks: { from: number; to: number }[] = [];
@@ -48,7 +62,7 @@ export function buildPlan(sheet: LeadSheet, tl: Timeline): Step[] {
   tl.slots.forEach((slot, si) => {
     if (seen.has(slot.bar)) return flush();
     const last = cur[cur.length - 1];
-    if (cur.length && (cur.length >= CHUNK_BARS || sheet.bars[slot.bar].section || last !== si - 1)) flush();
+    if (cur.length && (cur.length >= CHUNK_BARS || startsPart(si) || last !== si - 1)) flush();
     cur.push(si);
     seen.add(slot.bar);
   });
@@ -59,8 +73,8 @@ export function buildPlan(sheet: LeadSheet, tl: Timeline): Step[] {
     if (c.to !== c.from) continue;
     const next = chunks[i + 1];
     const prev = chunks[i - 1];
-    const intoSection = next && sheet.bars[tl.slots[next.from].bar].section;
-    const pickup = !sheet.bars.slice(0, tl.slots[c.from].bar + 1).some((b) => b.section);
+    const intoSection = next && startsPart(next.from);
+    const pickup = marked ? !sheet.bars.slice(0, tl.slots[c.from].bar + 1).some((b) => b.section) : c.from === 0;
     if (next && next.from === c.to + 1 && next.to - next.from < 2 && (!intoSection || pickup)) {
       next.from = c.from;
       chunks.splice(i--, 1);
@@ -81,9 +95,9 @@ export function buildPlan(sheet: LeadSheet, tl: Timeline): Step[] {
   const learned = new Map<string, string>(); // signature → where it was learned
   let i = 0;
   while (i < chunks.length) {
-    const section = sectionOf(tl.slots[chunks[i].from].bar);
+    const section = sectionOf(chunks[i].from);
     const group: typeof chunks = [];
-    while (i < chunks.length && sectionOf(tl.slots[chunks[i].from].bar) === section) group.push(chunks[i++]);
+    while (i < chunks.length && sectionOf(chunks[i].from) === section) group.push(chunks[i++]);
     let prevNew: (typeof chunks)[number] | null = null;
     let anyNew = false;
     for (const c of group) {
@@ -103,7 +117,8 @@ export function buildPlan(sheet: LeadSheet, tl: Timeline): Step[] {
     }
     const from = Math.min(...group.map((c) => c.from));
     const to = Math.max(...group.map((c) => c.to));
-    if (group.length > 1 || anyNew) {
+    // a found part that only repeats music already learned is reviewed chunk by chunk, not again whole
+    if (anyNew || (marked && group.length > 1)) {
       steps.push({ kind: "section", from, to, section, title: `${section} in time`, detail: `The whole of ${section}, repeats and endings included.`, listen: true, read: false, pass: PASS.section });
       if (anyNew)
         steps.push({ kind: "memory", from, to, section, title: `${section} from memory`, detail: "Page, bar-start landmarks, then hidden notes. Chords remain; the page can return at any time.", listen: false, read: false, pass: PASS.memory });

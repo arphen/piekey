@@ -164,8 +164,11 @@ export function planBlocks(deck: Deck, store: Store, day: string, opts: PlanOpti
   const weak: Weakness | undefined = arc ? profile?.weaknesses.find((w) => w.cls === arc.cls) : undefined;
   let focus: string[] = [];
   let why = "";
+  // A focus works on a part. The whole tune and the run-through show every mistake most (they are
+  // the longest), but working on them is playing the tune again: they stay music, never the focus.
+  const whole = (id: string) => Boolean(byId.get(id)?.run || byId.get(id)?.step?.kind === "tune");
   if (weak) {
-    focus = weak.cards.map(local).filter((id) => byId.has(id) && !used.has(id)).slice(0, MAX_FOCUS);
+    focus = weak.cards.map(local).filter((id) => byId.has(id) && !used.has(id) && !whole(id)).slice(0, MAX_FOCUS);
     if (focus.length) why = weak.fact;
   }
   if (!focus.length && (!goal || goal.kind === "melody")) {

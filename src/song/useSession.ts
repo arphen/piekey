@@ -68,7 +68,7 @@ const STEP_DOWN = 4; // as gentle as a step up: two short passes cost one clean 
 const MIN_BPM = 40;
 const MAX_BPM = 240;
 const MAX_MISSED_PASSES = 7;
-const UNTIMED_PASSES = 3; // right notes this often without their timing caught: the exercise is ok, and moves on
+const UNTIMED_PASSES = 3; // right notes this often without their timing caught (a tune's: or even): the exercise is ok, and moves on
 const MESSY = 0.5; // a pass under this share is mostly wrong notes: tempo is not the problem
 const SILENT_PASSES = 3; // then the band waits for you
 const HEARD_FRAMES = 6; // frames with a pitch for a pass to count as played
@@ -84,7 +84,7 @@ const SPOT_NUDGE_MS = 3000; // in a spot, the next note sounds this soon: it is 
 const PROMPT_SECS = [4, 3.5, 3, 2.4, 1.8, 1.4]; // by box: seconds a note on the neck may take to be found
 const WEAK_BAR = 0.7; // a run-through's bar with fewer of its notes than this is worked on next time
 const RUN_CLEAN = 0.9;
-const GAP_BOX = 4; // an exercise this far along is played in time with gaps in the band: the time is the player's
+const GAP_BOX = 4; // a scale this far along is played in time with gaps in the band: the time is the player's
 const GAP_BARS = 2; // bars with the band, then bars without it (twice as many in the top box)
 
 const EMPTY: Timeline = { slots: [], targets: [], comp: [], total: 0 };
@@ -123,7 +123,7 @@ function barShares(card: Card, results: readonly NoteResult[]): { bar: number; s
 
 export interface SessionOptions {
   suspended?: boolean; // a modal owns the shared input; do not wake or advance the session beneath it
-  gap?: ReadonlySet<string>; // exercises to play in time with gaps in the band whatever their box (a focus on time)
+  gap?: ReadonlySet<string>; // scale exercises to play in time with gaps in the band whatever their box (a focus on time)
   arrangementFingerprint?: string;
   arrangementFingerprints?: ReadonlyMap<string, string>;
   tempoBounds?: { minBpm: number; targetBpm: number };
@@ -185,7 +185,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
   const runBars = useRef<Outcome["bars"]>(undefined); // the last run-through, bar by bar
   const missRun = useRef(0); // passes in a row that fell short
   const rhythmMisses = useRef(0); // right pitches without a steady pulse do not earn a faster click
-  const untimed = useRef(0); // right pitches with too few attacks caught to time them
+  const untimed = useRef(0); // right pitches with too few attacks caught to time them (or, in a tune, uneven)
   const returnTo = useRef<Phase | null>(null); // where a "hear it again" goes back to
   const lostInput = useRef(false);
   const ownTempo = useRef<number | null>(null); // the last steady tempo at the player's own pace
@@ -311,8 +311,9 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     bass: true,
     guide: !memoryExercise || phase === "listen",
   };
-  // a gap: the band drops out for a couple of bars and comes back; the notes in between are still judged
-  const gapped = Boolean(card && !spot && !card.run && card.view !== "chords" && card.family !== "ear" && (options.gap?.has(card.id) || (box >= GAP_BOX && (card.family === "scales" || card.family === "melody"))));
+  // a gap: the band drops out of a scale drill for a couple of bars and comes back; the notes in
+  // between are still judged. A tune always keeps its band: playing it is playing with them.
+  const gapped = Boolean(card && !spot && card.family === "scales" && (options.gap?.has(card.id) || box >= GAP_BOX));
   const barBeats = card?.tl.slots[card.from]?.beats ?? 4;
   const gap = gapped ? { on: GAP_BARS * barBeats, off: (box >= 5 ? 2 : 1) * GAP_BARS * barBeats } : null;
   const playback = usePlayback(card?.tl ?? EMPTY, { ...mix, gap }, sessionInput, phase === "time" && listening && !selfGuided && !suspended, !card?.exact, ignore);
@@ -852,8 +853,10 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
       else finish();
       return;
     }
-    // the right notes with too few attacks caught to time them: the tempo holds, nothing is held against it
-    if (score >= card.pass && !onTime && !timing.measured) {
+    // the right notes with too few attacks caught to time them, or a tune's notes right with the time
+    // not yet even: the tempo holds and nothing is held against it. Slowing a tune whose notes are
+    // there teaches nothing; its time settles with playing it, and the timing strip shows it.
+    if (score >= card.pass && !onTime && (!timing.measured || card.family === "melody")) {
       missRun.current = 0;
       if (++untimed.current >= UNTIMED_PASSES) conclude("ok", score);
       return;

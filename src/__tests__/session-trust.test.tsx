@@ -337,6 +337,34 @@ describe("session assessment trust", () => {
     expect(session.outcome).toMatchObject({ result: "ok" });
   });
 
+  it("holds a tune's tempo when its notes are right but the time is uneven", async () => {
+    const tune = deck.cards.find((candidate) => candidate.step?.kind === "tune")!;
+    const uneven = (c: typeof card) => ({ at: c.tl.targets.map((_, i) => (i % 2 ? 140 : -140)) });
+    input.status = "listening";
+    await act(async () => session.begin([tune.id]));
+    await act(async () => session.go("time"));
+    await act(async () => vi.advanceTimersByTime(950));
+    const start = session.bpm;
+    await pass(tune, uneven(tune));
+    await pass(tune, uneven(tune));
+    expect(session.bpm).toBe(start); // the notes are there: neither slower nor faster
+    expect(session.outcome).toBeFalsy();
+    await pass(tune, uneven(tune));
+    expect(session.outcome).toMatchObject({ result: "ok" }); // and it moves on, kept in its box
+  });
+
+  it("slows a drill whose notes are right but whose time is uneven", async () => {
+    input.status = "listening";
+    await act(async () => session.begin([card.id]));
+    await act(async () => session.go("time"));
+    await act(async () => vi.advanceTimersByTime(950));
+    const start = session.bpm;
+    const uneven = { at: card.tl.targets.map((_, i) => (i % 2 ? 140 : -140)) };
+    await pass(card, uneven);
+    await pass(card, uneven);
+    expect(session.bpm).toBe(start - 4);
+  });
+
   it("fades new memory work only after full steady passes and schedules its later review", async () => {
     input.status = "listening";
     await act(async () => session.updateSettings({ guide: true }));

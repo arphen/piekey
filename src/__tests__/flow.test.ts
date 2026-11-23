@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { ReadingBar, ReadingNote } from "../core/contract";
 import { flowOf } from "../tunes/flow";
+import { buildPlan } from "../tunes/learn";
+import type { LeadSheet } from "../tunes/musicxml";
 import { buildTimeline } from "../tunes/order";
 
 const note = (midi: number, startBeat: number, extra: Partial<ReadingNote> = {}): ReadingNote => ({
@@ -82,5 +84,16 @@ describe("the tune as it is played", () => {
     // sections tile the stream
     flow.sections.forEach((s, i) => expect(s.from).toBe(i ? flow.sections[i - 1].to + 1 : 0));
     expect(flow.sections.at(-1)?.to).toBe(flow.bars.length - 1);
+
+    // and an unmarked tune is learned by those parts: B gets its own lessons before the whole tune
+    const plan = buildPlan(sheet as unknown as LeadSheet, buildTimeline(sheet));
+    const titles = plan.map((s) => s.title);
+    const tune = titles.indexOf("The whole tune");
+    expect(titles.indexOf("A section in time")).toBeGreaterThanOrEqual(0);
+    expect(titles.indexOf("B section in time")).toBeGreaterThan(titles.indexOf("A section in time"));
+    expect(titles.indexOf("B section in time")).toBeLessThan(tune);
+    const b = flow.sections.find((s) => s.label === "B")!;
+    expect(plan.some((s) => s.kind === "new" && s.from === b.from)).toBe(true); // B's first chunk starts with B
+    expect(plan.filter((s) => s.kind === "section").every((s) => s.to - s.from < flow.bars.length - 1)).toBe(true); // no part is the whole tune
   });
 });

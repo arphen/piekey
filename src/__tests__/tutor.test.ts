@@ -329,6 +329,15 @@ describe("a session with a shape", () => {
     expect(new Set(p.ids).size).toBe(p.ids.length);
   });
 
+  it("works a part, never the whole tune, when timing spreads most over the whole tune", () => {
+    const tune = melodies.find((id) => id.startsWith("mel:tune:"))!;
+    const part = melodies.find((id) => id.startsWith("mel:new:"))!;
+    const cards = Object.fromEntries([[scale, known(3)], ...melodies.map((id) => [id, known(2)])]);
+    const weak = { cls: "unsteady" as const, strength: 0.5, n: 300, cards: [`t::${tune}`, "t::mel:run", `t::${part}`], fact: "Spread 80 ms" };
+    const p = planBlocks(deck, store(cards), day, { minutes: 25, tuneId: "t", profile: profileWith({ weaknesses: [weak] }) });
+    expect(p.blocks.find((b) => b.role === "focus")!.cards).toEqual([part]);
+  });
+
   it("fits every block into the minutes and reserves music even with a large focus", () => {
     const cards = Object.fromEntries(deck.intro.map((id) => [id, known(1)]));
     const weak = { cls: "leaps" as const, strength: 0.6, n: 40, cards: melodies.slice(0, 5).map((id) => `t::${id}`), fact: "x" };
