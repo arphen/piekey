@@ -453,6 +453,38 @@ Ready screen
   time in headless Chrome; real speaker latency is not measured. Not verified: real microphone input, real power switching, Safari/Firefox,
   phones, context-loss recovery on real hardware, and GPU numbers outside headless Chrome.
 
+### Tunes by parts, steady tempo, smooth score (2026-11-23)
+
+From play on a ballad: notes played right in the flowing score were gold on ivory, hard to see;
+the band dropped out of well-known passages; a tune at 97 % right notes kept slowing down and
+came back as "the whole tune" session after session instead of its parts.
+
+- Flowing score: a note played right turns green at once (rust when missed); no colour transitions.
+- Band gaps apply to scale drills only; a tune always keeps its band.
+- A melody pass with right notes but uneven time holds the tempo (not counted as short); three
+  such passes end the exercise as ok, kept in its box. Drills still slow for uneven time.
+- The session's focus never picks the whole tune or the run-through (their timing spread is the
+  largest because they are longest, which made an "unsteady" arc hold the whole tune for 10 days,
+  with time-focus gaps on top).
+- A score without rehearsal marks is learned by the parts the form finder names (A, B, A′…):
+  chunks, section-in-time and memory cards per part before the whole tune. Card IDs of marked
+  scores are unchanged; for unmarked scores the old "The tune in time / from memory" cards (whole
+  tune copies) are replaced by part cards, and chunk IDs move only where a part starts off the
+  two-bar grid.
+- Performance, measured in real-time headless Chrome (M3, 107-bar unmarked solo, Living room,
+  band playing): main thread 179 → 81 ms/s, renderer CPU 33 → 19 %, GPU 24 → 13 %, paints
+  1,027 → 84 per 3 s, Layerize 140 → 9 ms per 3 s. Causes: the "how it is going" line animated
+  width/box-shadow on every note (layout + paint every frame); note fill transitions repainted
+  score pieces; an animated `::before` beat wash re-layerized every frame, even hidden under the
+  pool; the river was moved from the main thread each frame. The river now glides on the
+  compositor (Web Animations re-synced to the heard clock; measured: notes reach the line within
+  1 px, speed flat p5–p95), and only score pieces near the view stay on the page.
+
+Verified: `flow.test.ts` (an unmarked AABA plan has A and B section cards before the whole tune),
+`tutor.test.ts` (focus skips whole tune/run-through), `session-trust.test.tsx` (tune holds tempo on
+uneven right notes, drill still slows), CDP traces above. Not verified: on the user's laptop, by
+eye with a guitar, the Water room's GPU numbers.
+
 ### Flowing score (2026-11-23)
 
 Long melody cards (the whole tune, the run-through, sections over eight played bars) read as a

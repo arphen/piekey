@@ -56,7 +56,9 @@ closing one only releases a pause it owns.
 The ready screen plans a session of the chosen length (`song/planner.ts`): a scale the hands know,
 then a focus, then what the box says is due, then a melody of the tune. The focus is the mistake the
 player's history shows most (`song/profile.ts`), kept for up to ten days and dropped once it has
-halved; without one, the last run-through's short bars or a skill left alone for a week. It is
+halved; without one, the last run-through's short bars or a skill left alone for a week. The
+focus is always a part: the whole tune and the run-through show every mistake most, being the
+longest, but they stay music and never become the focus. It is
 named as one fact ("Leaps · 41 % missed"), never as advice. Struggling lately brings no new cards;
 cruising brings more.
 
@@ -101,7 +103,9 @@ away. Asking for in time while a pass is already playing changes nothing: the pa
   (4 bpm, as much as a clean pass earns). The first time, where the visit is heading stays put, so
   clean passes earn the way back; after that it comes down too. Right notes with too few attacks
   caught to time them hold the tempo without counting as short; three such passes end the
-  exercise as ok. Two passes of mostly wrong notes send the band away until a take at the
+  exercise as ok. In a tune (melody cards) right notes whose time is not yet even do the same:
+  the tempo holds rather than coming down, and three such passes end it as ok, kept in its box.
+  Only notes falling short slow a tune; a drill (scales and lines) still slows for uneven time. Two passes of mostly wrong notes send the band away until a take at the
   player's own pace is clean again. The tempo moves while the band plays. The first note may come early, the last may land
   late, and a finished pass keeps its colours for a moment.
   Untied repeated notes need separate attacks; ties remain a single target. Scale, melody and
@@ -119,9 +123,10 @@ away. Asking for in time while a pass is already playing changes nothing: the pa
   count-in clicks and the big number return, the finished pass keeps its colours through it, and
   its score lands before the next pass starts. Scales, harmony drills and chord changes cycle on
   without a break.
-- **Gaps.** Once an exercise is well known (box 4) the band drops out for two bars in four (four in
-  eight in the top box) while it plays in time; the notes are still judged, so the time is the
-  player's. During a focus on time every focus card plays this way.
+- **Gaps.** Once a scale drill is well known (box 4) the band drops out for two bars in four (four
+  in eight in the top box) while it plays in time; the notes are still judged, so the time is the
+  player's. During a focus on time every scale card in the focus plays this way. A tune always
+  keeps its band: playing it is playing with them.
 - **Timing.** After each pass in time a strip shows every note against its beat and how scattered
   they were (ms), with raw reference alignment separate from scatter. A pass accommodates constant
   phase within the smallest of 200 ms, 30% of a beat and 45% of nearby attack spacing; scatter and
@@ -161,10 +166,12 @@ away. Asking for in time while a pass is already playing changes nothing: the pa
   are named in a strip above it (the file's rehearsal marks, or parts found from what comes back
   in the melody and the chords: A, B, A′…) with the current one lit. Notes are spaced by time and
   the line flows right to left under a still line where the music is, on the heard output clock;
-  every note reaches the line as it sounds, and a note played right turns the colour of the
-  floating leaves. At the player's own pace the line eases on to each note they find. Round to
-  the top for another pass, the paper fades back rather than rewinding. In a gap the notes keep
-  coming and the line dims: the time is the player's. It sits closer as the exercise moves up the
+  every note reaches the line as it sounds, and a note played right turns green at once (one
+  missed, rust). While the band plays at a steady tempo the line's motion is handed to the
+  compositor a few seconds at a time, re-synced to the heard clock, so it glides even while the
+  page is busy; only the pieces of score near the view are on the page. At the player's own pace
+  the line eases on to each note they find. Round to
+  the top for another pass, the paper fades back rather than rewinding. It sits closer as the exercise moves up the
   box; the guitar menu's **Score** row (Tune & session page, in place of Return to playing), Z / X,
   a trackpad pinch or two fingers move it (`guitar-score-zoom`, this device only). Memory work and
   parts taken out keep the page.
@@ -250,6 +257,12 @@ never influences scoring, tempo, scheduling, evidence, boxes or goals.
 ## The curriculum
 
 Exercises live in a five-box card box per tune (`song/leitner.ts`). On top of that:
+
+- **Melody by parts** (`tunes/learn.ts`). A tune's melody is learned two bars at a time, joined,
+  then each section in time and from memory, and only then the whole tune. The sections are the
+  file's rehearsal marks; a file without marks is cut into the parts found in the music (the same
+  A, B, A′ the flowing score names), so its B is learned as B. A found part that only repeats one
+  already learned is reviewed chunk by chunk rather than given another whole-section card.
 
 - **Stages.** A scale opens in steps: its notes, then the same notes on other grids (quarters,
   triplets, 16ths) and in patterns (thirds, triads, 7th arpeggios). A step joins the box once the

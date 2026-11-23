@@ -203,10 +203,18 @@ page. `ScoreFlow` draws the flow once with VexFlow on one line, notes placed in 
 units wide sharing one coordinate system (each piece's `viewBox` starts where it does), so a
 result toggling one note repaints only its piece. Nothing in the river uses a CSS `filter`: inside
 the moving layer it repainted the whole score every frame (measured 200 → 35 ms/s main-thread).
-One rAF loop translates the track: exactly to `playback.beatAt(true)` while music plays (through
-gaps; the strict `beatAt()` only dims the now-line), easing to the waited-for note at the
-player's pace, fading rather than rewinding when the distance exceeds a screen (a new pass). The
-same loop lights the form strip and keeps a sticky clef/key at the left edge. Zoom is a lookahead in
+One rAF loop follows `playback.beatAt(true)` while music plays (through gaps; the strict
+`beatAt()` only dims the now-line), easing to the waited-for note at the player's pace, fading
+rather than rewinding when the distance exceeds a screen (a new pass). Once the heard tempo has
+been measured over 500 ms it hands the track to the compositor: a linear Web Animation through the
+next 3 s of bars, pinned to the frame its first beat was read in. Each frame then only compares
+where the glide is with the heard beat and hands on again (drift over 1.5 px, a jump, or the
+stretch running out); no style is written meanwhile, so the river glides through main-thread
+work. A transform-animated layer is painted with an unbounded cull rect, so only the SVG pieces
+near the view stay displayed (`display: none` elsewhere), keeping paint and layerization at a few
+pieces whatever the tune's length. Note results switch colour without transitions (a fill
+transition repainted the piece every frame). The same loop lights the form strip (written only
+when it moves visibly) and keeps a sticky clef/key at the left edge. Zoom is a lookahead in
 beats plus a minimum staff scale per level (`song/scoreZoom.ts`): automatic from the card's box,
 offset by the player (menu row, Z/X, ⌘/ctrl-wheel or pinch), stored device-local in
 `guitar-score-zoom`.
@@ -279,7 +287,9 @@ pitch detector or practice state. Water/leaf assets in `src/assets/` derive from
 original photographs and use the project AGPL-3.0-only license; see [ASSETS.md](../ASSETS.md).
 `BeatPulse` in the same
 module renders `BeatSignal` with an engraved SVG dial, alternating weighted sweep and one
-resonance per serial; CSS controls finite decay/sweep, not beat scheduling. Reduced motion leaves
+resonance per serial; CSS controls finite decay/sweep, not beat scheduling. The room's beat wash is
+a real element, not a `::before`: an animated pseudo-element re-layerized the page every frame of
+every beat. Under the living pool it is `display: none` (the pool shows the beat itself). Reduced motion leaves
 static texture and discrete beat markers. `RenderedWater` is an optional WebGL canvas behind the
 score, using fixed-cost analytic waves, shared RMS and heard-beat envelopes. Resolution is capped
 at 1,000 pixels on the long edge and rendering at 30 fps; inactive/hidden/reduced-motion rooms
@@ -428,7 +438,7 @@ applied by the detector. String attribution is inferred by `song/fingering.ts`, 
 | `src/tunes/flow.ts` | `flowOf`: a card's slots as forward bars, target ↔ flow-note mapping, printed or found sections. |
 | `src/tunes/usePlayback.ts` | Audio-clock playback and in-time scoring. |
 | `src/tunes/useCoach.ts` | Learn-mode plan progression and persisted state. |
-| `src/tunes/learn.ts` | `buildPlan`, chord landings, melody-over-chords reduction. |
+| `src/tunes/learn.ts` | `buildPlan` (sections from rehearsal marks, else the parts `flowOf` finds), chord landings, melody-over-chords reduction. |
 | `src/tunes/unzip.ts` | `.mxl` unzip. |
 | `src/tunes/chordName.ts` | Names chords from voicings when the file has no symbols. |
 

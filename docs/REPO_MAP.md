@@ -214,7 +214,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/components/SaveNotice.tsx` — `SaveNotice:7`
 - `src/components/ScalesView.tsx` — `ScalesView:12`
 - `src/components/Score.tsx` — `drawChord:82`, `Score:136`
-- `src/components/ScoreFlow.tsx` — `ScoreFlow:331`
+- `src/components/ScoreFlow.tsx` — `ScoreFlow:335`
 - `src/components/SessionSummary.tsx` — `SessionSummary:85`
 - `src/components/ShapesView.tsx` — `ShapesView:16`
 - `src/components/SkillTree.tsx` — `SkillTree:18`
@@ -328,7 +328,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/song/useGoalEvidence.ts` — `useGoalEvidence:13`
 - `src/song/useGoals.ts` — `useGoals:4`
 - `src/song/usePracticeHistory.ts` — `usePracticeHistory:11`
-- `src/song/useSession.ts` — `Phase:52`, `Outcome:94`, `SessionOptions:124`, `useSession:133`, `SessionApi:1296`
+- `src/song/useSession.ts` — `Phase:52`, `Outcome:94`, `SessionOptions:124`, `useSession:133`, `SessionApi:1299`
 - `src/song/useThemePicker.ts` — `useThemePicker:14`
 - `src/song/voicings.ts` — `VoicingNote:10`, `Voicing:17`, `voiceChords:75`
 - `src/storage.ts` — `StorageIssue:4`, `pendingStorageWrites:14`, `getStoredItem:15`, `storedKeys:18`, `retryStorageWrites:32`, `getStorageIssues:38`, `subscribeStorageIssues:39`, `reportStorageError:44`, `clearStorageError:53`, `setStoredItem:59`, `removeStoredItem:74`
@@ -357,7 +357,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/tunes/demos.ts` — `DemoStudy:5`, `DemoTune:18`, `BLUE_HOUR_ENTRY:26`, `DEMO_TUNES:33`, `getDemoStudy:65`
 - `src/tunes/demos/blue-hour.musicxml`
 - `src/tunes/flow.ts` — `FlowBar:10`, `FlowSection:20`, `Flow:30`, `flowOf:85`
-- `src/tunes/learn.ts` — `StepKind:11`, `Step:13`, `buildPlan:28`, `melodyOverChords:165`, `chordLandings:188`
+- `src/tunes/learn.ts` — `StepKind:14`, `Step:16`, `buildPlan:31`, `melodyOverChords:180`, `chordLandings:203`
 - `src/tunes/library.ts` — `TuneEntry:9`, `LibraryIssue:22`, `LARGE_TUNE_CHARS:32`, `getLibraryIssues:40`, `subscribeLibraryIssues:41`, `isLibraryBusy:57`, `subscribeLibraryOperations:58`, `withLibraryOperation:64`, `readStored:74`, `writeStored:83`, `loadLibrary:128`, `loadLibraryAsync:136`, `loadCompleteLibraryAsync:164`, `saveLibrary:173`, `removeLibraryEntry:223`, `newTuneId:230` (+5 more)
 - `src/tunes/musicxml-assets.d.ts`
 - `src/tunes/musicxml.ts` — `CompEvent:11`, `LeadSheet:18`, `MusicXmlOptions:32`, `MusicXmlPart:37`, `MusicXmlSource:44`, `parseMusicXml:284`, `loadTuneFile:600`
