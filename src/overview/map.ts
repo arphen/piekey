@@ -1,6 +1,7 @@
 import { allStores, BOXES, loadSharedSkills, type CardState } from "../song/leitner";
 import { loadFreePlay } from "../song/freeplay";
-import { buildTree, parseKey, TREE_SIZE, type TreeEdge, type TreeNode } from "../song/tree";
+import { parseScaleId } from "../song/kin";
+import { buildTree, parseKey, type TreeEdge, type TreeNode } from "../song/tree";
 import type { SongSummary } from "./summary";
 
 // The home map: every song in the library placed on the circle of fifths beside the key it is in,
@@ -17,6 +18,8 @@ export interface MapSong {
 export interface PracticeMap {
   nodes: TreeNode[];
   edges: TreeEdge[];
+  /** Tempo of each key exercise ("M0/run"): its furthest-along card's next tempo. */
+  tempo?: ReadonlyMap<string, number>;
 }
 
 export interface KeySkillSummary {
@@ -47,9 +50,6 @@ export interface KeyDetail {
   skills: KeySkillSummary[];
   ideas: KeyTuneIdea[];
 }
-
-/** The map's frame in tree coordinates: room for the songs' names around the rim. */
-export const MAP_VIEW = { x: -176, y: -68, w: TREE_SIZE + 352, h: TREE_SIZE + 136 };
 
 const LETTERS = /^([A-G])([b#♭♯]?)(m?)$/;
 
@@ -191,5 +191,16 @@ export function practiceMap(songs: MapSong[]): PracticeMap {
   }
   let free: ReturnType<typeof loadFreePlay> = [];
   try { free = loadFreePlay(); } catch { /* free play history is optional here */ }
-  return buildTree({ cards, credit, tunes: songs, free, lit: new Set(), stagger: true });
+  const tempo = new Map<string, number>();
+  const best = new Map<string, number>();
+  for (const [id, state] of Object.entries(cards)) {
+    const t = parseScaleId(id);
+    if (!t) continue;
+    const key = `${t.kind === "major" ? "M" : "m"}${t.root}/${t.rhythm ? `${t.drill}:${t.rhythm}` : t.drill}`;
+    if (state.box >= (best.get(key) ?? -1)) {
+      best.set(key, state.box);
+      tempo.set(key, state.bpm);
+    }
+  }
+  return { ...buildTree({ cards, credit, tunes: songs, free, lit: new Set(), stagger: true }), tempo };
 }

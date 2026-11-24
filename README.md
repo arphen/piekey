@@ -7,12 +7,14 @@ Source repository: [arphen/piekey](https://github.com/arphen/piekey).
 
 ## Views
 
-- **Home** — your map: the circle of fifths with every song beside its key and the drills
-  practised in each key growing out of it; keys light up as songs and drills climb the card box.
-  Tap a song for Play now, Listen, Score or to add it to the next session. The **Next session**
-  rail lists the songs the next guitar-mode session draws from (remove ×, Add songs), the big
-  **Guitar mode** button, and drill tiles (Changes, Scales, Ear, Reading, Triads, Free play).
-  An empty library offers the two original studies.
+- **Home** — your map, full screen: a passive tree on the circle of fifths with every song
+  beside its key, the drills practised in each key growing out of it, and the foundations
+  (spiders, rhythm pyramid, string crossings, shifting, enclosures) hung in the keys tunes rarely
+  visit, coloured by what they train, each with its tempo gauge. A foundation always plays in its
+  key, from the tree or when the curriculum rotates it in. Selecting a key, song or foundation
+  opens its card beside it; the core at the centre is **Guitar mode** for the next session (or
+  plays the selection). The ✓/+ on a song puts it in or out of the next session; its card sets
+  where the session starts. An empty library offers the two original studies.
 - **Library** — every song as a card: in/out of the next session, play in guitar mode, remove
   (practice history is kept), import a score or add a demo. Opening a card shows the song's page:
   the score, a phrase strip filled as each phrase climbs the box, exact start/end passages,

@@ -17,8 +17,9 @@ component (`FocusView` → `SongCoach`). Free play is also reachable without a t
 main.tsx
   └─ App.tsx
        ├─ header: Back + brand + Home/Library/Progress pills + Tools + DeviceSync → DeviceSyncPanel
-       ├─ Home      ── OverviewView → useSongSummaries + overview/map (song/tree) → SongMap
-       │                 └─ next-session rail ── song/sessionSet (guitar-session-set)
+       ├─ Home      ── OverviewView → useSongSummaries + overview/map (song/tree)
+       │                 └─ SongMap → overview/homeTree (spec + progress) → tree/layout → PassiveTree
+       │                     (selection cards beside nodes; song ✓/+ edit song/sessionSet)
        ├─ Library   ── TuneView(songId=null) → LibraryGrid (cards, import, demos, backup tools)
        │             ── TuneView(songId) → parseMusicXml → LeadSheet → buildTimeline
        │                 ├─ Score + listening transport + phrase strip/passage selection + exercise rows
@@ -155,12 +156,28 @@ and `barCount`. These are presentation projections of the parsed score, rendered
 `Score`; they do not alter exercises or persist another tune model. Without a library, the home
 previews the First Steps score and adds it only when practice is started.
 
+**Passive tree (2026-11-24, later).** Home lost its rail; the tree is the whole screen and is
+built as data. `src/tree/model.ts` describes a tree the way Path of Building describes PoE's:
+groups (a centre or an anchor node, a heading, orbit radii), nodes (kind, group, orbit, angle,
+family, size, `out` links with an optional shape/kind) and progress kept apart (`NodeProgress`:
+fill, tempo, box, locked, tags). `tree/layout.ts` resolves positions in order (an anchored group
+sits on an earlier node and can face outward/inward from the origin) and link paths (same group
+and orbit → arc; otherwise line/curve/S). `overview/homeTree.ts` builds Home's spec: a wheel group
+(core, petals, minor and major rings, song rim) and one branch group per key holding its four
+exercises and, on the outer orbit, the foundations anchored to that key (spread evenly, linked
+from the nearer branch node and along their `needs` chain); songs move out past foundations.
+`homeView` fits the frame to the nodes and labels. `components/PassiveTree.tsx` is generic: SVG
+layer per node kind plus an HTML layer of real buttons, with `data-kind`, `data-family`,
+`data-link` and `is-*` state classes as the styling surface; `SongMap` supplies Home's skins,
+state rules and the selection card (`Popover`, clamped inside the map). To add a node type or a
+foundation, extend the spec (or `TECHNIQUE_TRACKS` with a `hub`), not the renderer.
+
 **Home redesign (2026-11-24).** `OverviewView` no longer shows a score, a goal or a Next list.
 It projects summaries onto the circle-of-fifths tree (`overview/map.ts`: shared and per-tune
 scale cards, free-play entries, each song's box fill; a key hub grows with its drills or its
 songs). `songKey` places a song by its harmony home key when that shares the written signature,
 else by the signature. `SongMap` draws the SVG and lays real `button`s over song nodes so touch,
-mouse and the played cursor reach them. The rail edits `song/sessionSet.ts`; `SongCoachRoom`
+mouse and the played cursor reach them. Song toggles and cards edit `song/sessionSet.ts`; `SongCoachRoom`
 filters its mixed-in guests by that set, frozen while a session is live. `App` mirrors a
 `{ tab, song, depth }` route into `history`: tab buttons push, TuneView's in-session tune
 changes replace, and a launch from elsewhere returns there when the room closes. Browser Back

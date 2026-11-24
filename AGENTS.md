@@ -35,10 +35,18 @@ exact phrases in `SongCoach`; do not restore an inline Learn flow. Ear (`src/ear
 4. `src/core/index.ts` — public music-domain API (`getKey`, `getTune`, `buildPattern`, `fretboardNotes`, ...).
 5. `src/audio/usePlayer.ts` — transport/playback API (`play`, `stop`, `setLoop`, `setPattern`, mix). `src/audio/backing.ts` generates the band.
 6. `src/overview/summary.ts` + `src/components/FocusView.tsx` — tutor overview data and the mode screens that start a focused session.
-   `OverviewView` (Home) is the circle-of-fifths map (`src/overview/map.ts` → `song/tree.ts`,
-   drawn by `SongMap`) beside the **next session** rail. `src/song/sessionSet.ts` is that set
-   (`guitar-session-set`, a synced setting): stored null means every tune; the lead is the current
-   tune, the rest are mixed in, and changes made during a live session apply to the next one.
+   `OverviewView` (Home) is the passive tree and nothing else: no side rail. The tree is data
+   first: `src/tree/` is a generic Path of Building–style model (groups with orbits, nodes on an
+   orbit at an angle, `out` links; same-orbit links draw as arcs) and its layout resolver;
+   `src/overview/homeTree.ts` is Home's spec (wheel, one branch group per key, foundations on
+   their key's outer branch orbit, songs on the rim) with progress kept apart; `PassiveTree`
+   renders it with per-kind skins that `SongMap` supplies. Add nodes through the spec, restyle
+   through skins and `home.css` (`data-kind`/`data-family`/`data-link`), never by drawing ad hoc.
+   Selecting a node opens its card beside it; the core launches the selection or, with nothing
+   selected, the next session. `src/song/sessionSet.ts` is that set (`guitar-session-set`, a
+   synced setting): stored null means every tune; the lead is the current tune, the rest are
+   mixed in, and changes made during a live session apply to the next one. Foundations
+   (`song/technique.ts`) each carry an anchor `hub` and are built in that key by every deck.
    Nothing on Home is labelled "due"; the player chooses.
 7. `src/nav/useGuitarNav.ts` — played navigation for the whole shell (notes E5–A5, DOM-driven cursor). The Reading mode itself runs on `src/song/reading.ts` cards; `src/reading/generate.ts` is legacy, kept only as a `Score` test fixture.
 8. `src/components/Fretboard.tsx` — the shared fretboard renderer used across views.

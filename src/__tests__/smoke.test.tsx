@@ -84,7 +84,7 @@ it("opens free play from the real overview without an imported tune and returns 
   expect(element.querySelector('[role="dialog"][aria-label="free play"]')).toBeTruthy();
   await act(async () => element.querySelector<HTMLButtonElement>('[aria-label="leave free play"]')!.click());
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
-  expect(element.querySelector(".hm-rail")).toBeTruthy();
+  expect(element.querySelector(".hm-world")).toBeTruthy();
 });
 
 it("walks Back through the shell's history and stays put at home", async () => {
@@ -93,11 +93,11 @@ it("walks Back through the shell's history and stays put at home", async () => {
   const back = () => element.querySelector<HTMLButtonElement>('[aria-label="Back"]')!;
   expect(back().disabled).toBe(true);
   await press("Library");
-  expect(element.querySelector(".hm-rail")).toBeNull();
+  expect(element.querySelector(".hm-world")).toBeNull();
   expect(back().disabled).toBe(false);
   await act(async () => back().click());
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
-  expect(element.querySelector(".hm-rail")).toBeTruthy();
+  expect(element.querySelector(".hm-world")).toBeTruthy();
   expect(back().disabled).toBe(true);
 });
 

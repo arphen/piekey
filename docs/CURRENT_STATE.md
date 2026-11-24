@@ -84,11 +84,23 @@ cleanup and late-start cancellation have mounted coverage; physical audio remain
   - **Campfire songbook** (`tunes/campfire.ts`, `CampfireView`) provides a mobile-first, offline-capable chord & lyric sheet with section grouping, collapsible `ChordBox` diagrams, live transpose / capo shapes, Screen Wake Lock, and hands-free auto-scroll, reachable from Library and any song page.
   - **Code-verified** (`guitarpro.test.ts`, `campfire.test.ts`, `make check`, `npm run build:quiet`). **Runtime-unverified** in a real mobile browser, offline PWA install, or physical laptop↔phone sync.
 
-- **Home** (`OverviewView`) is the circle-of-fifths map (`overview/map.ts`, `SongMap`) beside the
-  **Next session** rail. The score excerpt, goal row, Next list and "Due" labels are gone from
-  Home; `UnitCard` no longer says "Due" anywhere (a waiting card shows its box).
+- **Home** (`OverviewView`) is the passive tree, full screen; the Next session rail is gone
+  (2026-11-24). The tree is a spec (`overview/homeTree.ts`) resolved by the generic PoB-style
+  model in `src/tree/` and drawn by `PassiveTree` with `SongMap`'s skins. Foundations sit on the
+  branches of their anchor keys (lower half of the circle), coloured by group (fingers, picking,
+  time, phrasing), chained in unlock order, with a tempo gauge (start → goal, current bpm);
+  key exercises show their bpm on hover and in the key card. Selecting a key, song or foundation
+  opens its card beside the node; a blend opens the mix card; the core is Guitar mode for the
+  next session or plays the selection. A colour legend sits bottom-left. Code-verified
+  (`tree.test.ts`, smoke) and checked in headless Chrome screenshots; not checked on a phone.
+  `UnitCard` no longer says "Due" anywhere (a waiting card shows its box).
+- **Foundations in their key** (`song/technique.ts` `hub`, `deck.ts` mechanics): every deck
+  builds each `tech:*` card in its anchor key and that key's position, so the same id is the
+  same music in any session; the rhythm pyramid arpeggiates I–IV–V7–I (one chord a bar) and
+  enclosures lead into the 3rds of I, IV, V7 and back to I, with the band playing those changes.
+  Audio of the new backing is unverified by ear.
 - **Next session** (`song/sessionSet.ts`, synced setting `guitar-session-set`): unset means every
-  tune (previous behaviour). Editable from Home (remove ×, Add songs sheet, map inspector),
+  tune (previous behaviour). Editable from Home (song ✓/+ on the tree, song card, Add songs sheet),
   Library cards, a song's page and guitar mode's chooser (F4). Guitar mode mixes in only those
   tunes; edits during a live session apply to the next one. Imports and added demos join an
   explicit set.

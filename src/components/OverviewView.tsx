@@ -7,7 +7,7 @@ import { FAMILY_LABEL, wholeTuneCard } from "../song/deck";
 import { BOXES, loadSharedSkills } from "../song/leitner";
 import { parseScaleId } from "../song/kin";
 import { keyStudyId, parseHubId, resolveTreeSelection, type CenterPlan, type TreeFocus } from "../song/keyStudy";
-import { TECHNIQUE_TRACKS } from "../song/technique";
+import { FOUNDATION_GROUPS, TECHNIQUE_TRACKS, type FoundationGroup, type TechniqueMeta } from "../song/technique";
 import { loadLibraryAsync, saveCurrentTuneId, saveLibrary } from "../tunes/library";
 import { DEMO_TUNES, type DemoTune } from "../tunes/demos";
 import { useSessionSet } from "../song/sessionSet";
@@ -18,10 +18,11 @@ import { SongMap } from "./SongMap";
 import "../overview/overview.css";
 import "../overview/home.css";
 
-// Home: the circle-of-fifths passive tree with a context-aware central Launch Core on the left,
-// and the Next Session + live Selection Inspector rail on the right.
-// Selecting a key focuses all tunes & scales/modes in that key; selecting a song focuses solo;
-// Shift-clicking or enabling Mix Select blends multiple keys, songs, and disciplines into one session.
+// Home is the passive tree and nothing else. The circle of fifths carries the keys, their
+// exercises, the foundations hung in the keys tunes rarely visit and the songs on the rim; the core
+// at the centre launches whatever is selected (nothing selected: the next session, lead song
+// first). Selecting a node opens its card beside it: a key, a song, a foundation, or the mix when
+// several are blended (Shift-click or Mix select).
 
 function ConnectGuitar({ input }: { input: InputApi }) {
   const starting = input.status === "starting";
@@ -51,6 +52,18 @@ function BoxPips({ box, status }: { box: number; status: "mastered" | "growing" 
   );
 }
 
+/** Where a tempo stands between where it started and its goal: a thin road with the numbers at its ends. */
+function TempoRoad({ bpm, start, goal }: { bpm: number; start: number; goal: number }) {
+  const share = goal > start ? Math.max(0, Math.min(1, (bpm - start) / (goal - start))) : 0;
+  return (
+    <div className="hm-road" aria-label={`${bpm} bpm, from ${start} towards ${goal}`}>
+      <small>{start}</small>
+      <span className="hm-road-line"><i style={{ width: `${share * 100}%` }} /><b style={{ left: `${share * 100}%` }}>♩{bpm}</b></span>
+      <small>{goal}</small>
+    </div>
+  );
+}
+
 /** Find a concrete scale card in the player's library matching a hub + skill branch, if one exists. */
 function findSkillCard(hubId: string, skill: string, songs: SongSummary[]): { tuneId: string; cardId: string } | null {
   const match = /^(M|m)(\d+)$/.exec(hubId);
@@ -70,6 +83,8 @@ function findSkillCard(hubId: string, skill: string, songs: SongSummary[]): { tu
   }
   return null;
 }
+
+const GROUP_ORDER: FoundationGroup[] = ["fingers", "picking", "time", "phrasing"];
 
 export function OverviewView({
   input,
@@ -94,6 +109,7 @@ export function OverviewView({
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [selectedSongs, setSelectedSongs] = useState<string[]>([]);
   const [selectedFocus, setSelectedFocus] = useState<TreeFocus | null>(null);
+  const [selectedFoundation, setSelectedFoundation] = useState<string | null>(null);
   const [mixMode, setMixMode] = useState(false);
   const [adding, setAdding] = useState(false);
   const [demoBusy, setDemoBusy] = useState(false);
@@ -102,12 +118,7 @@ export function OverviewView({
 
   const chosenLead = lead ?? currentTuneId;
   const leadId = chosenLead && session.has(chosenLead) ? chosenLead : session.ids[0] ?? (chosenLead && byId.has(chosenLead) ? chosenLead : songs[0]?.tuneId ?? null);
-  const sessionSongs = useMemo(() => {
-    const listed = session.ids.flatMap((id) => byId.get(id) ?? []);
-    return leadId ? [...listed.filter((song) => song.tuneId === leadId), ...listed.filter((song) => song.tuneId !== leadId)] : listed;
-  }, [session.ids, byId, leadId]);
   const outside = songs.filter((song) => !session.has(song.tuneId));
-  const leadSong = leadId ? byId.get(leadId) : undefined;
   const sessionIds = useMemo(() => new Set(session.ids), [session.ids]);
 
   const keys = useMemo(() => new Map(songs.map((song) => [song.tuneId, songKey(cachedSong(song.tuneId)?.deck.harmony.home.id, song.key)])), [songs]);
@@ -125,36 +136,57 @@ export function OverviewView({
     return key ? [{ id: song.tuneId, title: song.title, key, fill: songFill(song) }] : [];
   }), [songs, keys]);
   const map = useMemo(() => practiceMap(mapSongs), [mapSongs]);
+  // the shared box (foundations, scales) is re-read whenever the library refreshes
+  const shared = useMemo(() => loadSharedSkills(), [revision, songs]);
 
   const selectedKeySet = useMemo(() => new Set(selectedKeys), [selectedKeys]);
   const selectedSongSet = useMemo(() => new Set(selectedSongs), [selectedSongs]);
 
   const centerPlan = useMemo(
-    () =>
-      resolveTreeSelection({
-        selectedKeys,
-        selectedSongs,
-        selectedFocus,
-        songs,
-        songHubs,
-        sessionIds: session.ids,
-        leadId,
-      }),
+    () => resolveTreeSelection({ selectedKeys, selectedSongs, selectedFocus, songs, songHubs, sessionIds: session.ids, leadId }),
     [selectedKeys, selectedSongs, selectedFocus, songs, songHubs, session.ids, leadId],
   );
 
-  // Single-item inspection targets (when exactly one key or one song is focused with no mix)
+  const foundation = useMemo(() => {
+    const track = selectedFoundation ? TECHNIQUE_TRACKS.find((t) => t.id === selectedFoundation) : undefined;
+    if (!track) return null;
+    const st = shared.cards[track.id];
+    const box = st?.box ?? 0;
+    const needs = track.needs ? TECHNIQUE_TRACKS.find((t) => t.id === track.needs) : undefined;
+    const locked = Boolean(needs) && (shared.cards[needs!.id]?.box ?? 0) < 2 && (shared.credit[track.id] ?? 0) < 1;
+    return { track, box, bpm: st?.bpm ?? track.bpm, needs, locked, key: parseHubId(track.hub)!, status: box >= 4 ? ("mastered" as const) : box > 0 ? ("growing" as const) : ("unexplored" as const) };
+  }, [selectedFoundation, shared]);
+
+  // a selected foundation takes over the core: it plays that exercise, in its key
+  const plan: CenterPlan = foundation
+    ? {
+        kind: "focus",
+        orbLabel: foundation.track.short.replace(/-/g, "\u2011"), // keeps "1-2-3-4" on one line
+        orbSub: `${foundation.key.shortName} · ♩${foundation.bpm}`,
+        headline: `${foundation.track.short} · ${foundation.key.fullName}`,
+        summary: foundation.track.detail,
+        tuneIds: [],
+        studyHubIds: [foundation.track.hub],
+        focus: "technique",
+        openTab: null,
+        exercises: [],
+        modes: [],
+        activeHubIds: [foundation.track.hub],
+        activeSongIds: [],
+      }
+    : centerPlan;
+
+  // single-item inspection targets (exactly one key or one song, nothing blended)
   const singleKeyId = selectedKeys.length === 1 && selectedSongs.length === 0 && !selectedFocus ? selectedKeys[0] : null;
   const singleSongId = selectedSongs.length === 1 && selectedKeys.length === 0 && !selectedFocus ? selectedSongs[0] : null;
   const pickedSong = singleSongId ? byId.get(singleSongId) : undefined;
   const pickedKey = useMemo(() => (singleKeyId ? keyDetail(singleKeyId, map) : null), [singleKeyId, map]);
-  const keySongs = useMemo(
-    () => (pickedKey ? songs.filter((song) => songHubs.get(song.tuneId) === pickedKey.hubId) : []),
-    [pickedKey, songs, songHubs],
-  );
-  const showMixInspector = !pickedSong && !pickedKey && (selectedKeys.length > 0 || selectedSongs.length > 0 || selectedFocus !== null);
+  const keySongs = useMemo(() => (pickedKey ? songs.filter((song) => songHubs.get(song.tuneId) === pickedKey.hubId) : []), [pickedKey, songs, songHubs]);
+  const keyFoundations = useMemo(() => (pickedKey ? TECHNIQUE_TRACKS.filter((t) => t.hub === pickedKey.hubId) : []), [pickedKey]);
+  const showMix = !foundation && !pickedSong && !pickedKey && (selectedKeys.length > 0 || selectedSongs.length > 0 || selectedFocus !== null);
 
   const makeLead = (id: string) => {
+    if (!session.has(id)) session.add(id);
     setLead(id);
     try { saveCurrentTuneId(id); } catch { /* the storage notice reports it */ }
   };
@@ -167,36 +199,29 @@ export function OverviewView({
     return deck ? wholeTuneCard(deck)?.id : undefined;
   };
   const playWhole = (tuneId: string | null | undefined) => {
-    if (!tuneId) return;
-    play(tuneId, wholeIdOf(tuneId));
+    if (tuneId) play(tuneId, wholeIdOf(tuneId));
   };
+  const playFoundation = (track: TechniqueMeta) => play(keyStudyId(track.hub), track.id, { focus: "technique", mixIds: [], studyHubIds: [track.hub] });
 
-  const launchPlan = (plan: CenterPlan = centerPlan) => {
-    if (plan.openTab) {
-      onOpenMode(plan.openTab);
+  const launchPlan = () => {
+    if (foundation) {
+      playFoundation(foundation.track);
       return;
     }
-    if (plan.tuneIds.length > 0) {
-      const [first, ...restTunes] = plan.tuneIds;
-      const studyGuestIds = plan.studyHubIds.map(keyStudyId);
-      if (plan.kind === "full-mix") {
-        play(first);
-      } else {
-        play(first, undefined, {
-          focus: plan.focus,
-          mixIds: [...restTunes, ...studyGuestIds],
-          studyHubIds: plan.studyHubIds,
-        });
-      }
+    const p = centerPlan;
+    if (p.openTab) {
+      onOpenMode(p.openTab);
       return;
     }
-    if (plan.studyHubIds.length > 0) {
-      const [firstHub, ...restHubs] = plan.studyHubIds;
-      play(keyStudyId(firstHub), undefined, {
-        focus: plan.focus,
-        mixIds: restHubs.map(keyStudyId),
-        studyHubIds: plan.studyHubIds,
-      });
+    if (p.tuneIds.length > 0) {
+      const [first, ...restTunes] = p.tuneIds;
+      if (p.kind === "full-mix") play(first);
+      else play(first, undefined, { focus: p.focus, mixIds: [...restTunes, ...p.studyHubIds.map(keyStudyId)], studyHubIds: p.studyHubIds });
+      return;
+    }
+    if (p.studyHubIds.length > 0) {
+      const [firstHub, ...restHubs] = p.studyHubIds;
+      play(keyStudyId(firstHub), undefined, { focus: p.focus, mixIds: restHubs.map(keyStudyId), studyHubIds: p.studyHubIds });
     }
   };
 
@@ -204,37 +229,38 @@ export function OverviewView({
     setSelectedKeys([]);
     setSelectedSongs([]);
     setSelectedFocus(null);
+    setSelectedFoundation(null);
     setMixMode(false);
   };
+  const selectKey = (hubId: string) => { setSelectedFoundation(null); setSelectedKeys([hubId]); setSelectedSongs([]); };
+  const selectSong = (id: string) => { setSelectedFoundation(null); setSelectedSongs([id]); setSelectedKeys([]); };
 
   const handleClickKey = (hubId: string, additive: boolean) => {
+    setSelectedFoundation(null);
     if (additive) {
       setSelectedKeys((cur) => (cur.includes(hubId) ? cur.filter((k) => k !== hubId) : [...cur, hubId]));
       return;
     }
-    if (selectedKeys.length === 1 && selectedKeys[0] === hubId && selectedSongs.length === 0) {
-      setSelectedKeys([]);
-    } else {
-      setSelectedKeys([hubId]);
-      setSelectedSongs([]);
-    }
+    if (selectedKeys.length === 1 && selectedKeys[0] === hubId && selectedSongs.length === 0) setSelectedKeys([]);
+    else selectKey(hubId);
   };
-
   const handleClickSong = (songId: string, additive: boolean) => {
+    setSelectedFoundation(null);
     if (additive) {
       setSelectedSongs((cur) => (cur.includes(songId) ? cur.filter((s) => s !== songId) : [...cur, songId]));
       return;
     }
-    if (selectedSongs.length === 1 && selectedSongs[0] === songId && selectedKeys.length === 0) {
-      setSelectedSongs([]);
-    } else {
-      setSelectedSongs([songId]);
-      setSelectedKeys([]);
-    }
+    if (selectedSongs.length === 1 && selectedSongs[0] === songId && selectedKeys.length === 0) setSelectedSongs([]);
+    else selectSong(songId);
   };
-
   const handleClickFocus = (focus: TreeFocus) => {
+    setSelectedFoundation(null);
     setSelectedFocus((cur) => (cur === focus ? null : focus));
+  };
+  const handleClickFoundation = (id: string) => {
+    const again = selectedFoundation === id;
+    clearSelection();
+    if (!again) setSelectedFoundation(id);
   };
 
   const addDemo = async (demo: DemoTune) => {
@@ -257,39 +283,260 @@ export function OverviewView({
 
   const launchSkill = (hubId: string, skill: string) => {
     const found = findSkillCard(hubId, skill, songs);
-    if (found) {
-      play(found.tuneId, found.cardId);
-      return;
-    }
-    // Launch a live key study right in this key focused on scales!
-    play(keyStudyId(hubId), undefined, { focus: "scales", mixIds: [], studyHubIds: [hubId] });
+    if (found) play(found.tuneId, found.cardId);
+    else play(keyStudyId(hubId), undefined, { focus: "scales", mixIds: [], studyHubIds: [hubId] });
   };
 
-  const patternSkills = pickedKey ? pickedKey.skills.filter((s) => !s.skill.startsWith("run:")) : [];
-  const rhythmSkills = pickedKey ? pickedKey.skills.filter((s) => s.skill === "run" || s.skill.startsWith("run:")) : [];
   const empty = !loading && !songs.length;
-  const foundations = useMemo(() => {
-    const shared = loadSharedSkills().cards;
-    // Show the active spider stage (highest unlocked) plus the 4 other holistic foundation pillars.
-    const spiders = TECHNIQUE_TRACKS.filter((t) => t.kind === "spider");
-    const activeSpider =
-      spiders.find((t) => !shared[t.id] || shared[t.id].box < 2) ?? spiders[spiders.length - 1];
-    const skips = TECHNIQUE_TRACKS.filter((t) => t.kind === "skip");
-    const activeSkip = skips.find((t) => !shared[t.id] || shared[t.id].box < 2) ?? skips[skips.length - 1];
-    const core = [
-      activeSpider,
-      TECHNIQUE_TRACKS.find((t) => t.kind === "pyramid")!,
-      activeSkip,
-      TECHNIQUE_TRACKS.find((t) => t.kind === "shift")!,
-      TECHNIQUE_TRACKS.find((t) => t.kind === "enclose")!,
-    ].filter(Boolean);
-    return core.map((t) => {
-      const st = shared[t.id];
-      const box = st?.box ?? 0;
-      const status = box >= 4 ? "mastered" as const : box > 0 ? "growing" as const : "unexplored" as const;
-      return { ...t, box, bpm: st?.bpm ?? t.bpm, status };
-    });
-  }, [revision, songs]);
+  const close = <button type="button" className="hm-card-close" aria-label="Close" onClick={clearSelection}><Glyph name="close" size={15} /></button>;
+
+  const exerciseList = (title: string, list: CenterPlan["exercises"]) =>
+    list.length ? (
+      <div className="hm-card-list">
+        <p className="hm-kicker">{title}</p>
+        <ul>
+          {list.map((ex) => (
+            <li key={`${ex.tuneId}:${ex.cardId}`}>
+              <button type="button" className="hm-ex-row" onClick={() => play(ex.tuneId, ex.cardId)}>
+                <span className="hm-ex-copy">
+                  <strong>{ex.title}</strong>
+                  <small>{ex.tuneTitle} · {FAMILY_LABEL[ex.family]}{ex.bpm ? ` · ♩${ex.bpm}` : ""}</small>
+                </span>
+                <span className="hm-ex-go"><Glyph name="play" size={12} /></span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    ) : null;
+
+  const modePills = (title: string) =>
+    centerPlan.modes.length ? (
+      <div className="hm-card-list">
+        <p className="hm-kicker">{title}</p>
+        <div className="hm-mode-pills">
+          {centerPlan.modes.map((m) => (
+            <button key={m.name} type="button" className="hm-mode-pill" onClick={() => launchSkill(m.hubId, m.skill)}>
+              <strong>{m.name}</strong>
+              <small>{m.role}</small>
+            </button>
+          ))}
+        </div>
+      </div>
+    ) : null;
+
+  let card: { anchor: string; content: JSX.Element } | null = null;
+  if (foundation) {
+    const { track, key } = foundation;
+    card = {
+      anchor: track.id,
+      content: (
+        <div className="hm-card is-foundation" data-family={track.group} role="group" aria-label={`${track.short}, ${key.fullName}`}>
+          {close}
+          <p className="hm-card-kicker"><i aria-hidden="true" />{FOUNDATION_GROUPS[track.group].label} · {key.fullName}</p>
+          <h3>{track.short}</h3>
+          <TempoRoad bpm={foundation.bpm} start={track.bpm} goal={track.goalBpm} />
+          <p className="hm-card-detail">{track.detail}</p>
+          <div className="hm-card-meta">
+            <BoxPips box={foundation.box} status={foundation.status} />
+            {foundation.locked && foundation.needs ? <span className="hm-card-needs">after {foundation.needs.short}</span> : null}
+          </div>
+          <button type="button" className="hm-btn is-primary" onClick={() => playFoundation(track)}>
+            <Glyph name="play" size={15} />Play in {key.shortName}
+          </button>
+        </div>
+      ),
+    };
+  } else if (showMix) {
+    card = {
+      anchor: "core",
+      content: (
+        <div className="hm-card is-mix" role="group" aria-label={centerPlan.headline}>
+          {close}
+          <p className="hm-card-kicker">{centerPlan.kind === "focus" ? "Focus" : "Mix"} · {centerPlan.orbSub}</p>
+          <h3>{centerPlan.headline}</h3>
+          <div className="hm-mix-chips" aria-label="Selected items">
+            {selectedKeys.map((hubId) => (
+              <button key={hubId} type="button" className="hm-mix-chip is-key" onClick={() => setSelectedKeys((cur) => cur.filter((k) => k !== hubId))}>
+                <span>{parseHubId(hubId)?.shortName ?? hubId}</span>
+                <Glyph name="close" size={11} />
+              </button>
+            ))}
+            {selectedSongs.map((id) => (
+              <button key={id} type="button" className="hm-mix-chip is-song" onClick={() => setSelectedSongs((cur) => cur.filter((s) => s !== id))}>
+                <span>{byId.get(id)?.title ?? id}</span>
+                <Glyph name="close" size={11} />
+              </button>
+            ))}
+            {selectedFocus ? (
+              <button type="button" className="hm-mix-chip is-focus" onClick={() => setSelectedFocus(null)}>
+                <span>{selectedFocus}</span>
+                <Glyph name="close" size={11} />
+              </button>
+            ) : null}
+            <button type="button" className={`hm-mix-chip is-add ${mixMode ? "is-on" : ""}`} onClick={() => setMixMode((on) => !on)}>
+              <Glyph name="plus" size={11} />
+              <span>{mixMode ? "Picking" : "Add more"}</span>
+            </button>
+          </div>
+          <button type="button" className="hm-btn is-primary" disabled={!centerPlan.openTab && !centerPlan.tuneIds.length && !centerPlan.studyHubIds.length} onClick={launchPlan}>
+            <Glyph name="play" size={15} />Play {centerPlan.headline}
+          </button>
+          {exerciseList("Exercises", centerPlan.exercises.slice(0, 4))}
+          {modePills("Scales & modes")}
+        </div>
+      ),
+    };
+  } else if (pickedSong) {
+    const hub = songHubs.get(pickedSong.tuneId);
+    const isLead = pickedSong.tuneId === leadId && session.has(pickedSong.tuneId);
+    const inSession = session.has(pickedSong.tuneId);
+    card = {
+      anchor: `tune:${pickedSong.tuneId}`,
+      content: (
+        <div className="hm-card is-song" role="group" aria-label={pickedSong.title}>
+          {close}
+          <div className="hm-card-head">
+            <button type="button" className="hm-key-chip" onClick={() => hub && selectKey(hub)}>{keyLabel(pickedSong)}</button>
+            <p className="hm-kicker">{[pickedSong.barCount ? `${pickedSong.barCount} bars` : null, pickedSong.composer].filter(Boolean).join(" · ")}</p>
+          </div>
+          <h3>{pickedSong.title}</h3>
+          <Progress song={pickedSong} />
+          <button type="button" className="hm-btn is-primary" onClick={launchPlan}>
+            <Glyph name="play" size={15} />Practice solo
+          </button>
+          <div className="hm-card-actions">
+            <button type="button" className="hm-btn" onClick={() => playWhole(pickedSong.tuneId)}><Glyph name="melody" size={15} />Whole tune</button>
+            <button type="button" className="hm-btn" aria-pressed={inSession} onClick={() => session.toggle(pickedSong.tuneId)}>
+              <Glyph name={inSession ? "check" : "plus"} size={15} />{inSession ? "In session" : "Add to session"}
+            </button>
+            <button type="button" className={`hm-btn ${isLead ? "is-lead" : ""}`} aria-pressed={isLead} disabled={isLead} onClick={() => makeLead(pickedSong.tuneId)}>
+              <Glyph name="arrow" size={15} />{isLead ? "Starts here" : "Start here"}
+            </button>
+            <button type="button" className="hm-btn" onClick={() => onOpenSong(pickedSong.tuneId)}><Glyph name="reading" size={15} />Score</button>
+            {onListenSong ? <button type="button" className="hm-btn hm-btn--span" onClick={() => onListenSong(pickedSong.tuneId)}><Glyph name="ear" size={15} />Listen to backing</button> : null}
+          </div>
+          {pickedSong.next.length ? (
+            <div className="hm-card-list">
+              <p className="hm-kicker">Next up</p>
+              <ul>
+                {pickedSong.next.slice(0, 3).map((unit) => (
+                  <li key={unit.id}>
+                    <button type="button" className="hm-ex-row" onClick={() => play(pickedSong.tuneId, unit.id)}>
+                      <span className="hm-ex-copy">
+                        <strong>{unit.title}</strong>
+                        <small>{FAMILY_LABEL[unit.family]}{unit.where ? ` · ${unit.where}` : ""}{unit.bpm ? ` · ♩${unit.bpm}` : ""}</small>
+                      </span>
+                      <span className="hm-ex-go"><Glyph name="play" size={12} /></span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      ),
+    };
+  } else if (pickedKey) {
+    const patterns = pickedKey.skills.filter((s) => !s.skill.startsWith("run:"));
+    const rhythms = pickedKey.skills.filter((s) => s.skill === "run" || s.skill.startsWith("run:"));
+    card = {
+      anchor: pickedKey.hubId,
+      content: (
+        <div className="hm-card is-key" role="group" aria-label={pickedKey.fullName}>
+          {close}
+          <div className="hm-card-head">
+            <span className="hm-key-chip is-static">{pickedKey.shortName}</span>
+            <button type="button" className="hm-rel-link" onClick={() => selectKey(pickedKey.relativeHubId)}>Relative · {pickedKey.relativeName}</button>
+          </div>
+          <h3>{pickedKey.fullName}</h3>
+          <button type="button" className="hm-btn is-primary" onClick={launchPlan}>
+            <Glyph name="play" size={15} />
+            {keySongs.length ? `Play ${pickedKey.shortName} · ${keySongs.length} tune${keySongs.length === 1 ? "" : "s"} & scales` : `Play ${pickedKey.shortName} · scales & modes`}
+          </button>
+          <div className="hm-skill-grid" role="list" aria-label={`Exercises in ${pickedKey.fullName}`}>
+            {patterns.map((skill) => {
+              const bpm = map.tempo?.get(skill.id);
+              return (
+                <button key={skill.id} type="button" role="listitem" className={`hm-skill-card is-${skill.status}`} onClick={() => launchSkill(pickedKey.hubId, skill.skill)}>
+                  <span className="hm-skill-head">
+                    <strong>{skill.skill === "triads" ? "Chords" : skill.skill === "sevenths" ? "Arps" : skill.skill === "run" ? "Scale" : skill.label}</strong>
+                    <BoxPips box={skill.box} status={skill.status} />
+                  </span>
+                  <small>{bpm ? `♩${bpm}` : skill.status === "kinship" ? "kinship" : "new"}</small>
+                </button>
+              );
+            })}
+          </div>
+          <div className="hm-rhythm-bar" aria-label="Rhythm">
+            {rhythms.map((r) => {
+              const tier = r.skill === "run:sixteenths" ? "sixteenths" : r.skill === "run:triplets" ? "triplets" : "straight";
+              return (
+                <button key={r.id} type="button" className={`hm-rhythm-chip is-${tier} ${r.box > 0 ? "is-on" : ""}`} onClick={() => launchSkill(pickedKey.hubId, r.skill)}>
+                  <i aria-hidden="true" />
+                  <span>{tier === "sixteenths" ? "16ths" : tier === "triplets" ? "Triplets" : "Straight"}</span>
+                  <small>{r.box > 0 ? `B${r.box}` : "—"}</small>
+                </button>
+              );
+            })}
+          </div>
+          {keyFoundations.length ? (
+            <div className="hm-card-list">
+              <p className="hm-kicker">Foundations in {pickedKey.shortName}</p>
+              <div className="hm-found-chips">
+                {keyFoundations.map((t) => (
+                  <button key={t.id} type="button" className="hm-found-chip" data-family={t.group} onClick={() => handleClickFoundation(t.id)}>
+                    <i aria-hidden="true" />
+                    <span>{t.short}</span>
+                    <small>♩{shared.cards[t.id]?.bpm ?? t.bpm}</small>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {exerciseList(`From your tunes in ${pickedKey.shortName}`, centerPlan.exercises.slice(0, 3))}
+          {keySongs.length ? (
+            <div className="hm-card-list">
+              <p className="hm-kicker">Tunes in {pickedKey.shortName}</p>
+              <ul>
+                {keySongs.map((song) => {
+                  const inSession = session.has(song.tuneId);
+                  return (
+                    <li key={song.tuneId} className="hm-key-tune-row">
+                      <button type="button" className="hm-ex-row" onClick={() => selectSong(song.tuneId)}>
+                        <span className="hm-ex-copy">
+                          <strong>{song.title}</strong>
+                          <small>{Math.round(songFill(song) * 100)}% grown</small>
+                        </span>
+                        <span className="hm-ex-go"><Glyph name="arrow" size={12} /></span>
+                      </button>
+                      <button type="button" className={`hm-mini-toggle ${inSession ? "is-on" : ""}`} aria-pressed={inSession} onClick={() => session.toggle(song.tuneId)}>
+                        {inSession ? "In session" : "+ Session"}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : null}
+          {modePills("Scales & modes")}
+          {keySongs.length < 2 && pickedKey.ideas.length ? (
+            <div className="hm-card-list">
+              <div className="hm-ideas-head">
+                <p className="hm-kicker">{keySongs.length ? `More tunes in ${pickedKey.shortName}` : `Tunes in ${pickedKey.shortName}`}</p>
+                {onOpenLibrary ? <button type="button" className="hm-ideas-import" onClick={onOpenLibrary}><Glyph name="plus" size={12} />Import score</button> : null}
+              </div>
+              <ul className="hm-idea-chips">
+                {pickedKey.ideas.map((idea) => (
+                  <li key={idea.title}><strong>{idea.title}</strong><span>{idea.note}</span></li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      ),
+    };
+  }
 
   return (
     <main className="home">
@@ -297,32 +544,44 @@ export function OverviewView({
         <div className="hm-pond-bg" aria-hidden="true" data-nav-skip />
 
         <SongMap
+          songs={mapSongs}
           map={map}
+          shared={shared}
           sessionIds={sessionIds}
           leadId={leadId}
           selectedSongIds={selectedSongSet}
           selectedKeyIds={selectedKeySet}
           selectedFocus={selectedFocus}
-          centerPlan={centerPlan}
+          selectedFoundation={selectedFoundation}
+          centerPlan={plan}
           mixMode={mixMode}
+          popover={card}
           onToggleMixMode={() => setMixMode((on) => !on)}
           onClickSong={handleClickSong}
           onClickKey={handleClickKey}
           onClickFocus={handleClickFocus}
-          onLaunchCenter={() => launchPlan()}
+          onClickFoundation={handleClickFoundation}
+          onLaunchCenter={launchPlan}
           onClearSelection={clearSelection}
           onToggleSession={(id) => session.toggle(id)}
-          onAddSong={onOpenLibrary ? () => setAdding(true) : undefined}
+          onAddSong={() => setAdding(true)}
         />
-      </section>
 
-      <aside className="hm-rail">
-        <section className="hm-session" aria-labelledby="hm-session-title">
-          <header>
-            <h2 id="hm-session-title">Next session</h2>
-            {sessionSongs.length ? <span>{sessionSongs.length} song{sessionSongs.length === 1 ? "" : "s"}</span> : null}
-          </header>
-          {loading ? <p className="hm-quiet">Opening library…</p> : empty ? (
+        <ul className="hm-legend" aria-label="Colours" data-nav-skip>
+          <li data-family="scales"><i />Key exercises</li>
+          {GROUP_ORDER.map((g) => <li key={g} data-family={g}><i />{FOUNDATION_GROUPS[g].label}</li>)}
+          <li data-family="song"><i />Songs</li>
+        </ul>
+
+        <div className="hm-notices">
+          {loading ? <p className="hm-quiet">Opening library…</p> : null}
+          {input && input.status === "error" ? <ConnectGuitar input={input} /> : null}
+          {error ? <p className="hm-error" role="alert">{error}</p> : null}
+          {issues.length ? <button type="button" className="hm-notice" onClick={onOpenLibrary}>{issues.length} score{issues.length === 1 ? " needs" : "s need"} repair<Glyph name="arrow" size={16} /></button> : null}
+        </div>
+
+        {empty ? (
+          <section className="hm-welcome" aria-label="Start with a song">
             <div className="hm-demos">
               {DEMO_TUNES.map((demo) => (
                 <button key={demo.entry.id} type="button" className="hm-tile is-demo" disabled={demoBusy} onClick={() => void addDemo(demo)}>
@@ -331,372 +590,11 @@ export function OverviewView({
                   <span className="hm-tile-meta"><Glyph name="plus" size={14} />Add to library</span>
                 </button>
               ))}
-              {onOpenLibrary ? <button type="button" className="hm-add" onClick={onOpenLibrary}><Glyph name="library" size={18} />Import your own score</button> : null}
             </div>
-          ) : (
-            <>
-              <ol className="hm-tiles">
-                {sessionSongs.map((song) => {
-                  const wholeId = wholeIdOf(song.tuneId);
-                  return (
-                    <li key={song.tuneId} className={`hm-tile-row ${song.tuneId === leadId ? "is-lead" : ""}`}>
-                      <button type="button" className="hm-tile" aria-pressed={song.tuneId === leadId} onClick={() => makeLead(song.tuneId)} title={song.tuneId === leadId ? "The session starts here" : "Start the session with this song"}>
-                        <span className="hm-tile-key">{keyLabel(song)}{song.tuneId === leadId ? <em>starts here</em> : null}</span>
-                        <span className="hm-tile-title">{song.title}</span>
-                        <Progress song={song} />
-                      </button>
-                      <div className="hm-tile-side">
-                        {wholeId ? (
-                          <button type="button" className="hm-tile-whole" aria-label={`Play whole tune: ${song.title}`} title="Play the whole tune" onClick={() => play(song.tuneId, wholeId)}>
-                            <Glyph name="play" size={13} />
-                          </button>
-                        ) : null}
-                        <button type="button" className="hm-tile-x" aria-label={`Remove ${song.title} from next session`} onClick={() => session.remove(song.tuneId)}><Glyph name="close" size={15} /></button>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ol>
-              {!sessionSongs.length ? <p className="hm-quiet">No songs chosen. Guitar mode plays {leadSong?.title ?? "the first song"} alone.</p> : null}
-              {outside.length > 0 && outside.length <= 4 ? (
-                <div className="hm-quick-add" aria-label="Quick add songs">
-                  {outside.map((song) => (
-                    <button key={song.tuneId} type="button" className="hm-quick-chip" onClick={() => session.add(song.tuneId)}>
-                      <Glyph name="plus" size={12} />
-                      <span>{song.title}</span>
-                      <em>{keyLabel(song)}</em>
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-              <button type="button" className="hm-add" onClick={() => setAdding(true)} disabled={!outside.length && !onOpenLibrary}><Glyph name="plus" size={16} />{outside.length ? "Add songs" : "Import new score"}</button>
-            </>
-          )}
-        </section>
-
-        <button type="button" className="hm-play" disabled={loading || !leadId} onClick={() => play(leadId)}>
-          <span className="hm-play-icon"><Glyph name="play" size={22} /></span>
-          <span className="hm-play-copy"><strong>Guitar mode</strong><small>{leadSong ? `${leadSong.title}${sessionSongs.length > 1 ? ` + ${sessionSongs.length - 1} more` : ""}` : empty ? "Add a song first" : ""}</small></span>
-        </button>
-        {leadSong && wholeIdOf(leadSong.tuneId) ? (
-          <button type="button" className="hm-whole-cta" onClick={() => playWhole(leadSong.tuneId)}>
-            <Glyph name="melody" size={16} />
-            <span>Play whole tune · <b>{leadSong.title}</b></span>
-            <em aria-hidden="true">↗</em>
-          </button>
-        ) : null}
-
-        {showMixInspector ? (
-          <div className="hm-inspect hm-inspect--mix" role="group" aria-label={centerPlan.headline}>
-            <button type="button" className="hm-inspect-close" aria-label="Close" onClick={clearSelection}><Glyph name="close" size={16} /></button>
-            <div className="hm-inspect-meta">
-              <span className="hm-key-chip is-static">{centerPlan.kind === "focus" ? "Focus" : "Mix"}</span>
-              <p className="hm-kicker">{centerPlan.orbSub}</p>
-            </div>
-            <h3>{centerPlan.headline}</h3>
-            <p className="hm-quiet">{centerPlan.summary}</p>
-
-            <div className="hm-mix-chips" aria-label="Selected items">
-              {selectedKeys.map((hubId) => (
-                <button key={hubId} type="button" className="hm-mix-chip is-key" onClick={() => setSelectedKeys((cur) => cur.filter((k) => k !== hubId))}>
-                  <span>{parseHubId(hubId)?.shortName ?? hubId}</span>
-                  <Glyph name="close" size={11} />
-                </button>
-              ))}
-              {selectedSongs.map((id) => (
-                <button key={id} type="button" className="hm-mix-chip is-song" onClick={() => setSelectedSongs((cur) => cur.filter((s) => s !== id))}>
-                  <span>{byId.get(id)?.title ?? id}</span>
-                  <Glyph name="close" size={11} />
-                </button>
-              ))}
-              {selectedFocus ? (
-                <button type="button" className="hm-mix-chip is-focus" onClick={() => setSelectedFocus(null)}>
-                  <span>{selectedFocus}</span>
-                  <Glyph name="close" size={11} />
-                </button>
-              ) : null}
-              <button type="button" className={`hm-mix-chip is-add ${mixMode ? "is-on" : ""}`} onClick={() => setMixMode((on) => !on)}>
-                <Glyph name="plus" size={11} />
-                <span>{mixMode ? "Picking…" : "Add more"}</span>
-              </button>
-            </div>
-
-            <button
-              type="button"
-              className="hm-btn is-primary"
-              disabled={!centerPlan.openTab && !centerPlan.tuneIds.length && !centerPlan.studyHubIds.length}
-              onClick={() => launchPlan()}
-            >
-              <Glyph name="play" size={16} />Play {centerPlan.headline}
-            </button>
-
-            {centerPlan.exercises.length ? (
-              <div className="hm-inspect-list">
-                <p className="hm-kicker">Most relevant exercises</p>
-                <ul>
-                  {centerPlan.exercises.slice(0, 4).map((ex) => (
-                    <li key={`${ex.tuneId}:${ex.cardId}`}>
-                      <button type="button" className="hm-ex-row" onClick={() => play(ex.tuneId, ex.cardId)}>
-                        <span className="hm-ex-copy">
-                          <strong>{ex.title}</strong>
-                          <small>{ex.tuneTitle} · {FAMILY_LABEL[ex.family]}</small>
-                        </span>
-                        <span className="hm-ex-go"><Glyph name="play" size={13} /></span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-
-            {centerPlan.modes.length ? (
-              <div className="hm-modes-block">
-                <p className="hm-kicker">Relevant scales &amp; modes</p>
-                <div className="hm-mode-pills">
-                  {centerPlan.modes.map((m) => (
-                    <button key={m.name} type="button" className="hm-mode-pill" onClick={() => launchSkill(m.hubId, m.skill)}>
-                      <strong>{m.name}</strong>
-                      <small>{m.role}</small>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        ) : pickedSong ? (
-          <div className="hm-inspect" role="group" aria-label={pickedSong.title}>
-            <button type="button" className="hm-inspect-close" aria-label="Close" onClick={clearSelection}><Glyph name="close" size={16} /></button>
-            <div className="hm-inspect-meta">
-              <button
-                type="button"
-                className="hm-key-chip"
-                onClick={() => {
-                  const hub = songHubs.get(pickedSong.tuneId);
-                  if (hub) { setSelectedKeys([hub]); setSelectedSongs([]); }
-                }}
-              >
-                {keyLabel(pickedSong)}
-              </button>
-              <p className="hm-kicker">{[pickedSong.barCount ? `${pickedSong.barCount} bars` : null, pickedSong.composer].filter(Boolean).join(" · ")}</p>
-              <button type="button" className={`hm-inline-mix ${mixMode ? "is-on" : ""}`} onClick={() => setMixMode((on) => !on)} title="Mix this song with other songs or keys">
-                <Glyph name="plus" size={11} />Mix
-              </button>
-            </div>
-            <h3>{pickedSong.title}</h3>
-            <Progress song={pickedSong} />
-            <div className="hm-inspect-actions">
-              <button type="button" className="hm-btn is-primary" onClick={() => launchPlan()}>
-                <Glyph name="play" size={16} />Practice solo
-              </button>
-              <button type="button" className="hm-btn" onClick={() => playWhole(pickedSong.tuneId)}>
-                <Glyph name="melody" size={16} />Whole tune
-              </button>
-              <button type="button" className="hm-btn" aria-pressed={session.has(pickedSong.tuneId)} onClick={() => session.toggle(pickedSong.tuneId)}>
-                <Glyph name={session.has(pickedSong.tuneId) ? "check" : "plus"} size={16} />{session.has(pickedSong.tuneId) ? "In session" : "Add to session"}
-              </button>
-              <button type="button" className="hm-btn" onClick={() => onOpenSong(pickedSong.tuneId)}>
-                <Glyph name="reading" size={16} />Score
-              </button>
-              {onListenSong ? <button type="button" className="hm-btn hm-btn--span" onClick={() => onListenSong(pickedSong.tuneId)}><Glyph name="ear" size={16} />Listen to backing</button> : null}
-            </div>
-            {pickedSong.next.length ? (
-              <div className="hm-inspect-list">
-                <p className="hm-kicker">Next up in {pickedSong.title}</p>
-                <ul>
-                  {pickedSong.next.slice(0, 3).map((unit) => (
-                    <li key={unit.id}>
-                      <button type="button" className="hm-ex-row" onClick={() => play(pickedSong.tuneId, unit.id)}>
-                        <span className="hm-ex-copy">
-                          <strong>{unit.title}</strong>
-                          <small>{FAMILY_LABEL[unit.family]}{unit.where ? ` · ${unit.where}` : ""}{unit.bpm ? ` · ${unit.bpm} bpm` : ""}</small>
-                        </span>
-                        <span className="hm-ex-go"><Glyph name="play" size={13} /></span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </div>
-        ) : pickedKey ? (
-          <div className="hm-inspect hm-inspect--key" role="group" aria-label={pickedKey.fullName}>
-            <button type="button" className="hm-inspect-close" aria-label="Close" onClick={clearSelection}><Glyph name="close" size={16} /></button>
-            <div className="hm-inspect-meta">
-              <span className="hm-key-chip is-static">{pickedKey.shortName}</span>
-              <button type="button" className="hm-rel-link" onClick={() => { setSelectedKeys([pickedKey.relativeHubId]); setSelectedSongs([]); }}>
-                Relative · {pickedKey.relativeName}
-              </button>
-              <button type="button" className={`hm-inline-mix ${mixMode ? "is-on" : ""}`} onClick={() => setMixMode((on) => !on)} title="Mix this key with other keys or songs">
-                <Glyph name="plus" size={11} />Mix
-              </button>
-            </div>
-            <h3>{pickedKey.fullName}</h3>
-
-            <button type="button" className="hm-btn is-primary" onClick={() => launchPlan()}>
-              <Glyph name="play" size={16} />
-              {keySongs.length
-                ? `Play ${pickedKey.shortName} · ${keySongs.length} tune${keySongs.length === 1 ? "" : "s"} & scales`
-                : `Play ${pickedKey.fullName} · scales & modes`}
-            </button>
-
-            {centerPlan.exercises.length ? (
-              <div className="hm-inspect-list">
-                <p className="hm-kicker">Relevant exercises in {pickedKey.shortName}</p>
-                <ul>
-                  {centerPlan.exercises.slice(0, 3).map((ex) => (
-                    <li key={`${ex.tuneId}:${ex.cardId}`}>
-                      <button type="button" className="hm-ex-row" onClick={() => play(ex.tuneId, ex.cardId)}>
-                        <span className="hm-ex-copy">
-                          <strong>{ex.title}</strong>
-                          <small>{ex.tuneTitle} · {FAMILY_LABEL[ex.family]}</small>
-                        </span>
-                        <span className="hm-ex-go"><Glyph name="play" size={13} /></span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-
-            <div className="hm-skill-grid" role="list" aria-label={`Patterns in ${pickedKey.fullName}`}>
-              {patternSkills.map((skill) => {
-                const direct = findSkillCard(pickedKey.hubId, skill.skill, songs);
-                return (
-                  <button
-                    key={skill.id}
-                    type="button"
-                    role="listitem"
-                    className={`hm-skill-card is-${skill.status}`}
-                    onClick={() => launchSkill(pickedKey.hubId, skill.skill)}
-                  >
-                    <span className="hm-skill-head">
-                      <strong>{skill.skill === "triads" ? "Diatonic chords" : skill.label}</strong>
-                      <BoxPips box={skill.box} status={skill.status} />
-                    </span>
-                    <small>{direct ? "Direct exercise ↗" : skill.box > 0 ? `Box ${skill.box}/${BOXES}` : skill.status === "kinship" ? "Kinship boost" : "Key study ↗"}</small>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="hm-rhythm-bar" aria-label="Rhythm color tiers">
-              {rhythmSkills.map((r) => {
-                const tier = r.skill === "run:sixteenths" ? "sixteenths" : r.skill === "run:triplets" ? "triplets" : "straight";
-                const name = tier === "sixteenths" ? "16ths" : tier === "triplets" ? "Triplets" : "Straight";
-                return (
-                  <button
-                    key={r.id}
-                    type="button"
-                    className={`hm-rhythm-chip is-${tier} ${r.box > 0 ? "is-on" : ""}`}
-                    onClick={() => launchSkill(pickedKey.hubId, r.skill)}
-                  >
-                    <i aria-hidden="true" />
-                    <span>{name}</span>
-                    <small>{r.box > 0 ? `B${r.box}` : "—"}</small>
-                  </button>
-                );
-              })}
-            </div>
-
-            {centerPlan.modes.length ? (
-              <div className="hm-modes-block">
-                <p className="hm-kicker">Scales &amp; modes to learn</p>
-                <div className="hm-mode-pills">
-                  {centerPlan.modes.map((m) => (
-                    <button key={m.name} type="button" className="hm-mode-pill" onClick={() => launchSkill(m.hubId, m.skill)}>
-                      <strong>{m.name}</strong>
-                      <small>{m.role}</small>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            {keySongs.length ? (
-              <div className="hm-inspect-list">
-                <p className="hm-kicker">Your tunes in {pickedKey.shortName}</p>
-                <ul>
-                  {keySongs.map((song) => {
-                    const inSession = session.has(song.tuneId);
-                    return (
-                      <li key={song.tuneId} className="hm-key-tune-row">
-                        <button type="button" className="hm-ex-row" onClick={() => { setSelectedSongs([song.tuneId]); setSelectedKeys([]); }}>
-                          <span className="hm-ex-copy">
-                            <strong>{song.title}</strong>
-                            <small>{Math.round(songFill(song) * 100)}% grown</small>
-                          </span>
-                          <span className="hm-ex-go"><Glyph name="arrow" size={13} /></span>
-                        </button>
-                        <button
-                          type="button"
-                          className={`hm-mini-toggle ${inSession ? "is-on" : ""}`}
-                          aria-pressed={inSession}
-                          onClick={() => session.toggle(song.tuneId)}
-                        >
-                          {inSession ? "In session" : "+ Session"}
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ) : null}
-
-            {keySongs.length < 2 && pickedKey.ideas.length ? (
-              <div className="hm-ideas">
-                <div className="hm-ideas-head">
-                  <p className="hm-kicker">{keySongs.length ? `More tunes in ${pickedKey.shortName}` : `Tune ideas in ${pickedKey.shortName}`}</p>
-                  {onOpenLibrary ? (
-                    <button type="button" className="hm-ideas-import" onClick={onOpenLibrary}>
-                      <Glyph name="plus" size={13} />Import score
-                    </button>
-                  ) : null}
-                </div>
-                <ul className="hm-idea-chips">
-                  {pickedKey.ideas.map((idea) => (
-                    <li key={idea.title}>
-                      <strong>{idea.title}</strong>
-                      <span>{idea.note}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <section className="hm-foundations" aria-labelledby="hm-foundations-title">
-            <header>
-              <h2 id="hm-foundations-title">Foundations</h2>
-              <span>mechanics &amp; time</span>
-            </header>
-            <ul className="hm-found-list">
-              {foundations.map((f) => (
-                <li key={f.id}>
-                  <button
-                    type="button"
-                    className={`hm-found-row is-${f.status}`}
-                    onClick={() => {
-                      const targetTune = leadId ?? keyStudyId("M0");
-                      play(targetTune, f.id, leadId ? undefined : { focus: "technique", mixIds: [], studyHubIds: ["M0"] });
-                    }}
-                    title={f.why}
-                  >
-                    <span className="hm-found-copy">
-                      <strong>{f.short}</strong>
-                      <small>♩{f.bpm}→{f.goalBpm} · {f.insight}</small>
-                    </span>
-                    <BoxPips box={f.box} status={f.status} />
-                  </button>
-                </li>
-              ))}
-            </ul>
+            {onOpenLibrary ? <button type="button" className="hm-add" onClick={onOpenLibrary}><Glyph name="library" size={18} />Import your own score</button> : null}
           </section>
-        )}
-
-        {input && input.status === "error" ? <ConnectGuitar input={input} /> : null}
-        {error ? <p className="hm-error" role="alert">{error}</p> : null}
-        {issues.length ? <button type="button" className="hm-notice" onClick={onOpenLibrary}>{issues.length} score{issues.length === 1 ? " needs" : "s need"} repair<Glyph name="arrow" size={16} /></button> : null}
-      </aside>
+        ) : null}
+      </section>
 
       {adding ? (
         <div className="hm-sheet" role="dialog" aria-modal="true" aria-label="Add songs to next session">
