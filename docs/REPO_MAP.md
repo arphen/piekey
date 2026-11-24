@@ -138,11 +138,13 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/__tests__/attacks.test.ts`
 - `src/__tests__/audio-scoring.test.ts`
 - `src/__tests__/calibration.test.ts`
+- `src/__tests__/campfire.test.ts`
 - `src/__tests__/coach-entry.test.tsx`
 - `src/__tests__/core.test.ts`
 - `src/__tests__/demos.test.ts`
 - `src/__tests__/ear.test.ts`
 - `src/__tests__/flow.test.ts`
+- `src/__tests__/guitarpro.test.ts`
 - `src/__tests__/input-lifecycle.test.tsx`
 - `src/__tests__/musicxml.test.ts`
 - `src/__tests__/nav.test.ts`
@@ -187,6 +189,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/audio/usePlayer.ts` — `usePlayer:49`
 - `src/audio/useTakePlayback.ts` — `useTakePlayback:23`
 - `src/components/Calibrate.tsx` — `Calibrate:34`
+- `src/components/CampfireView.tsx` — `CampfireView:21`
 - `src/components/ChordBox.tsx` — `ChordBox:15`
 - `src/components/DeviceSync.tsx` — `DeviceSync:13`
 - `src/components/DeviceSyncPanel.tsx` — `DeviceSyncPanel:15`
@@ -226,7 +229,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/components/TriadWheel.tsx` — `TriadWheel:48`
 - `src/components/TriadsView.tsx` — `TriadsView:153`
 - `src/components/TunePicker.tsx` — `TunePicker:14`
-- `src/components/TuneView.tsx` — `PracticeLaunchOptions:40`, `TuneView:54`
+- `src/components/TuneView.tsx` — `PracticeLaunchOptions:41`, `TuneView:55`
 - `src/components/UnitCard.tsx` — `UnitCard:22`
 - `src/components/goal-chooser.css`
 - `src/components/keyContext.ts` — `KeyContext:4`, `useKey:6`, `RomanContext:13`
@@ -363,16 +366,19 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/triads/useTriads.ts` — `PLAY_BOX:26`, `TriadAnswer:29`, `useTriads:38`
 - `src/tunes/agentPrompt.ts` — `MUSICXML_AGENT_PROMPT:2`
 - `src/tunes/backup.ts` — `PracticeBackup:10`, `createBackup:78`, `parseBackup:94`, `restoreBackup:131`
+- `src/tunes/campfire.css`
+- `src/tunes/campfire.ts` — `CampfireBar:7`, `CampfireSection:16`, `CampfireChord:22`, `CampfireSheet:27`, `transposeKey:49`, `transposeChord:62`, `buildCampfireSheet:78`
 - `src/tunes/chordName.ts` — `nameVoicing:31`
 - `src/tunes/database.ts` — `writeTuneXml:17`, `readTuneXml:31`
 - `src/tunes/demos.ts` — `DemoStudy:5`, `DemoTune:18`, `BLUE_HOUR_ENTRY:26`, `DEMO_TUNES:33`, `getDemoStudy:65`
 - `src/tunes/demos/blue-hour.musicxml`
 - `src/tunes/flow.ts` — `FlowBar:10`, `FlowSection:20`, `Flow:30`, `flowOf:85`
+- `src/tunes/guitarpro.ts` — `gpifToMusicXml:185`
 - `src/tunes/learn.ts` — `StepKind:14`, `Step:16`, `buildPlan:31`, `melodyOverChords:180`, `chordLandings:203`
 - `src/tunes/library.css`
 - `src/tunes/library.ts` — `TuneEntry:9`, `LibraryIssue:22`, `LARGE_TUNE_CHARS:32`, `getLibraryIssues:40`, `subscribeLibraryIssues:41`, `isLibraryBusy:57`, `subscribeLibraryOperations:58`, `withLibraryOperation:64`, `readStored:74`, `writeStored:83`, `loadLibrary:128`, `loadLibraryAsync:136`, `loadCompleteLibraryAsync:164`, `saveLibrary:173`, `removeLibraryEntry:223`, `newTuneId:230` (+5 more)
 - `src/tunes/musicxml-assets.d.ts`
-- `src/tunes/musicxml.ts` — `CompEvent:11`, `LeadSheet:18`, `MusicXmlOptions:32`, `MusicXmlPart:37`, `MusicXmlSource:44`, `parseMusicXml:284`, `loadTuneFile:600`
+- `src/tunes/musicxml.ts` — `CompEvent:12`, `LeadSheet:19`, `MusicXmlOptions:33`, `MusicXmlPart:38`, `MusicXmlSource:45`, `parseMusicXml:285`, `loadTuneFile:623`
 - `src/tunes/order.ts` — `Slot:8`, `Target:17`, `Voice:30`, `Timeline:36`, `playOrder:48`, `buildTimeline:128`, `slotOfBar:172`, `firstTargetAt:177`, `printedResults:186`
 - `src/tunes/passage.ts` — `PassageRange:5`, `validPassage:7`, `passageOccurrences:13`, `passageLabel:23`, `passageId:33`, `parsePassageId:37`, `passageTimeline:46`
 - `src/tunes/scoring.ts` — `matchesPitch:4`, `PitchSample:7`, `PitchWindow:13`, `judgePitch:29`, `TimingFit:51`, `fitTiming:60`, `timingTolerance:76`, `timingPhaseLimit:78`, `assessTiming:85`, `timingReady:99`

@@ -28,6 +28,7 @@ import { Score } from "./Score";
 import { GoalChooser } from "./GoalChooser";
 import { PracticeBriefPanel } from "./PracticeBriefPanel";
 import { openPractice, SongCoach } from "./SongCoach";
+import { CampfireView } from "./CampfireView";
 import { LibraryGrid } from "./LibraryGrid";
 import "../tunes/tunes.css";
 import "../tunes/library.css";
@@ -95,12 +96,14 @@ export function TuneView({ input, launch, onLaunched, songId, onSong, onSessionE
   const [passageDraft, setPassageDraft] = useState<PassageRange | null>(null);
   const [looping, setLooping] = useState(false);
   const [coach, setCoach] = useState(false); // the full-screen practice session
+  const [campfire, setCampfire] = useState<{ open: boolean; tuneId: string | null }>({ open: false, tuneId: null });
   const [sessionLaunch, setSessionLaunch] = useState<Launch>();
   const [demoToListen, setDemoToListen] = useState<string | null>(null);
   const launched = useRef<Launch>();
   const openingDemo = useRef(false);
   const browseScroll = useRef(0);
   const fileRef = useRef<HTMLInputElement>(null);
+  const folderRef = useRef<HTMLInputElement>(null);
   const backupRef = useRef<HTMLInputElement>(null);
   const passageToggle = useRef<HTMLButtonElement>(null);
   const repairTarget = useRef<string>();
@@ -242,15 +245,27 @@ export function TuneView({ input, launch, onLaunched, songId, onSong, onSessionE
     async (files: FileList | File[], repairId?: string) => {
       setLoadError(null);
       setNotice(null);
+      const list = [...files];
+      const scoreFiles = list.length > 1
+        ? list.filter((f) => /\.(musicxml|xml|mxl|gp)$/i.test(f.name))
+        : list;
+      if (!scoreFiles.length) {
+        setLoadError("No MusicXML or Guitar Pro (.gp) files were found in that selection.");
+        return;
+      }
       const previews: PendingImport[] = [];
-      for (const file of [...files]) {
+      const errors: string[] = [];
+      for (const file of scoreFiles) {
         try {
           const { xml, name } = await loadTuneFile(file);
           parseMusicXml(xml, name);
           previews.push({ xml, name, ...(repairId && !previews.length ? { repairId } : {}) });
         } catch (e) {
-          setLoadError(`${file.name}: ${e instanceof Error ? e.message : "couldn't read it"}`);
+          errors.push(`${file.name}: ${e instanceof Error ? e.message : "couldn't read it"}`);
         }
+      }
+      if (errors.length) {
+        setLoadError(errors.length === 1 ? errors[0] : `${errors.length} files could not be read (${errors[0]}).`);
       }
       setPending((current) => [...current, ...previews]);
     },
@@ -312,6 +327,66 @@ export function TuneView({ input, launch, onLaunched, songId, onSong, onSessionE
       setLoadError(null);
       setNotice(replaceId ? "Score replaced. Its practice history has been kept." : "Tune saved.");
     } else setLoadError("This tune has not been saved. Keep this preview open and try again after freeing browser storage.");
+    setBusy(false);
+  };
+
+  const acceptAllPending = async () => {
+    if (!pending.length || busy) return;
+    setBusy(true);
+    setLoadError(null);
+    const next = [...library];
+    const addedIds: string[] = [];
+    let skipped = 0;
+    let failed = 0;
+    for (const item of pending) {
+      try {
+        const parsedItem = parseMusicXml(item.xml, item.name, item);
+        const src = parsedItem.source;
+        if (!src) { failed++; continue; }
+        const dup = next.find((saved) => sameTuneContent(saved, { ...item, partId: src.partId, voice: src.voice }));
+        if (dup) { skipped++; continue; }
+        const { repairId: _repair, ...score } = item;
+        const imported: TuneEntry = { ...score, name: parsedItem.title || item.name, id: newTuneId(), partId: src.partId, voice: src.voice };
+        next.push(imported);
+        addedIds.push(imported.id);
+      } catch {
+        failed++;
+      }
+    }
+    if (!addedIds.length) {
+      setPending([]);
+      setNotice(skipped ? `All ${skipped} file${skipped === 1 ? "" : "s"} were already in your library.` : "No readable scores were imported.");
+      setBusy(false);
+      return;
+    }
+    if (await saveLibrary(next)) {
+      setLibrary(next);
+      const allIds = next.map((saved) => saved.id);
+      for (const id of addedIds) addSessionTune(id, allIds);
+      setPending([]);
+      setReplaceId("");
+      const partsMsg = [`Imported ${addedIds.length} song${addedIds.length === 1 ? "" : "s"}`];
+      if (skipped) partsMsg.push(`${skipped} duplicate${skipped === 1 ? "" : "s"} skipped`);
+      if (failed) partsMsg.push(`${failed} unreadable`);
+      setNotice(`${partsMsg.join(" · ")}.`);
+    } else {
+      setLoadError("The batch could not be saved. Try importing fewer files or freeing browser storage.");
+    }
+    setBusy(false);
+  };
+
+  const switchPart = async (partId: string) => {
+    if (!entry || busy || entry.partId === partId) return;
+    setBusy(true);
+    setLoadError(null);
+    const updated: TuneEntry = { ...entry, partId, voice: undefined };
+    const next = library.map((saved) => (saved.id === entry.id ? updated : saved));
+    if (await saveLibrary(next)) {
+      setLibrary(next);
+      setNotice(null);
+    } else {
+      setLoadError("Could not save the selected part.");
+    }
     setBusy(false);
   };
 
@@ -558,6 +633,20 @@ export function TuneView({ input, launch, onLaunched, songId, onSong, onSessionE
     />
   );
 
+  if (campfire.open) return (
+    <CampfireView
+      library={library}
+      initialTuneId={campfire.tuneId}
+      onClose={() => setCampfire({ open: false, tuneId: null })}
+      onOpenScore={(id) => { setCampfire({ open: false, tuneId: null }); pick(id); }}
+      onPractice={(id) => {
+        setCampfire({ open: false, tuneId: null });
+        if (onStartPractice) onStartPractice(id);
+        else { pick(id); setCoach(true); }
+      }}
+    />
+  );
+
   return (
     <main className={`tunes ${dragging ? "is-dragging" : ""}`} aria-busy={loading || busy}
       onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
@@ -576,6 +665,8 @@ export function TuneView({ input, launch, onLaunched, songId, onSong, onSessionE
         </div>
         <div className="lib-head-actions">
           <button type="button" className="lib-btn is-primary" onClick={() => { repairTarget.current = undefined; fileRef.current?.click(); }} disabled={loading || busy}><Glyph name="plus" size={18} />Import score</button>
+          <button type="button" className="lib-btn" onClick={() => { repairTarget.current = undefined; folderRef.current?.click(); }} disabled={loading || busy}><Glyph name="library" size={18} />Import folder</button>
+          <button type="button" className="lib-btn" onClick={() => setCampfire({ open: true, tuneId: null })} disabled={loading || busy}><Glyph name="reading" size={18} />Campfire songbook</button>
           <button type="button" className="lib-btn" aria-expanded={toolsOpen} aria-controls="song-library-tools" onClick={() => setToolsOpen((open) => !open)}><Glyph name="tools" size={18} />Backup &amp; tools</button>
         </div>
       </header> : <header className="tunes-heading">
@@ -616,9 +707,13 @@ export function TuneView({ input, launch, onLaunched, songId, onSong, onSessionE
           onScope={(scope) => { setBriefScope(scope); setBrief(null); }} onDays={(days) => { setBriefDays(days); setBrief(null); }}
           onPrepare={() => void generateBrief()} onClose={() => setBriefOpen(false)} /> : null}
       </div> : null}
-      <input ref={fileRef} hidden type="file" accept=".musicxml,.xml,.mxl" multiple onChange={(event) => {
+      <input ref={fileRef} hidden type="file" accept=".musicxml,.xml,.mxl,.gp" multiple onChange={(event) => {
         if (event.target.files?.length) void addFiles(event.target.files, repairTarget.current);
         repairTarget.current = undefined;
+        event.target.value = "";
+      }} />
+      <input ref={folderRef} hidden type="file" multiple {...({ webkitdirectory: "", directory: "" } as Record<string, string>)} onChange={(event) => {
+        if (event.target.files?.length) void addFiles(event.target.files);
         event.target.value = "";
       }} />
       <input ref={backupRef} hidden type="file" accept=".json,application/json" onChange={(event) => {
@@ -688,10 +783,18 @@ export function TuneView({ input, launch, onLaunched, songId, onSong, onSessionE
               <button type="button" className="tunes-play" onClick={() => void acceptImport()} disabled={!previewSource || loading || busy}>
                 {busy ? "Saving…" : duplicate && !replaceId ? "Open existing tune" : replaceId ? "Replace selected tune" : "Import tune"}
               </button>
+              {pending.length > 1 && !candidate.repairId ? (
+                <button type="button" className="tunes-play" onClick={() => void acceptAllPending()} disabled={loading || busy}>
+                  {busy ? "Saving…" : `Import all ${pending.length} files`}
+                </button>
+              ) : null}
               <button type="button" className="coach-btn" disabled={busy} onClick={() => {
                 setPending((queue) => queue.slice(1));
                 setReplaceId("");
               }}>Skip this file</button>
+              {pending.length > 1 ? (
+                <button type="button" className="coach-btn" disabled={busy} onClick={() => { setPending([]); setReplaceId(""); }}>Cancel batch</button>
+              ) : null}
             </div>
           </section>
         ) : null}
@@ -728,12 +831,23 @@ export function TuneView({ input, launch, onLaunched, songId, onSong, onSessionE
             {playback.playing ? <span className="tunes-stop" aria-hidden="true" /> : <Glyph name="play" size={17} />}{playback.playing ? "Stop" : range ? customPassage ? "Listen to passage" : "Listen to phrase" : "Listen to piece"}
           </button>
           <button type="button" className="tunes-practice-piece" onClick={() => practice(whole?.id)} disabled={!whole || loading || busy}>Practice piece<Glyph name="arrow" size={16} /></button>
+          <button type="button" className="tunes-passage-toggle" onClick={() => { stop(); setCampfire({ open: true, tuneId: sheet.id }); }} disabled={loading || busy}>Campfire</button>
           <button type="button" ref={passageToggle} className="tunes-passage-toggle" aria-expanded={Boolean(passageDraft)} aria-controls="song-passage-picker" onClick={() => {
             stop();
             setPassageDraft((draft) => draft ? null : range ?? { start: 0, end: 0 });
           }} disabled={!tl.slots.length || loading || busy}>Select passage</button>
           <span className="tunes-play-position">{playback.playing ? playback.counting ? "Count-in" : playingBar >= 0 ? occurrences[playback.activeSlot]?.label ?? `Bar ${barLabel(playingBar)}` : "" : ""}</span>
           <button type="button" className="tunes-sound-toggle" aria-expanded={soundOpen} aria-controls="song-sound" onClick={() => setSoundOpen((open) => !open)}><Glyph name="free" size={17} />{bpm}<span>Sound</span></button>
+          {entry && sheet.source && sheet.source.parts.filter((part) => part.notes > 0).length > 1 ? (
+            <label className="tunes-part-switch">
+              <span>Part</span>
+              <select aria-label="Active part" value={sheet.source.partId} disabled={busy} onChange={(event) => { stop(); void switchPart(event.target.value); }}>
+                {sheet.source.parts.filter((part) => part.notes > 0).map((part) => (
+                  <option key={part.id} value={part.id}>{part.name}</option>
+                ))}
+              </select>
+            </label>
+          ) : null}
         {range ? <div className="tunes-selection" role="group" aria-label={customPassage ? "Selected passage" : "Selected phrase"}>
           <span>{customPassage ? <strong>{passageLabel(sheet, tl, range)}</strong> : <><strong>{selectedPhrase?.where}</strong><small>Playing order {range.start + 1}–{range.end + 1}</small></>}</span>
           <button type="button" aria-pressed={looping} onClick={() => { stop(); setLooping((value) => !value); }}><Glyph name="sync" size={16} />Loop</button>
@@ -809,7 +923,7 @@ export function TuneView({ input, launch, onLaunched, songId, onSong, onSessionE
         </section> : null}
       </> : !entry && !loading ? <section className="tunes-empty">
         <DemoShelf library={library} disabled={busy} onChoose={(demo, action) => void chooseDemo(demo, action)} onDownload={downloadDemo} />
-        <div className="tunes-empty-import"><button type="button" onClick={() => { repairTarget.current = undefined; fileRef.current?.click(); }} disabled={busy}>Open your own score<Glyph name="arrow" size={16} /></button><p>MusicXML · .musicxml · .xml · .mxl</p></div>
+        <div className="tunes-empty-import"><button type="button" onClick={() => { repairTarget.current = undefined; fileRef.current?.click(); }} disabled={busy}>Open your own score<Glyph name="arrow" size={16} /></button><p>MusicXML · Guitar Pro (.gp)</p></div>
         {hasOldLibrary() ? <p className="tunes-upgrade">Load your previous tunes again to update their playing order.</p> : null}
       </section> : null}
       {!entry && !loading && !browsing ? <AgentScorePrompt /> : null}

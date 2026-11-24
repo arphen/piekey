@@ -78,6 +78,12 @@ cleanup and late-start cancellation have mounted coverage; physical audio remain
 
 ## Home, Library and navigation redesign (2026-11-24)
 
+- **Native Guitar Pro 7/8 (`.gp`), batch import, part switcher & Campfire songbook (2026-11-24):**
+  - `tunes/guitarpro.ts` converts GP7/8 (`Content/score.gpif`) archives into part-wise MusicXML 3.1 inside `loadTuneFile()`, preserving guitar & vocal tracks (excluding drum kits), exact string/fret tags, song-wide chord symbols, section markers (`<rehearsal>`), tempo automations, repeats/endings, ties, tuplets and vocal lyrics (`ReadingBar.lyrics`).
+  - Library now supports `.gp` alongside MusicXML, **Import folder** / multi-file batch import with one-click duplicate-skipping save, and an on-page **Part** switcher (`Guitar` ↔ `Vocals`, etc.) on multi-part songs.
+  - **Campfire songbook** (`tunes/campfire.ts`, `CampfireView`) provides a mobile-first, offline-capable chord & lyric sheet with section grouping, collapsible `ChordBox` diagrams, live transpose / capo shapes, Screen Wake Lock, and hands-free auto-scroll, reachable from Library and any song page.
+  - **Code-verified** (`guitarpro.test.ts`, `campfire.test.ts`, `make check`, `npm run build:quiet`). **Runtime-unverified** in a real mobile browser, offline PWA install, or physical laptop↔phone sync.
+
 - **Home** (`OverviewView`) is the circle-of-fifths map (`overview/map.ts`, `SongMap`) beside the
   **Next session** rail. The score excerpt, goal row, Next list and "Due" labels are gone from
   Home; `UnitCard` no longer says "Due" anywhere (a waiting card shows its box).

@@ -76,7 +76,7 @@ export function LibraryGrid({ library, issues, session, busy, onOpen, onPlay, on
       <button type="button" className="lib-import" onClick={onImport} disabled={busy}>
         <Glyph name="plus" size={28} />
         <strong>Add a score</strong>
-        <small>MusicXML · .musicxml · .xml · .mxl — or drop files anywhere here</small>
+        <small>MusicXML · Guitar Pro (.gp) — or drop files anywhere here</small>
       </button>
     </section>
   );

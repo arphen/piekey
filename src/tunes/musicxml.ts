@@ -1,6 +1,7 @@
 import { OPEN_MIDI } from "../core";
 import type { JumpKind, ReadingBar, ReadingNote } from "../core/contract";
 import { nameVoicing } from "./chordName";
+import { gpifToMusicXml } from "./guitarpro";
 import { unzip } from "./unzip";
 
 // A lead sheet loaded from MusicXML: the melody (first part) with its chord symbols, key, meter,
@@ -549,6 +550,28 @@ export function parseMusicXml(xml: string, fallbackTitle = "Untitled", options: 
     }
   }
 
+  // Extract bar-level lyrics from the active melody part or the first part that carries <lyric> tags.
+  const lyricPart = melodyPart.getElementsByTagName("lyric").length
+    ? melodyPart
+    : parts.find((p) => p.getElementsByTagName("lyric").length > 0);
+  if (lyricPart) {
+    const measures = kids(lyricPart, "measure");
+    measures.forEach((m, mi) => {
+      if (mi >= bars.length) return;
+      const partsText: string[] = [];
+      for (const note of kids(m, "note")) {
+        const lyr = child(note, "lyric");
+        const t = text(lyr, "text");
+        if (t) partsText.push(t);
+      }
+      if (partsText.length) {
+        // Rejoin hyphenated syllables ("la-" + "dy" -> "lady") cleanly for campfire reading
+        const joined = partsText.reduce((acc, tok) => (!acc ? tok : acc.endsWith("-") ? `${acc.slice(0, -1)}${tok}` : `${acc} ${tok}`), "");
+        bars[mi].lyrics = joined;
+      }
+    });
+  }
+
   const pitches = bars.flatMap((bar) => bar.notes.filter((note) => !note.rest).map((note) => note.midi));
   const range = pitches.reduce<[number, number]>(([low, high], midi) => [Math.min(low, midi), Math.max(high, midi)], [Infinity, -Infinity]);
   const hasChords = bars.some((bar) => bar.chordSymbols.some((symbol) => symbol !== "N.C."));
@@ -598,12 +621,17 @@ function finger(bars: ReadingBar[]) {
 }
 
 export async function loadTuneFile(file: File): Promise<{ xml: string; name: string }> {
-  if (file.size > 20 * 1024 * 1024) throw new Error("Choose a MusicXML file smaller than 20 MB.");
+  if (file.size > 20 * 1024 * 1024) throw new Error("Choose a score file smaller than 20 MB.");
   const buf = await file.arrayBuffer();
   const head = new Uint8Array(buf, 0, Math.min(4, buf.byteLength));
-  const name = file.name.replace(/\.(musicxml|xml|mxl)$/i, "");
+  const name = file.name.replace(/\.(musicxml|xml|mxl|gp)$/i, "");
   if (head[0] === 0x50 && head[1] === 0x4b) {
     const entries = await unzip(buf);
+    const gpif = entries.get("Content/score.gpif");
+    if (gpif) {
+      const gpifXml = new TextDecoder().decode(await gpif());
+      return { xml: gpifToMusicXml(gpifXml, name), name };
+    }
     const container = entries.get("META-INF/container.xml");
     let path: string | undefined;
     if (container) {
@@ -613,8 +641,11 @@ export async function loadTuneFile(file: File): Promise<{ xml: string; name: str
     }
     path ??= [...entries.keys()].find((n) => !n.startsWith("META-INF") && /\.(xml|musicxml)$/i.test(n));
     const entry = path ? entries.get(path) : undefined;
-    if (!entry) throw new Error("No score found inside that .mxl file.");
+    if (!entry) throw new Error("No score found inside that archive.");
     return { xml: new TextDecoder().decode(await entry()), name };
+  }
+  if (/\.gp(3|4|5|x)?$/i.test(file.name)) {
+    throw new Error("Only Guitar Pro 7/8 (.gp) files are supported directly. Older .gp5/.gpx files can be exported to MusicXML from MuseScore or TuxGuitar.");
   }
   return { xml: new TextDecoder().decode(buf), name };
 }

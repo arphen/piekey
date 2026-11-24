@@ -264,6 +264,7 @@ export interface ReadingBar {
   timeChange?: string;
   barline?: "double" | "final";
   jumps?: { kind: JumpKind; text: string }[]; // "D.S. al Coda", "To Coda", "Fine", segno and coda signs
+  lyrics?: string; // combined vocal lyric text for this bar when present in the score
 }
 
 export interface ReadingExercise {
