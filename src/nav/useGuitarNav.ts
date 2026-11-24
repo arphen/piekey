@@ -8,10 +8,10 @@ import type { InputApi } from "../listen/useInput";
 
 /** What each key does, in the order `useNoteKeys` gets them. */
 export const NAV_KEYS = [
-  { id: "prev", midi: 76, label: "back", glyph: "◀" }, // E5, the 12th fret of the high e
+  { id: "prev", midi: 76, label: "previous", glyph: "◀" }, // E5, the 12th fret of the high e
   { id: "next", midi: 77, label: "on", glyph: "▶" },
   { id: "press", midi: 78, label: "press", glyph: "●" },
-  { id: "home", midi: 79, label: "home", glyph: "⌂" },
+  { id: "home", midi: 79, label: "back", glyph: "↩" }, // the shell's Back: one step out, home at the root
   { id: "tabLeft", midi: 80, label: "mode ◀", glyph: "‹" },
   { id: "tabRight", midi: 81, label: "mode ▶", glyph: "›" },
 ] as const;
@@ -61,7 +61,7 @@ export function press(el: HTMLElement) {
 }
 
 /**
- * Held high notes drive the cursor. `tab` moves between modes; `home` returns to the overview.
+ * Held high notes drive the cursor. `tab` moves between modes; `home` is the shell's Back.
  * Returns the key being held (an index into `NAV_KEYS`) for the legend.
  */
 export function useGuitarNav(input: InputApi, handlers: { home(): void; tab(dir: 1 | -1): void }): number | null {

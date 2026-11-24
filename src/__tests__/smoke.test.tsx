@@ -48,6 +48,7 @@ beforeEach(() => {
   });
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   shell.overview = { songs: [], currentTuneId: null, loading: true, error: null };
+  history.replaceState(null, "");
   archive.result = { status: "unavailable" };
   archive.retry.mockClear();
   // Exercise the browser compatibility regression during actual route changes below.
@@ -82,10 +83,25 @@ it("opens free play from the real overview without an imported tune and returns 
   await press("Free play");
   expect(element.querySelector('[role="dialog"][aria-label="free play"]')).toBeTruthy();
   await act(async () => element.querySelector<HTMLButtonElement>('[aria-label="leave free play"]')!.click());
-  expect(element.querySelector(".tutor-actions")).toBeTruthy();
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+  expect(element.querySelector(".hm-rail")).toBeTruthy();
 });
 
-it("launches the selected song and exercise even when saving the selection fails", async () => {
+it("walks Back through the shell's history and stays put at home", async () => {
+  shell.overview.loading = false;
+  const element = await mountShell();
+  const back = () => element.querySelector<HTMLButtonElement>('[aria-label="Back"]')!;
+  expect(back().disabled).toBe(true);
+  await press("Library");
+  expect(element.querySelector(".hm-rail")).toBeNull();
+  expect(back().disabled).toBe(false);
+  await act(async () => back().click());
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+  expect(element.querySelector(".hm-rail")).toBeTruthy();
+  expect(back().disabled).toBe(true);
+});
+
+it("enters guitar mode with the session's first song even when saving the selection fails", async () => {
   shell.overview = {
     loading: false, error: null, currentTuneId: "study-one",
     songs: [{
@@ -98,9 +114,9 @@ it("launches the selected song and exercise even when saving the selection fails
   localStorage.setItem("guitar-tune", JSON.stringify("previous-song"));
   vi.spyOn(localStorage, "setItem").mockImplementation(() => { throw new DOMException("full", "QuotaExceededError"); });
   const element = await mountShell();
-  await press("A particular passage");
+  await press("Guitar mode");
   expect(element.querySelector<HTMLElement>("main[data-launch]")?.dataset).toMatchObject({
-    launch: "card", tune: "study-one", card: "mel:new:2-3",
+    launch: "session", tune: "study-one",
   });
   expect(localStorage.getItem("guitar-tune")).toBe(JSON.stringify("previous-song"));
   expect(element.querySelector('[role="alert"]')).toBeTruthy();

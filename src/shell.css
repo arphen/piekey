@@ -1,0 +1,93 @@
+/* The shell around every laptop-mode view: one night palette shared with guitar mode, big
+   touch-sized navigation, a Back that is always in the same place, and views that fade in
+   instead of snapping. */
+
+.app {
+  --bg: #0d0c0f;
+}
+
+.app .topbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  min-height: 76px;
+  padding: 0 clamp(14px, 2vw, 28px);
+  background: #0d0c0f;
+  border-bottom: 1px solid var(--line);
+}
+.shell-start, .shell-end { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.shell-end { justify-content: flex-end; gap: 6px; }
+.app .brand { padding: 0; gap: 10px; min-width: 0; }
+.app .brand h1 { overflow: hidden; color: var(--ink-soft); font: 400 15px/1 var(--font-display); letter-spacing: -0.01em; text-overflow: ellipsis; white-space: nowrap; }
+
+.app .topbar button { font-weight: 400; transform: none; filter: none; }
+.app .shell-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 0 18px 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: rgba(255, 240, 220, 0.04);
+  color: var(--ink);
+  font-size: 15px;
+  transition: opacity 0.2s, background 0.2s;
+}
+.app .shell-back svg { transform: rotate(180deg); }
+.app .shell-back:hover:not(:disabled) { background: rgba(255, 240, 220, 0.09); }
+.app .shell-back:disabled { opacity: 0; pointer-events: none; }
+.app .shell-back:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
+
+.app .tabs {
+  align-self: center;
+  gap: 4px;
+  margin: 0;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 240, 220, 0.03);
+  overflow: visible;
+}
+.app .tabs button {
+  min-height: 52px;
+  padding: 0 22px;
+  border-radius: 999px;
+  color: var(--ink-soft);
+  font-size: 15px;
+  gap: 9px;
+  transition: background 0.2s, color 0.2s;
+}
+.app .tabs button::after { display: none; }
+.app .tabs button:hover { background: rgba(255, 240, 220, 0.05); color: var(--ink); }
+.app .tabs button.is-on { background: rgba(224, 169, 86, 0.16); color: #f6dfb0; }
+.app .tabs button.is-on svg { color: #f0c478; }
+
+.app .shell-end .device-sync-trigger {
+  position: static;
+  min-height: 52px;
+  margin: 0;
+  padding: 0 16px;
+  border-radius: 999px;
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+.app .shell-end .device-sync-trigger:hover,
+.app .shell-end .device-sync-trigger[aria-pressed="true"] { background: rgba(255, 240, 220, 0.06); color: var(--ink); }
+
+/* views fade in; nothing snaps between laptop mode and guitar mode */
+.app > main { animation: shell-view-in 0.38s ease-out backwards; }
+@keyframes shell-view-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .app > main { animation: none; } }
+
+@media (max-width: 1100px) {
+  .app .brand h1 { display: none; }
+}
+@media (max-width: 760px) {
+  .app .topbar { grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; padding-block: 8px; }
+  .app .tabs button { padding: 0 12px; }
+  .app .tabs button span, .app .shell-end .device-sync-trigger span, .app .shell-back span { display: none; }
+  .app .shell-back { padding: 0 14px; }
+  .app .brand { display: none; }
+}

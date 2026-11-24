@@ -37,7 +37,8 @@ export interface SongSummaries {
   issues: readonly LibraryIssue[];
 }
 
-export function useSongSummaries(): SongSummaries {
+/** `revision`: bump it to re-read the library after a change made from the same screen. */
+export function useSongSummaries(revision = 0): SongSummaries {
   const [state, setState] = useState<SongSummaries>({ songs: [], currentTuneId: null, loading: true, error: null, issues: [] });
   const goals = useGoals();
 
@@ -69,7 +70,7 @@ export function useSongSummaries(): SongSummaries {
       if (!gone) setState({ songs: [], currentTuneId: null, loading: false, error: "Your saved library could not be opened. It has not been changed.", issues: getLibraryIssues() });
     });
     return () => { gone = true; };
-  }, [goals]);
+  }, [goals, revision]);
 
   return state;
 }

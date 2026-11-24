@@ -44,6 +44,7 @@ import { RecordingRecovery, RecordingStatus } from "./RecordingStatus";
 import { PracticeWindowBoundary } from "../platform/PracticeWindowBoundary";
 import { settlePracticeWrites } from "../platform/practiceWindow";
 import { TunePicker } from "./TunePicker";
+import { useSessionSet } from "../song/sessionSet";
 import { GuitarToolsRoom } from "../tools/GuitarTools";
 import { PoolRoom, usePoolCalm, usePoolEmit } from "../pool/PoolRoom";
 import { ROOM_MODES, useRoomRender, type RoomMode } from "../pool/mode";
@@ -334,14 +335,23 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
   const own = useMemo(() => goalDeck(rawOwn, activeGoal), [rawOwn, activeGoal]);
   const arrangementFingerprint = useMemo(() => arrangementIdentity(sheet).fingerprint, [sheet]);
   const focused = useMemo(() => (focus === "all" ? own : familiesOnly(own, FOCUS_FAMILIES[focus])), [focus, own]);
+  // the songs chosen for the session; a change made while a session runs applies to the next one
+  const roomIds = useMemo(() => [sheet.id, ...others.map((o) => o.sheet.id)], [sheet.id, others]);
+  const sessionSet = useSessionSet(roomIds);
+  const setKey = sessionSet.ids.join("\u0000");
+  const [mixKey, setMixKey] = useState(setKey);
+  const mixable = useMemo(() => {
+    const chosen = new Set(mixKey ? mixKey.split("\u0000") : []);
+    return others.filter((o) => chosen.has(o.sheet.id));
+  }, [others, mixKey]);
   const guests = useMemo(
     () =>
       focus !== "all"
         ? []
         : mix
-          ? others.map((o) => ({ tuneId: o.sheet.id, sheet: o.sheet, deck: buildDeck(o.sheet, o.tl, { window: loadStore(o.sheet.id).settings.window ?? undefined, round, seen: seenIn(o.sheet.id) }) }))
+          ? mixable.map((o) => ({ tuneId: o.sheet.id, sheet: o.sheet, deck: buildDeck(o.sheet, o.tl, { window: loadStore(o.sheet.id).settings.window ?? undefined, round, seen: seenIn(o.sheet.id) }) }))
           : [],
-    [focus, mix, others, round],
+    [focus, mix, mixable, round],
   );
   const deck = useMemo(() => mixDecks(focused, guests), [focused, guests]);
   const tuneIds = useMemo(() => [sheet.id, ...guests.map((g) => g.tuneId)], [sheet.id, guests]);
@@ -492,9 +502,12 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
   useEffect(() => {
     if (!live) setRound(`${today()}:${sessions}`);
   }, [live, sessions]);
+  useEffect(() => {
+    if (!live) setMixKey(setKey);
+  }, [live, setKey]);
   // between sessions only: the exercise in front of the player may be one of the other tunes'
   const toggleMix = () => {
-    if (live || !others.length) return;
+    if (live || !mixable.length) return;
     session.updateSettings({ mix: !mix });
     setMix(!mix);
   };
@@ -791,7 +804,7 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
           onChooseTune={onTune ? openTunePicker : undefined}
           onTools={openTools}
           keysOn={between}
-          guests={others.map((o) => o.sheet.title)}
+          guests={mixable.map((o) => o.sheet.title)}
           mix={mix}
           focus={focus}
           unavailablePassage={unavailablePassage}
@@ -828,10 +841,11 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
           <Gear />
           <ToneTag pc={tonesLive ? toneKeys[0] : null} lit={tapped === 0} />
         </button>
-        <button type="button" className="ss-icon" onClick={close} aria-label="leave" title="Leave (Esc)">
+        <button type="button" className="ss-icon ss-leave" onClick={close} aria-label="leave" title="Back to the dashboard (Esc)">
           <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M6 6 L18 18 M18 6 L6 18" />
+            <path d="M3 5h18v11H3zM8 20h8M12 16v4" />
           </svg>
+          <span>Dashboard</span>
         </button>
       </div> : null}
       {pad !== null && inExercise ? <GuitarPad input={input} title={padPages[pad].title} rows={padPages[pad].rows} onFire={(i) => padPages[pad].fire[i]()} /> : null}
@@ -852,12 +866,12 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
           tones={switchTones}
           tapped={tapped}
           onClose={closeMenu}
-          mix={others.length ? mix : null}
+          mix={mixable.length ? mix : null}
           onMix={toggleMix}
         />
       ) : null}
       </div>
-      {choosingTune ? <TunePicker input={input} sources={themeSources} currentTuneId={sheet.id} onCancel={closeTunePicker} onChoose={chooseTune} /> : null}
+      {choosingTune ? <TunePicker input={input} sources={themeSources} currentTuneId={sheet.id} session={sessionSet} onCancel={closeTunePicker} onChoose={chooseTune} /> : null}
       {tools ? <GuitarToolsRoom input={input} initialTool={tools} initialBpm={session.bpm} onClose={closeTools} /> : null}
     </div>
   );

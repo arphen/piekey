@@ -34,12 +34,15 @@ export interface TreeInput {
   tunes: { id: string; title: string; key: string; fill: number }[]; // key: "D-minor"
   free: FreeEntry[];
   lit: Set<string>; // card ids that moved this session
+  stagger?: boolean; // several tunes in one key: every other one further out, so their names clear each other
 }
 
 export const TREE_SIZE = 640;
 const C = TREE_SIZE / 2;
-const R_MAJOR = 196;
-const R_MINOR = 118;
+export const R_MAJOR = 196;
+export const R_MINOR = 118;
+export const R_TUNES = R_MAJOR + 104;
+const STAGGER = 40;
 const MAJOR_NAMES = ["C", "G", "D", "A", "E", "B", "F♯", "D♭", "A♭", "E♭", "B♭", "F"];
 const MINOR_NAMES = ["Am", "Em", "Bm", "F♯m", "C♯m", "G♯m", "E♭m", "B♭m", "Fm", "Cm", "Gm", "Dm"];
 const LETTER_PC: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
@@ -62,7 +65,7 @@ const polar = (radius: number, degrees: number) => {
 };
 
 /** "D-minor", "Bb-major" → the pitch class of its tonic and its mode. */
-function parseKey(id: string): { pc: number; minor: boolean } | null {
+export function parseKey(id: string): { pc: number; minor: boolean } | null {
   const m = /^([A-G])([b#]*)-(major|minor)$/.exec(id);
   if (!m) return null;
   const alter = [...m[2]].reduce((n, ch) => n + (ch === "b" ? -1 : 1), 0);
@@ -96,6 +99,18 @@ export function buildTree(input: TreeInput): { nodes: TreeNode[]; edges: TreeEdg
     if (t) note(`${hubOf(t.root, t.kind !== "major")}/${t.drill}`, 0.1, false);
   }
 
+  // a key also grows with the tunes played in it, not only with its drills
+  const tuneFill = new Map<string, number[]>();
+  for (const t of input.tunes) {
+    const k = parseKey(t.key);
+    if (k) tuneFill.set(hubOf(k.pc, k.minor), [...(tuneFill.get(hubOf(k.pc, k.minor)) ?? []), t.fill]);
+  }
+  const tunesOf = (hub: string) => {
+    const fills = tuneFill.get(hub);
+    return fills?.length ? fills.reduce((a, b) => a + b, 0) / fills.length : 0;
+  };
+  const hubHas = (hub: string) => skillsOf(fill, hub) > 0 || tunesOf(hub) > 0;
+
   const nodes: TreeNode[] = [];
   const edges: TreeEdge[] = [];
   const filled = (id: string) => (fill.get(id) ?? 0) > 0;
@@ -113,11 +128,11 @@ export function buildTree(input: TreeInput): { nodes: TreeNode[]; edges: TreeEdg
         edges.push({ from: parent ? `${hub}/${parent}` : hub, to: id, on: filled(id) });
         return fill.get(id) ?? 0;
       });
-      const mean = skills.reduce((a, b) => a + b, 0) / skills.length;
+      const mean = Math.max(skills.reduce((a, b) => a + b, 0) / skills.length, tunesOf(hub));
       const name = (minor ? MINOR_NAMES : MAJOR_NAMES)[slot(pc)];
       nodes.push({ id: hub, kind: minor ? "minor" : "major", label: name, title: name, ...polar(radius, angle), r: minor ? 13 : 17, fill: mean, lit: SKILLS.some(([s]) => lit.has(`${hub}/${s}`)) });
-      if (minor) edges.push({ from: hubOf(pc, false), to: hub, on: mean > 0 && skillsOf(fill, hubOf(pc, false)) > 0 });
-      else edges.push({ from: hub, to: hubOf(mod(pc + 7), false), on: mean > 0 && skillsOf(fill, hubOf(mod(pc + 7), false)) > 0 });
+      if (minor) edges.push({ from: hubOf(pc, false), to: hub, on: mean > 0 && hubHas(hubOf(pc, false)) });
+      else edges.push({ from: hub, to: hubOf(mod(pc + 7), false), on: mean > 0 && hubHas(hubOf(mod(pc + 7), false)) });
     }
   }
 
@@ -137,7 +152,7 @@ export function buildTree(input: TreeInput): { nodes: TreeNode[]; edges: TreeEdg
     tunes.forEach((t, i) => {
       // on the rim: a major key's tunes on its own spoke, a minor key's between that spoke and the next
       const fan = i - (tunes.length - 1) / 2;
-      const p = polar(R_MAJOR + 104, minor ? angle + 15 + fan * 5 : angle + fan * 9);
+      const p = polar(R_TUNES + (input.stagger && i % 2 ? STAGGER : 0), minor ? angle + 15 + fan * 5 : angle + fan * 9);
       const id = `tune:${t.id}`;
       nodes.push({ id, kind: "tune", label: t.title, title: t.title, ...p, r: 8, fill: t.fill, lit: false });
       edges.push({ from: at.id, to: id, on: t.fill > 0 });

@@ -7,7 +7,7 @@ const ACTIONS = {
   prev: { label: "Previous control", path: "M19 12H5m6-6-6 6 6 6" },
   next: { label: "Next control", path: "M5 12h14m-6-6 6 6-6 6" },
   press: { label: "Select", path: "M19 5v7H5m6-6-6 6 6 6" },
-  home: { label: "Tutor", path: "m3 11 9-8 9 8M5 9v11h14V9M9 20v-7h6v7" },
+  home: { label: "Back", path: "M20 12H5m6-7-7 7 7 7" },
   tabLeft: { label: "Previous mode", path: "m11 6-6 6 6 6m8-12-6 6 6 6" },
   tabRight: { label: "Next mode", path: "m5 6 6 6-6 6m8-12 6 6-6 6" },
 };

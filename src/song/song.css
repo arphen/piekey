@@ -22,6 +22,12 @@
   transition: background 0.8s;
 }
 
+.ss {
+  animation: ss-enter 0.45s ease-out backwards;
+}
+@keyframes ss-enter { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .ss { animation: none; } }
+
 .ss.is-idle {
   cursor: none;
 }
@@ -113,6 +119,16 @@
 .ss .ss-icon:hover {
   background: rgba(255, 240, 220, 0.08);
   color: var(--ink);
+}
+
+/* the way back to laptop mode: labelled, never just a cross */
+.ss .ss-leave {
+  width: auto;
+  gap: 8px;
+  padding: 0 16px 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  font-size: 14px;
 }
 
 .ss-icon svg {

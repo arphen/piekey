@@ -1,6 +1,7 @@
 # Current state
 
-Updated **2026-11-18** after SOL continuation and browser review. See [SOL_IMPLEMENTATION.md](SOL_IMPLEMENTATION.md)
+Updated **2026-11-24** for the Home/Library/navigation redesign (section below); earlier sections
+date from **2026-11-18** after SOL continuation and browser review. See [SOL_IMPLEMENTATION.md](SOL_IMPLEMENTATION.md)
 for delivered boundaries and remaining product work.
 This is the authoritative description of what exists, what is only partly built, and what is
 broken. Update it when a feature's status changes; wishes belong in [BACKLOG.md](BACKLOG.md).
@@ -74,6 +75,30 @@ the review no longer showed a false claim that another window was practising. Re
 handoff remains a separate hardware/lifecycle check. Progress recordings now have real Play/Pause,
 Restart and seek buttons for the played cursor, sharing one routed player per comparison. Controls,
 cleanup and late-start cancellation have mounted coverage; physical audio remains unverified.
+
+## Home, Library and navigation redesign (2026-11-24)
+
+- **Home** (`OverviewView`) is the circle-of-fifths map (`overview/map.ts`, `SongMap`) beside the
+  **Next session** rail. The score excerpt, goal row, Next list and "Due" labels are gone from
+  Home; `UnitCard` no longer says "Due" anywhere (a waiting card shows its box).
+- **Next session** (`song/sessionSet.ts`, synced setting `guitar-session-set`): unset means every
+  tune (previous behaviour). Editable from Home (remove ×, Add songs sheet, map inspector),
+  Library cards, a song's page and guitar mode's chooser (F4). Guitar mode mixes in only those
+  tunes; edits during a live session apply to the next one. Imports and added demos join an
+  explicit set.
+- **Library** (`TuneView` with `songId = null` → `LibraryGrid`): cards with session toggle, play,
+  remove-with-confirm (history kept), import tile, demo shelf, Backup & tools. A song's page has
+  a Library back link, a phrase strip filled by box, and the goal chooser behind a disclosure.
+- **Navigation**: `App` routes mirror into browser history; topbar Back, browser Back and G5
+  (formerly Home) walk it. Guitar mode shows a labelled Dashboard button and returns to the
+  screen it was opened from. Views and the room fade in (opacity only, no lingering layers).
+- **Guitar-mode chooser** (`TunePicker`): cards instead of a `<select>`; same gestures, review and
+  confirmation flow.
+- Verified: typecheck; smoke (incl. a new Back test), song-browse, coach-entry, overview (new
+  session-set and key tests), nav, sync suites; headless Chrome screenshots at 1440×900,
+  1280×720 and 390×844 of Home, the add-songs sheet, Library, a song page and the chooser; a real
+  CDP round trip Home → Guitar mode → Dashboard → Home. Not verified: real guitar input, touch
+  hardware, and how a dense library (many songs in one key) labels on the map.
 
 ## SOL delivery: goals, evidence and recovery (2026-11-18)
 

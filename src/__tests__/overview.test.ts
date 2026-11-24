@@ -11,6 +11,8 @@ import type { LeadSheet } from "../tunes/musicxml";
 import { buildTimeline } from "../tunes/order";
 import { buildPracticeBrief } from "../agent/brief";
 import { createGoal } from "../song/goals";
+import { resolveSessionSet } from "../song/sessionSet";
+import { songKey } from "../overview/map";
 
 const note = (midi: number, startBeat: number): ReadingNote => ({
   rest: false,
@@ -57,6 +59,19 @@ const emptyStore = (): Store => ({
 });
 
 describe("tutor overview", () => {
+  it("draws the next session from every tune until chosen, then from the chosen tunes still in the library", () => {
+    expect(resolveSessionSet(null, ["a", "b", "c"])).toEqual(["a", "b", "c"]);
+    expect(resolveSessionSet(["c", "gone", "a", "c"], ["a", "b", "c"])).toEqual(["c", "a"]);
+    expect(resolveSessionSet([], ["a", "b"])).toEqual([]);
+  });
+
+  it("places a song by its harmony when that agrees with the written signature, else by the signature", () => {
+    expect(songKey("D-minor", "F")).toBe("D-minor"); // minor tune under one flat
+    expect(songKey("G-minor", "C")).toBe("C-major"); // a C blues misread as G minor
+    expect(songKey(undefined, "Am")).toBe("A-minor");
+    expect(songKey("E-major", "nonsense")).toBe("E-major");
+  });
+
   it("exports only observed practice evidence, with empty measurements unknown and private source data omitted", () => {
     const store = Object.assign(emptyStore(), { xml: "SCORE_SECRET", audio: "AUDIO_SECRET", pairing: "PAIRING_SECRET", journal: "JOURNAL_SECRET" });
     Object.assign(store.settings, { deviceId: "DEVICE_SECRET", calibration: "CALIBRATION_SECRET" });

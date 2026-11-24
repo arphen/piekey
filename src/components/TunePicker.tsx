@@ -3,6 +3,7 @@ import type { InputApi } from "../listen/useInput";
 import { buildThemeCatalog, type ThemeSource } from "../song/theme";
 import { useThemePicker } from "../song/useThemePicker";
 import { SUMMON_NOTE } from "../song/notekeys";
+import type { SessionSetApi } from "../song/sessionSet";
 import { NoteTag, PAD_NOTES, SUMMON_HINT, useNoteKeys, useSummon } from "./GuitarPad";
 import "../song/tune-picker.css";
 
@@ -10,10 +11,11 @@ import "../song/tune-picker.css";
 const KEYS = { cancel: PAD_NOTES[0], previous: PAD_NOTES[1], next: PAD_NOTES[2], review: PAD_NOTES[3], listen: PAD_NOTES[4], all: PAD_NOTES[5] };
 
 /** An explicit practice-room action. Recognising a melody only offers choices; it never selects one. */
-export function TunePicker({ input, sources, currentTuneId, onCancel, onChoose }: {
+export function TunePicker({ input, sources, currentTuneId, session, onCancel, onChoose }: {
   input: InputApi;
   sources: ThemeSource[];
   currentTuneId?: string;
+  session?: SessionSetApi; // the songs of the next session, toggled from here too
   onCancel(): void;
   onChoose(id: string): void | Promise<void>;
 }) {
@@ -53,6 +55,11 @@ export function TunePicker({ input, sources, currentTuneId, onCancel, onChoose }
     setStage("browse");
   };
   const allTunes = () => { setMatchedIds(null); setError(null); };
+  const toggleSession = () => { if (selected && session) session.toggle(selected.id); };
+  const cards = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    cards.current?.querySelector<HTMLElement>('[aria-pressed="true"]')?.scrollIntoView?.({ inline: "center", block: "nearest", behavior: "smooth" });
+  }, [selected?.id, stage]);
   const back = () => {
     if (busy) return;
     if (stage === "confirm") { setStage("browse"); setError(null); }
@@ -97,7 +104,8 @@ export function TunePicker({ input, sources, currentTuneId, onCancel, onChoose }
     else if (key === 2) move(1);
     else if (key === 3) review();
     else if (key === 4) listen();
-    else allTunes();
+    else if (matchedIds) allTunes();
+    else toggleSession();
   });
   // A separate subscription arms afresh after reviewing a choice. Neither the opening melody
   // nor the held G♯ that opened confirmation can also confirm the switch.
@@ -126,19 +134,29 @@ export function TunePicker({ input, sources, currentTuneId, onCancel, onChoose }
           <p className="ss-tune-picker-detail">Release the last note, then hold F4 (high e, fret 1) to confirm.</p>
         </> : <>
           <p>{matchedIds ? "Matching openings · choose the tune you meant." : "Your library stays inside the practice room."}</p>
-          <label className="ss-tune-select">Tune<select aria-label="Tune to practise" value={selected?.id ?? ""} onChange={(event) => { setSelectedId(event.target.value); setError(null); }}>{choices.map((source) => <option key={source.id} value={source.id}>{source.title}{source.id === currentTuneId ? " · current tune" : ""}</option>)}</select></label>
-          <p className="ss-tune-picker-detail">Hold the shown note for a moment. A♯ and D♯ move through every choice; G♯ reviews it.</p>
+          <div ref={cards} className="ss-tune-cards" role="group" aria-label="Tune to practise">
+            {choices.map((source) => {
+              const inSession = session?.has(source.id) ?? false;
+              return (
+                <button key={source.id} type="button" className={`ss-tune-card ${source.id === currentTuneId ? "is-current" : ""} ${inSession ? "is-session" : ""}`} aria-pressed={source.id === selected?.id} onClick={() => { setSelectedId(source.id); setError(null); }}>
+                  <span className="ss-tune-card-tag">{source.id === currentTuneId ? "Playing now" : inSession ? "In next session" : "Library"}</span>
+                  <span className="ss-tune-card-title">{source.title}</span>
+                </button>
+              );
+            })}
+          </div>
           <div className="ss-tune-picker-actions">
             <button type="button" onClick={() => move(-1)} disabled={choices.length < 2}><NoteTag midi={KEYS.previous} held={browseHeld === 1} />Previous tune</button>
             <button type="button" onClick={() => move(1)} disabled={choices.length < 2}><NoteTag midi={KEYS.next} held={browseHeld === 2} />Next tune</button>
             <button type="button" className="ss-tune-primary" onClick={review} disabled={!selected || selected.id === currentTuneId}><NoteTag midi={KEYS.review} held={browseHeld === 3} />Review choice</button>
           </div>
           <div className="ss-tune-picker-actions">
+            {matchedIds ? <button type="button" onClick={allTunes}><NoteTag midi={KEYS.all} held={browseHeld === 5} />All tunes</button>
+              : session && selected ? <button type="button" aria-pressed={session.has(selected.id)} onClick={toggleSession}><NoteTag midi={KEYS.all} held={browseHeld === 5} />{session.has(selected.id) ? "In next session" : "Add to next session"}</button> : null}
             <button type="button" onClick={listen} disabled={!catalog.themes.length}><NoteTag midi={KEYS.listen} held={browseHeld === 4} />Listen to opening</button>
-            {matchedIds ? <button type="button" onClick={allTunes}><NoteTag midi={KEYS.all} held={browseHeld === 5} />All tunes</button> : null}
             <button type="button" onClick={onCancel}><NoteTag midi={KEYS.cancel} held={browseHeld === 0} />Return to practice</button>
           </div>
-          <p className="ss-tune-picker-detail">Opening recognition compares pitch classes only, in the original key.{catalog.omitted ? ` ${catalog.omitted} tune${catalog.omitted === 1 ? " is" : "s are"} available through the list only.` : ""}</p>
+          <p className="ss-tune-picker-detail">Hold the shown note for a moment. Opening recognition compares pitch classes only, in the original key.{catalog.omitted ? ` ${catalog.omitted} tune${catalog.omitted === 1 ? " is" : "s are"} available through the list only.` : ""}</p>
         </>}
       </div>
     </section>

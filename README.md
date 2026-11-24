@@ -7,21 +7,26 @@ Source repository: [arphen/piekey](https://github.com/arphen/piekey).
 
 ## Views
 
-- **Practice** — the home screen: current score, a short Next list, musical goals and Explore
-  shortcuts. Start the daily session, a selected exercise, or Free play without importing music.
-  An empty library offers **Listen** and **Try practice** for two original studies.
-- **Songs** — browse and hear MusicXML with the score at the center. Select a phrase or choose
-  exact start/end bars, listen once or loop them, then practise that passage in the full-screen
-  coach. Start/end choices name each repeated-bar occurrence and its playing-order position.
-  Returning preserves the browsing position.
-  Library/import/backup tools are disclosed separately.
+- **Home** — your map: the circle of fifths with every song beside its key and the drills
+  practised in each key growing out of it; keys light up as songs and drills climb the card box.
+  Tap a song for Play now, Listen, Score or to add it to the next session. The **Next session**
+  rail lists the songs the next guitar-mode session draws from (remove ×, Add songs), the big
+  **Guitar mode** button, and drill tiles (Changes, Scales, Ear, Reading, Triads, Free play).
+  An empty library offers the two original studies.
+- **Library** — every song as a card: in/out of the next session, play in guitar mode, remove
+  (practice history is kept), import a score or add a demo. Opening a card shows the song's page:
+  the score, a phrase strip filled as each phrase climbs the box, exact start/end passages,
+  listening/looping and launching exactly that passage. Backup tools sit behind **Backup & tools**.
 - **Progress** — musical goals, historical task records, observed practice patterns and recordings.
   Compare any two retained takes with tempo, task, score-version and assistance context.
   Exercise history reads the captured tune journal beyond the recent-attempt limit, with dated
   clean-tempo observations and inspectable attempts. Versions and help remain separate; shared
   scale history is outside this tune-specific view, and unavailable evidence stays unknown.
 
-**Changes, Scales, Reading, Ear and Triads** remain accessible through Practice’s Explore shortcuts.
+**Back** is always top-left (and the browser's Back, and G5 on the guitar). Guitar mode has a
+labelled **Dashboard** button and returns to the screen it was opened from.
+
+**Changes, Scales, Reading, Ear and Triads** are drill tiles on Home.
 **Triads** is a by-heart drill: "ii of C major" and four written triads to choose from (tap, keys
 1–4, the guitar's cursor, or strum the triad), filed in a card box, keys opening from C outward round
 the circle of fifths, then the same the other way round, minor keys and inversions as each is
@@ -67,13 +72,13 @@ Score acquisition/conversion utilities are maintained as separate local projects
 Song includes an import preview with part/voice selection and explicit score replacement. Use
 **Devices → Save file** for a `.fretpack` containing tunes, practice history, settings and recordings.
 Importing a transfer merges its immutable transactions; repeated imports do not count practice twice.
-Song's older JSON practice backup remains available under Library tools and excludes recordings.
+The older JSON practice backup remains available under Library → Backup & tools and excludes recordings.
 Save failures remain visible. Unsaved progress can be retried or exported; failed recording saves
 stay in memory with Retry and Save audio actions. Keep the page open until they are rescued.
 
 ## With your own agent
 
-In **Songs → Library → Library tools → Practice brief**, choose one tune or all saved music and
+In **Library → Backup & tools → Practice brief**, choose one tune or all saved music and
 7, 28 or 90 days. Prepare a readable summary, inspect its JSON, then copy it for your chosen agent
 or download the report. The bounded report includes
 practice counts, observed notes/timing and dated clean task tempos within that period, with definitions and

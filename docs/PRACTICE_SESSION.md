@@ -43,7 +43,12 @@ the fretted unisons that sound the same (for example A2 at the fifth fret of the
 Double taps are off while the six-row menu is open; the paused drawer prefers the card's own
 notes to open strings.
 
-**Choose tune** lives inside this room, including from free play. Its optional **Listen to
+**Choose tune** lives inside this room, including from free play. It shows the library as a row
+of cards (A♯2/D♯3 move, G♯3 reviews); outside a matched list, F4 puts the highlighted tune in or
+out of the **next session** (`song/sessionSet.ts`). A change to that set made while a session runs
+applies when the next one starts, so the running deck never changes under the player. The corner
+**Dashboard** button (Esc outside fullscreen) leaves guitar mode for the screen it was opened from;
+browser Back is ignored while the room is open. Its optional **Listen to
 opening** only listens while explicitly armed. Matching needs at least six fresh attacks and
 three pitch classes from an original-key opening; octaves may differ. It offers candidates,
 then a separate review and fresh confirmation. Recognition alone never changes music. A change

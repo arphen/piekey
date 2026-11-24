@@ -114,6 +114,12 @@ function loadShared(): Shared {
   return { v: 1, cards: {}, credit: {} };
 }
 
+/** The scale work shared across tunes (Scales, Free play and every tune's own scale cards). */
+export function loadSharedSkills(): { cards: Record<string, CardState>; credit: Record<string, number> } {
+  const { cards, credit } = loadShared();
+  return { cards, credit };
+}
+
 function parse(raw: string | null): Store | null {
   if (!raw) return null;
   const s = JSON.parse(raw) as Store;

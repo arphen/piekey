@@ -30,11 +30,16 @@ exact phrases in `SongCoach`; do not restore an inline Learn flow. Ear (`src/ear
 ## Critical entry points
 
 1. `src/main.tsx` — mounts React and loads global styles.
-2. `src/App.tsx` — thin shell: three primary tabs (Practice, Songs, Progress), with Changes, Scales, Reading, Ear and Triads under Explore, the one shared mic input, and `GuitarNav`. It also holds the key for the Scales shape explorer. Feature state belongs in the feature's hook, not here.
+2. `src/App.tsx` — thin shell: three primary tabs (Home, Library, Progress), with Changes, Scales, Reading, Ear and Triads as Home's drill tiles, the one shared mic input, and `GuitarNav`. Its `{ tab, song, depth }` route is mirrored into `history` so the topbar Back, browser Back and the G5 guitar key walk it; guitar mode returns to where it was entered from. It also holds the key for the Scales shape explorer. Feature state belongs in the feature's hook, not here.
 3. `src/core/contract.ts` — the typed boundary between logic (`core`, `audio`) and UI (`App`, `components`). Change only by agreement, then update every consumer.
 4. `src/core/index.ts` — public music-domain API (`getKey`, `getTune`, `buildPattern`, `fretboardNotes`, ...).
 5. `src/audio/usePlayer.ts` — transport/playback API (`play`, `stop`, `setLoop`, `setPattern`, mix). `src/audio/backing.ts` generates the band.
 6. `src/overview/summary.ts` + `src/components/FocusView.tsx` — tutor overview data and the mode screens that start a focused session.
+   `OverviewView` (Home) is the circle-of-fifths map (`src/overview/map.ts` → `song/tree.ts`,
+   drawn by `SongMap`) beside the **next session** rail. `src/song/sessionSet.ts` is that set
+   (`guitar-session-set`, a synced setting): stored null means every tune; the lead is the current
+   tune, the rest are mixed in, and changes made during a live session apply to the next one.
+   Nothing on Home is labelled "due"; the player chooses.
 7. `src/nav/useGuitarNav.ts` — played navigation for the whole shell (notes E5–A5, DOM-driven cursor). The Reading mode itself runs on `src/song/reading.ts` cards; `src/reading/generate.ts` is legacy, kept only as a `Score` test fixture.
 8. `src/components/Fretboard.tsx` — the shared fretboard renderer used across views.
 9. `src/tunes/musicxml.ts` — MusicXML/archive import, the entry point for loaded tunes.

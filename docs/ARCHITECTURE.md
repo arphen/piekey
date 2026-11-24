@@ -16,10 +16,12 @@ component (`FocusView` → `SongCoach`). Free play is also reachable without a t
 ```
 main.tsx
   └─ App.tsx
-       ├─ header: brand + icon-labelled tab buttons + DeviceSync → DeviceSyncPanel
-       ├─ Practice  ── OverviewView → useSongSummaries → summary/pickGlobalUnits
-       ├─ Songs     ── TuneView → parseMusicXml → LeadSheet → buildTimeline
-       │                 ├─ Score + listening transport + phrase/passage selection + exercise rows
+       ├─ header: Back + brand + Home/Library/Progress pills + Tools + DeviceSync → DeviceSyncPanel
+       ├─ Home      ── OverviewView → useSongSummaries + overview/map (song/tree) → SongMap
+       │                 └─ next-session rail ── song/sessionSet (guitar-session-set)
+       ├─ Library   ── TuneView(songId=null) → LibraryGrid (cards, import, demos, backup tools)
+       │             ── TuneView(songId) → parseMusicXml → LeadSheet → buildTimeline
+       │                 ├─ Score + listening transport + phrase strip/passage selection + exercise rows
        │                 └─ SongCoach → buildDeck → useSession → SessionSummary
        ├─ Progress  ── ProgressView → goals / exercise archive / observed patterns / retained take comparison
        ├─ Explore: Changes ── FocusView(changes) → SongCoach(focus) over familiesOnly(deck)
@@ -153,7 +155,17 @@ and `barCount`. These are presentation projections of the parsed score, rendered
 `Score`; they do not alter exercises or persist another tune model. Without a library, the home
 previews the First Steps score and adds it only when practice is started.
 
-`OverviewView` presents that score and factual metadata, one flat Next exercise list, mode icons
+**Home redesign (2026-11-24).** `OverviewView` no longer shows a score, a goal or a Next list.
+It projects summaries onto the circle-of-fifths tree (`overview/map.ts`: shared and per-tune
+scale cards, free-play entries, each song's box fill; a key hub grows with its drills or its
+songs). `songKey` places a song by its harmony home key when that shares the written signature,
+else by the signature. `SongMap` draws the SVG and lays real `button`s over song nodes so touch,
+mouse and the played cursor reach them. The rail edits `song/sessionSet.ts`; `SongCoachRoom`
+filters its mixed-in guests by that set, frozen while a session is live. `App` mirrors a
+`{ tab, song, depth }` route into `history`: tab buttons push, TuneView's in-session tune
+changes replace, and a launch from elsewhere returns there when the room closes. Browser Back
+is swallowed while a full-screen room is open; the shell's own Back is flagged so it is not.
+Previously: `OverviewView` presented a score and factual metadata, one flat Next exercise list, mode icons
 and simple tune rows. `UnitCard` is a shared exercise row used by the overview and `FocusView`;
 the tune list does not duplicate it. `Glyph` supplies shared icons for the header, modes and
 actions. The compact guitar note/icon legend keeps the existing `useGuitarNav` mappings and mute

@@ -6,15 +6,16 @@ import type { MixReason, UnitPreview, UnitStatus } from "../overview/summary";
 import { Glyph } from "./Glyph";
 import "../overview/unit-card.css";
 
+// No "due": a card waiting for review is simply in its box; skipping it is the player's call.
 const STATUS_LABEL: Record<UnitStatus, string> = {
-  due: "Due",
+  due: "Review",
   next: "New",
   "in-box": "In progress",
   mastered: "Review",
 };
 
 function statusText(unit: UnitPreview): string {
-  if (unit.status === "in-box" && unit.box > 0) return `Box ${unit.box}`;
+  if ((unit.status === "in-box" || unit.status === "due") && unit.box > 0) return `Box ${unit.box}`;
   return STATUS_LABEL[unit.status];
 }
 

@@ -42,7 +42,7 @@ export interface MergeResult {
   revision: number;
 }
 
-const SETTINGS = new Set(["guitar-key", "guitar-tune", "guitar-arc", "guitar-freeplay", "guitar-freeplay-prefs", "guitar-ear-v1", "guitar-skills", "guitar-goals-v1", "guitar-triads-v1"]);
+const SETTINGS = new Set(["guitar-key", "guitar-tune", "guitar-arc", "guitar-freeplay", "guitar-freeplay-prefs", "guitar-ear-v1", "guitar-skills", "guitar-goals-v1", "guitar-triads-v1", "guitar-session-set"]);
 const reserved = (key: string) => key === "prototype" || Object.prototype.hasOwnProperty.call(Object.prototype, key);
 export function syncableStorageKey(key: string): boolean {
   return SETTINGS.has(key) || key.startsWith("guitar-song-deck:") || key.startsWith("guitar-learn:");
@@ -204,6 +204,7 @@ function validPayload(tx: SyncTransaction, raw: string | null): boolean {
   if (tx.key === "guitar-goals-v1") return validGoalData(value);
   if (tx.key === "guitar-ear-v1") return validEar(value);
   if (tx.key === "guitar-triads-v1") return validTriadStore(value);
+  if (tx.key === "guitar-session-set") return Array.isArray(value) && value.length <= 512 && value.every((id) => typeof id === "string" && id.length > 0 && id.length <= 512);
   if (tx.key.startsWith("guitar-learn:")) return isRecord(value) && count(value.step) && Array.isArray(value.done) && value.done.every(count);
   return true;
 }

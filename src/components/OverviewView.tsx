@@ -1,269 +1,221 @@
 import { useMemo, useRef, useState, type CSSProperties } from "react";
-import * as Tone from "tone";
-import { ensureAudio } from "../audio/context";
-import { today } from "../song/leitner";
-import type { NoteResult } from "../core/contract";
 import { TUTOR_MODES, type TutorTargetTab } from "../overview/modes";
-import { pickGlobalUnits } from "../overview/summary";
 import { cachedSong, useSongSummaries } from "../overview/useSongSummaries";
-import { relativeDay } from "../overview/visual";
-import { loadLibraryAsync, parseTuneEntry, saveLibrary } from "../tunes/library";
-import { BLUE_HOUR_ENTRY, DEMO_TUNES } from "../tunes/demos";
+import { keyName, practiceMap, songFill, songKey, type MapSong } from "../overview/map";
+import type { SongSummary } from "../overview/summary";
+import { loadLibraryAsync, saveCurrentTuneId, saveLibrary } from "../tunes/library";
+import { DEMO_TUNES, type DemoTune } from "../tunes/demos";
+import { useSessionSet } from "../song/sessionSet";
 import type { InputApi } from "../listen/useInput";
 import { Glyph } from "./Glyph";
-import { UnitCard } from "./UnitCard";
-import { Score } from "./Score";
-import { GoalChooser } from "./GoalChooser";
+import { SongMap } from "./SongMap";
 import "../overview/overview.css";
+import "../overview/home.css";
 
-const SONG_LIMIT = 4;
-const NO_RESULTS: NoteResult[] = [];
+// Home: the player's map and what the next session holds. The map is the circle of fifths with
+// every song beside its key, growing as songs and drills climb the card box. The rail holds the
+// songs the next session draws from, big enough to change with a hand off the guitar, the way
+// into guitar mode, and the focused drills. Nothing here is "due": the player chooses.
 
-function BoxBar({ boxes, total }: { boxes: number[]; total: number }) {
-  return (
-    <span className="tutor-boxbar" aria-label="box progress">
-      {boxes.map((count, index) =>
-        count ? (
-          <i
-            key={index}
-            data-box={index + 1}
-            style={{ width: `${total ? (count / total) * 100 : 0}%` }}
-            title={`box ${index + 1}: ${count}`}
-          />
-        ) : null,
-      )}
-    </span>
-  );
-}
-
-function EmptyLibrary({ onOpen }: { onOpen: () => void }) {
-  return (
-    <div className="tutor-empty">
-      <Glyph name="library" size={26} />
-      <div>
-        <strong>Your own music</strong>
-        <p>MusicXML · .xml · .mxl</p>
-      </div>
-      <button type="button" className="tutor-primary" onClick={onOpen}>
-        Import tune <Glyph name="arrow" size={16} />
-      </button>
-    </div>
-  );
-}
+const DRILLS = TUTOR_MODES.filter((mode) => mode.id !== "song");
 
 function ConnectGuitar({ input }: { input: InputApi }) {
   const starting = input.status === "starting";
   return (
-    <div className="tutor-connect">
-      <button type="button" className="tutor-connect-btn" onClick={() => void input.start()} disabled={starting}>
+    <div className="hm-connect">
+      <button type="button" onClick={() => void input.start()} disabled={starting}>
         <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M9 3v9a3 3 0 0 0 6 0V3a3 3 0 0 0-6 0ZM5 10v2a7 7 0 0 0 14 0v-2M12 19v3m-4 0h8" /></svg>
         {starting ? "Connecting…" : input.status === "error" ? "Retry guitar input" : "Connect your guitar"}
       </button>
-      {input.status === "error" && input.error ? <p className="tutor-error" role="alert">{input.error}</p> : null}
+      {input.status === "error" && input.error ? <p className="hm-error" role="alert">{input.error}</p> : null}
     </div>
   );
+}
+
+
+function Progress({ song }: { song: SongSummary }) {
+  const fill = songFill(song);
+  return <span className="hm-meter" aria-label={`${Math.round(fill * 100)}% of exercises climbed`}><i style={{ width: `${Math.max(fill * 100, fill > 0 ? 4 : 0)}%` }} /></span>;
 }
 
 export function OverviewView({
   input,
   onOpenMode,
   onOpenSong,
+  onOpenLibrary,
   onListenSong,
-  onOpenProgress,
   onStartPractice,
-  onPreparePractice,
 }: {
   input?: InputApi;
   onOpenMode: (target: TutorTargetTab) => void;
   onOpenSong: (tuneId: string) => void;
+  onOpenLibrary?: () => void;
   onListenSong?: (tuneId: string) => void;
-  onOpenProgress?: () => void;
   onStartPractice: (tuneId: string, cardId?: string, prepared?: boolean) => void;
-  onPreparePractice?: () => void;
 }) {
-  const { songs, currentTuneId, loading, error, issues = [] } = useSongSummaries();
-  const [showAll, setShowAll] = useState(false);
-  const [starting, setStarting] = useState(false);
-  const demoBusy = useRef(false);
-  const [demoId, setDemoId] = useState(BLUE_HOUR_ENTRY.id);
-  const demo = DEMO_TUNES.find((item) => item.entry.id === demoId) ?? DEMO_TUNES[0];
-  const current = songs.find((song) => song.tuneId === currentTuneId) ?? songs[0] ?? null;
-  const currentMusic = current ? cachedSong(current.tuneId) : undefined;
-  const mixed = pickGlobalUnits(songs, current?.tuneId ?? null, 3);
-  const visibleSongs = showAll ? songs : songs.slice(0, SONG_LIMIT);
-  const day = today();
-  const example = useMemo(() => !current && !loading ? parseTuneEntry(demo.entry) : null, [current, loading, demo]);
-  const excerpt = current?.excerpt ?? (example ? { bars: example.bars.slice(0, 2), keySignature: example.keySignature, timeSignature: example.timeSignature } : null);
-  const title = current?.title ?? example?.title ?? (loading ? "Loading…" : "Library unavailable");
-  const key = current?.key ?? example?.keySignature;
-  const tempo = current?.tempo ?? example?.tempo;
-  const barCount = current?.barCount ?? example?.bars.length;
-  const openDemo = async (action: "open" | "listen" | "practice") => {
-    if (demoBusy.current) return;
-    demoBusy.current = true;
-    if (action === "practice") onPreparePractice?.();
-    if (action === "listen") { ensureAudio(); void Tone.start().catch(() => undefined); }
-    setStarting(true);
+  const [revision, setRevision] = useState(0);
+  const { songs, currentTuneId, loading, error, issues = [] } = useSongSummaries(revision);
+  const libraryIds = useMemo(() => songs.map((song) => song.tuneId), [songs]);
+  const session = useSessionSet(libraryIds);
+  const [lead, setLead] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [demoBusy, setDemoBusy] = useState(false);
+  const demoLock = useRef(false);
+  const byId = useMemo(() => new Map(songs.map((song) => [song.tuneId, song])), [songs]);
+
+  const chosenLead = lead ?? currentTuneId;
+  const leadId = chosenLead && session.has(chosenLead) ? chosenLead : session.ids[0] ?? (chosenLead && byId.has(chosenLead) ? chosenLead : songs[0]?.tuneId ?? null);
+  const sessionSongs = useMemo(() => {
+    const listed = session.ids.flatMap((id) => byId.get(id) ?? []);
+    return leadId ? [...listed.filter((song) => song.tuneId === leadId), ...listed.filter((song) => song.tuneId !== leadId)] : listed;
+  }, [session.ids, byId, leadId]);
+  const outside = songs.filter((song) => !session.has(song.tuneId));
+  const leadSong = leadId ? byId.get(leadId) : undefined;
+  const sessionIds = useMemo(() => new Set(session.ids), [session.ids]);
+
+  const keys = useMemo(() => new Map(songs.map((song) => [song.tuneId, songKey(cachedSong(song.tuneId)?.deck.harmony.home.id, song.key)])), [songs]);
+  const keyLabel = (song: SongSummary) => { const key = keys.get(song.tuneId); return key ? keyName(key) : song.key; };
+  const mapSongs = useMemo((): MapSong[] => songs.flatMap((song) => {
+    const key = keys.get(song.tuneId);
+    return key ? [{ id: song.tuneId, title: song.title, key, fill: songFill(song) }] : [];
+  }), [songs, keys]);
+  const map = useMemo(() => practiceMap(mapSongs), [mapSongs]);
+  const keysLit = map.nodes.filter((node) => (node.kind === "major" || node.kind === "minor") && node.fill > 0).length;
+  const keyCount = new Set(mapSongs.map((song) => song.key)).size;
+  const picked = selected ? byId.get(selected) : undefined;
+
+  const makeLead = (id: string) => {
+    setLead(id);
+    try { saveCurrentTuneId(id); } catch { /* the storage notice reports it */ }
+  };
+  const play = (id: string | null | undefined) => { if (id) onStartPractice(id); };
+  const addDemo = async (demo: DemoTune) => {
+    if (demoLock.current) return;
+    demoLock.current = true;
+    setDemoBusy(true);
     try {
       const entries = await loadLibraryAsync();
       if (!entries.some((entry) => entry.id === demo.entry.id)) await saveLibrary([...entries, demo.entry]);
+      session.add(demo.entry.id);
+      makeLead(demo.entry.id);
+      setRevision((value) => value + 1);
     } catch {
-      // The bundled original can be previewed even when the saved library is unavailable.
+      onOpenSong(demo.entry.id); // the bundled original still opens as a preview
     } finally {
-      demoBusy.current = false;
-      setStarting(false);
+      demoLock.current = false;
+      setDemoBusy(false);
     }
-    if (action === "practice") onStartPractice(demo.entry.id, undefined, Boolean(onPreparePractice));
-    else if (action === "listen" && onListenSong) onListenSong(demo.entry.id);
-    else onOpenSong(demo.entry.id);
   };
 
+  const empty = !loading && !songs.length;
   return (
-    <main className="tutor">
-      <header className="tutor-hero">
-        <div className="tutor-hero-copy">
-          <p className="tutor-eyebrow">{current ? "Practice" : demo.label}</p>
-          <h2>{title}</h2>
-          <div className="tutor-tune-meta">
-            {key ? <span>{key}</span> : null}
-            {excerpt ? <span>{excerpt.timeSignature}</span> : null}
-            {tempo ? <span><Glyph name="free" size={15} />{tempo}</span> : null}
-            {barCount ? <span>{barCount} bars</span> : null}
-          </div>
-          {current?.composer ? <p className="tutor-composer">{current.composer}</p> : null}
-          {!current && !loading ? <>
-            <p className="tutor-demo-description">{demo.description}</p>
-            <div className="tutor-demo-choices" role="group" aria-label="Try an original study">
-              {DEMO_TUNES.map((item) => <button key={item.entry.id} type="button" aria-pressed={demoId === item.entry.id} disabled={starting} onClick={() => setDemoId(item.entry.id)}>{item.title}</button>)}
+    <main className="home">
+      <section className="hm-world" aria-label="Your map">
+        <header className="hm-head">
+          <p className="hm-kicker">Your map</p>
+          <p className="hm-stats">
+            {loading ? "Opening library…" : empty ? "Songs you add appear beside their key" : <>
+              <span><b>{songs.length}</b> song{songs.length === 1 ? "" : "s"} in <b>{keyCount}</b> key{keyCount === 1 ? "" : "s"}</span>
+              {keysLit ? <span><b>{keysLit}</b> growing</span> : null}
+            </>}
+          </p>
+        </header>
+        <SongMap map={map} sessionIds={sessionIds} leadId={leadId} selectedId={selected} onSelect={setSelected} />
+        {picked ? (
+          <div className="hm-inspect" role="group" aria-label={`${picked.title}`}>
+            <button type="button" className="hm-inspect-close" aria-label="Close" onClick={() => setSelected(null)}><Glyph name="close" size={18} /></button>
+            <p className="hm-kicker">{[keyLabel(picked), picked.barCount ? `${picked.barCount} bars` : null, picked.composer].filter(Boolean).join(" · ")}</p>
+            <h3>{picked.title}</h3>
+            <Progress song={picked} />
+            <div className="hm-inspect-actions">
+              <button type="button" className="hm-btn is-primary" onClick={() => play(picked.tuneId)}><Glyph name="play" size={20} />Play now</button>
+              <button type="button" className="hm-btn" aria-pressed={session.has(picked.tuneId)} onClick={() => session.toggle(picked.tuneId)}>
+                <Glyph name={session.has(picked.tuneId) ? "check" : "plus"} size={18} />{session.has(picked.tuneId) ? "In next session" : "Add to next session"}
+              </button>
+              {onListenSong ? <button type="button" className="hm-btn" onClick={() => onListenSong(picked.tuneId)}><Glyph name="ear" size={18} />Listen</button> : null}
+              <button type="button" className="hm-btn" onClick={() => onOpenSong(picked.tuneId)}><Glyph name="melody" size={18} />Score</button>
             </div>
-          </> : null}
-          {error ? <p className="tutor-error" role="alert">{error}</p> : null}
-          {input && input.status !== "listening" ? <ConnectGuitar input={input} /> : null}
-          <div className="tutor-actions">
-            <button
-              type="button"
-              className="tutor-primary"
-              disabled={loading || starting}
-              onClick={() => current ? onStartPractice(current.tuneId) : void openDemo("practice")}
-            >
-              <Glyph name="play" size={18} />{starting ? "Loading…" : current ? "Start practice" : "Try practice"}
-            </button>
-            <button type="button" className="tutor-secondary" disabled={loading || starting} onClick={() => current ? onOpenMode("tunes") : void openDemo(onListenSong ? "listen" : "open")}>
-              <Glyph name={current ? "library" : "ear"} size={19} />{current ? "Library" : "Listen"}
-            </button>
           </div>
-        </div>
+        ) : null}
+      </section>
 
-        <div className="tutor-manuscript">
-          {excerpt ? <div className="tutor-excerpt"><Score exercise={excerpt} activeStep={-1} results={NO_RESULTS} showFingering={false} barsPerLine={2} /></div> : <div className="tutor-staff-placeholder" aria-hidden="true" />}
-          {current?.path.total ? (
-            <ol className="tutor-path" aria-label={`${current.path.ready} of ${current.path.total} performance milestones`}>
-              {current.path.milestones.map((milestone) => <li key={milestone.id} className={milestone.ready ? "is-ready" : ""} title={milestone.ready ? `${milestone.label} achieved` : `${milestone.label} not yet achieved`}><span>{milestone.ready ? <Glyph name="check" size={13} /> : <i />}</span><small>{milestone.label}</small></li>)}
-            </ol>
-          ) : null}
-        </div>
-      </header>
-
-      {currentMusic ? <GoalChooser sheet={currentMusic.sheet} deck={currentMusic.deck} /> : null}
-
-      {issues.length ? <section className="tutor-library-issues" aria-label="Scores needing repair"><h3>Scores needing repair</h3>{issues.map((issue) => <div key={issue.id}><span>{issue.name}</span><small>{issue.message}</small><button type="button" className="tutor-link" onClick={() => onOpenSong(issue.id)}>Repair score <Glyph name="arrow" size={15} /></button></div>)}</section> : null}
-
-      <div className="tutor-workbench">
-      {loading || songs.length > 0 ? (
-        <section className="tutor-section tutor-next" aria-labelledby="tutor-mixed-title">
-          <div className="tutor-section-head">
-            <h3 id="tutor-mixed-title">Next</h3>
-            <span className="tutor-section-count">{mixed.length ? String(mixed.length).padStart(2, "0") : ""}</span>
-          </div>
-          {loading ? (
-            <div className="tutor-loading">Loading…</div>
-          ) : (
-            <div className="tutor-mixed">
-              {mixed.map((unit) => (
-                <UnitCard
-                  key={`${unit.tuneId}:${unit.id}`}
-                  unit={unit}
-                  label={songs.length > 1 ? unit.tuneTitle : undefined}
-                  reason={unit.reason}
-                  onOpen={() => onStartPractice(unit.tuneId, unit.id)}
-                />
+      <aside className="hm-rail">
+        <section className="hm-session" aria-labelledby="hm-session-title">
+          <header>
+            <h2 id="hm-session-title">Next session</h2>
+            {sessionSongs.length ? <span>{sessionSongs.length} song{sessionSongs.length === 1 ? "" : "s"}</span> : null}
+          </header>
+          {loading ? <p className="hm-quiet">Opening library…</p> : empty ? (
+            <div className="hm-demos">
+              {DEMO_TUNES.map((demo) => (
+                <button key={demo.entry.id} type="button" className="hm-tile is-demo" disabled={demoBusy} onClick={() => void addDemo(demo)}>
+                  <span className="hm-tile-key">{demo.label}</span>
+                  <span className="hm-tile-title">{demo.title}</span>
+                  <span className="hm-tile-meta"><Glyph name="plus" size={14} />Add to library</span>
+                </button>
               ))}
+              {onOpenLibrary ? <button type="button" className="hm-add" onClick={onOpenLibrary}><Glyph name="library" size={20} />Import your own score</button> : null}
             </div>
+          ) : (
+            <>
+              <ol className="hm-tiles">
+                {sessionSongs.map((song) => (
+                  <li key={song.tuneId} className={`hm-tile-row ${song.tuneId === leadId ? "is-lead" : ""}`}>
+                    <button type="button" className="hm-tile" aria-pressed={song.tuneId === leadId} onClick={() => makeLead(song.tuneId)} title={song.tuneId === leadId ? "The session starts here" : "Start the session with this song"}>
+                      <span className="hm-tile-key">{keyLabel(song)}{song.tuneId === leadId ? <em>starts here</em> : null}</span>
+                      <span className="hm-tile-title">{song.title}</span>
+                      <Progress song={song} />
+                    </button>
+                    <button type="button" className="hm-tile-x" aria-label={`Remove ${song.title} from next session`} onClick={() => session.remove(song.tuneId)}><Glyph name="close" size={18} /></button>
+                  </li>
+                ))}
+              </ol>
+              {!sessionSongs.length ? <p className="hm-quiet">No songs chosen. Guitar mode plays {leadSong?.title ?? "the first song"} alone.</p> : null}
+              <button type="button" className="hm-add" onClick={() => setAdding(true)} disabled={!outside.length && !onOpenLibrary}><Glyph name="plus" size={20} />Add songs</button>
+            </>
           )}
         </section>
-      ) : null}
 
-      <section className="tutor-section tutor-mode-section" aria-labelledby="tutor-modes-title">
-        <div className="tutor-section-head">
-          <h3 id="tutor-modes-title">Explore</h3>
-        </div>
-        <div className="tutor-modes">
-          {TUTOR_MODES.map((mode) => (
-            <button
-              key={mode.id}
-              type="button"
-              className="tutor-mode"
-              style={{ "--mode": mode.color } as CSSProperties}
-              onClick={() => onOpenMode(mode.targetTab)}
-              title={mode.blurb}
-            >
-              <span className="tutor-mode-icon">
-                <Glyph name={mode.glyph} size={30} />
-              </span>
-              <span className="tutor-mode-copy">
-                <strong>{mode.label}</strong>
-              </span>
-              {mode.requiresTune && !current ? <span className="tutor-mode-note">choose a song</span> : null}
+        <button type="button" className="hm-play" disabled={loading || !leadId} onClick={() => play(leadId)}>
+          <span className="hm-play-icon"><Glyph name="play" size={26} /></span>
+          <span className="hm-play-copy"><strong>Guitar mode</strong><small>{leadSong ? `${leadSong.title}${sessionSongs.length > 1 ? ` + ${sessionSongs.length - 1} more` : ""}` : empty ? "Add a song first" : ""}</small></span>
+        </button>
+        {input && input.status === "error" ? <ConnectGuitar input={input} /> : null}
+        {error ? <p className="hm-error" role="alert">{error}</p> : null}
+        {issues.length ? <button type="button" className="hm-notice" onClick={onOpenLibrary}>{issues.length} score{issues.length === 1 ? " needs" : "s need"} repair<Glyph name="arrow" size={16} /></button> : null}
+
+        <section className="hm-drills" aria-label="Drills">
+          {DRILLS.map((mode) => (
+            <button key={mode.id} type="button" className="hm-drill" style={{ "--mode": mode.color } as CSSProperties} onClick={() => onOpenMode(mode.targetTab)} title={mode.blurb}>
+              <Glyph name={mode.glyph} size={26} />
+              <span>{mode.label}</span>
             </button>
           ))}
+        </section>
+      </aside>
+
+      {adding ? (
+        <div className="hm-sheet" role="dialog" aria-modal="true" aria-label="Add songs to next session">
+          <div className="hm-sheet-scrim" onClick={() => setAdding(false)} />
+          <section className="hm-sheet-body">
+            <header>
+              <h2>Add songs</h2>
+              <button type="button" className="hm-btn" onClick={() => setAdding(false)}><Glyph name="check" size={18} />Done</button>
+            </header>
+            {outside.length ? <div className="hm-sheet-grid">
+              {outside.map((song) => (
+                <button key={song.tuneId} type="button" className="hm-tile" onClick={() => session.add(song.tuneId)}>
+                  <span className="hm-tile-key">{keyLabel(song)}</span>
+                  <span className="hm-tile-title">{song.title}</span>
+                  <span className="hm-tile-meta"><Glyph name="plus" size={14} />Add</span>
+                </button>
+              ))}
+            </div> : <p className="hm-quiet">Every song in your library is in the next session.</p>}
+            {onOpenLibrary ? <button type="button" className="hm-add" onClick={() => { setAdding(false); onOpenLibrary(); }}><Glyph name="library" size={20} />Import a new score</button> : null}
+          </section>
         </div>
-      </section>
-      </div>
-
-      {onOpenProgress ? <button type="button" className="tutor-link tutor-progress-link" onClick={onOpenProgress}><Glyph name="progress" size={18} />Progress & recordings <Glyph name="arrow" size={16} /></button> : null}
-
-
-      <section className="tutor-section" aria-labelledby="tutor-songs-title">
-        <div className="tutor-section-head">
-          <h3 id="tutor-songs-title"><Glyph name="library" size={19} />Tunes</h3>
-          <div className="tutor-section-actions">
-            {songs.length > SONG_LIMIT ? (
-              <button type="button" className="tutor-link" onClick={() => setShowAll((value) => !value)}>
-                {showAll ? "Show less" : `All ${songs.length}`}
-              </button>
-            ) : null}
-            <button type="button" className="tutor-link" onClick={() => onOpenMode("tunes")}>
-              Open library <Glyph name="arrow" size={16} />
-            </button>
-          </div>
-        </div>
-
-        {loading ? (
-          <div className="tutor-loading">Loading…</div>
-        ) : visibleSongs.length ? (
-          <div className="tutor-song-list">
-            {visibleSongs.map((song) => (
-              <article key={song.tuneId} className="tutor-song">
-                <header className="tutor-song-head">
-                  <Glyph name="melody" size={23} />
-                  <div className="tutor-song-name">
-                    <h4>{song.title}</h4>
-                    <p>
-                      {[song.key, song.composer, relativeDay(song.lastPlayed, day)].filter(Boolean).join(" · ")}
-                    </p>
-                  </div>
-                  {song.boxes.some(Boolean) ? <div className="tutor-song-progress"><BoxBar boxes={song.boxes} total={song.total} /></div> : null}
-                  <button type="button" className="tutor-link" aria-label={`Open ${song.title}`} onClick={() => onOpenSong(song.tuneId)}>
-                    <Glyph name="arrow" size={19} />
-                  </button>
-                </header>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <EmptyLibrary onOpen={() => onOpenMode("tunes")} />
-        )}
-      </section>
+      ) : null}
     </main>
   );
 }

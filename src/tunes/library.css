@@ -1,0 +1,173 @@
+/* The library and a song's page, in the same night-and-brass as home and guitar mode, with
+   targets a hand can find without looking for long. */
+
+.app.tab-tunes {
+  --bg: #0d0c0f;
+  --ink-faint: #8a8079;
+  --line: rgba(255, 240, 220, 0.09);
+  --line-strong: rgba(255, 240, 220, 0.18);
+  background:
+    radial-gradient(1000px 520px at 80% -10%, rgba(224, 169, 86, 0.07), transparent 62%),
+    var(--bg);
+}
+.tunes { width: min(1240px, calc(100% - 64px)); }
+.tunes button { font-weight: 400; transform: none; filter: none; }
+.tunes button:hover { transform: none; filter: none; }
+
+/* ---------- header ---------- */
+
+.lib-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 24px; }
+.lib-head h2 { margin: 0; font: 400 clamp(40px, 5vw, 64px)/1.05 var(--font-display); letter-spacing: -0.045em; }
+.lib-head .tunes-byline { font-size: 14px; }
+.lib-head-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.tunes .lib-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 54px;
+  padding: 0 20px;
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 15px;
+  transition: background 0.18s, border-color 0.18s, color 0.18s;
+}
+.tunes .lib-btn:hover:not(:disabled) { background: rgba(255, 240, 220, 0.06); }
+.tunes .lib-btn.is-primary { border-color: transparent; background: linear-gradient(135deg, #f0c478, #d79a4c); color: #1d150b; font-weight: 600; }
+.tunes .lib-btn.is-primary:hover:not(:disabled) { background: linear-gradient(135deg, #f6d08c, #e0a656); }
+.tunes .lib-btn.is-danger { border-color: rgba(233, 138, 107, 0.6); color: var(--warn); }
+.tunes .lib-btn.is-danger:hover:not(:disabled) { background: rgba(233, 138, 107, 0.12); }
+.tunes .lib-btn[aria-pressed="true"] { border-color: rgba(240, 196, 120, 0.6); background: rgba(224, 169, 86, 0.13); color: #f6dfb0; }
+
+/* ---------- the cards ---------- */
+
+.lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 16px; }
+.lib-card {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: rgba(255, 240, 220, 0.03);
+  overflow: hidden;
+  transition: border-color 0.2s, background 0.2s;
+}
+.lib-card:hover { border-color: var(--line-strong); }
+.lib-card.is-session { border-color: rgba(240, 196, 120, 0.42); background: linear-gradient(160deg, rgba(224, 169, 86, 0.11), rgba(224, 169, 86, 0.02) 60%); }
+.lib-card.is-broken { border-color: rgba(233, 138, 107, 0.4); }
+.tunes .lib-card-open {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  min-height: 150px;
+  padding: 22px 22px 18px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  text-align: left;
+}
+.tunes .lib-card-open:hover:not(:disabled) .lib-card-title { color: #f6dfb0; }
+.lib-card-key { color: var(--brass); font: 400 11px/1.4 var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; }
+.lib-card.is-broken .lib-card-key { color: var(--warn); }
+.lib-card-title { font: 400 28px/1.1 var(--font-display); letter-spacing: -0.03em; overflow-wrap: anywhere; transition: color 0.2s; }
+.lib-card-meta { color: var(--ink-soft); font-size: 13px; line-height: 1.5; }
+.lib-meter { display: block; height: 4px; margin-top: 8px; overflow: hidden; border-radius: 4px; background: rgba(255, 240, 220, 0.08); }
+.lib-meter i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #b07a35, #f0c478); }
+.lib-card-actions, .lib-card-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px; border-top: 1px solid var(--line); }
+.lib-card-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; flex-wrap: nowrap; }
+.tunes .lib-card-actions .lib-session { min-width: 0; padding: 0 12px; white-space: nowrap; }
+.tunes .lib-icon { width: 54px; padding: 0; }
+.lib-card-confirm p { flex-basis: 100%; margin: 0 0 4px; color: var(--ink-soft); font-size: 14px; }
+.lib-card-confirm .lib-btn { flex: 1; }
+.tunes .lib-import {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  min-height: 220px;
+  padding: 24px;
+  border: 1.5px dashed rgba(255, 240, 220, 0.18);
+  border-radius: 22px;
+  background: none;
+  color: var(--ink-soft);
+  text-align: center;
+}
+.tunes .lib-import strong { color: var(--ink); font: 400 24px/1.2 var(--font-display); }
+.tunes .lib-import small { max-width: 28ch; color: var(--ink-faint); font-size: 12px; line-height: 1.5; }
+.tunes .lib-import:hover:not(:disabled) { border-color: rgba(240, 196, 120, 0.55); background: rgba(224, 169, 86, 0.05); }
+
+/* ---------- a song's page ---------- */
+
+.tunes-heading { flex-wrap: wrap; align-items: center; }
+.tunes .tunes-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 22px;
+  min-height: 48px;
+  padding: 0 16px 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+.tunes .tunes-back svg { transform: rotate(180deg); }
+.tunes .tunes-back:hover { color: var(--ink); background: rgba(255, 240, 220, 0.05); }
+.tunes-heading > div { flex: 1 1 420px; }
+.tunes .tunes-session-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 54px;
+  padding: 0 20px;
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  background: none;
+  color: var(--ink);
+  font-size: 15px;
+}
+.tunes .tunes-session-toggle[aria-pressed="true"] { border-color: rgba(240, 196, 120, 0.6); background: rgba(224, 169, 86, 0.13); color: #f6dfb0; }
+.tunes-heading .tunes-byline { font-size: 13px; }
+
+/* the transport: bigger, brass instead of the old sage */
+.tunes .tunes-listen-button { min-height: 52px; border-radius: 14px; padding: 0 20px; background: linear-gradient(135deg, #f0c478, #d79a4c); color: #1d150b; font-size: 15px; font-weight: 600; }
+.tunes .tunes-listen-button:hover:not(:disabled) { background: linear-gradient(135deg, #f6d08c, #e0a656); }
+.tunes .tunes-practice-piece, .tunes .tunes-sound-toggle, .tunes .tunes-passage-toggle { min-height: 52px; padding: 0 16px; border: 1px solid var(--line-strong); border-radius: 14px; color: var(--ink); font-size: 14px; }
+.tunes .tunes-practice-piece:hover, .tunes .tunes-sound-toggle:hover, .tunes .tunes-passage-toggle:hover { background: rgba(255, 240, 220, 0.05); }
+.tunes-score-actions { gap: 12px 12px; }
+
+/* phrases: the tune laid out as blocks, wide as their bars, filled as they climb the box */
+.tunes-phrases { display: grid; gap: 14px; }
+.tunes-phrases h3 { font-size: 13px; }
+.tunes-strip { display: flex; flex-wrap: wrap; gap: 6px; }
+.tunes-phrases .tunes-strip button {
+  position: relative;
+  flex: var(--bars, 1) 1 calc(var(--bars, 1) * 30px + 36px);
+  justify-content: center;
+  min-width: 64px;
+  min-height: 58px;
+  padding: 0 8px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 240, 220, 0.03);
+  color: var(--ink-soft);
+  font: 400 13px var(--font-mono);
+}
+.tunes-strip button::before {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: calc(var(--box, 0) * 100%);
+  background: linear-gradient(0deg, rgba(224, 169, 86, 0.32), rgba(224, 169, 86, 0.08));
+  pointer-events: none;
+}
+.tunes-strip button > span { position: relative; }
+.tunes-phrases .tunes-strip button:hover { border-color: var(--line-strong); color: var(--ink); }
+.tunes-phrases .tunes-strip button[aria-pressed="true"] { border-color: #f0c478; color: #f6dfb0; text-decoration: none; box-shadow: 0 0 0 3px rgba(240, 196, 120, 0.14); }
+
+.tunes-goal { display: grid; gap: 12px; }

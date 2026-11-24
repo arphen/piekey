@@ -48,7 +48,7 @@ Unless an item says otherwise, implement it there.
 | T16 | Scale last-note bug, encouragement, metronome-first work, rhythms and melodic patterns | PARTIAL | Gap click from box 4 and tempo ceilings in the profile (2026-11-17); no BPM history chart. |
 | T17 | Stage notes → rhythm → melody; exercises influence each other; avoid endless cards | PARTIAL | Stages and scale kinship exist; kinship does not cover arpeggios/guide tones/voicings. |
 | T18 | ii–V–I switch less jarring; listen-again and metronome from guitar anywhere | PARTIAL | Changes now runs in SongCoach (guitar gestures, listen again, tempo); no dedicated "play the progression" card yet. |
-| T19 | Free-play logging, key/exercise categorization, passive tree, Leitner integration, react to playing | PARTIAL | Strummed loops recognised and routed to voicings cards (2026-11-17); progressions not logged, tree still read-only. |
+| T19 | Free-play logging, key/exercise categorization, passive tree, Leitner integration, react to playing | PARTIAL | Strummed loops recognised and routed to voicings cards (2026-11-17); the tree is Home's map with every library song beside its key (2026-11-24). Progressions not logged; chords are not nodes yet; the tree is still read-only (no drill launch from a key). |
 | T20 | Unplug/replug interface should not kick the player out or require reload | SHIPPED (code) | Runtime unverified; verify pause/resume and output fallback. |
 | T21 | Metronome discipline; communicate slow down/speed up; back off on mistakes; hear V–I; next from guitar | SHIPPED (v1) | Session mood is mostly visual; explicit sonic cues and a first-class "slow down" signal remain. |
 | T22 | Detect the string a note was played on | OPEN | String is inferred from position/fingering, not heard. |
@@ -533,6 +533,9 @@ song they bring.
 
 **Evidence.**
 
+- 2026-11-24: the tree became Home (`OverviewView` → `overview/map.ts` → `SongMap`). Every library
+  song hangs off its key; a key hub fills with its drills or its songs' box progress; songs in
+  the next session are ringed in brass. Missing: chord nodes, tapping a key to drill it.
 - `useFreePlay` detects onsets, estimates key (Krumhansl), pattern (run/thirds/triads/7ths), grid
   division, timing and in-key ratio; it runs a click/band and logs `FreeEntry` to `guitar-freeplay`
   on exit (key, pattern, BPM, division, seconds).

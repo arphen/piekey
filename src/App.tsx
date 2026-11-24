@@ -18,25 +18,40 @@ import { DeviceSync } from "./components/DeviceSync";
 import { openPractice } from "./components/SongCoach";
 import type { GlyphName, TutorTargetTab } from "./overview/modes";
 import { useInput } from "./listen/useInput";
+import { sessionOpen } from "./nav/useGuitarNav";
 import { saveCurrentTuneId } from "./tunes/library";
 import { getStoredItem, setStoredItem } from "./storage";
 import { GuitarTools } from "./tools/GuitarTools";
 import "./practice.css";
+import "./shell.css";
 
 type Tab = "tutor" | "progress" | TutorTargetTab;
 type PracticeLaunch = { kind: "song" | "listen" | "session" | "card"; tuneId?: string; cardId?: string };
+/** Where the shell is. Mirrored into the browser history, so Back (button, key, swipe) walks it. */
+interface Route { tab: Tab; song: string | null; depth: number }
 
 const KEY_STORAGE = "guitar-key";
+const HOME: Route = { tab: "tutor", song: null, depth: 0 };
 const TABS: { id: Tab; label: string; glyph: GlyphName | UtilityGlyphName }[] = [
-  { id: "tutor", label: "Practice", glyph: "home" },
-  { id: "tunes", label: "Songs", glyph: "melody" },
+  { id: "tutor", label: "Home", glyph: "home" },
+  { id: "tunes", label: "Library", glyph: "library" },
   { id: "progress", label: "Progress", glyph: "progress" },
 ];
 const primaryTab = (tab: Tab) => tab === "tunes" || tab === "progress" ? tab : "tutor";
+const routeOf = (state: unknown): Route | null => {
+  const route = (state as { ffl?: Route } | null)?.ffl;
+  return route && typeof route.tab === "string" && typeof route.depth === "number" ? route : null;
+};
+const trySaveTune = (id: string) => { try { saveCurrentTuneId(id); } catch { /* the save notice reports it */ } };
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>("tutor");
+  const [route, setRoute] = useState<Route>(() => routeOf(history.state) ?? HOME);
+  const routeRef = useRef(route);
+  routeRef.current = route;
+  const tab = route.tab;
   const [launch, setLaunch] = useState<PracticeLaunch>();
+  const returnAfterSession = useRef(false);
+  const ownPop = useRef(false); // a Back the shell asked for itself, as opposed to the browser's
   const [stateRevision, setStateRevision] = useState(0);
   const [devicesOpen, setDevicesOpen] = useState(() => new URLSearchParams(location.hash.slice(1)).has("pair"));
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -50,6 +65,47 @@ export default function App() {
     observer?.observe(header);
     return () => { observer?.disconnect(); document.documentElement.style.removeProperty("--topbar-h"); };
   }, []);
+
+  // ---------- routes and the browser history ----------
+  useEffect(() => {
+    try { history.replaceState({ ...(history.state ?? {}), ffl: routeRef.current }, ""); } catch { /* history is a convenience */ }
+    const onPop = (event: PopStateEvent) => {
+      // guitar mode owns the screen: Back there is its own Dashboard button, so the shell stays put
+      const own = ownPop.current;
+      ownPop.current = false;
+      if (!own && sessionOpen()) {
+        try { history.pushState({ ffl: routeRef.current }, ""); } catch { /* ignore */ }
+        return;
+      }
+      setToolsOpen(false);
+      setLaunch(undefined);
+      returnAfterSession.current = false;
+      setRoute(routeOf(event.state) ?? HOME);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+  /** Move to a place. Returns whether a history entry was added. */
+  const go = useCallback((tab: Tab, song: string | null = null, replace = false): boolean => {
+    const now = routeRef.current;
+    if (now.tab === tab && now.song === song) return false;
+    const next: Route = { tab, song, depth: replace ? now.depth : tab === "tutor" && song === null ? 0 : now.depth + 1 };
+    routeRef.current = next;
+    setRoute(next);
+    try {
+      if (replace || next.depth === 0) history.replaceState({ ffl: next }, "");
+      else history.pushState({ ffl: next }, "");
+    } catch { /* history is a convenience */ }
+    return !replace && next.depth > 0;
+  }, []);
+  const historyBack = useCallback(() => { ownPop.current = true; history.back(); }, []);
+  const back = useCallback(() => {
+    if (toolsOpen) { setToolsOpen(false); return; }
+    setLaunch(undefined);
+    if (routeRef.current.depth > 0) historyBack();
+    else go("tutor");
+  }, [go, toolsOpen, historyBack]);
+
   // the key only drives the scale-shape explorer; songs bring their own
   const [key, setKey] = useState<KeyInfo>(() => {
     try {
@@ -76,75 +132,92 @@ export default function App() {
   const input = useInput({ fftSize: 4096, intervalMs: 25 });
   const { autoStart } = input;
   useEffect(() => { autoStart(); }, [autoStart]);
-  const home = useCallback(() => { setToolsOpen(false); setLaunch(undefined); setTab("tutor"); }, []);
   const moveTab = useCallback((dir: 1 | -1) => {
     setLaunch(undefined);
     setToolsOpen(false);
-    setTab((now) => TABS[(TABS.findIndex((t) => t.id === primaryTab(now)) + dir + TABS.length) % TABS.length].id);
-  }, []);
+    const at = TABS.findIndex((t) => t.id === primaryTab(routeRef.current.tab));
+    go(TABS[(at + dir + TABS.length) % TABS.length].id);
+  }, [go]);
 
-  const openTunes = useCallback(() => { setLaunch(undefined); setTab("tunes"); }, []);
+  const openLibrary = useCallback(() => { setLaunch(undefined); setToolsOpen(false); go("tunes", null); }, [go]);
+  const openTunes = openLibrary;
   const openSong = useCallback((tuneId: string) => {
-    saveCurrentTuneId(tuneId);
+    trySaveTune(tuneId);
     setLaunch({ kind: "song", tuneId });
-    setTab("tunes");
-  }, []);
+    go("tunes", tuneId);
+  }, [go]);
   const listenSong = useCallback((tuneId: string) => {
-    saveCurrentTuneId(tuneId);
+    trySaveTune(tuneId);
     setLaunch({ kind: "listen", tuneId });
-    setTab("tunes");
-  }, []);
+    go("tunes", tuneId);
+  }, [go]);
+  /** TuneView moves between its library and a song itself (a pick, a tune change in guitar mode). */
+  const songRoute = useCallback((tuneId: string | null, replace = false) => { go("tunes", tuneId, replace); }, [go]);
 
   const startPractice = useCallback((tuneId: string, cardId?: string, prepared = false) => {
-    saveCurrentTuneId(tuneId);
+    trySaveTune(tuneId);
     if (!prepared) openPractice(input);
     setLaunch({ kind: cardId ? "card" : "session", tuneId, cardId });
-    setTab("tunes");
-  }, [input]);
+    returnAfterSession.current = go("tunes", tuneId);
+  }, [input, go]);
+  /** Leaving guitar mode returns to wherever it was entered from. */
+  const sessionEnded = useCallback(() => {
+    if (!returnAfterSession.current) return;
+    returnAfterSession.current = false;
+    historyBack();
+  }, [historyBack]);
   const openMode = useCallback((target: TutorTargetTab) => {
     setLaunch(undefined);
     if (target === "free") openPractice(input);
-    setTab(target);
-  }, [input]);
+    go(target);
+  }, [input, go]);
   const launched = useCallback(() => setLaunch(undefined), []);
   const closeFree = useCallback(() => {
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
-    setTab("tutor");
-  }, []);
+    back();
+  }, [back]);
 
   useEffect(() => {
     window.scrollTo?.(0, 0);
-  }, [tab]);
+  }, [route.tab, route.song]);
 
+  const canGoBack = route.depth > 0 || toolsOpen;
   return (
     <KeyContext.Provider value={key}>
       <RomanContext.Provider value={true}>
         <div className={`app tab-${tab}`}>
           <header className="topbar" ref={topbar}>
-            <div className="brand">
-              <span className="brand-mark" aria-hidden="true"><Glyph name="melody" size={20} /></span>
-              <h1>Fretboard Focus Lab</h1>
+            <div className="shell-start">
+              <button type="button" className="shell-back" onClick={back} disabled={!canGoBack} aria-label="Back" title="Back">
+                <Glyph name="arrow" size={20} /><span>Back</span>
+              </button>
+              <div className="brand">
+                <span className="brand-mark" aria-hidden="true"><Glyph name="melody" size={20} /></span>
+                <h1>Fretboard Focus Lab</h1>
+              </div>
             </div>
             <nav className="tabs" aria-label="views">
               {TABS.map((t) => (
-                <button key={t.id} type="button" className={primaryTab(tab) === t.id ? "is-on" : ""} aria-current={primaryTab(tab) === t.id ? "page" : undefined} onClick={() => { setToolsOpen(false); setLaunch(undefined); setTab(t.id); }}>
-                  <Glyph name={t.glyph} size={18} /><span>{t.label}</span>
+                <button key={t.id} type="button" className={primaryTab(tab) === t.id && !toolsOpen ? "is-on" : ""} aria-current={primaryTab(tab) === t.id ? "page" : undefined} onClick={() => { setToolsOpen(false); setLaunch(undefined); go(t.id); }}>
+                  <Glyph name={t.glyph} size={20} /><span>{t.label}</span>
                 </button>
               ))}
             </nav>
-            <button type="button" className="device-sync-trigger guitar-tools-trigger" onClick={() => { setDevicesOpen(false); setToolsOpen(true); }} aria-label="Guitar tools"><Glyph name="tools" size={19} /><span>Tools</span></button>
-            <DeviceSync open={devicesOpen} onOpenChange={(open) => { setToolsOpen(false); setDevicesOpen(open); }} onUpdated={refreshState} />
+            <div className="shell-end">
+              <button type="button" className="device-sync-trigger guitar-tools-trigger" aria-pressed={toolsOpen} onClick={() => { setDevicesOpen(false); setToolsOpen(true); }} aria-label="Guitar tools"><Glyph name="tools" size={20} /><span>Tools</span></button>
+              <DeviceSync open={devicesOpen} onOpenChange={(open) => { setToolsOpen(false); setDevicesOpen(open); }} onUpdated={refreshState} />
+            </div>
           </header>
 
           <SaveNotice />
           <PlatformStatus />
 
           {devicesOpen ? <main className="device-sync-placeholder" aria-hidden="true" /> : toolsOpen ? <GuitarTools input={input} onClose={() => setToolsOpen(false)} /> : tab === "tutor" ? (
-            <OverviewView key={stateRevision} input={input} onOpenMode={openMode} onOpenSong={openSong} onListenSong={listenSong} onOpenProgress={() => setTab("progress")} onStartPractice={startPractice} onPreparePractice={() => openPractice(input)} />
+            <OverviewView key={stateRevision} input={input} onOpenMode={openMode} onOpenSong={openSong} onOpenLibrary={openLibrary} onListenSong={listenSong} onStartPractice={startPractice} />
           ) : tab === "progress" ? (
             <ProgressView key={stateRevision} onOpenSong={openSong} onStartPractice={startPractice} />
           ) : tab === "tunes" ? (
-            <TuneView key={stateRevision} input={input} launch={launch} onLaunched={launched} />
+            <TuneView key={stateRevision} input={input} launch={launch} onLaunched={launched} songId={route.song} onSong={songRoute} onSessionEnd={sessionEnded} onStartPractice={startPractice} />
           ) : tab === "free" ? (
             <FreePlayView key={stateRevision} input={input} onClose={closeFree} />
           ) : tab === "changes" ? (
@@ -154,7 +227,7 @@ export default function App() {
           ) : tab === "reading" ? (
             <FocusView key={stateRevision} focus="reading" input={input} onOpenTunes={openTunes} />
           ) : tab === "triads" ? (
-            <TriadsView key={stateRevision} input={input} onExit={() => setTab("tutor")} />
+            <TriadsView key={stateRevision} input={input} onExit={back} />
           ) : (
             <EarHub key={stateRevision} input={input} onOpenTunes={openTunes} />
           )}
@@ -163,7 +236,7 @@ export default function App() {
             <a href={`${import.meta.env.BASE_URL}licenses/index.html`} target="_blank" rel="noreferrer">AGPLv3 · licenses</a>
             <span>No warranty</span>
           </footer>
-          <GuitarNav input={input} onHome={home} onTab={moveTab} />
+          <GuitarNav input={input} onHome={back} onTab={moveTab} />
         </div>
       </RomanContext.Provider>
     </KeyContext.Provider>
