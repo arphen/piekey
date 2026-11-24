@@ -71,6 +71,8 @@ interface SongCoachProps {
   mixIds?: readonly string[]; // explicit guest IDs for a tree selection (solo = [], key/custom mix = [...])
   focus?: Focus; // a tutor mode: only that mode's card families
   initialCardId?: string; // an exercise chosen on the overview or a focused mode
+  /** Start running `initialCardId` immediately on mount, skipping the Ready lobby. */
+  autoStart?: boolean;
   /** Behind another tab: no input reaches the room, the session holds still, the pool rests. */
   parked?: boolean;
   /** Lets the host finish and save the session before it replaces the room's music. */
@@ -320,7 +322,7 @@ export function SongCoach(props: SongCoachProps) {
 }
 
 /** The practice room must remain inside a stable PracticeWindowBoundary while changing tunes. */
-export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_TUNES, mixIds, focus = "all", initialCardId, parked = false, handle, onLive, request, served: servedRef }: SongCoachProps) {
+export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_TUNES, mixIds, focus = "all", initialCardId, autoStart = false, parked = false, handle, onLive, request, served: servedRef }: SongCoachProps) {
   const explicitMix = mixIds !== undefined;
   const [windowP, setWindowP] = useState<number | null>(() => loadStore(sheet.id).settings.window);
   const [mix, setMix] = useState(() => (explicitMix ? mixIds.length > 0 : loadStore(sheet.id).settings.mix !== false)); // the other tunes' exercises too
@@ -357,9 +359,20 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
   const tuneIds = useMemo(() => [sheet.id, ...guests.map((g) => g.tuneId)], [sheet.id, guests]);
   const sheets = useMemo(() => new Map<string, LeadSheet>([[sheet.id, sheet], ...guests.map((g) => [g.tuneId, g.sheet] as [string, LeadSheet])]), [sheet, guests]);
   const arrangementFingerprints = useMemo(() => new Map([...sheets].map(([id, score]) => [id, arrangementIdentity(score).fingerprint])), [sheets]);
+  const [direct] = useState(() => {
+    if (!autoStart || !initialCardId) return null;
+    const card = deck.cards.find((c) => c.id === initialCardId);
+    if (!card) return null;
+    const ids = [card.id, ...(card.followedBy ? [card.followedBy] : [])];
+    return {
+      ids,
+      blocks: [{ role: "focus" as const, cards: ids, minutes: 2 }],
+      why: card.followedBy ? "Rhythm, then the phrase" : "",
+    };
+  });
   const [gapIds, setGapIds] = useState<ReadonlySet<string>>(() => new Set()); // a focus on time: these play with gaps in the band
-  const [sessionBlocks, setSessionBlocks] = useState<SessionPlan["blocks"]>([]);
-  const [sessionWhy, setSessionWhy] = useState("");
+  const [sessionBlocks, setSessionBlocks] = useState<SessionPlan["blocks"]>(() => direct?.blocks ?? []);
+  const [sessionWhy, setSessionWhy] = useState(() => direct?.why ?? "");
   const [sessionSideWhy, setSessionSideWhy] = useState("");
   const outputs = useOutputs();
   const [labels, setLabels] = useState<LabelMode>("names");
@@ -379,7 +392,7 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
   const pausedByTools = useRef(false);
   const switchStopped = useRef(false);
   const themeSources = useMemo(() => [{ id: sheet.id, title: sheet.title, tl }, ...others.map((other) => ({ id: other.sheet.id, title: other.sheet.title, tl: other.tl }))], [sheet.id, sheet.title, tl, others]);
-  const session = useSession(deck, tuneIds, input, { gap: gapIds, arrangementFingerprint, arrangementFingerprints, tempoBounds: activeGoal?.tempo, suspended: parked || choosingTune || Boolean(tools) || free || menu || pad !== null || calib });
+  const session = useSession(deck, tuneIds, input, { gap: gapIds, arrangementFingerprint, arrangementFingerprints, tempoBounds: activeGoal?.tempo, suspended: parked || choosingTune || Boolean(tools) || free || menu || pad !== null || calib, initialQueue: direct?.ids });
   // Decoration only: the pool hears landed notes, clean passes and exercise moves; nothing comes back.
   usePoolCalm(menu || calib);
   const emitPool = usePoolEmit();
@@ -452,7 +465,7 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
   }, [running, choosingTune, tools, input.status, input.paused, setupKey]);
   // the player across every box, and the session planned from it: warm-up, focus, review, music
   const length = store.settings.length ?? "normal";
-  const [chosenCard, setChosenCard] = useState(initialCardId);
+  const [chosenCard, setChosenCard] = useState(() => (direct ? undefined : initialCardId));
   const unavailablePassage = Boolean(chosenCard?.startsWith("mel:passage:") && !deck.cards.some((card) => card.id === chosenCard));
   const shaped = useMemo<SessionPlan>(() => {
     const chosen = deck.cards.find((card) => card.id === chosenCard);
@@ -1425,10 +1438,26 @@ function Running({
         ) : null}
         {s.paused ? (
           <span className="ss-veil ss-pause-state">
-            <strong>{s.away ? "A moment of quiet" : s.listeningOff ? "Let’s hear you again" : "Paused"}</strong>
-            <small>{s.listeningOff ? input.error ?? "The session carries on when the guitar is connected." : s.away ? "A note brings the session back." : "Space to carry on · low E for the guitar menu"}</small>
-            {s.listeningOff ? <button type="button" onClick={() => void input.start()} disabled={input.status === "starting"}>{input.status === "starting" ? "Opening input…" : input.paused ? "Resume listening" : "Reconnect input"}</button> : null}
-            {s.listeningOff ? <button type="button" onClick={s.continueWithoutScoring}>Continue without scoring</button> : null}
+            <strong>
+              {s.away
+                ? "A moment of quiet"
+                : s.listeningOff
+                  ? input.status === "starting"
+                    ? "Connecting your guitar…"
+                    : input.status === "idle"
+                      ? "Connect your guitar"
+                      : "Let’s hear you again"
+                  : "Paused"}
+            </strong>
+            <small>
+              {s.listeningOff
+                ? input.error ?? (input.status === "starting" ? "Listening will begin automatically once the input opens." : input.status === "idle" ? "Allow the microphone or play along without scoring." : "The session carries on when the guitar is connected.")
+                : s.away
+                  ? "A note brings the session back."
+                  : "Space to carry on · low E for the guitar menu"}
+            </small>
+            {s.listeningOff ? <button type="button" onClick={() => void input.start()} disabled={input.status === "starting"}>{input.status === "starting" ? "Opening input…" : input.paused ? "Resume listening" : input.status === "idle" ? "Enable listening" : "Reconnect input"}</button> : null}
+            {s.listeningOff ? <button type="button" onClick={s.continueWithoutScoring}>{input.status === "idle" ? "Practise without scoring" : "Continue without scoring"}</button> : null}
           </span>
         ) : null}
         {s.phase === "result" && s.outcome ? <ResultMark o={s.outcome} titleOf={(id) => byId.get(id)?.title ?? ""} secret={s.outcome.secret} /> : null}

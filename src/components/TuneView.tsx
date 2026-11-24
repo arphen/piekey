@@ -42,6 +42,8 @@ export interface PracticeLaunchOptions {
   focus?: Focus;
   mixIds?: string[];
   studyHubIds?: string[];
+  /** Skip the Ready lobby and start running the chosen exercise immediately. */
+  autoStart?: boolean;
 }
 
 interface Launch extends PracticeLaunchOptions {

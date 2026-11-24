@@ -22,9 +22,15 @@ import { STARTER_ENTRY } from "../tunes/starter";
 import { passageId } from "../tunes/passage";
 import type { ReactNode } from "react";
 
-const mocked = vi.hoisted(() => ({ session: undefined as unknown as SessionApi, calibrated: false, suspended: false }));
+const mocked = vi.hoisted(() => ({ session: undefined as unknown as SessionApi, calibrated: false, suspended: false, initialQueue: undefined as readonly string[] | undefined }));
 
-vi.mock("../song/useSession", () => ({ useSession: (_deck: unknown, _ids: unknown, _input: unknown, options?: { suspended?: boolean }) => { mocked.suspended = Boolean(options?.suspended); return mocked.session; } }));
+vi.mock("../song/useSession", () => ({
+  useSession: (_deck: unknown, _ids: unknown, _input: unknown, options?: { suspended?: boolean; initialQueue?: readonly string[] }) => {
+    mocked.suspended = Boolean(options?.suspended);
+    mocked.initialQueue = options?.initialQueue;
+    return mocked.session;
+  },
+}));
 vi.mock("../components/Score", () => ({ Score: () => null }));
 vi.mock("../platform/PracticeWindowBoundary", () => ({ PracticeWindowBoundary: ({ children }: { children: ReactNode }) => <>{children}</> }));
 vi.mock("../listen/calibration", () => ({ loadProfile: () => mocked.calibrated ? {} : null }));
@@ -63,6 +69,7 @@ describe("coach entry", () => {
     setInputSetup(null);
     mocked.calibrated = false;
     mocked.suspended = false;
+    mocked.initialQueue = undefined;
     sheet = parseTuneEntry(STARTER_ENTRY);
     tl = buildTimeline(sheet);
     const store = loadStore(sheet.id);
@@ -469,5 +476,18 @@ describe("coach entry", () => {
     expect(button).toBeDefined();
     await act(async () => button!.click());
     expect(mocked.session.begin).toHaveBeenCalledWith([whole.id]);
+  });
+
+  it("starts directly into the requested exercise when autoStart is set and falls back cleanly when missing", async () => {
+    mocked.calibrated = true;
+    const deck = buildDeck(sheet, tl);
+    const selected = deck.cards.find((card) => card.family === "scales")!;
+    await act(async () => root.render(<SongCoach key="direct" sheet={sheet} tl={tl} input={inputAt("listening", "guitar")} initialCardId={selected.id} autoStart onClose={() => undefined} />));
+    expect(mocked.initialQueue).toEqual([selected.id]);
+
+    mocked.initialQueue = undefined;
+    await act(async () => root.render(<SongCoach key="missing" sheet={sheet} tl={tl} input={inputAt("listening", "guitar")} initialCardId="scale:missing:thirds" autoStart onClose={() => undefined} />));
+    expect(mocked.initialQueue).toBeUndefined();
+    expect(host.querySelector(".ss-ready")).not.toBeNull();
   });
 });

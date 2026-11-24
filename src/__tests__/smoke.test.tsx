@@ -30,8 +30,8 @@ vi.mock("../components/Score", () => ({ Score: () => null }));
 vi.mock("../components/FreePlay", () => ({ FreePlay: () => <div>standalone metronome</div> }));
 vi.mock("../platform/PracticeWindowBoundary", () => ({ PracticeWindowBoundary: ({ children }: { children: ReactNode }) => <>{children}</> }));
 vi.mock("../components/PracticeRoom", () => ({
-  PracticeRoom: ({ launch, parked }: { launch: { tuneId: string | null; cardId?: string }; parked: boolean }) => (
-    <main data-room={launch.tuneId ?? "next"} data-card={launch.cardId} data-parked={String(parked)} />
+  PracticeRoom: ({ launch, parked }: { launch: { tuneId: string | null; cardId?: string; autoStart?: boolean }; parked: boolean }) => (
+    <main data-room={launch.tuneId ?? "next"} data-card={launch.cardId} data-auto-start={String(Boolean(launch.autoStart))} data-parked={String(parked)} />
   ),
 }));
 vi.mock("../components/TuneView", () => ({
@@ -145,6 +145,22 @@ it("parks the Play tab's room behind other tabs and returns to the same room", a
   await act(async () => element.querySelector<HTMLButtonElement>('[aria-label="Back"]')!.click());
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
   expect(room()?.dataset.parked).toBe("true");
+});
+
+it("launches C thirds directly into a running exercise when clicked on the Home tree", async () => {
+  shell.overview.loading = false;
+  const element = await mountShell();
+  const cThirds = element.querySelector<HTMLButtonElement>('button[aria-label^="Play C · 3rds"]');
+  expect(cThirds).toBeTruthy();
+  await act(async () => cThirds!.click());
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+  expect(element.querySelector(".hm-card")).toBeNull();
+  expect(element.querySelector<HTMLElement>("main[data-room]")?.dataset).toMatchObject({
+    room: "key-study:M0",
+    card: "scale:C-major:thirds",
+    autoStart: "true",
+    parked: "false",
+  });
 });
 
 it("keeps archive failures unknown with retry and resets history choices for another tune", async () => {

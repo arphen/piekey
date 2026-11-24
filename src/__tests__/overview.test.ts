@@ -13,7 +13,7 @@ import { buildPracticeBrief } from "../agent/brief";
 import { createGoal } from "../song/goals";
 import { resolveSessionSet } from "../song/sessionSet";
 import { hubIdForKey, keyDetail, practiceMap, songKey } from "../overview/map";
-import { keyRelevantModes, keyStudySheet, resolveTreeSelection } from "../song/keyStudy";
+import { keyRelevantModes, keyStudySheet, resolveTreeSelection, skillCardId } from "../song/keyStudy";
 
 const note = (midi: number, startBeat: number): ReadingNote => ({
   rest: false,
@@ -270,6 +270,25 @@ describe("tutor overview", () => {
     expect(aDeck.cards.some((c) => c.id.includes("naturalMinor"))).toBe(true);
     expect(keyRelevantModes("M0").map((m) => m.name)).toContain("C Major");
     expect(keyRelevantModes("m9").map((m) => m.name)).toContain("A Harmonic Minor");
+
+    // Every one of the 24 tree hubs resolves its exact skillCardId for every branch skill and rhythm.
+    const skills = ["run", "thirds", "triads", "sevenths", "run:triplets", "run:sixteenths"];
+    for (let pc = 0; pc < 12; pc++) {
+      for (const prefix of ["M", "m"] as const) {
+        const hub = `${prefix}${pc}`;
+        const study = keyStudySheet(hub)!;
+        const deck = buildDeck(study, buildTimeline(study));
+        const ids = new Set(deck.cards.map((c) => c.id));
+        for (const skill of skills) {
+          const id = skillCardId(hub, skill)!;
+          expect(ids.has(id), `${hub} missing ${id}`).toBe(true);
+        }
+        if (prefix === "m") {
+          const harmId = skillCardId(hub, "run", "harmonicMinor")!;
+          expect(ids.has(harmId), `${hub} missing ${harmId}`).toBe(true);
+        }
+      }
+    }
   });
 
   it("resolves dynamic center-orb plans for full mix, key focus, solo song, tuneless key, and custom mixes", () => {

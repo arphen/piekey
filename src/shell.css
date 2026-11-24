@@ -338,17 +338,26 @@ body:has(.room-host:not([hidden]) .ss.is-idle.is-exercise) .app .topbar:not(:hov
 
 /* ---------- arriving in the room (view transitions where the browser has them) ---------- */
 
-.room-host:not([hidden]) .ss-ready .ss-display { view-transition-name: room-title; }
+.room-host:not([hidden]) .ss-ready .ss-display,
+.room-host:not([hidden]) .ss-run .ss-title { view-transition-name: room-title; }
+.room-host:not([hidden]) .ss { transform-origin: var(--room-ox, 50%) var(--room-oy, 50%); }
 /* the transition carries the arrival, so the room's own fade-ins would only hide the morph */
 @supports (view-transition-name: none) {
   .room-host .ss,
-  .room-host .ss-ready { animation: none; }
+  .room-host .ss-ready,
+  .room-host .ss-run .ss-head { animation: none; }
 }
-::view-transition-group(room-title) { animation-duration: 0.46s; animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1); }
+::view-transition-group(room-title) { animation-duration: 0.44s; animation-timing-function: cubic-bezier(0.2, 0.85, 0.25, 1); }
 ::view-transition-old(room-title),
 ::view-transition-new(room-title) { height: 100%; object-fit: contain; }
 ::view-transition-group(tab-ink) { animation-duration: 0.36s; animation-timing-function: cubic-bezier(0.3, 0.7, 0.2, 1); }
-::view-transition-old(root) { animation: 0.2s ease both room-out; }
-::view-transition-new(root) { animation: 0.38s 0.06s cubic-bezier(0.2, 0.8, 0.2, 1) both room-in; }
-@keyframes room-out { to { opacity: 0; } }
-@keyframes room-in { from { opacity: 0; transform: scale(0.985); } }
+::view-transition-old(root) {
+  animation: 0.24s cubic-bezier(0.4, 0, 1, 1) both room-out;
+  transform-origin: var(--room-ox, 50%) var(--room-oy, 50%);
+}
+::view-transition-new(root) {
+  animation: 0.42s 0.04s cubic-bezier(0.2, 0.85, 0.25, 1) both room-in;
+  transform-origin: var(--room-ox, 50%) var(--room-oy, 50%);
+}
+@keyframes room-out { to { opacity: 0; transform: scale(1.03); } }
+@keyframes room-in { from { opacity: 0; transform: scale(0.965); } }

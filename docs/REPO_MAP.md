@@ -134,7 +134,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 
 ## src
 
-- `src/App.tsx` — `App:96`
+- `src/App.tsx` — `App:111`
 - `src/__tests__/attacks.test.ts`
 - `src/__tests__/audio-scoring.test.ts`
 - `src/__tests__/calibration.test.ts`
@@ -212,7 +212,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/components/LeadSheet.tsx` — `LeadSheet:35`, `ChordSymbol:210`
 - `src/components/LearnView.tsx` — `LearnView:33`
 - `src/components/LibraryGrid.tsx` — `LibraryGrid:21`
-- `src/components/OverviewView.tsx` — `OverviewView:93`
+- `src/components/OverviewView.tsx` — `OverviewView:73`
 - `src/components/PassiveTree.tsx` — `TreeView:9`, `NodeSkinProps:16`, `NodeSkin:25`, `TreeSkins:32`, `stagePoint:39`, `progressClasses:44`, `PassiveTree:49`
 - `src/components/PracticeAtmosphere.tsx` — `PracticeAtmosphere:13`, `BeatPulse:127`
 - `src/components/PracticeBriefPanel.tsx` — `PracticeBriefPanel:6`
@@ -228,13 +228,13 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/components/SessionSummary.tsx` — `SessionSummary:86`
 - `src/components/ShapesView.tsx` — `ShapesView:16`
 - `src/components/SkillTree.tsx` — `SkillTree:18`
-- `src/components/SongCoach.tsx` — `RoomRequest:86`, `RoomHandle:91`, `openPractice:245`, `SongCoach:315`, `SongCoachRoom:323`
+- `src/components/SongCoach.tsx` — `RoomRequest:88`, `RoomHandle:93`, `openPractice:247`, `SongCoach:317`, `SongCoachRoom:325`
 - `src/components/SongMap.tsx` — `SongMap:138`
 - `src/components/Transport.tsx` — `Transport:18`
 - `src/components/TriadWheel.tsx` — `TriadWheel:48`
 - `src/components/TriadsView.tsx` — `TriadsView:153`
 - `src/components/TunePicker.tsx` — `TunePicker:14`
-- `src/components/TuneView.tsx` — `PracticeLaunchOptions:41`, `TuneView:55`
+- `src/components/TuneView.tsx` — `PracticeLaunchOptions:41`, `TuneView:57`
 - `src/components/UnitCard.tsx` — `UnitCard:22`
 - `src/components/WisteriaArt.tsx` — `scallopPath:12`, `calyxPath:30`, `leafPath:46`, `WisteriaDefs:205`, `WisteriaUnderlay:262`, `CoreMedallion:456`, `HubMedallion:486`, `SkillBlossom:553`, `NotableFrame:600`, `KeystoneFrame:649`, `TravelBead:704`, `PetalCradle:714`, `SongMedallion:728`
 - `src/components/goal-chooser.css`
@@ -318,7 +318,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/song/harmony.ts` — `ChordKind:15`, `Chord:17`, `parseChord:53`, `isDominant:108`, `isMinorType:109`, `pretty:114`, `ScaleKind:125`, `Scale:139`, `Mode:148`, `Key:149`, `nice:163`, `makeScale:171`, `makeKey:179`, `spellIn:191`, `ChordEvent:200`, `KeyCentre:212` (+4 more)
 - `src/song/ids.ts` — `GLUE:6`, `isShared:9`, `glue:11`, `localId:14`, `tuneOf:20`
 - `src/song/judge.ts` — `takeShare:11`, `cleanTake:16`
-- `src/song/keyStudy.ts` — `KEY_STUDY_PREFIX:17`, `TreeFocus:19`, `RelevantMode:21`, `RelevantExercise:30`, `CenterPlan:41`, `isKeyStudyId:77`, `keyStudyId:81`, `hubIdFromStudyId:85`, `parseHubId:91`, `keyStudySheet:159`, `keyRelevantModes:231`, `resolveTreeSelection:274`
+- `src/song/keyStudy.ts` — `KEY_STUDY_PREFIX:18`, `TreeFocus:20`, `RelevantMode:22`, `RelevantExercise:33`, `CenterPlan:44`, `isKeyStudyId:80`, `keyStudyId:84`, `hubIdFromStudyId:88`, `parseHubId:94`, `skillCardId:110`, `keyStudySheet:171`, `keyRelevantModes:243`, `resolveTreeSelection:286`
 - `src/song/kin.ts` — `ScaleTopic:9`, `parseScaleId:19`, `kinship:33`
 - `src/song/leitner.ts` — `Result:18`, `CardState:20`, `LoopMode:30`, `Settings:32`, `AttemptConditions:44`, `Attempt:55`, `SessionEntry:73`, `Store:82`, `BOX_DAYS:92`, `BOXES:93`, `loadSharedSkills:121`, `loadStore:143`, `saveStore:162`, `loadStores:184`, `chronologicalAttempts:201`, `saveStores:214` (+12 more)
 - `src/song/lines.ts` — `LineNote:10`, `Span:16`, `ScaleDrill:22`, `scaleLine:42`, `arpLine:84`, `guideLine:97`, `chainLine:127`
@@ -350,7 +350,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/song/useGoalEvidence.ts` — `useGoalEvidence:13`
 - `src/song/useGoals.ts` — `useGoals:4`
 - `src/song/usePracticeHistory.ts` — `usePracticeHistory:11`
-- `src/song/useSession.ts` — `Phase:52`, `PassEntry:95`, `Outcome:101`, `SessionOptions:131`, `useSession:140`, `SessionApi:1394`
+- `src/song/useSession.ts` — `Phase:52`, `PassEntry:95`, `Outcome:101`, `SessionOptions:131`, `useSession:142`, `SessionApi:1405`
 - `src/song/useThemePicker.ts` — `useThemePicker:14`
 - `src/song/voicings.ts` — `VoicingNote:10`, `Voicing:17`, `voiceChords:75`
 - `src/storage.ts` — `StorageIssue:4`, `pendingStorageWrites:14`, `getStoredItem:15`, `storedKeys:18`, `retryStorageWrites:32`, `getStorageIssues:38`, `subscribeStorageIssues:39`, `reportStorageError:44`, `clearStorageError:53`, `setStoredItem:59`, `removeStoredItem:74`

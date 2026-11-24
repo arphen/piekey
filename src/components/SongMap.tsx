@@ -151,6 +151,7 @@ export function SongMap({
   onToggleMixMode,
   onClickSong,
   onClickKey,
+  onClickSkill,
   onClickFocus,
   onClickFoundation,
   onLaunchCenter,
@@ -175,6 +176,7 @@ export function SongMap({
   onToggleMixMode(): void;
   onClickSong(id: string, additive: boolean): void;
   onClickKey(hubId: string, additive: boolean): void;
+  onClickSkill(hubId: string, skill: string): void;
   onClickFocus(focus: TreeFocus): void;
   onClickFoundation(id: string): void;
   onLaunchCenter(): void;
@@ -236,7 +238,7 @@ export function SongMap({
       out.push((pa?.fill ?? 0) > 0 && (pb?.fill ?? 0) > 0 ? "is-on" : "");
       if (primaryFocusHub && ((a.id === primaryFocusHub && kin.has(b.id)) || (b.id === primaryFocusHub && kin.has(a.id)))) out.push("is-kin");
     } else if (e.kind === "branch") {
-      out.push((pb?.fill ?? 0) >= 0.18 ? "is-on" : "", ...(progress.get(hubB ?? "")?.tags ?? []).map((t) => `is-${t}`));
+      out.push((pb?.fill ?? 0) >= 0.18 ? "is-on" : "", hovered?.id === b.id ? "is-lit" : "", ...(progress.get(hubB ?? "")?.tags ?? []).map((t) => `is-${t}`));
     } else if (e.kind === "foundation" || e.kind === "chain") {
       out.push((pb?.box ?? 0) > 0 ? "is-on" : "", pb?.locked ? "is-locked" : "", techniqueLit || selectedFoundation === b.id ? "is-lit" : "");
     } else if (e.kind === "keystone" && (b.data?.type === "keystone" || b.data?.type === "travel")) {
@@ -312,16 +314,25 @@ export function SongMap({
       html: ({ node: n, progress: p, at }) => {
         const d = n.data as Extract<HomeNodeData, { type: "skill" }>;
         const fill = p?.fill ?? 0;
+        const detail = [
+          mixMode ? "Add key to mix" : "Play now",
+          fill >= 0.8 ? "Mastered" : p?.box ? `Box ${p.box}/5` : fill > 0 ? "Kinship" : "New",
+          p?.tempo ? `♩${p.tempo.bpm}` : "",
+        ].filter(Boolean).join(" · ");
         return (
           <button
             type="button"
             className="hm-skill-btn"
             style={at}
             data-nav-skip
-            aria-label={`${n.title}${p?.tempo ? `, ${p.tempo.bpm} bpm` : ""}`}
-            onMouseEnter={hover({ id: n.id, hubId: d.hubId, title: n.title ?? n.label, detail: [fill >= 0.8 ? "Mastered" : p?.box ? `Box ${p.box}/5` : fill > 0 ? "Kinship" : "New", p?.tempo ? `♩${p.tempo.bpm}` : ""].filter(Boolean).join(" · ") })}
+            aria-label={`Play ${n.title}${p?.tempo ? `, ${p.tempo.bpm} bpm` : ""}`}
+            onMouseEnter={hover({ id: n.id, hubId: d.hubId, title: n.title ?? n.label, detail })}
             onMouseLeave={unhover(n.id)}
-            onClick={(event) => onClickKey(d.hubId, additive(event, mixMode))}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (additive(event, mixMode)) onClickKey(d.hubId, true);
+              else onClickSkill(d.hubId, d.skill);
+            }}
           />
         );
       },

@@ -134,6 +134,8 @@ export interface SessionOptions {
   arrangementFingerprint?: string;
   arrangementFingerprints?: ReadonlyMap<string, string>;
   tempoBounds?: { minBpm: number; targetBpm: number };
+  /** Start directly in a running session with this queue on mount (no Ready screen flash). */
+  initialQueue?: readonly string[];
 }
 
 /** `tuneIds`: the tune the session belongs to, then any others whose exercises are mixed in. */
@@ -152,9 +154,18 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
   const [store, setStore] = useState<Store>(() => loadStores(tuneIds));
   const storeRef = useRef(store);
   storeRef.current = store;
-  const [queue, setQueue] = useState<string[]>([]);
+  const initQueue = options.initialQueue?.length ? [...options.initialQueue] : null;
+  const initTempo = (() => {
+    const first = initQueue ? deck.cards.find((c) => c.id === initQueue[0]) : undefined;
+    if (!first) return 80;
+    const restored = store.cards[first.id]?.bpm ?? first.bpm;
+    const min = first.tuneId === tuneIds[0] ? options.tempoBounds?.minBpm ?? MIN_BPM : MIN_BPM;
+    const max = first.tuneId === tuneIds[0] ? options.tempoBounds?.targetBpm ?? MAX_BPM : MAX_BPM;
+    return Math.min(max, Math.max(min, restored));
+  })();
+  const [queue, setQueue] = useState<string[]>(() => initQueue ?? []);
   const [pos, setPos] = useState(0);
-  const [running, setRunning] = useState(false);
+  const [running, setRunning] = useState(() => Boolean(initQueue));
   const [finished, setFinished] = useState(false);
   const [selfGuided, setSelfGuided] = useState(false);
   const [ending, setEnding] = useState(false);
@@ -163,8 +174,8 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
   const inactive = paused || suspended;
   const [away, setAway] = useState(false); // resting after a long silence: a note wakes it
   const [waiting, setWaiting] = useState(false); // the band stopped: play to bring it back
-  const [bpm, setBpm] = useState(80);
-  const [target, setTarget] = useState(80); // the tempo this visit is heading for
+  const [bpm, setBpm] = useState(() => initTempo);
+  const [target, setTarget] = useState(() => initTempo); // the tempo this visit is heading for
   const [takes, setTakes] = useState({ clean: 0, unclean: 0 });
   const [lastTake, setLastTake] = useState<{ hit: number; total: number; clean: boolean } | null>(null);
   const [passes, setPasses] = useState<number[]>([]);
@@ -208,7 +219,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
   const assessedBpm = useRef<number | undefined>();
   const manualTempoChanged = useRef(false);
   // the session's clock: only time spent playing counts
-  const clock = useRef({ active: 0, card: 0, heard: 0, event: 0, nudges: 0 });
+  const clock = useRef({ active: 0, card: 0, heard: initQueue ? performance.now() : 0, event: initQueue ? performance.now() : 0, nudges: 0 });
 
   useEffect(() => {
     setStore(loadStores(boxes.current));

@@ -546,6 +546,7 @@
 .pt-edge.is-kin { stroke: rgba(230, 199, 124, 0.68); stroke-width: 1.45; }
 .pt-edge[data-link="branch"].is-rhythm-triplets.is-on { stroke: var(--f-triplets); }
 .pt-edge[data-link="branch"].is-rhythm-sixteenths.is-on { stroke: var(--f-sixteenths); }
+.pt-edge[data-link="branch"].is-lit { stroke: #b8ffbe; stroke-width: 2.3; }
 .pt-edge[data-link="song"] { stroke-dasharray: 2.5 5; stroke: rgba(204, 172, 246, 0.34); stroke-width: 1.15; }
 .pt-edge[data-link="song"].is-on { stroke-dasharray: none; stroke: rgba(182, 146, 248, 0.66); stroke-width: 1.5; }
 .pt-edge[data-link="song"].is-session { stroke: rgba(154, 236, 168, 0.88); stroke-width: 1.95; stroke-dasharray: none; }
@@ -810,7 +811,7 @@
 }
 .home .hm-hub-major { width: max(28px, calc(38 / var(--vw) * 100%)); }
 .home .hm-hub-minor { width: max(22px, calc(28 / var(--vw) * 100%)); }
-.home .hm-skill-btn { z-index: 2; width: max(12px, calc(15 / var(--vw) * 100%)); }
+.home .hm-skill-btn { z-index: 2; width: max(15px, calc(17 / var(--vw) * 100%)); }
 .home .hm-f-btn { z-index: 2; width: max(24px, calc(30 / var(--vw) * 100%)); }
 .home .hm-f-btn:focus-visible { outline-color: var(--fam); }
 

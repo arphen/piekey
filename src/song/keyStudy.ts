@@ -5,6 +5,7 @@ import type { LeadSheet } from "../tunes/musicxml";
 import type { SongSummary } from "../overview/summary";
 import type { Family, Focus } from "./deck";
 import { FOCUS_FAMILIES } from "./deck";
+import type { ScaleKind } from "./harmony";
 import { makeScale, nice } from "./harmony";
 
 // Pure key-study synthesizer & passive-tree selection resolver.
@@ -25,6 +26,8 @@ export interface RelevantMode {
   hubId: string;
   /** Scale skill branch to launch when clicked. */
   skill: string;
+  /** Optional explicit scale variant (e.g. harmonicMinor on a minor hub). */
+  scaleKind?: ScaleKind;
 }
 
 export interface RelevantExercise {
@@ -103,6 +106,15 @@ export function parseHubId(hubId: string): { minor: boolean; pc: number; shortNa
   };
 }
 
+/** Exact shared scale card ID (`scale:C-major:thirds`, `scale:A-naturalMinor:run:triplets`) for a tree hub + skill. */
+export function skillCardId(hubId: string, skill: string, scaleKind?: ScaleKind): string | null {
+  const info = parseHubId(hubId);
+  if (!info) return null;
+  const kind: ScaleKind = scaleKind ?? (info.minor ? "naturalMinor" : "major");
+  const scale = makeScale(info.pc, kind);
+  return `scale:${scale.id}:${skill}`;
+}
+
 function fingeringFor(midi: number): { string: number; fret: number } {
   let best = { string: 2, fret: 5, cost: 999 };
   for (let s = 0; s < OPEN_MIDI.length; s++) {
@@ -174,10 +186,10 @@ export function keyStudySheet(hubId: string): LeadSheet | null {
   const sym = (deg: number) => scale.names[deg];
 
   const chords = minor
-    ? [`${sym(0)}m7`, `${sym(3)}m7`, `${sym(1)}m7b5`, `${sym(4)}7`]
-    : [`${sym(0)}maj7`, `${sym(5)}m7`, `${sym(1)}m7`, `${sym(4)}7`];
+    ? [`${sym(0)}m7`, `${sym(1)}m7b5`, `${sym(4)}7`, `${sym(0)}m7`]
+    : [`${sym(0)}maj7`, `${sym(1)}m7`, `${sym(4)}7`, `${sym(0)}maj7`];
 
-  // Leading-tone accidental for minor bar 4 (raised 7th vs key signature)
+  // Leading-tone accidental for minor bar 3 (raised 7th vs key signature)
   const ltAcc: ReadingNote["accidental"] = minor && harm
     ? (harm.names[6].endsWith("##") ? "##" : harm.names[6].endsWith("#") ? "#" : harm.names[6].endsWith("b") ? "b" : "n")
     : null;
@@ -185,15 +197,15 @@ export function keyStudySheet(hubId: string): LeadSheet | null {
   const patterns: { deg: number; oct: number; harm?: boolean }[][] = minor
     ? [
         [{ deg: 0, oct: 0 }, { deg: 2, oct: 0 }, { deg: 4, oct: 0 }, { deg: 3, oct: 0 }],
-        [{ deg: 3, oct: 0 }, { deg: 5, oct: 0 }, { deg: 0, oct: 1 }, { deg: 4, oct: 0 }],
         [{ deg: 1, oct: 0 }, { deg: 3, oct: 0 }, { deg: 5, oct: 0 }, { deg: 0, oct: 1 }],
-        [{ deg: 4, oct: 0 }, { deg: 6, oct: 0, harm: true }, { deg: 1, oct: 1 }, { deg: 0, oct: 1 }],
+        [{ deg: 4, oct: 0 }, { deg: 6, oct: 0, harm: true }, { deg: 1, oct: 1 }, { deg: 3, oct: 1 }],
+        [{ deg: 4, oct: 0 }, { deg: 2, oct: 0 }, { deg: 1, oct: 0 }, { deg: 0, oct: 0 }],
       ]
     : [
         [{ deg: 0, oct: 0 }, { deg: 2, oct: 0 }, { deg: 4, oct: 0 }, { deg: 6, oct: 0 }],
-        [{ deg: 5, oct: 0 }, { deg: 0, oct: 1 }, { deg: 2, oct: 1 }, { deg: 4, oct: 0 }],
         [{ deg: 1, oct: 0 }, { deg: 3, oct: 0 }, { deg: 5, oct: 0 }, { deg: 0, oct: 1 }],
-        [{ deg: 4, oct: 0 }, { deg: 6, oct: 0 }, { deg: 1, oct: 1 }, { deg: 0, oct: 1 }],
+        [{ deg: 4, oct: 0 }, { deg: 6, oct: 0 }, { deg: 1, oct: 1 }, { deg: 3, oct: 1 }],
+        [{ deg: 4, oct: 0 }, { deg: 2, oct: 0 }, { deg: 1, oct: 0 }, { deg: 0, oct: 0 }],
       ];
 
   const bars: ReadingBar[] = patterns.map((barNotes, barIndex) => ({
@@ -240,7 +252,7 @@ export function keyRelevantModes(hubId: string): RelevantMode[] {
     const relHub = `M${relPc}`;
     return [
       { name: `${deg(0)} Natural Minor`, role: "Aeolian · home", hubId, skill: "run" },
-      { name: `${deg(0)} Harmonic Minor`, role: "V7 leading tone", hubId, skill: "sevenths" },
+      { name: `${deg(0)} Harmonic Minor`, role: "V7 leading tone", hubId, skill: "run", scaleKind: "harmonicMinor" },
       { name: `${deg(0)} Dorian`, role: "iv · modal color", hubId, skill: "thirds" },
       { name: `${MAJOR_SHORT[relPc]} Major`, role: "Relative major", hubId: relHub, skill: "run" },
     ];

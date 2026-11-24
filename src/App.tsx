@@ -58,24 +58,39 @@ const appeared = (selector: string, ms: number) => new Promise<void>((resolve) =
   const check = () => (document.querySelector(selector) || Date.now() > until ? resolve() : window.setTimeout(check, 16));
   check();
 });
-/** The morph's source: the pressed card's title, or what was pressed. */
+interface PressOrigin { el: Element | null; x: number; y: number }
+/** The morph's source: the pressed exercise/card title, or null for icon-only tree blossoms. */
 function markMorphSource(from: Element | null): () => void {
-  const el = from?.closest("[data-morph]") ?? from?.closest(".hm-card, .lib-card")?.querySelector("h3, .lib-card-title") ?? from?.closest("button");
+  if (from?.closest(".hm-skill-btn")) return () => undefined;
+  const el =
+    from?.closest("[data-morph]") ??
+    from?.closest(".hm-skill-card, .hm-ex-row, .hm-mode-pill")?.querySelector("strong") ??
+    from?.closest(".hm-rhythm-chip")?.querySelector("span") ??
+    from?.closest(".hm-card, .lib-card")?.querySelector("h3, .lib-card-title") ??
+    from?.closest("button");
   if (!(el instanceof HTMLElement)) return () => undefined;
   el.style.viewTransitionName = "room-title";
   return () => { el.style.viewTransitionName = ""; };
 }
-const ROOM_TITLE = ".room-host:not([hidden]) .ss-ready .ss-display";
+const ROOM_TITLE = ".room-host:not([hidden]) .ss-ready .ss-display, .room-host:not([hidden]) .ss-run .ss-title";
 /**
- * Arriving in the Play tab: where the browser has view transitions, the pressed title flies into
- * the room's title and the tab ink slides to Play (waiting briefly for the room to be read);
- * without them, or with reduced motion, it is a cut.
+ * Arriving in the Play tab: where the browser has view transitions, the view blooms smoothly from
+ * the pressed point (and any pressed title glides into the room's heading) while the tab ink
+ * slides to Play; without them, or with reduced motion, it falls back cleanly.
  */
-function arriveInRoom(update: () => void, from: Element | null) {
+function arriveInRoom(update: () => void, press: PressOrigin | null) {
+  const rootStyle = document.documentElement.style;
+  if (press && (press.x || press.y)) {
+    rootStyle.setProperty("--room-ox", `${Math.round(press.x)}px`);
+    rootStyle.setProperty("--room-oy", `${Math.round(press.y)}px`);
+  } else {
+    rootStyle.setProperty("--room-ox", "50%");
+    rootStyle.setProperty("--room-oy", "50%");
+  }
   const doc = document as ViewTransitionDocument;
   const still = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (!doc.startViewTransition || still) { update(); return; }
-  const unmark = markMorphSource(from);
+  const unmark = markMorphSource(press?.el ?? null);
   try {
     doc.startViewTransition(async () => {
       unmark();
@@ -106,9 +121,9 @@ export default function App() {
   const roomHandle = useRef<RoomHandle | null>(null);
   const [roomLive, setRoomLive] = useState(false);
   const [roomRequest, setRoomRequest] = useState<RoomRequest>();
-  const lastPress = useRef<Element | null>(null);
+  const lastPress = useRef<PressOrigin | null>(null);
   useEffect(() => {
-    const press = (event: PointerEvent) => { lastPress.current = event.target as Element | null; };
+    const press = (event: PointerEvent) => { lastPress.current = { el: event.target as Element | null, x: event.clientX, y: event.clientY }; };
     window.addEventListener("pointerdown", press, true);
     return () => window.removeEventListener("pointerdown", press, true);
   }, []);
@@ -142,15 +157,22 @@ export default function App() {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
   /** Move to a place. Returns whether a history entry was added. */
-  const go = useCallback((tab: Tab, song: string | null = null, replace = false): boolean => {
+  const go = useCallback((tab: Tab, song: string | null = null, replace = false, commit?: () => void): boolean => {
     const now = routeRef.current;
-    if (now.tab === tab && now.song === song) return false;
+    if (now.tab === tab && now.song === song) {
+      commit?.();
+      return false;
+    }
     const next: Route = { tab, song, depth: replace ? now.depth : tab === "tutor" && song === null ? 0 : now.depth + 1 };
     const diff = tabRank(next) - tabRank(now);
     setNavDir(diff > 0 ? "right" : diff < 0 ? "left" : "fade");
     routeRef.current = next;
-    if (tab === "play") arriveInRoom(() => setRoute(next), lastPress.current);
-    else setRoute(next);
+    const apply = () => {
+      commit?.();
+      setRoute(next);
+    };
+    if (tab === "play") arriveInRoom(apply, lastPress.current);
+    else apply();
     try {
       if (replace || next.depth === 0) history.replaceState({ ffl: next }, "");
       else history.pushState({ ffl: next }, "");
@@ -201,9 +223,11 @@ export default function App() {
     setLaunch(undefined);
     await roomHandle.current?.leave();
     roomSerial.current += 1;
-    setRoomRequest(undefined);
-    setRoom({ serial: roomSerial.current, tuneId, cardId, ...options });
-    go("play");
+    const nextRoom: RoomLaunch = { serial: roomSerial.current, tuneId, cardId, ...options };
+    go("play", null, false, () => {
+      setRoomRequest(undefined);
+      setRoom(nextRoom);
+    });
   }, [input, go]);
   const startTune = useCallback((tuneId: string, cardId?: string, prepared = false, options?: PracticeLaunchOptions) => { void startPractice(tuneId, cardId, prepared, options); }, [startPractice]);
   /** The Play tab: back to the room as it was left, or the next session when none is open. */

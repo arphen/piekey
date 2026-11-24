@@ -4,9 +4,9 @@ import { cachedSong, useSongSummaries } from "../overview/useSongSummaries";
 import { hubIdForKey, keyDetail, keyName, practiceMap, songFill, songKey, type MapSong } from "../overview/map";
 import type { SongSummary } from "../overview/summary";
 import { FAMILY_LABEL, wholeTuneCard } from "../song/deck";
+import type { ScaleKind } from "../song/harmony";
 import { BOXES, loadSharedSkills } from "../song/leitner";
-import { parseScaleId } from "../song/kin";
-import { keyStudyId, parseHubId, resolveTreeSelection, type CenterPlan, type TreeFocus } from "../song/keyStudy";
+import { keyStudyId, parseHubId, resolveTreeSelection, skillCardId, type CenterPlan, type TreeFocus } from "../song/keyStudy";
 import { FOUNDATION_GROUPS, TECHNIQUE_TRACKS, type FoundationGroup, type TechniqueMeta } from "../song/technique";
 import { loadLibraryAsync, saveCurrentTuneId, saveLibrary } from "../tunes/library";
 import { DEMO_TUNES, type DemoTune } from "../tunes/demos";
@@ -66,26 +66,6 @@ function TempoRoad({ bpm, start, goal }: { bpm: number; start: number; goal: num
       <small>{goal}</small>
     </div>
   );
-}
-
-/** Find a concrete scale card in the player's library matching a hub + skill branch, if one exists. */
-function findSkillCard(hubId: string, skill: string, songs: SongSummary[]): { tuneId: string; cardId: string } | null {
-  const match = /^(M|m)(\d+)$/.exec(hubId);
-  if (!match) return null;
-  const minor = match[1] === "m";
-  const pc = Number(match[2]);
-  for (const song of songs) {
-    const deck = cachedSong(song.tuneId)?.deck;
-    if (!deck) continue;
-    const card = deck.cards.find((c) => {
-      const parsed = parseScaleId(c.id);
-      if (!parsed) return false;
-      const cardSkill = parsed.rhythm ? `${parsed.drill}:${parsed.rhythm}` : parsed.drill;
-      return parsed.root === pc && (parsed.kind !== "major") === minor && cardSkill === skill;
-    });
-    if (card) return { tuneId: song.tuneId, cardId: card.id };
-  }
-  return null;
 }
 
 const GROUP_ORDER: FoundationGroup[] = ["fingers", "picking", "time", "phrasing"];
@@ -215,9 +195,11 @@ export function OverviewView({
     return deck ? wholeTuneCard(deck)?.id : undefined;
   };
   const playWhole = (tuneId: string | null | undefined) => {
-    if (tuneId) play(tuneId, wholeIdOf(tuneId));
+    if (!tuneId) return;
+    const whole = wholeIdOf(tuneId);
+    play(tuneId, whole, whole ? { autoStart: true } : undefined);
   };
-  const playFoundation = (track: TechniqueMeta) => play(keyStudyId(track.hub), track.id, { focus: "technique", mixIds: [], studyHubIds: [track.hub] });
+  const playFoundation = (track: TechniqueMeta) => play(keyStudyId(track.hub), track.id, { focus: "technique", mixIds: [], studyHubIds: [track.hub], autoStart: true });
 
   const launchPlan = () => {
     if (foundation) {
@@ -297,10 +279,9 @@ export function OverviewView({
     }
   };
 
-  const launchSkill = (hubId: string, skill: string) => {
-    const found = findSkillCard(hubId, skill, songs);
-    if (found) play(found.tuneId, found.cardId);
-    else play(keyStudyId(hubId), undefined, { focus: "scales", mixIds: [], studyHubIds: [hubId] });
+  const launchSkill = (hubId: string, skill: string, scaleKind?: ScaleKind) => {
+    const cardId = skillCardId(hubId, skill, scaleKind);
+    play(keyStudyId(hubId), cardId ?? undefined, { focus: "scales", mixIds: [], studyHubIds: [hubId], autoStart: Boolean(cardId) });
   };
 
   const empty = !loading && !songs.length;
@@ -313,7 +294,7 @@ export function OverviewView({
         <ul>
           {list.map((ex) => (
             <li key={`${ex.tuneId}:${ex.cardId}`}>
-              <button type="button" className="hm-ex-row" onClick={() => play(ex.tuneId, ex.cardId)}>
+              <button type="button" className="hm-ex-row" onClick={() => play(ex.tuneId, ex.cardId, { autoStart: true })}>
                 <span className="hm-ex-copy">
                   <strong>{ex.title}</strong>
                   <small>{ex.tuneTitle} · {FAMILY_LABEL[ex.family]}{ex.bpm ? ` · ♩${ex.bpm}` : ""}</small>
@@ -332,7 +313,7 @@ export function OverviewView({
         <p className="hm-kicker">{title}</p>
         <div className="hm-mode-pills">
           {centerPlan.modes.map((m) => (
-            <button key={m.name} type="button" className="hm-mode-pill" onClick={() => launchSkill(m.hubId, m.skill)}>
+            <button key={m.name} type="button" className="hm-mode-pill" onClick={() => launchSkill(m.hubId, m.skill, m.scaleKind)}>
               <strong>{m.name}</strong>
               <small>{m.role}</small>
             </button>
@@ -459,7 +440,7 @@ export function OverviewView({
               <ul>
                 {pickedSong.next.slice(0, 3).map((unit) => (
                   <li key={unit.id}>
-                    <button type="button" className="hm-ex-row" onClick={() => play(pickedSong.tuneId, unit.id)}>
+                    <button type="button" className="hm-ex-row" onClick={() => play(pickedSong.tuneId, unit.id, { autoStart: true })}>
                       <span className="hm-ex-copy">
                         <strong>{unit.title}</strong>
                         <small>{FAMILY_LABEL[unit.family]}{unit.where ? ` · ${unit.where}` : ""}{unit.bpm ? ` · ♩${unit.bpm}` : ""}</small>
@@ -596,6 +577,7 @@ export function OverviewView({
           onToggleMixMode={() => setMixMode((on) => !on)}
           onClickSong={handleClickSong}
           onClickKey={handleClickKey}
+          onClickSkill={launchSkill}
           onClickFocus={handleClickFocus}
           onClickFoundation={handleClickFoundation}
           onLaunchCenter={launchPlan}

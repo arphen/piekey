@@ -122,6 +122,7 @@ export function PracticeRoom({ input, launch, parked, request, handle, onClose, 
       mixIds={options.mixIds}
       focus={options.focus}
       initialCardId={cardId}
+      autoStart={options.autoStart}
     />
   );
 
