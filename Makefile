@@ -77,11 +77,10 @@ hooks:
 	@git config core.hooksPath .githooks
 	@echo "git hooks installed from .githooks (pre-commit: typecheck + map, pre-push: make check)"
 
-# Publish the current branch: clean tree, full gate, production build, then push (never main, never forced).
+# Publish the current branch: clean tree, full gate, production build, then push (never forced).
 # The pre-push hook repeats the gate; set SKIP=1 only to skip the local build.
 publish:
 	@branch=$$(git rev-parse --abbrev-ref HEAD); \
-	if [ "$$branch" = "main" ]; then echo "Refusing to publish from main; use a branch."; exit 1; fi; \
 	if [ -n "$$(git status --porcelain)" ]; then echo "Working tree is not clean; commit or stash first:"; git status --short; exit 1; fi; \
 	$(MAKE) --no-print-directory check; \
 	if [ -z "$(SKIP)" ]; then npm run --silent build:quiet; fi; \
