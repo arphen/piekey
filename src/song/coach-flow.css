@@ -375,7 +375,7 @@
   text-transform: uppercase;
 }
 
-.ss-played-controls { display: grid; justify-items: center; gap: 9px; }
+.ss-played-controls { display: grid; justify-items: center; gap: 9px; margin: 2px 0 4px; }
 .ss-played-controls > .ss-section-label { font-size: 9px; letter-spacing: 0.07em; }
 .ss-played-controls .ss-trail { gap: 6px; letter-spacing: 0; text-transform: none; }
 .ss-played-controls .ss-trail-next { margin: 0; padding: 0; border: 0; }
@@ -403,7 +403,7 @@
 
 .ss .ss-trail button:disabled { opacity: 0.4; cursor: default; }
 .ss .ss-trail .ss-nk { min-width: 29px; height: 20px; }
-.ss-run .ss-foot { grid-template-columns: minmax(140px, 1fr) auto minmax(110px, 1fr); gap: 20px; }
+.ss-run .ss-foot { grid-template-columns: minmax(140px, 1fr) minmax(110px, 1fr); gap: 20px; }
 .ss-run .ss-call { gap: 11px; }
 .ss-menu-access { display: grid; gap: 5px; }
 .ss .ss-menu-access button { justify-self: start; color: var(--ink-soft); font-size: 12px; }
@@ -545,8 +545,6 @@
 
 @media (max-width: 1150px) {
   .ss-run .ss-foot { grid-template-columns: 1fr auto; gap: 16px; }
-  .ss-played-controls { grid-column: 1 / -1; grid-row: 1; }
-  .ss-run .ss-call, .ss-run .ss-side { grid-row: 2; }
 }
 
 @media (max-width: 800px) {

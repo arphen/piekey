@@ -1441,6 +1441,27 @@ function Running({
           ) : null}
           <span className={`ss-connection ${listening ? "is-live" : ""}`}><i />{s.selfGuided ? "Self-guided · unscored" : listening ? "Input live" : "Input off"}</span>
         </div>
+        <div className="ss-played-controls">
+          <span className="ss-section-label">{free || wholeTune ? "Every note is music · use the guitar menu for controls" : "Hold a shown note · exact octave"}</span>
+          {!free ? (
+            <ol className="ss-trail">
+              {trail.map((r, i) => (
+                <li key={r.id} className={stateOf(r.id)}>
+                  <button type="button" onClick={r.fire} disabled={s.paused || s.phase === "result"} aria-label={`${r.label}${playedShortcuts && r.key !== null ? ` · hold ${keyName(r.key)}` : ""}`} aria-current={s.phase === r.id ? "step" : undefined}>
+                    <NoteTag midi={playedShortcuts ? r.key : null} held={held === i} />
+                    <span>{r.label}</span>
+                  </button>
+                </li>
+              ))}
+              <li className="ss-trail-next">
+                <button type="button" onClick={s.next} disabled={s.paused} aria-label={`${s.selfGuided ? "Done practising" : "Next exercise"}${playedShortcuts && s.keys.next !== null ? ` · hold ${keyName(s.keys.next)}` : ""}`}>
+                  <NoteTag midi={playedShortcuts ? s.keys.next : null} held={held === 3} />
+                  <span>{s.selfGuided ? "Done practising" : "Next exercise"}</span>
+                </button>
+              </li>
+            </ol>
+          ) : null}
+        </div>
         <p className="ss-kicker">
           <span className="ss-fam">{FAMILY_LABEL[card.family]}</span>
           {mixed ? ` · ${card.tune}` : ""}
@@ -1574,27 +1595,6 @@ function Running({
             <SummonVisual />
           </span>
         </span>
-        <div className="ss-played-controls">
-          <span className="ss-section-label">{free || wholeTune ? "Every note is music · use the guitar menu for controls" : "Hold a shown note · exact octave"}</span>
-          {!free ? (
-            <ol className="ss-trail">
-              {trail.map((r, i) => (
-                <li key={r.id} className={stateOf(r.id)}>
-                  <button type="button" onClick={r.fire} disabled={s.paused || s.phase === "result"} aria-label={`${r.label}${playedShortcuts && r.key !== null ? ` · hold ${keyName(r.key)}` : ""}`} aria-current={s.phase === r.id ? "step" : undefined}>
-                    <NoteTag midi={playedShortcuts ? r.key : null} held={held === i} />
-                    <span>{r.label}</span>
-                  </button>
-                </li>
-              ))}
-              <li className="ss-trail-next">
-                <button type="button" onClick={s.next} disabled={s.paused} aria-label={`${s.selfGuided ? "Done practising" : "Next exercise"}${playedShortcuts && s.keys.next !== null ? ` · hold ${keyName(s.keys.next)}` : ""}`}>
-                  <NoteTag midi={playedShortcuts ? s.keys.next : null} held={held === 3} />
-                  <span>{s.selfGuided ? "Done practising" : "Next exercise"}</span>
-                </button>
-              </li>
-            </ol>
-          ) : null}
-        </div>
         <div className="ss-side" data-pool="calm">
           <span className={`ss-aid ${aidLevel >= 0.08 ? "is-on" : ""}`} style={{ opacity: s.phase === "time" ? Math.min(1, aidLevel * 2.1) : 0 }} title="Adaptive guide melody blending in where needed and fading out as you carry it">
             <svg viewBox="0 0 24 24" aria-hidden="true">
