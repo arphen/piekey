@@ -29,6 +29,10 @@
   height: 100dvh;
   pointer-events: none;
   display: block;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  will-change: transform;
+  contain: strict;
 }
 .abyssal-water.is-suspended { opacity: 0; }
 body:has(.ss:not(.is-parked)) .abyssal-water,
@@ -40,6 +44,11 @@ body:has(.ss:not(.is-parked)) .abyssal-water-fallback { display: none; }
     url("./assets/pond-abyss.webp") center / cover no-repeat;
   filter: saturate(1.35) contrast(1.32) brightness(0.46) hue-rotate(8deg);
   transition: filter 0.6s ease;
+}
+.abyssal-water-fallback.is-home {
+  background:
+    radial-gradient(ellipse at 50% 48%, rgba(4, 10, 22, 0.34) 16%, rgba(3, 8, 18, 0.72) 100%),
+    url("./assets/pond-swirl.webp") center / cover no-repeat;
 }
 .abyssal-water-fallback.is-progress {
   background:

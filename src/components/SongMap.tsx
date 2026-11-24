@@ -1,13 +1,26 @@
 import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { MID, ORBIT, WHEEL_ORBITS, homeTreeProgress, homeTreeSpec, homeView, tempoShare, type HomeNodeData, type KeystoneFocus } from "../overview/homeTree";
+import { MID, homeTreeProgress, homeTreeSpec, homeView, tempoShare, type HomeNodeData, type KeystoneFocus } from "../overview/homeTree";
 import type { MapSong, PracticeMap } from "../overview/map";
 import type { CenterPlan, TreeFocus } from "../song/keyStudy";
 import type { CardState } from "../song/leitner";
 import type { TechniqueKind } from "../song/technique";
 import { linkPath, polarPoint, resolveTree } from "../tree/layout";
 import type { PlacedEdge, PlacedNode } from "../tree/model";
-import { Glyph } from "./Glyph";
+import { Glyph, type UtilityGlyphName } from "./Glyph";
+import type { GlyphName } from "../overview/modes";
 import { PassiveTree, stagePoint, type TreeSkins, type TreeView } from "./PassiveTree";
+import {
+  CoreMedallion,
+  HubMedallion,
+  KeystoneFrame,
+  NotableFrame,
+  PetalCradle,
+  SkillBlossom,
+  SongMedallion,
+  TravelBead,
+  WisteriaDefs,
+  WisteriaUnderlay,
+} from "./WisteriaArt";
 
 // Home's passive tree: the circle of fifths with each key's exercises growing from it, the
 // foundations hung in the keys tunes rarely visit, the songs on the rim and the launch core at the
@@ -61,6 +74,16 @@ function FoundationGlyph({ kind, s }: { kind: TechniqueKind; s: number }) {
       return <g><circle r={1.7 * k} /><path d={`M ${-3.4 * k} ${-3.6 * k} Q ${-5.6 * k} 0 ${-3.4 * k} ${3.6 * k} M ${3.4 * k} ${-3.6 * k} Q ${5.6 * k} 0 ${3.4 * k} ${3.6 * k}`} /></g>;
   }
 }
+
+/** Icon inside each orbiting discipline petal gem. */
+const PETAL_GLYPH: Record<TreeFocus, GlyphName | UtilityGlyphName> = {
+  ear: "ear",
+  technique: "spark",
+  changes: "chords",
+  triads: "harmony",
+  scales: "scales",
+  reading: "reading",
+};
 
 /** Three stacked notes: a triad. */
 function TriadGlyph() {
@@ -228,17 +251,22 @@ export function SongMap({
   const skins: TreeSkins<HomeNodeData> = {
     hub: {
       svg: ({ node: n, progress: p, state }) => {
+        const d = n.data as Extract<HomeNodeData, { type: "hub" }>;
         const fill = p?.fill ?? 0;
-        const selected = state.includes("is-selected");
-        const focus = state.includes("is-focus");
+        const tier = p?.tags?.find((t) => t.startsWith("rhythm-"))?.slice(7);
         return (
-          <>
-            {selected || focus || fill > 0.2 ? <circle className="hm-hub-glow" r={n.size + (selected ? 19 : 12)} fill="url(#hm-bloom)" /> : state.includes("is-kin") ? <circle className="hm-hub-glow" r={n.size + 12} fill="url(#hm-kin-glow)" /> : null}
-            {selected || state.includes("is-session") ? <circle className="hm-hub-pulse" r={n.size + 5} /> : null}
-            <circle className="hm-dot" r={n.size} style={{ fillOpacity: 0.08 + 0.36 * fill }} />
-            {fill > 0 ? <circle className="hm-arc" r={n.size} pathLength={1} strokeDasharray={`${fill.toFixed(3)} 1`} transform="rotate(-90)" /> : null}
-            <text dy="0.36em">{n.label}</text>
-          </>
+          <HubMedallion
+            size={n.size}
+            minor={d.minor}
+            outward={n.outward}
+            fill={fill}
+            label={n.label}
+            selected={state.includes("is-selected")}
+            focus={state.includes("is-focus")}
+            kin={state.includes("is-kin")}
+            session={state.includes("is-session")}
+            rhythmTier={tier}
+          />
         );
       },
       html: ({ node: n, progress: p, state, at }) => {
@@ -262,17 +290,16 @@ export function SongMap({
       svg: ({ node: n, progress: p, state }) => {
         const fill = p?.fill ?? 0;
         const growing = fill >= 0.18;
+        const mastered = state.includes("is-mastered");
         const isHover = state.includes("is-hover");
         const focus = state.includes("is-focus");
         const r = (isHover ? n.size + 2.4 : focus ? n.size + 1.2 : n.size) + (growing ? fill * 1.6 : 0);
-        const lx = Math.sin((n.outward * Math.PI) / 180) * (r + 9);
-        const ly = -Math.cos((n.outward * Math.PI) / 180) * (r + 9) + 3;
+        const lx = Math.sin((n.outward * Math.PI) / 180) * (r + 10);
+        const ly = -Math.cos((n.outward * Math.PI) / 180) * (r + 10) + 3;
         const anchor = Math.abs(lx) < 4 ? "middle" : lx > 0 ? "start" : "end";
         return (
           <>
-            {state.includes("is-mastered") || isHover ? <circle className="hm-skill-halo" r={r + 5} fill="url(#hm-bloom)" /> : null}
-            <circle className="hm-dot" r={r} style={{ fillOpacity: growing ? 0.48 + 0.52 * fill : fill > 0 ? 0.45 : focus ? 0.28 : 0.12 }} />
-            {state.includes("is-mastered") ? <circle className="hm-spore-core" r={1.8} /> : null}
+            <SkillBlossom r={r} outward={n.outward} fill={fill} growing={growing} mastered={mastered} focus={focus} isHover={isHover} />
             {isHover ? (
               <text className="hm-skill-label" x={lx} y={ly} textAnchor={anchor}>
                 {n.label}
@@ -304,26 +331,27 @@ export function SongMap({
         const d = n.data as Extract<HomeNodeData, { type: "foundation" }>;
         const s = n.size;
         const share = tempoShare(p?.tempo);
-        const g = s + 4.4;
         // the name goes outward, but never straight above or below: there it would run into the rim
         const ox = Math.sin((n.outward * Math.PI) / 180);
         const oy = -Math.cos((n.outward * Math.PI) / 180);
         const level = Math.abs(ox) < 0.35;
-        const lx = level ? s + 9 : ox * (s + 16);
-        const ly = level ? 3 : oy * (s + 16) + 3;
+        const lx = level ? s + 10 : ox * (s + 17);
+        const ly = level ? 3 : oy * (s + 17) + 3;
         const anchor = level || lx > 0 ? "start" : "end";
         return (
           <>
-            <circle className="hm-f-aura" r={s + 16} />
-            {state.includes("is-selected") || state.includes("is-hover") ? <circle className="hm-f-halo" r={s + 9} /> : null}
-            <path className="hm-f-track" d={arc(g, -135, 135)} />
-            {share > 0 ? <path className="hm-f-gauge" d={arc(g, -135, -135 + 270 * share)} /> : null}
-            <circle className="hm-f-disc" r={s} />
-            <circle className="hm-f-fill" r={s - 1.6} style={{ fillOpacity: 0.1 + 0.55 * (p?.fill ?? 0) }} />
+            <NotableFrame
+              s={s}
+              share={share}
+              fill={p?.fill ?? 0}
+              mastered={state.includes("is-mastered")}
+              active={state.includes("is-selected") || state.includes("is-hover")}
+              arcPath={arc}
+            />
             <g className="hm-f-glyph">
               <FoundationGlyph kind={d.track.kind} s={s} />
             </g>
-            {p?.tempo ? <text className="hm-f-bpm" y={s + 8.2}>{p.tempo.bpm}</text> : null}
+            {p?.tempo ? <text className="hm-f-bpm" y={s + 8.8}>{p.tempo.bpm}</text> : null}
             <text className="hm-f-name" x={lx} y={ly} textAnchor={anchor}>{n.label}</text>
           </>
         );
@@ -357,18 +385,8 @@ export function SongMap({
         const fill = p?.fill ?? 0;
         return (
           <>
-            <circle className="hm-k-aura" r={s + 26} />
-            <circle className="hm-k-halo" r={s + 12} />
-            <circle className="hm-k-track" r={s + 7} />
-            {fill > 0 ? <circle className="hm-k-gauge" r={s + 7} pathLength={1} strokeDasharray={`${fill.toFixed(3)} 1`} transform="rotate(-90)" /> : null}
-            <circle className="hm-k-frame" r={s + 2.6} />
-            {[0, 90, 180, 270].map((a) => (
-              <rect key={a} className="hm-k-stud" x={-2.1} y={-(s + 4.7)} width={4.2} height={4.2} transform={`rotate(${a}) rotate(45 0 ${-(s + 2.6)})`} />
-            ))}
-            <circle className="hm-k-disc" r={s} />
-            <circle className="hm-k-fill" r={s - 2.4} style={{ fillOpacity: 0.07 + 0.4 * fill }} />
+            <KeystoneFrame s={s} fill={fill} label={n.label} />
             <g className="hm-k-glyph">{d.focus === "triads" ? <TriadGlyph /> : <g transform="translate(-11 -11)"><Glyph name="ear" size={22} /></g>}</g>
-            <text className="hm-k-name" y={s + 22}>{n.label}</text>
           </>
         );
       },
@@ -395,16 +413,21 @@ export function SongMap({
       },
     },
     travel: {
-      svg: ({ node: n }) => <circle className="hm-t-dot" r={n.size} />,
+      svg: ({ node: n }) => <TravelBead size={n.size} />,
     },
     petal: {
+      svg: ({ node: n }) => {
+        const d = n.data as Extract<HomeNodeData, { type: "petal" }>;
+        return <PetalCradle outward={n.outward} active={selectedFocus === d.focus} />;
+      },
       html: ({ node: n, at }) => {
         const d = n.data as Extract<HomeNodeData, { type: "petal" }>;
         const active = selectedFocus === d.focus;
+        const pos = n.y < MID - 20 ? "is-top" : n.y > MID + 20 ? "is-bottom" : n.x < MID ? "is-left" : "is-right";
         return (
           <button
             type="button"
-            className={`hm-orbit-btn ${active ? "is-on" : ""}`}
+            className={`hm-orbit-btn ${pos} ${active ? "is-on" : ""}`}
             data-family={n.family}
             style={at}
             aria-pressed={active}
@@ -413,21 +436,14 @@ export function SongMap({
             onMouseLeave={unhover(n.id)}
             onClick={() => onClickFocus(d.focus)}
           >
-            <i aria-hidden="true" />
-            <span>{n.label}</span>
+            <span className="hm-orbit-icon" aria-hidden="true"><Glyph name={PETAL_GLYPH[d.focus]} size={13} /></span>
+            <span className="hm-orbit-label">{n.label}</span>
           </button>
         );
       },
     },
     core: {
-      svg: () => (
-        <g className={`hm-scion-svg is-${centerPlan.kind} ${selectionCount > 0 ? "is-targeted" : ""}`}>
-          <circle className="hm-scion-aura" r={59} fill={centerPlan.kind === "custom-mix" ? "url(#hm-kin-glow)" : "url(#hm-bloom)"} />
-          <circle className="hm-scion-pulse" r={43} />
-          <circle className="hm-scion-ring" r={37} />
-          <circle className="hm-scion-inner" r={30} />
-        </g>
-      ),
+      svg: () => <CoreMedallion kind={centerPlan.kind} targeted={selectionCount > 0} />,
       html: ({ at }) => {
         const full = centerPlan.kind === "full-mix";
         return (
@@ -449,6 +465,20 @@ export function SongMap({
       },
     },
     song: {
+      svg: ({ node: n, progress: p }) => {
+        const d = n.data as Extract<HomeNodeData, { type: "song" }>;
+        const id = d.songId;
+        return (
+          <SongMedallion
+            fill={p?.fill ?? 0}
+            outward={n.outward}
+            inSession={sessionIds.has(id)}
+            isLead={leadId === id}
+            isSelected={selectedSongIds.has(id)}
+            isTargeted={activeSongs.has(id)}
+          />
+        );
+      },
       html: ({ node: n, progress: p, at }) => {
         const d = n.data as Extract<HomeNodeData, { type: "song" }>;
         const id = d.songId;
@@ -495,15 +525,36 @@ export function SongMap({
     <g className="hm-conduits">
       {centerPlan.activeHubIds.map((hubId, i) => {
         const h = tree.byId.get(hubId);
-        return h ? <path key={hubId} d={linkPath(h, core, "curve", i % 2 ? -18 : 18)} className={`hm-center-vein is-${centerPlan.kind}`} /> : null;
+        if (!h) return null;
+        const d = linkPath(h, core, "curve", i % 2 ? -18 : 18);
+        return (
+          <g key={hubId}>
+            <path d={d} className={`hm-center-vein-glow is-${centerPlan.kind}`} />
+            <path d={d} className={`hm-center-vein is-${centerPlan.kind}`} />
+          </g>
+        );
       })}
       {selectedFocus ? (() => {
         const petal = tree.byId.get(`petal:${selectedFocus}`);
-        return petal ? <path d={linkPath(petal, core)} className="hm-center-vein is-focus" /> : null;
+        if (!petal) return null;
+        const d = linkPath(petal, core);
+        return (
+          <g>
+            <path d={d} className="hm-center-vein-glow is-focus" />
+            <path d={d} className="hm-center-vein is-focus" />
+          </g>
+        );
       })() : null}
       {selectedFoundation ? (() => {
         const f = tree.byId.get(selectedFoundation);
-        return f ? <path d={linkPath(f, core, "curve", 22)} className="hm-center-vein is-foundation" data-family={f.family} /> : null;
+        if (!f) return null;
+        const d = linkPath(f, core, "curve", 22);
+        return (
+          <g data-family={f.family}>
+            <path d={d} className="hm-center-vein-glow is-foundation" />
+            <path d={d} className="hm-center-vein is-foundation" />
+          </g>
+        );
       })() : null}
     </g>
   );
@@ -548,38 +599,8 @@ export function SongMap({
         nodeState={nodeState}
         edgeState={edgeState}
         onBackground={onClearSelection}
-        defs={
-          <>
-            <radialGradient id="hm-core">
-              <stop offset="0" stopColor="#72e854" stopOpacity="0.22" />
-              <stop offset="0.32" stopColor="#287430" stopOpacity="0.08" />
-              <stop offset="0.7" stopColor="#0f2818" stopOpacity="0.03" />
-              <stop offset="1" stopColor="#050a08" stopOpacity="0" />
-            </radialGradient>
-            <radialGradient id="hm-bloom">
-              <stop offset="0" stopColor="#9cff63" stopOpacity="0.44" />
-              <stop offset="0.55" stopColor="#58d640" stopOpacity="0.14" />
-              <stop offset="1" stopColor="#58d640" stopOpacity="0" />
-            </radialGradient>
-            <radialGradient id="hm-kin-glow">
-              <stop offset="0" stopColor="#dfc068" stopOpacity="0.3" />
-              <stop offset="1" stopColor="#dfc068" stopOpacity="0" />
-            </radialGradient>
-            <radialGradient id="hm-f-aura">
-              <stop offset="0" stopColor="currentColor" stopOpacity="0.22" />
-              <stop offset="1" stopColor="currentColor" stopOpacity="0" />
-            </radialGradient>
-          </>
-        }
-        underlay={
-          <>
-            <circle cx={MID} cy={MID} r={WHEEL_ORBITS[ORBIT.songs] + 48} fill="url(#hm-core)" />
-            <circle className="hm-track hm-track--outer" cx={MID} cy={MID} r={WHEEL_ORBITS[ORBIT.songs]} />
-            <circle className="hm-track is-strong" cx={MID} cy={MID} r={WHEEL_ORBITS[ORBIT.major]} />
-            <circle className="hm-track" cx={MID} cy={MID} r={WHEEL_ORBITS[ORBIT.minor]} />
-            <circle className="hm-track hm-track--inner" cx={MID} cy={MID} r={WHEEL_ORBITS[ORBIT.petals]} />
-          </>
-        }
+        defs={<WisteriaDefs />}
+        underlay={<WisteriaUnderlay />}
         overlay={conduits}
       >
         {popover && anchor ? <Popover key={popover.anchor} node={anchor} view={view} below={anchorNode?.kind === "song"} inward={anchorNode?.kind === "keystone"}>{popover.content}</Popover> : null}

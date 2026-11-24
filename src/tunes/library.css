@@ -48,13 +48,15 @@
 }
 .lib-head .tunes-kicker {
   margin: 0 0 10px;
-  color: var(--algae-cyan);
+  color: var(--algae-bright);
   letter-spacing: 0.16em;
+  text-shadow: 0 2px 12px rgba(2, 8, 18, 0.95);
 }
 .lib-head .tunes-byline {
   margin: 10px 0 0;
   font-size: 13px;
-  color: var(--ink-soft);
+  color: #cbe2e6;
+  text-shadow: 0 2px 14px rgba(2, 8, 18, 0.95);
 }
 .lib-head-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
@@ -244,14 +246,13 @@
 }
 .lib-sort select {
   width: auto;
-  height: 36px;
-  line-height: 1.2;
-  padding: 0 28px 0 12px;
+  min-height: 36px;
+  padding: 7px 26px 7px 11px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: rgba(5, 14, 28, 0.88);
   color: var(--ink);
-  font: 400 12.5px var(--font-ui);
+  font: 400 12.5px/1.2 var(--font-ui);
   text-transform: none;
   letter-spacing: 0;
 }

@@ -190,7 +190,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/audio/setup.ts` — `InputSetup:2`, `AudioSetup:7`, `currentInputSetup:14`, `currentAudioSetup:15`, `setInputSetup:16`, `setOutputSetup:17`, `sameInputSetup:18`, `sameAudioSetup:20`
 - `src/audio/usePlayer.ts` — `usePlayer:49`
 - `src/audio/useTakePlayback.ts` — `useTakePlayback:23`
-- `src/components/AbyssalWater.tsx` — `WaterScene:8`, `AbyssalWater:299`
+- `src/components/AbyssalWater.tsx` — `WaterScene:8`, `AbyssalWater:312`
 - `src/components/Calibrate.tsx` — `Calibrate:34`
 - `src/components/CampfireView.tsx` — `CampfireView:21`
 - `src/components/ChordBox.tsx` — `ChordBox:15`
@@ -229,13 +229,14 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/components/ShapesView.tsx` — `ShapesView:16`
 - `src/components/SkillTree.tsx` — `SkillTree:18`
 - `src/components/SongCoach.tsx` — `RoomRequest:86`, `RoomHandle:91`, `openPractice:245`, `SongCoach:315`, `SongCoachRoom:323`
-- `src/components/SongMap.tsx` — `SongMap:115`
+- `src/components/SongMap.tsx` — `SongMap:138`
 - `src/components/Transport.tsx` — `Transport:18`
 - `src/components/TriadWheel.tsx` — `TriadWheel:48`
 - `src/components/TriadsView.tsx` — `TriadsView:153`
 - `src/components/TunePicker.tsx` — `TunePicker:14`
 - `src/components/TuneView.tsx` — `PracticeLaunchOptions:41`, `TuneView:55`
 - `src/components/UnitCard.tsx` — `UnitCard:22`
+- `src/components/WisteriaArt.tsx` — `scallopPath:12`, `calyxPath:30`, `leafPath:46`, `WisteriaDefs:205`, `WisteriaUnderlay:262`, `CoreMedallion:456`, `HubMedallion:486`, `SkillBlossom:553`, `NotableFrame:600`, `KeystoneFrame:649`, `TravelBead:704`, `PetalCradle:714`, `SongMedallion:728`
 - `src/components/goal-chooser.css`
 - `src/components/keyContext.ts` — `KeyContext:4`, `useKey:6`, `RomanContext:13`
 - `src/core/contract.ts` — `ParentScaleId:10`, `ParentScale:12`, `KeyInfo:22`, `ChordInBar:29`, `Bar:40`, `Tune:46`, `HarmonyLevel:53`, `PositionId:57`, `Position:58`, `NoteRole:68`, `FretNote:75`, `PatternId:87`, `PatternStep:89`, `Mix:114`, `PlayerState:121`, `PlayerApi:135` (+14 more)

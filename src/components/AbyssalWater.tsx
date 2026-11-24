@@ -15,6 +15,7 @@ interface SceneConfig {
   glowRgb: [number, number, number]; // primary bioluminescent chlorophyll hue
   flareRgb: [number, number, number]; // violent interaction surge hue
   calmCenter: number; // how much to soften the center for text/score legibility
+  vortex: number; // centered spiral vortex pull (strongest behind Home's circle-of-fifths tree)
 }
 
 const SCENES: Record<WaterScene, SceneConfig> = {
@@ -22,10 +23,11 @@ const SCENES: Record<WaterScene, SceneConfig> = {
     panX: 0.0,
     primary: swirlUrl,
     secondary: abyssUrl,
-    abyssRgb: [0.008, 0.024, 0.052], // nocturnal harbor deep navy
-    glowRgb: [0.18, 0.88, 0.48],
-    flareRgb: [0.54, 1.0, 0.34],
-    calmCenter: 0.56,
+    abyssRgb: [0.008, 0.025, 0.058], // nocturnal harbor deep navy
+    glowRgb: [0.22, 0.94, 0.46],
+    flareRgb: [0.58, 1.0, 0.34],
+    calmCenter: 0.14,
+    vortex: 1.0,
   },
   library: {
     panX: 1.05,
@@ -34,7 +36,8 @@ const SCENES: Record<WaterScene, SceneConfig> = {
     abyssRgb: [0.008, 0.024, 0.062], // abyssal Prussian dark blue
     glowRgb: [0.12, 0.86, 0.64], // bioluminescent cyan-emerald
     flareRgb: [0.24, 0.98, 0.92], // violent electric aqua surge
-    calmCenter: 0.58,
+    calmCenter: 0.46,
+    vortex: 0.28,
   },
   song: {
     panX: 1.55,
@@ -43,7 +46,8 @@ const SCENES: Record<WaterScene, SceneConfig> = {
     abyssRgb: [0.007, 0.021, 0.054],
     glowRgb: [0.16, 0.84, 0.58],
     flareRgb: [0.62, 0.98, 0.38],
-    calmCenter: 0.68,
+    calmCenter: 0.62,
+    vortex: 0.16,
   },
   progress: {
     panX: 2.25,
@@ -52,7 +56,8 @@ const SCENES: Record<WaterScene, SceneConfig> = {
     abyssRgb: [0.009, 0.022, 0.060], // deep abyssal indigo-blue
     glowRgb: [0.24, 0.92, 0.38], // poisonous bioluminescent emerald-lime
     flareRgb: [0.92, 0.84, 0.32], // violent chartreuse-gold flare
-    calmCenter: 0.56,
+    calmCenter: 0.44,
+    vortex: 0.25,
   },
 };
 
@@ -79,6 +84,7 @@ uniform vec3 abyssColor;
 uniform vec3 glowColor;
 uniform vec3 flareColor;
 uniform float calmCenter;
+uniform float vortex;
 uniform float surge;
 uniform vec2 wake0;
 uniform vec2 wake1;
@@ -148,48 +154,55 @@ void main() {
 
   float t = time;
   float speed = abs(panVel);
-  float agitation = clamp(surge + speed * 0.65 + abs(scrollVel) * 0.45 + burstPower * exp(-burstAge * 1.4), 0.0, 2.2);
+  float agitation = clamp(
+    surge * 0.42 + speed * 0.24 + abs(scrollVel) * 0.16 + burstPower * exp(-burstAge * 1.1) * 0.35,
+    0.0,
+    0.85
+  );
 
   // Slow stagnant-harbor drift + horizontal lagoon pan + vertical scroll drag.
   vec2 drift = vec2(
-    panX * 0.62 + sin(t * 0.041) * 0.12 + t * 0.007,
-    -scrollY * 0.24 + cos(t * 0.033) * 0.09 - t * 0.004
+    panX * 0.56 + sin(t * 0.032) * 0.10 + t * 0.005,
+    -scrollY * 0.18 + cos(t * 0.026) * 0.08 - t * 0.003
   );
 
-  // Ambient counter-rotating harbor eddies that twist harder during transitions & interactions.
-  vec2 c1 = vec2(sin(t * 0.072) * 0.46, cos(t * 0.058) * 0.30);
-  vec2 c2 = vec2(cos(t * 0.054 + 2.2) * 0.52, sin(t * 0.068 + 1.1) * 0.34);
-  vec2 c3 = vec2(sin(t * 0.048 + 4.1) * 0.32, cos(t * 0.082 + 3.0) * 0.28);
+  // Ambient counter-rotating harbor eddies that gently respond during transitions & interactions.
+  vec2 c1 = vec2(sin(t * 0.055) * 0.46, cos(t * 0.044) * 0.30);
+  vec2 c2 = vec2(cos(t * 0.042 + 2.2) * 0.52, sin(t * 0.052 + 1.1) * 0.34);
+  vec2 c3 = vec2(sin(t * 0.038 + 4.1) * 0.32, cos(t * 0.062 + 3.0) * 0.28);
 
-  float shear = panVel * 0.26 * sin(p.y * 3.4 + t * 0.8);
-  vec2 swirl = vec2(shear, scrollVel * 0.14 * cos(p.x * 3.0));
-  float vigor = 1.0 + agitation * 0.75;
-  swirl += spiralEddy(p, c1, 0.62, (0.38 + 0.28 * sin(t * 0.11)) * vigor);
-  swirl += spiralEddy(p, c2, 0.54, (-0.34 + 0.24 * cos(t * 0.09)) * vigor);
-  swirl += spiralEddy(p, c3, 0.44, (0.28 * sin(t * 0.14 + 1.5)) * vigor);
+  float shear = panVel * 0.11 * sin(p.y * 2.8 + t * 0.5);
+  vec2 swirl = vec2(shear, scrollVel * 0.05 * cos(p.x * 2.6));
+  float vigor = 1.0 + agitation * 0.28;
+  // Concentric central vortex wrapping the Home circle-of-fifths tree in flowing algae tendrils.
+  swirl += spiralEddy(p, vec2(0.0, 0.0), 0.82, (0.68 + 0.16 * sin(t * 0.11)) * vortex * (1.0 + agitation * 0.16));
+  swirl += spiralEddy(p, c1, 0.62, (0.34 + 0.18 * sin(t * 0.09)) * vigor);
+  swirl += spiralEddy(p, c2, 0.54, (-0.30 + 0.16 * cos(t * 0.07)) * vigor);
+  swirl += spiralEddy(p, c3, 0.44, (0.24 * sin(t * 0.11 + 1.5)) * vigor);
 
-  // 4-node viscous pointer wake: swirling algae left and right along the user's movement.
-  swirl += spiralEddy(p, wake0, 0.28, wakeSpin.x * 1.45);
-  swirl += spiralEddy(p, wake1, 0.34, wakeSpin.y * 1.15);
-  swirl += spiralEddy(p, wake2, 0.40, wakeSpin.z * 0.85);
-  swirl += spiralEddy(p, wake3, 0.46, wakeSpin.w * 0.60);
+  // 4-node viscous pointer wake: silky, weighted swirl trailing smoothly behind the cursor.
+  swirl += spiralEddy(p, wake0, 0.30, wakeSpin.x * 0.36);
+  swirl += spiralEddy(p, wake1, 0.36, wakeSpin.y * 0.28);
+  swirl += spiralEddy(p, wake2, 0.42, wakeSpin.z * 0.20);
+  swirl += spiralEddy(p, wake3, 0.48, wakeSpin.w * 0.13);
 
-  // Violent localized click/interaction shock-vortex & expanding ring ripple.
-  float burstDecay = burstPower * exp(-burstAge * 1.35);
+  // Calm click stone-drop: smooth attack envelope (zero 1-frame flash) + single expanding ripple.
+  float burstEnv = smoothstep(0.0, 0.28, burstAge) * exp(-burstAge * 1.15);
+  float burstDecay = burstPower * burstEnv;
   float distB = length(p - burstPos);
-  float ringRadius = burstAge * 0.58;
-  float ringWave = exp(-pow((distB - ringRadius) / 0.095, 2.0)) * burstDecay;
-  swirl += spiralEddy(p, burstPos, 0.38, burstDecay * 2.15 * sin(burstAge * 4.5 + 1.1));
-  swirl += normalize(p - burstPos + vec2(0.0001)) * ringWave * 0.075;
+  float ringRadius = burstAge * 0.30;
+  float ringWave = exp(-pow((distB - ringRadius) / 0.12, 2.0)) * burstDecay;
+  swirl += spiralEddy(p, burstPos, 0.36, burstDecay * 0.32);
+  swirl += normalize(p - burstPos + vec2(0.0001)) * ringWave * 0.018;
 
   // Curl of low-frequency noise stretches organic algae filaments across the abyss.
   vec2 q = p * 1.5 + drift * 0.55;
-  float f0 = fbm(q + vec2(t * 0.022, -t * 0.017));
-  float fx = fbm(q + vec2(0.06 + t * 0.022, -t * 0.017));
-  float fy = fbm(q + vec2(t * 0.022, 0.06 - t * 0.017));
-  vec2 curl = vec2(fy - f0, -(fx - f0)) * (0.48 + agitation * 0.52);
+  float f0 = fbm(q + vec2(t * 0.017, -t * 0.013));
+  float fx = fbm(q + vec2(0.06 + t * 0.017, -t * 0.013));
+  float fy = fbm(q + vec2(t * 0.017, 0.06 - t * 0.013));
+  vec2 curl = vec2(fy - f0, -(fx - f0)) * (0.42 + agitation * 0.22);
 
-  vec2 coord = p + drift + swirl * 0.46 + curl * 0.18;
+  vec2 coord = p + drift + swirl * 0.44 + curl * 0.16;
 
   vec3 raw = abyssColor;
   if (hasTexA > 0.5) {
@@ -216,47 +229,47 @@ void main() {
   float veinMask = smoothstep(0.11, 0.27, greenness) * smoothstep(0.32, 0.68, luma);
 
   // Nocturnal abyssal dark-blue water: deep Prussian/midnight-blue currents with dark-teal submerged mats.
-  vec3 deepOcean = abyssColor * (0.75 + 0.75 * smoothstep(0.12, 0.82, f0));
-  vec3 waterSheen = vec3(0.012, 0.046, 0.105) * smoothstep(0.35, 0.85, f0) * (0.55 + 0.45 * sin(t * 0.25 + p.x * 2.0));
+  vec3 deepOcean = abyssColor * (0.85 + 0.95 * smoothstep(0.08, 0.84, f0));
+  vec3 waterSheen = vec3(0.010, 0.048, 0.135) * smoothstep(0.28, 0.86, f0) * (0.62 + 0.38 * sin(t * 0.25 + p.x * 2.0));
   vec3 baseWater = deepOcean + waterSheen;
 
-  // Sculpt the real algae photograph into dark, nocturnal floating emerald mats (never bright daylight green).
+  // Sculpt the real algae photograph into dark, nocturnal floating emerald mats over deep blue voids.
   vec3 darkMat = mix(
-    vec3(0.012, 0.052, 0.076),
-    vec3(0.048, 0.195, 0.145),
-    smoothstep(0.15, 0.72, luma)
+    vec3(0.008, 0.048, 0.105),
+    vec3(0.036, 0.175, 0.145),
+    smoothstep(0.16, 0.72, luma)
   );
   // Blend subtle photographic micro-texture into the dark mats so real organic ripples stay tactile.
-  vec3 photoDetail = pow(max(raw, 0.0), vec3(2.35)) * vec3(0.42, 0.68, 0.58);
-  vec3 algaeBody = mix(darkMat, photoDetail, 0.55);
+  vec3 photoDetail = pow(max(raw, 0.0), vec3(2.45)) * vec3(0.36, 0.62, 0.68);
+  vec3 algaeBody = mix(darkMat, photoDetail, 0.48);
 
-  // Calm center lens keeps UI headers & text razor-sharp while framing edges in rich swirling algae.
+  // Calm center lens keeps UI headers & text razor-sharp while letting Home's vortex breathe across the tree.
   float centerDist = length((uv - vec2(0.5, 0.48)) * vec2(1.06, 0.96));
-  float rim = smoothstep(0.14, 0.88, centerDist);
-  float matVis = mix(0.22 * (1.0 - calmCenter * 0.45), 0.64, rim);
-  vec3 color = mix(baseWater, algaeBody, clamp(matMask * matVis, 0.0, 0.72));
+  float rim = smoothstep(0.10, 0.86, centerDist);
+  float matVis = mix(0.42 * (1.0 - calmCenter * 0.52), 0.74, rim);
+  vec3 color = mix(baseWater, algaeBody, clamp(matMask * matVis, 0.0, 0.78));
 
-  // Bioluminescence Layer 1: slow "stinking" anaerobic ambient pulse on the thickest algae veins.
-  float breath = 0.5 + 0.5 * sin(t * 0.52 + f0 * 6.2831 + p.x * 1.6);
-  float stenchGlow = veinMask * (0.12 + 0.18 * breath) * (0.40 + 0.78 * rim);
+  // Bioluminescence Layer 1: slow languid anaerobic ambient pulse on the thickest algae veins.
+  float breath = 0.5 + 0.5 * sin(t * 0.36 + f0 * 6.2831 + p.x * 1.4);
+  float stenchGlow = veinMask * (0.11 + 0.13 * breath) * (0.48 + 0.66 * rim);
   color += glowColor * stenchGlow;
 
-  // Bioluminescence Layer 2: viscous pointer wake — parts the dark water and lights up algae along the trail.
+  // Bioluminescence Layer 2: subtle, silky pointer wake shimmer along the trailing eddies.
   float wakeLight =
-    exp(-dot(p - wake0, p - wake0) / 0.048) * wakeEnergy.x +
-    exp(-dot(p - wake1, p - wake1) / 0.078) * wakeEnergy.y * 0.78 +
-    exp(-dot(p - wake2, p - wake2) / 0.112) * wakeEnergy.z * 0.52 +
-    exp(-dot(p - wake3, p - wake3) / 0.150) * wakeEnergy.w * 0.30;
-  color += mix(glowColor, flareColor, 0.48) * (0.18 + 1.45 * matMask + 0.9 * veinMask) * wakeLight * 0.52;
+    exp(-dot(p - wake0, p - wake0) / 0.065) * wakeEnergy.x +
+    exp(-dot(p - wake1, p - wake1) / 0.095) * wakeEnergy.y * 0.72 +
+    exp(-dot(p - wake2, p - wake2) / 0.130) * wakeEnergy.z * 0.46 +
+    exp(-dot(p - wake3, p - wake3) / 0.170) * wakeEnergy.w * 0.24;
+  color += mix(glowColor, flareColor, 0.32) * (0.14 + 1.05 * matMask + 0.65 * veinMask) * wakeLight * 0.20;
 
-  // Bioluminescence Layer 3: violent click shockwave + expanding bioluminescent ring.
-  float burstCore = exp(-distB * distB / 0.095) * burstDecay;
-  float burstLight = (burstCore * 0.95 + ringWave * 1.25) * (0.24 + 1.55 * matMask);
-  color += mix(glowColor, flareColor, 0.72) * burstLight * 0.82;
+  // Bioluminescence Layer 3: understated click ripple & gentle bloom (no abrupt flash).
+  float burstCore = exp(-distB * distB / 0.12) * burstDecay;
+  float burstLight = (burstCore * 0.45 + ringWave * 0.75) * (0.18 + 0.95 * matMask);
+  color += mix(glowColor, flareColor, 0.38) * burstLight * 0.20;
 
-  // Directional transition wash: sweeps glowing emerald-cyan currents across the abyss on tab switches.
-  float sweepGlow = (surge * 0.44 + speed * 0.32 + abs(scrollVel) * 0.16) * (0.16 + 1.35 * matMask);
-  color += mix(glowColor, flareColor, clamp(surge, 0.0, 1.0) * 0.58) * sweepGlow * (0.42 + 0.68 * rim);
+  // Directional transition wash: calm luminous current sweeping across the abyss on tab switches.
+  float sweepGlow = (surge * 0.18 + speed * 0.14 + abs(scrollVel) * 0.06) * (0.14 + 1.05 * matMask);
+  color += mix(glowColor, flareColor, clamp(surge, 0.0, 1.0) * 0.38) * sweepGlow * (0.40 + 0.60 * rim);
 
   // Subtle dark-blue vignette + filmic highlight knee so violent flares glow like real bioluminescence.
   float vig = smoothstep(1.32, 0.22, centerDist);
@@ -329,7 +342,7 @@ export function AbyssalWater({ scene, suspended = false }: { scene: WaterScene; 
           depth: false,
           stencil: false,
           powerPreference: "low-power",
-          preserveDrawingBuffer: false,
+          preserveDrawingBuffer: true,
         });
       } catch {
         gl = null;
@@ -387,7 +400,7 @@ export function AbyssalWater({ scene, suspended = false }: { scene: WaterScene; 
     const names = [
       "resolution", "time", "panX", "panVel", "scrollY", "scrollVel",
       "morph", "hasTexA", "hasTexB", "abyssColor", "glowColor", "flareColor",
-      "calmCenter", "surge", "wake0", "wake1", "wake2", "wake3",
+      "calmCenter", "vortex", "surge", "wake0", "wake1", "wake2", "wake3",
       "wakeSpin", "wakeEnergy", "burstPos", "burstAge", "burstPower", "texA", "texB",
     ];
     const u = Object.fromEntries(names.map((name) => [name, gpu.getUniformLocation(program, name)]));
@@ -401,7 +414,6 @@ export function AbyssalWater({ scene, suspended = false }: { scene: WaterScene; 
     let elapsed = 0;
     let changedSize = true;
     let painted = false;
-    let lastInteraction = performance.now();
 
     const initCfg = SCENES[sceneRef.current];
     let curPanX = initCfg.panX;
@@ -410,12 +422,17 @@ export function AbyssalWater({ scene, suspended = false }: { scene: WaterScene; 
     let curGlow: [number, number, number] = [...initCfg.glowRgb];
     let curFlare: [number, number, number] = [...initCfg.flareRgb];
     let curCalm = initCfg.calmCenter;
-    let surge = 0.28;
+    let curVortex = initCfg.vortex;
+    let surge = 0.12;
     let curScrollY = typeof window !== "undefined" ? window.scrollY / 900 : 0;
+    let targetScrollY = curScrollY;
     let scrollVel = 0;
 
-    // 4-node trailing pointer wake in normalized aspect space
+    // 4-node viscous spring-followed pointer wake in normalized aspect space (never snaps discretely)
     const wakes = Array.from({ length: 4 }, () => ({ x: 9, y: 9, spin: 0, energy: 0 }));
+    let ptrTarget = { x: 9, y: 9, initialized: false };
+    let ptrEnergyTarget = 0;
+    let ptrSpinTarget = 0;
     let lastPtr = { x: 0, y: 0, at: 0 };
     let burst = { x: 0, y: 0, age: 10, power: 0 };
 
@@ -451,8 +468,7 @@ export function AbyssalWater({ scene, suspended = false }: { scene: WaterScene; 
     const applySceneTextures = (next: WaterScene, immediate: boolean) => {
       const cfg = SCENES[next];
       if (!immediate) {
-        surge = Math.min(1.5, surge + 0.95);
-        lastInteraction = performance.now();
+        surge = Math.min(0.65, surge + 0.34);
       }
       ensureImg(cfg.primary, (imgA) => {
         if (sceneRef.current !== next) return;
@@ -489,45 +505,44 @@ export function AbyssalWater({ scene, suspended = false }: { scene: WaterScene; 
       if (suspendedRef.current) return;
       const now = performance.now();
       const [x, y] = toAspectPos(event.clientX, event.clientY);
+      if (!ptrTarget.initialized) {
+        ptrTarget = { x, y, initialized: true };
+        for (const w of wakes) { w.x = x; w.y = y; }
+        lastPtr = { x, y, at: now };
+        return;
+      }
       const dx = x - lastPtr.x;
       const dy = y - lastPtr.y;
-      const dt = Math.max(8, now - lastPtr.at);
       const dist = Math.hypot(dx, dy);
-      if (dist < 0.004 && now - lastPtr.at < 45) return;
-      const vel = Math.min(2.4, (dist / (dt / 1000)) * 0.55);
-      const sign = dx * 0.8 - dy * 0.5 >= 0 ? 1 : -1;
-      for (let i = wakes.length - 1; i > 0; i--) {
-        wakes[i] = { ...wakes[i - 1] };
-      }
-      wakes[0] = { x, y, spin: sign * (0.42 + vel * 0.85), energy: Math.min(1.4, 0.26 + vel * 0.68) };
+      ptrTarget.x = x;
+      ptrTarget.y = y;
+      // Smoothly accumulate gentle spin & energy proportional to pointer travel (no abrupt sign flips)
+      ptrEnergyTarget = Math.min(0.75, ptrEnergyTarget + dist * 1.15);
+      ptrSpinTarget = Math.max(-0.55, Math.min(0.55, ptrSpinTarget + (dx - dy * 0.55) * 0.9));
       lastPtr = { x, y, at: now };
-      lastInteraction = now;
       start();
     };
 
     const onPointerDown = (event: PointerEvent) => {
       if (suspendedRef.current) return;
       const [x, y] = toAspectPos(event.clientX, event.clientY);
-      burst = { x, y, age: 0, power: 1.25 };
-      surge = Math.min(1.4, surge + 0.35);
-      lastInteraction = performance.now();
+      // Only start a fresh ripple if the prior one has mostly settled, avoiding abrupt glow jumps
+      if (burst.age > 0.35 || burst.power < 0.05) {
+        burst = { x, y, age: 0, power: 0.32 };
+      }
+      surge = Math.min(0.45, surge + 0.06);
       start();
     };
 
     const onScroll = () => {
       if (suspendedRef.current) return;
-      const nextScroll = window.scrollY / Math.max(window.innerHeight, 600);
-      const delta = nextScroll - curScrollY;
-      scrollVel = Math.max(-2.2, Math.min(2.2, scrollVel + delta * 3.8));
-      curScrollY = nextScroll;
-      lastInteraction = performance.now();
+      targetScrollY = window.scrollY / Math.max(window.innerHeight, 600);
       start();
     };
 
     const onKeyDown = () => {
       if (suspendedRef.current) return;
-      surge = Math.min(1.1, surge + 0.14);
-      lastInteraction = performance.now();
+      surge = Math.min(0.5, surge + 0.04);
       start();
     };
 
@@ -538,8 +553,7 @@ export function AbyssalWater({ scene, suspended = false }: { scene: WaterScene; 
       if (disposed || failed || document.hidden || gpu.isContextLost() || suspendedRef.current) return;
       if (document.querySelector(".ss:not(.is-parked)")) return;
       const moving = !motion?.matches;
-      const active = now - lastInteraction < 2800 || surge > 0.04 || Math.abs(panVel) > 0.015 || burst.age < 2.2;
-      const targetFps = active ? 30 : 15;
+      const targetFps = 30;
       if (moving && previous && now - previous < 1000 / targetFps) {
         frame = requestAnimationFrame(paint);
         return;
@@ -560,28 +574,48 @@ export function AbyssalWater({ scene, suspended = false }: { scene: WaterScene; 
       }
 
       const cfg = SCENES[sceneRef.current];
-      const spring = 1 - Math.exp(-dt * 4.4);
+      const spring = 1 - Math.exp(-dt * 2.4);
       const nextPan = lerp(curPanX, cfg.panX, spring);
       const instantVel = (nextPan - curPanX) / Math.max(dt, 0.016);
-      panVel = lerp(panVel, instantVel, 1 - Math.exp(-dt * 10));
+      panVel = lerp(panVel, Math.max(-1.2, Math.min(1.2, instantVel)), 1 - Math.exp(-dt * 5.0));
       curPanX = nextPan;
 
-      const colorEase = 1 - Math.exp(-dt * 2.6);
+      // Smooth inertial vertical scroll drag
+      const nextScroll = lerp(curScrollY, targetScrollY, 1 - Math.exp(-dt * 4.5));
+      const instantScrollVel = (nextScroll - curScrollY) / Math.max(dt, 0.016);
+      scrollVel = lerp(scrollVel, Math.max(-0.7, Math.min(0.7, instantScrollVel)), 1 - Math.exp(-dt * 5.0));
+      curScrollY = nextScroll;
+
+      const colorEase = 1 - Math.exp(-dt * 1.8);
       for (let i = 0; i < 3; i++) {
         curAbyss[i] = lerp(curAbyss[i], cfg.abyssRgb[i], colorEase);
         curGlow[i] = lerp(curGlow[i], cfg.glowRgb[i], colorEase);
         curFlare[i] = lerp(curFlare[i], cfg.flareRgb[i], colorEase);
       }
       curCalm = lerp(curCalm, cfg.calmCenter, colorEase);
+      curVortex = lerp(curVortex, cfg.vortex, colorEase);
 
-      surge *= Math.exp(-dt * 1.45);
-      scrollVel *= Math.exp(-dt * 4.2);
+      surge *= Math.exp(-dt * 1.15);
       burst.age += dt;
-      morph = lerp(morph, targetMorph + Math.sin(elapsed * 0.12) * 0.22, 1 - Math.exp(-dt * 0.9));
+      morph = lerp(morph, targetMorph + Math.sin(elapsed * 0.08) * 0.18, 1 - Math.exp(-dt * 0.55));
 
-      for (const w of wakes) {
-        w.energy *= Math.exp(-dt * 1.85);
-        w.spin *= Math.exp(-dt * 1.35);
+      // Viscous spring-integrated pointer wake chain (zero jumps, silky drag)
+      ptrEnergyTarget *= Math.exp(-dt * 2.4);
+      ptrSpinTarget *= Math.exp(-dt * 1.8);
+      if (ptrTarget.initialized) {
+        const leadEase = 1 - Math.exp(-dt * 3.8);
+        wakes[0].x = lerp(wakes[0].x, ptrTarget.x, leadEase);
+        wakes[0].y = lerp(wakes[0].y, ptrTarget.y, leadEase);
+        wakes[0].energy = lerp(wakes[0].energy, ptrEnergyTarget, 1 - Math.exp(-dt * 3.2));
+        wakes[0].spin = lerp(wakes[0].spin, ptrSpinTarget, 1 - Math.exp(-dt * 2.6));
+        for (let i = 1; i < wakes.length; i++) {
+          const prev = wakes[i - 1];
+          const follow = 1 - Math.exp(-dt * Math.max(1.2, 3.0 - i * 0.55));
+          wakes[i].x = lerp(wakes[i].x, prev.x, follow);
+          wakes[i].y = lerp(wakes[i].y, prev.y, follow);
+          wakes[i].energy = lerp(wakes[i].energy, prev.energy * 0.8, follow);
+          wakes[i].spin = lerp(wakes[i].spin, prev.spin * 0.8, follow);
+        }
       }
 
       gpu.activeTexture(gpu.TEXTURE0);
@@ -601,6 +635,7 @@ export function AbyssalWater({ scene, suspended = false }: { scene: WaterScene; 
       gpu.uniform3f(u.glowColor, curGlow[0], curGlow[1], curGlow[2]);
       gpu.uniform3f(u.flareColor, curFlare[0], curFlare[1], curFlare[2]);
       gpu.uniform1f(u.calmCenter, curCalm);
+      gpu.uniform1f(u.vortex, curVortex);
       gpu.uniform1f(u.surge, moving ? surge : 0);
       gpu.uniform2f(u.wake0, wakes[0].x, wakes[0].y);
       gpu.uniform2f(u.wake1, wakes[1].x, wakes[1].y);

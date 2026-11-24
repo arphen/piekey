@@ -108,11 +108,13 @@ cleanup and late-start cancellation have mounted coverage; physical audio remain
   Library cards, a song's page and guitar mode's chooser (F4). Guitar mode mixes in only those
   tunes; edits during a live session apply to the next one. Imports and added demos join an
   explicit set.
-- **Library** (`TuneView` with `songId = null` → `LibraryGrid`): cards with session toggle, play,
-  remove-with-confirm (history kept), import tile, demo shelf, Backup & tools. A song's page has
-  a Library back link, a phrase strip filled by box, and the goal chooser behind a disclosure.
+- **Library, Progress & Abyssal Shell Water overhaul (2026-11-24):**
+  - **Interactive abyssal water backdrop (`src/components/AbyssalWater.tsx`, `shell.css`)**: Shared WebGL lagoon canvas behind the shell using the owner's pond photographs (adding `pond-abyss.webp`, `pond-bloom.webp`, `pond-current.webp` in `src/assets/`). Glides horizontally across a continuous algae lagoon with distinct scene textures/hues for Library, Song, and Progress, responds to pointer wake, click shockwaves, scroll drag, and directional slide view transitions, and suspends automatically while Play/Tools/Free play/Devices are active or hidden.
+  - **User-journey-first Library (`LibraryGrid`, `tunes/catalog.ts`, `TuneView`, `CampfireView`)**: Fast search (title, artist, key, chords; `/` shortcut), quick filters (`All`, `Next session`, `With chords`, `With lyrics`), sort controls, scannable list view with 1-click **Chords** (Campfire jam sheet) and **Next session** toggles, and an interactive Song Inspector with chord chips and safe remove-with-confirm. MusicXML/agent-prompt clutter moved behind **Manage**; Song header adds a direct **Score | Chords & lyrics** mode switch.
+  - **Progress dashboard & scheduler transparency (`ProgressView`, `overview/dashboard.ts`)**: Global KPI strip (time, streak, clean accuracy, mastery/repertoire), 12-week bioluminescent practice heatmap & weekly volume bars, Leitner Box 1–5 ladder & family breakdown, 6-axis hexagonal SVG Skill Constellation radar, and a read-only **Why your sessions look like this** panel explaining active focus arcs, new-card pacing zones, side-study pairings, upcoming session blocks, and detected friction points with 1-click **Drill** launches, while preserving per-song milestones, `GoalChooser`, `PracticeHistory`, and `Takes` audio comparison.
+  - **Verified:** `make check` (typecheck, repo map freshness, 42 suites / 486 tests including `dashboard.test.ts`), `npm run build:quiet`, and live browser inspection at 1440×900 across Library, Campfire, Song, and Progress with 0 console/network errors. **Unverified:** physical mobile touch/Safari, real guitar mic input, and long-term GPU/battery impact.
 - **Navigation**: `App` routes mirror into browser history; topbar Back, browser Back and G5
-  (formerly Home) walk it. Views fade in (opacity only, no lingering layers).
+  (formerly Home) walk it. Views slide and dissolve directionally in sync with the water sweep.
 - **Play tab** (2026-11-24): guitar mode is no longer fullscreen or an overlay. It is the Play
   tab, set apart right of Home/Library/Progress, hosting `PracticeRoom` → `SongCoach` under the
   header; every launch (tree core, cards, Library, song page, Changes, Reading) lands there, and
