@@ -2,7 +2,7 @@ SHELL := /bin/bash
 NPM_REGISTRY ?= https://registry.npmjs.org
 PORT ?= 5173
 
-.PHONY: install run build preview stop test test-file test-related typecheck quick map-update map-check check hooks publish
+.PHONY: install run build preview stop test test-file test-related typecheck quick map-update map-check check hooks publish report
 
 install:
 	npm install --registry $(NPM_REGISTRY)
@@ -82,7 +82,12 @@ hooks:
 publish:
 	@branch=$$(git rev-parse --abbrev-ref HEAD); \
 	if [ -n "$$(git status --porcelain)" ]; then echo "Working tree is not clean; commit or stash first:"; git status --short; exit 1; fi; \
+	./scripts/publish-report.sh; \
 	$(MAKE) --no-print-directory check; \
 	if [ -z "$(SKIP)" ]; then npm run --silent build:quiet; fi; \
 	git push -u origin "$$branch"; \
 	echo "Published $$branch to $$(git remote get-url origin)"
+
+# What a publish would send, and which branches main has not integrated. Changes nothing.
+report:
+	@./scripts/publish-report.sh
