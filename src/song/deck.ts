@@ -14,7 +14,7 @@ import { arpLine, chainLine, guideLine, scaleLine, type LineNote, type ScaleDril
 import { seeded } from "./rand";
 import { freshLine, knownLine, pickKnown, vary } from "./reading";
 import { isolateRhythm } from "./rhythm";
-import { densityStartBpm, enclosureLine, pyramidLine, shiftLine, skipLine, spiderLine, TECHNIQUE_TRACKS, techniqueSteps, type SpiderPattern, type TechniqueKind, type TechniqueNote } from "./technique";
+import { cadenceChords, cadenceRomans, densityStartBpm, enclosureLine, foundationKey, pyramidLine, shiftLine, skipLine, spiderLine, TECHNIQUE_TRACKS, techniqueSteps, type SpiderPattern, type TechniqueKind, type TechniqueNote } from "./technique";
 import { voiceChords, type Voicing } from "./voicings";
 
 // A tune turned into a deck of exercise cards that together teach it:
@@ -1014,67 +1014,82 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
   }
   for (const c of harmony.cadences) if (!queued.has(c.id)) harmonyQueue.push(...(cadenceCards.get(c.id) ?? []));
 
-  // holistic mechanics & technique: spiders, rhythm pyramid, string skipping, shifting, enclosures
-  // Shared globally across all tunes in `guitar-skills` via `tech:*` IDs.
+  // holistic mechanics & technique: spiders, rhythm pyramid, string skipping, shifting, enclosures.
+  // Shared globally across all tunes in `guitar-skills` via `tech:*` IDs. Each one lives in the key
+  // it hangs from on Home's tree, not in this tune's key: whichever deck builds it, it is the same
+  // music, and rotating it into a session takes the player through keys their tunes rarely visit,
+  // in that key's position, with the arpeggio drills walking its I–IV–V–I.
   const mechanics: Card[] = [];
-  {
-    const homeScale = makeScale(home.tonic, home.mode === "minor" ? "naturalMinor" : "major", home.tonicName);
-    const tonicChord = parseChord(home.tonicName + (home.mode === "minor" ? "m7" : "maj7")) ?? parseChord(home.tonicName + (home.mode === "minor" ? "m" : ""))!;
-    const mechPos = Math.max(1, Math.min(MAX_FRET - 3, w.p));
-    for (const track of TECHNIQUE_TRACKS) {
-      let rawNotes: TechniqueNote[] = [];
-      let harmonic = true;
-      if (track.kind === "spider") {
-        const pat = track.id.split(":")[2] as SpiderPattern;
-        rawNotes = spiderLine(pat, mechPos);
-        harmonic = false; // chromatic drill: keep backing clean (click + pulse only)
-      } else if (track.kind === "skip") {
-        rawNotes = skipLine(track.id.endsWith(":octave") ? "octave" : "adjacent", homeScale, w);
-      } else if (track.kind === "pyramid") {
-        rawNotes = pyramidLine(homeScale, w);
-      } else if (track.kind === "shift") {
-        rawNotes = shiftLine(homeScale, w);
-      } else if (track.kind === "enclose") {
-        rawNotes = enclosureLine(homeScale, tonicChord, w);
-      }
-      if (!rawNotes.length) continue;
-      const total = rawNotes[rawNotes.length - 1].t + rawNotes[rawNotes.length - 1].dur;
-      const slots = synthSlots(total);
-      const spans: Span[] = [{ chord: tonicChord, t: 0, dur: slots.length * 4 }];
-      const timeline: Timeline = {
-        slots,
-        targets: toTargets({ slots }, rawNotes),
-        comp: harmonic ? padHits(spans) : [],
-        bass: harmonic ? bassLine(spans) : undefined,
-        total: slots.length * 4,
-      };
-      const ctx: Context = { chord: harmonic ? tonicChord : null, scale: homeScale, next: null, roman: home.mode === "minor" ? "i" : "I" };
-      mechanics.push({
-        ...base,
-        id: track.id,
-        p: mechPos,
-        family: "technique",
-        kind: track.kind,
-        needs: track.needs,
-        group: "Foundations",
-        title: track.title,
-        detail: track.detail,
-        why: track.why,
-        insight: track.insight,
-        where: track.kind === "shift" ? `frets ${Math.max(1, Math.min(MAX_FRET - 5, w.p))}–${Math.min(MAX_FRET, Math.max(1, Math.min(MAX_FRET - 5, w.p)) + 5)}` : `frets ${mechPos}–${mechPos + 3}`,
-        bpm: track.bpm,
-        goalBpm: track.goalBpm,
-        pass: 0.85,
-        click: true,
-        tl: timeline,
-        from: 0,
-        to: slots.length - 1,
-        first: 0,
-        last: rawNotes.length - 1,
-        steps: techniqueSteps(rawNotes, w),
-        context: rawNotes.map(() => ctx),
-      });
+  for (const track of TECHNIQUE_TRACKS) {
+    const anchor = foundationKey(track);
+    const keyScale = anchor.scale;
+    const mw = chooseWindow(anchor.tonic);
+    const cadence = cadenceChords(keyScale, anchor.minor);
+    const romans = cadenceRomans(anchor.minor);
+    const tonicChord = cadence[0];
+    const mechPos = Math.max(1, Math.min(MAX_FRET - 3, mw.p));
+    let rawNotes: TechniqueNote[] = [];
+    let harmonic = true;
+    let beatsPerChord = 0; // 0: the tonic held throughout
+    if (track.kind === "spider") {
+      const pat = track.id.split(":")[2] as SpiderPattern;
+      rawNotes = spiderLine(pat, mechPos);
+      harmonic = false; // chromatic drill: keep backing clean (click + pulse only)
+    } else if (track.kind === "skip") {
+      rawNotes = skipLine(track.id.endsWith(":octave") ? "octave" : "adjacent", keyScale, mw);
+    } else if (track.kind === "pyramid") {
+      rawNotes = pyramidLine(keyScale, mw, cadence);
+      beatsPerChord = 4;
+    } else if (track.kind === "shift") {
+      rawNotes = shiftLine(keyScale, mw);
+    } else if (track.kind === "enclose") {
+      rawNotes = enclosureLine(keyScale, tonicChord, mw, cadence);
+      beatsPerChord = 2;
     }
+    if (!rawNotes.length) continue;
+    const total = rawNotes[rawNotes.length - 1].t + rawNotes[rawNotes.length - 1].dur;
+    const slots = synthSlots(total);
+    const spans: Span[] = beatsPerChord
+      ? cadence.map((chord, i) => ({ chord, t: i * beatsPerChord, dur: i === cadence.length - 1 ? slots.length * 4 - i * beatsPerChord : beatsPerChord }))
+      : [{ chord: tonicChord, t: 0, dur: slots.length * 4 }];
+    const timeline: Timeline = {
+      slots,
+      targets: toTargets({ slots }, rawNotes),
+      comp: harmonic ? padHits(spans) : [],
+      bass: harmonic ? bassLine(spans) : undefined,
+      total: slots.length * 4,
+    };
+    const contextAt = (t: number): Context => {
+      const i = beatsPerChord ? Math.min(cadence.length - 1, Math.floor(t / beatsPerChord + 1e-6)) : 0;
+      return { chord: harmonic ? cadence[i] : null, scale: keyScale, next: harmonic && beatsPerChord ? cadence[i + 1] ?? null : null, roman: romans[i] };
+    };
+    const lowFret = track.kind === "shift" ? Math.max(1, Math.min(MAX_FRET - 5, mw.p)) : mechPos;
+    const highFret = track.kind === "shift" ? Math.min(MAX_FRET, lowFret + 5) : mechPos + 3;
+    mechanics.push({
+      ...base,
+      id: track.id,
+      p: mechPos,
+      family: "technique",
+      kind: track.kind,
+      needs: track.needs,
+      group: "Foundations",
+      title: track.title,
+      detail: track.detail,
+      why: track.why,
+      insight: track.insight,
+      where: `${keyScale.name} · frets ${lowFret}–${highFret}`,
+      bpm: track.bpm,
+      goalBpm: track.goalBpm,
+      pass: 0.85,
+      click: true,
+      tl: timeline,
+      from: 0,
+      to: slots.length - 1,
+      first: 0,
+      last: rawNotes.length - 1,
+      steps: techniqueSteps(rawNotes, mw),
+      context: rawNotes.map((n) => contextAt(n.t)),
+    });
   }
 
   const streams = [technique, melodyCards, melodyCards, harmonyQueue, reading, earDeck, fretDeck, mechanics];

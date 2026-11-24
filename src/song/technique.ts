@@ -1,7 +1,7 @@
 import type { PatternStep } from "../core/contract";
 import { OPEN_MIDI } from "../core/scales";
 import { mod } from "../musicTheory";
-import type { Chord, Scale } from "./harmony";
+import { makeScale, parseChord, type Chord, type Scale } from "./harmony";
 import { fingerLine, MAX_FRET, notesIn, type Window } from "./fingering";
 import type { LineNote } from "./lines";
 
@@ -12,6 +12,15 @@ import type { LineNote } from "./lines";
 export type SpiderPattern = "1234" | "4321" | "1324" | "1423";
 export type SkipPattern = "adjacent" | "octave";
 export type TechniqueKind = "spider" | "skip" | "pyramid" | "shift" | "enclose";
+/** What a foundation trains; Home colours each group alike so a cluster reads at a glance. */
+export type FoundationGroup = "fingers" | "picking" | "time" | "phrasing";
+
+export const FOUNDATION_GROUPS: Record<FoundationGroup, { label: string; trains: string }> = {
+  fingers: { label: "Fingers", trains: "fretting-hand independence and reach" },
+  picking: { label: "Picking", trains: "clean string changes with the pick" },
+  time: { label: "Time", trains: "subdivision against a steady beat" },
+  phrasing: { label: "Phrasing", trains: "leading into chord tones" },
+};
 
 export interface TechniqueNote {
   midi: number;
@@ -32,6 +41,13 @@ export interface TechniqueMeta {
   bpm: number;
   goalBpm: number;
   needs?: string;
+  group: FoundationGroup;
+  /**
+   * The key the exercise lives in, as a tree hub ("M6" = F♯ major, "m9" = A minor). Foundations
+   * sit in the keys tunes rarely visit, and whichever deck builds one plays it there, so the same
+   * id is always the same music.
+   */
+  hub: string;
 }
 
 /** Shared mechanics catalogue displayed on Home's Foundations strip and built into decks. */
@@ -46,6 +62,8 @@ export const TECHNIQUE_TRACKS: readonly TechniqueMeta[] = [
     insight: "Keep each finger hovering close — lift only when its string moves.",
     bpm: 64,
     goalBpm: 116,
+    group: "fingers",
+    hub: "M4",
   },
   {
     id: "tech:spider:4321",
@@ -58,6 +76,8 @@ export const TECHNIQUE_TRACKS: readonly TechniqueMeta[] = [
     bpm: 62,
     goalBpm: 112,
     needs: "tech:spider:1234",
+    group: "fingers",
+    hub: "M4",
   },
   {
     id: "tech:spider:1324",
@@ -70,6 +90,8 @@ export const TECHNIQUE_TRACKS: readonly TechniqueMeta[] = [
     bpm: 60,
     goalBpm: 112,
     needs: "tech:spider:4321",
+    group: "fingers",
+    hub: "M11",
   },
   {
     id: "tech:spider:1423",
@@ -82,17 +104,21 @@ export const TECHNIQUE_TRACKS: readonly TechniqueMeta[] = [
     bpm: 58,
     goalBpm: 108,
     needs: "tech:spider:1324",
+    group: "fingers",
+    hub: "M11",
   },
   {
     id: "tech:pyramid:core",
     kind: "pyramid",
     title: "Rhythm pyramid · ¼ → 16ths",
     short: "Rhythm pyramid",
-    detail: "One bar each of quarters, 8ths, triplets, and 16ths on a tonic triad cell.",
+    detail: "One bar each of quarters, 8ths, triplets and 16ths, arpeggiating I–IV–V–I in one position.",
     why: "Shifts your internal subdivision gear smoothly without changing tempo.",
     insight: "Feel the beat stay still while the hand doubles, triples, and quadruples.",
     bpm: 52,
     goalBpm: 84,
+    group: "time",
+    hub: "M6",
   },
   {
     id: "tech:skip:adjacent",
@@ -104,6 +130,8 @@ export const TECHNIQUE_TRACKS: readonly TechniqueMeta[] = [
     insight: "Keep your wrist loose; let the pick clear the string by a hair.",
     bpm: 60,
     goalBpm: 108,
+    group: "picking",
+    hub: "M1",
   },
   {
     id: "tech:skip:octave",
@@ -116,6 +144,8 @@ export const TECHNIQUE_TRACKS: readonly TechniqueMeta[] = [
     bpm: 56,
     goalBpm: 104,
     needs: "tech:skip:adjacent",
+    group: "picking",
+    hub: "M1",
   },
   {
     id: "tech:shift:connect",
@@ -127,17 +157,21 @@ export const TECHNIQUE_TRACKS: readonly TechniqueMeta[] = [
     insight: "Look at the target fret one note early before your hand glides there.",
     bpm: 62,
     goalBpm: 108,
+    group: "fingers",
+    hub: "M8",
   },
   {
     id: "tech:enclose:core",
     kind: "enclose",
     title: "Chord-tone enclosures",
     short: "Enclosures",
-    detail: "Half-step below, scale step above, then land on each chord tone (1-3-5-7).",
+    detail: "Half-step below, scale step above, then land on a chord tone of each chord in I–IV–V–I.",
     why: "Turns static arpeggios into real jazz and melodic phrasing.",
     insight: "Lean slightly into the chord tone on beat 2 and beat 4 of each bar.",
     bpm: 60,
     goalBpm: 112,
+    group: "phrasing",
+    hub: "M3",
   },
 ];
 
@@ -199,32 +233,57 @@ export function skipLine(kind: SkipPattern, scale: Scale, w: Window): TechniqueN
   return out;
 }
 
-/**
- * 4-bar Rhythm Pyramid on a musical tonic-3rd-5th-octave anchor:
- * bar 1 = quarters (4), bar 2 = eighths (8), bar 3 = triplets (12), bar 4 = sixteenths (16).
- */
-export function pyramidLine(scale: Scale, w: Window): TechniqueNote[] {
-  const inPos = notesIn(scale.pcs, w.low, w.high);
-  const tonicIdx = inPos.findIndex((m) => mod(m) === scale.root);
-  const root = tonicIdx >= 0 ? inPos[tonicIdx] : inPos[0] ?? OPEN_MIDI[4] + Math.min(5, w.p);
-  const third = inPos.find((m) => m > root && mod(m) === scale.pcs[2]) ?? root + 3;
-  const fifth = inPos.find((m) => m > third && mod(m) === scale.pcs[4]) ?? root + 7;
-  const oct = inPos.find((m) => m >= root + 12 && mod(m) === scale.root) ?? fifth;
-  const cell = [root, third, fifth, oct];
-  const cell3 = [root, third, fifth];
+/** A foundation's key: the hub it hangs from on the tree, as a scale. */
+export function foundationKey(track: Pick<TechniqueMeta, "hub">): { tonic: number; minor: boolean; scale: Scale } {
+  const m = /^(M|m)(\d+)$/.exec(track.hub);
+  const minor = m?.[1] === "m";
+  const tonic = m ? mod(Number(m[2])) : 0;
+  return { tonic, minor, scale: makeScale(tonic, minor ? "naturalMinor" : "major") };
+}
 
-  const out: TechniqueNote[] = [];
-  // Bar 1: 4 quarter notes
-  for (let i = 0; i < 4; i++) out.push({ midi: cell[i % cell.length], t: i, dur: 1 });
-  // Bar 2: 8 eighth notes
-  for (let i = 0; i < 8; i++) out.push({ midi: cell[i % cell.length], t: 4 + i * 0.5, dur: 0.5 });
-  // Bar 3: 12 eighth-note triplets
-  for (let i = 0; i < 12; i++) out.push({ midi: cell3[i % cell3.length], t: 8 + i / 3, dur: 1 / 3 });
-  // Bar 4: 16 sixteenth notes, landing cleanly on tonic at beat 15.75
-  for (let i = 0; i < 16; i++) {
-    const midi = i === 15 ? root : cell[i % cell.length];
-    out.push({ midi, t: 12 + i * 0.25, dur: 0.25 });
+/** The key's I–IV–V7–I (i–iv–V7–i in minor, the dominant borrowed from harmonic minor). */
+export function cadenceChords(scale: Scale, minor: boolean): Chord[] {
+  const name = (deg: number) => scale.names[deg];
+  const symbols = [`${name(0)}${minor ? "m" : ""}`, `${name(3)}${minor ? "m" : ""}`, `${name(4)}7`, `${name(0)}${minor ? "m" : ""}`];
+  return symbols.map((sym) => parseChord(sym) ?? parseChord(name(0))!);
+}
+
+/** Roman numerals for `cadenceChords`. */
+export const cadenceRomans = (minor: boolean) => (minor ? ["i", "iv", "V7", "i"] : ["I", "IV", "V7", "I"]);
+
+/** Four ascending chord tones inside the window, from the chord's lowest root where there is room. */
+function chordCell(chord: Chord, w: Window): number[] {
+  const tones = notesIn(chord.pcs.slice(0, 3), w.low, w.high);
+  if (tones.length < 4) {
+    const r = OPEN_MIDI[4] + Math.min(5, w.p);
+    return [r, r + 4, r + 7, r + 12];
   }
+  const rootAt = tones.findIndex((m) => mod(m) === chord.root);
+  const from = Math.max(0, Math.min(rootAt < 0 ? 0 : rootAt, tones.length - 4));
+  return tones.slice(from, from + 4);
+}
+
+/**
+ * 4-bar Rhythm Pyramid arpeggiating the key's cadence in one position:
+ * bar 1 = quarters on I, bar 2 = eighths on IV, bar 3 = triplets on V7, bar 4 = sixteenths back on I.
+ * The beat stays still while the hand doubles, triples and quadruples, and the hand also has to find
+ * each chord's shape in the position as it changes.
+ */
+export function pyramidLine(scale: Scale, w: Window, bars?: readonly Chord[]): TechniqueNote[] {
+  const chords = bars?.length === 4 ? bars : cadenceChords(scale, scale.kind !== "major");
+  const cells = chords.map((c) => chordCell(c, w));
+  const out: TechniqueNote[] = [];
+  const bar = (b: number, count: number, len: number) => {
+    const cell = cells[b];
+    for (let i = 0; i < count; i++) {
+      const last = b === 3 && i === count - 1;
+      out.push({ midi: last ? cell[0] : cell[i % len], t: b * 4 + (i * 4) / count, dur: 4 / count });
+    }
+  };
+  bar(0, 4, 4);
+  bar(1, 8, 4);
+  bar(2, 12, 3);
+  bar(3, 16, 4);
   return out;
 }
 
@@ -255,40 +314,34 @@ export function shiftLine(scale: Scale, w: Window): TechniqueNote[] {
 }
 
 /**
- * Melodic enclosures onto the tonic chord's 1, 3, 5, 7 (4 targets × 4 eighth notes = 2 bars):
- * [half-step below, diatonic step above, target, target hold / passing] — keeps all frets <= MAX_FRET.
+ * Melodic enclosures through the key's cadence, one chord every two beats (2 bars): for each chord,
+ * a half-step below, a diatonic step above, then its target held for a beat. The targets are the
+ * 3rds of I, IV and V7 (the notes that name each chord) and the root of I to close, each the one
+ * nearest the last, so the line moves by step through the changes. Frets stay <= MAX_FRET.
  */
-export function enclosureLine(scale: Scale, chord: Chord, w: Window): TechniqueNote[] {
+export function enclosureLine(scale: Scale, chord: Chord, w: Window, bars?: readonly Chord[]): TechniqueNote[] {
+  const chords = bars?.length === 4 ? bars : [chord, chord, chord, chord];
   const lo = Math.max(w.low + 1, OPEN_MIDI[4] + Math.max(1, w.p));
   const hi = Math.min(w.high - 2, OPEN_MIDI[0] + Math.min(MAX_FRET - 1, w.p + 2));
-  const chordMidis = notesIn(chord.pcs, lo, hi);
-  const targets: number[] = [];
-  for (const pc of chord.pcs.slice(0, 4)) {
-    const found = chordMidis.find((m) => mod(m) === pc && !targets.includes(m));
-    if (found !== undefined) targets.push(found);
-  }
-  while (targets.length < 4 && chordMidis.length) {
-    targets.push(chordMidis[targets.length % chordMidis.length]);
-  }
-  if (!targets.length) return [];
-
+  if (hi <= lo) return [];
   const diatonicAbove = (midi: number): number => {
     for (let m = midi + 1; m <= midi + 3; m++) if (scale.pcs.includes(mod(m))) return m;
     return midi + 2;
   };
-
   const out: TechniqueNote[] = [];
-  let t = 0;
-  for (const target of targets.slice(0, 4)) {
-    const below = target - 1;
-    const above = diatonicAbove(target);
-    // 2 eighth approaches + quarter target = 2 beats per chord tone × 4 = 8 beats = 2 bars
-    out.push({ midi: below, t, dur: 0.5 });
-    out.push({ midi: above, t: t + 0.5, dur: 0.5 });
+  let prev = Math.round((lo + hi) / 2);
+  chords.forEach((c, i) => {
+    const pc = i === chords.length - 1 ? c.root : c.third !== null ? mod(c.root + c.third) : c.root;
+    const options = notesIn([pc], lo, hi);
+    if (!options.length) return;
+    const target = options.reduce((best, m) => (Math.abs(m - prev) < Math.abs(best - prev) ? m : best), options[0]);
+    const t = i * 2;
+    out.push({ midi: target - 1, t, dur: 0.5 });
+    out.push({ midi: diatonicAbove(target), t: t + 0.5, dur: 0.5 });
     out.push({ midi: target, t: t + 1, dur: 1 });
-    t += 2;
-  }
-  return out;
+    prev = target;
+  });
+  return out.length === chords.length * 3 ? out : [];
 }
 
 /** Convert TechniqueNote[] into fretboard PatternStep[], honoring explicit string/fret where given. */
