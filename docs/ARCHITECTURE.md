@@ -467,7 +467,10 @@ applied by the detector. String attribution is inferred by `song/fingering.ts`, 
 | `src/song/notation.ts` | Turns a card's line into a `ReadingExercise` for `Score`. |
 | `src/song/fingering.ts` | Position window and string/fret assignment. |
 | `src/song/harmony.ts` | Chord/scale parsing, analysis, key centres, spelling. |
-| `src/song/lines.ts` | Scale/arpeggio/guide-tone/chain line generators. |
+| `src/song/lines.ts` | Scale/arpeggio/guide-tone/chain line generators; `boundedLine` for a shape's turning points. |
+| `src/song/scaleShapes.ts` | Pure: CAGED windows per scale, shape lines, own-version detection (`findOwnPass`, `knownLine`), `validShapeBook`. |
+| `src/song/shapeBook.ts` | The synced `guitar-scale-shapes` setting: chosen shape per exercise, kept versions. |
+| `src/song/useHeardPass.ts` | Notes heard on the shared input → the newest complete pass of a scale. |
 | `src/song/voicings.ts` | Shell voicings for chord cards. |
 | `src/song/rand.ts` | Seeded PRNG/shuffle. |
 
@@ -585,6 +588,12 @@ starting tempo/goal that keeps notes-per-minute sensible.
 - `kin`: only scale ids; `carryOver` adds credit, moves a relative up when a whole box accrues.
 - Shared scale cards: ids start with `scale:`; `saveStore` mirrors them into `guitar-skills`, and
   `loadStore` merges the copy with more plays. Other families stay in the tune's store.
+- Scale shapes: `buildDeck(…, { shapes })` builds each scale exercise in the shape chosen for its
+  base id (`Card.base`, `Card.shape`; id `base@shape`, default keeps `base`), rewrites `needs` to
+  the chosen shape of the prerequisite, and falls back to the default line when a shape holds no
+  line. Launchers that name a base id resolve it with `findCard`. A shape change in a running
+  session is `chooseShape` + `session.swap(from, to)`, which replaces the queue entry and starts
+  the visit over; `parseScaleId` ignores the suffix, so kinship and the tree aggregate shapes.
 
 If you add a card family, update `familyOf`, `FAMILY_LABEL`, the summary grouping, tree/stats (if it
 should appear there), and the tests.

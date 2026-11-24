@@ -13,6 +13,7 @@ does not tell them what to do.
 | D♯5 (high e, fret 11) struck three times quickly, or held 1.3 s, released into quiet, then held again 0.6 s | exercises, free play, instruments | the six-string menu (tempo, click, tuner, sound output, …) |
 | A free note tapped twice | exercises, open drawer | gear, calibration, the drawer's switches |
 | F (any octave) held | ready screen | session length: 10 / 25 / 45 minutes |
+| The shown note held, while "Heard … · Keep as shape" is up | scale runs | keep the pass just played as a shape of its own and switch to it |
 
 Note keys (`song/notekeys.ts`) have home notes outside what exercises play (E5; F2, G2, G♯2). A
 card that sounds a key's home note, itself or through its band, gets the nearest free note
@@ -95,6 +96,17 @@ failed or denied microphone therefore leaves a useful practice route available.
 **Finish after this pass** is reachable through the shown time-note action and its button. During
 a timed pass it waits for that pass to finish, then opens the summary; elsewhere it finishes at the
 next safe boundary. **Stop now** remains available. Neither action awards an unfinished pass.
+
+## Scale shapes
+
+A scale exercise is played where the player chooses: the deck's own line, one of the key's five
+CAGED shapes, or a version of their own. The shape sits under the card title (click for the
+list) and on the guitar menu's Session page (the Shape row cycles through them). A chosen shape
+is new music: the visit starts over and the shape keeps its own box and tempo. On a scale run,
+a whole pass up and back that is not the score (another turnaround, no notes under the root,
+notes added or left out; a couple of slips do not count) shows what was heard,
+"Heard C3 → A4 → C3 · 17 notes", with a note to hold to keep it. Nothing changes unless it is
+kept; × or simply playing on leaves it.
 
 ## One exercise
 

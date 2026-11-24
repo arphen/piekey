@@ -87,7 +87,7 @@ export const keystoneId = (focus: KeystoneFocus) => `ks:${focus}`;
 export const BRANCH_SKILLS: { skill: string; label: string; orbit: number; angle: number; parent: string | null }[] = [
   { skill: "run", label: "Scale", orbit: 0, angle: 0, parent: null },
   { skill: "thirds", label: "3rds", orbit: 1, angle: -30, parent: "run" },
-  { skill: "triads", label: "Chords", orbit: 1, angle: 30, parent: "run" },
+  { skill: "triads", label: "Triads", orbit: 1, angle: 30, parent: "run" },
   { skill: "sevenths", label: "Arps", orbit: 2, angle: 0, parent: "thirds" },
 ];
 

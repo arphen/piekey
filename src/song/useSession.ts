@@ -1217,6 +1217,19 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     setLoopKey((value) => value + 1);
   }, []);
 
+  /**
+   * The same exercise in another shape: `to` takes `from`'s place wherever the session has it,
+   * and the current visit starts over (a new shape is new music, so it opens at the player's pace).
+   */
+  const swap = useCallback((from: string, to: string) => {
+    if (from === to || !queue.includes(from)) return;
+    setPaused(false);
+    setAway(false);
+    setWaiting(false);
+    setSpot(null);
+    setQueue((q) => q.map((id) => (id === from ? to : id)));
+  }, [queue]);
+
   /** Straight to one way of working on this exercise. */
   const go = useCallback(
     (to: "pace" | "time") => {
@@ -1393,6 +1406,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     skip,
     next,
     go,
+    swap,
     hear: askHear,
     again,
     tempo,

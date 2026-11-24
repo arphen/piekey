@@ -11,6 +11,7 @@ import { echoOfTune, EAR_TIERS, earPhrase } from "./ear";
 import { stringPrompts, thirdPrompts, tonePrompts, STRING_NAMES, type Prompt } from "./fretboard";
 import { glue } from "./ids";
 import { arpLine, chainLine, guideLine, scaleLine, type LineNote, type ScaleDrill, type Span } from "./lines";
+import { findShape, shapeFrets, shapeLine, shapeWindow, variantId, type ShapeBook, type ShapeOption } from "./scaleShapes";
 import { seeded } from "./rand";
 import { freshLine, knownLine, pickKnown, vary } from "./reading";
 import { isolateRhythm } from "./rhythm";
@@ -77,6 +78,8 @@ export interface Card {
   rhythmPitch?: number; // source notation is shown on this one pitch, retaining its original rhythm
   followedBy?: string; // explicitly selected study continues with this card, outside the daily intro
   insight?: string; // crisp one-line musical or mechanical side-education cue
+  base?: string; // scale cards: the exercise this is a shape of (its ID in the default shape)
+  shape?: string; // scale cards: the chosen shape ("" the default, "E", "my1", …)
 }
 
 export interface Deck {
@@ -90,7 +93,7 @@ export const FAMILY_LABEL: Record<Family, string> = { scales: "Scales", techniqu
 export const KIND_LABEL: Record<Kind, string> = {
   run: "Scale",
   thirds: "Thirds",
-  triads: "Triads",
+  triads: "Diatonic triads",
   sevenths: "7th arpeggios",
   spider: "Spider",
   skip: "String skip",
@@ -281,6 +284,22 @@ function scaleWhy(drill: ScaleDrill, scale: Scale, chords: string[], natural: Sc
 const READ_BARS = 4; // a reading exercise is this long: enough to need the eyes, short enough to finish
 const MAX_READ_SECTIONS = 4;
 
+/** What a scale exercise in a chosen shape does: where it turns round, in the scale's own spelling. */
+function shapeDetail(drill: ScaleDrill, scale: Scale, option: ShapeOption, notes: LineNote[]): string {
+  const name = (midi: number) => scale.names[scale.pcs.indexOf(mod(midi))] ?? pitchClassToName(midi);
+  const midis = notes.map((n) => n.midi);
+  const top = name(Math.max(...midis));
+  const low = Math.min(...midis);
+  const start = name(midis[0]);
+  const below = low < midis[0] ? `, down to ${name(low)}` : "";
+  const span = Math.max(...midis) - midis[0];
+  const where = option.own ? "where you played it" : `in the ${option.label}`;
+  if (option.own && drill === "run") return `Your own version: ${start} up to ${top}${below} and back, as you played it.`;
+  const what = drill === "run" ? "" : drill === "thirds" ? "In thirds: " : drill === "triads" ? "Each degree's triad: " : "Each degree's 7th chord: ";
+  const route = top === start && !below ? `${span >= 24 ? "two octaves" : "an octave"} root to root, up and back down to ${start}` : `${start} up to ${top}${below} and back to ${start}`;
+  return `${what}${route}, ${where}.`.replace(/^./, (c) => c.toUpperCase());
+}
+
 /** A scale's exercises in the order they open: the notes, then other grids and melodic patterns. */
 const SCALE_STAGES: { drill: ScaleDrill; rhythm?: Rhythm; needs?: string }[] = [
   { drill: "run" },
@@ -304,7 +323,7 @@ const RHYTHMS: Record<Rhythm, { beats: number; label: string; count: string; bpm
  * should be new (a new day, another session), `seen` says how often each has been played, which
  * decides how hard it is and which known tune comes next.
  */
-export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: number; round?: string; seen?: Record<string, number>; rhythmFrom?: string; passageFrom?: string } = {}): Deck {
+export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: number; round?: string; seen?: Record<string, number>; rhythmFrom?: string; passageFrom?: string; shapes?: ShapeBook } = {}): Deck {
   const harmony = analyze(sheet, tl);
   const w = opts.window ? windowAt(opts.window) : chooseWindow(harmony.home.tonic);
   const tempo = sheet.tempo ?? 90;
@@ -335,26 +354,43 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
     const scales = centre.scales.filter((s) => s.scale.root === centre.key.tonic && s.beats >= 4).slice(0, 2);
     const natural = scales.find((s) => s.scale.kind === "naturalMinor")?.scale ?? null;
     const tonicChord = parseChord(centre.key.tonicName + (centre.key.mode === "minor" ? "m" : ""))!;
+    const built = new Map<string, string>(); // each exercise's ID in the shape chosen for it
     for (const stage of SCALE_STAGES)
       for (const { scale, chords } of scales) {
         const { drill, rhythm } = stage;
-        const notes = scaleLine(drill, scale, w, rhythm ? RHYTHMS[rhythm].beats : undefined);
+        const beats = rhythm ? RHYTHMS[rhythm].beats : undefined;
+        const baseId = `scale:${scale.id}:${drill}${rhythm ? `:${rhythm}` : ""}`;
+        // a shape chosen for this exercise, when it can be played there; else the deck's own line
+        const chosen = opts.shapes ? findShape(scale, opts.shapes, opts.shapes.chosen[baseId] ?? "") : null;
+        const shaped = chosen ? shapeLine(drill, scale, chosen, beats) : [];
+        const option: ShapeOption | null = shaped.length ? chosen : null;
+        const cw = (option && shapeWindow(option)) || w;
+        const notes = option ? shaped : scaleLine(drill, scale, w, beats);
         if (!notes.length) continue;
+        const id = variantId(baseId, option?.id ?? "");
+        built.set(baseId, id);
+        const needBase = stage.needs ? `scale:${scale.id}:${stage.needs}` : undefined;
         const total = notes[notes.length - 1].t + notes[notes.length - 1].dur;
         const slots = synthSlots(total);
         const spans: Span[] = [{ chord: tonicChord, t: 0, dur: slots.length * 4 }];
         const timeline: Timeline = { slots, targets: toTargets({ slots }, notes), comp: padHits(spans), bass: bassLine(spans), total: slots.length * 4 };
         const ctx: Context = { chord: tonicChord, scale, next: null, roman: centre.key.mode === "minor" ? "i" : "I" };
+        const plain = rhythm ? `${scale.name} · ${RHYTHMS[rhythm].label}` : drill === "run" ? scale.name : `${scale.name} · ${KIND_LABEL[drill].toLowerCase()}`;
         technique.push({
           ...base,
-          id: `scale:${scale.id}:${drill}${rhythm ? `:${rhythm}` : ""}`,
+          p: cw.p,
+          id,
+          base: baseId,
+          shape: option?.id ?? "",
           family: "scales",
           kind: drill,
           rhythm,
-          needs: stage.needs ? `scale:${scale.id}:${stage.needs}` : undefined,
+          needs: needBase ? built.get(needBase) ?? needBase : undefined,
           group: centre.key.name,
-          title: rhythm ? `${scale.name} · ${RHYTHMS[rhythm].label}` : drill === "run" ? scale.name : `${scale.name} · ${KIND_LABEL[drill].toLowerCase()}`,
-          detail: rhythm
+          title: option ? `${plain} · ${option.label}` : plain,
+          detail: option
+            ? shapeDetail(drill, scale, option, notes)
+            : rhythm
             ? `The same run, ${RHYTHMS[rhythm].count} note${rhythm === "quarters" ? "" : "s"} to the click.`
             : drill === "run"
               ? `From the lowest ${scale.names[0]} up to the top of the position, down to its lowest note and back to ${scale.names[0]}.`
@@ -364,7 +400,7 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
                   ? "Each degree's triad up the scale in triplets, then down."
                   : "Each degree's 7th chord, 1-3-5-7, up the scale and back down.",
           why: rhythm ? "Same notes on another grid: the picking hand divides the beat." : scaleWhy(drill, scale, chords, scale.kind === "naturalMinor" ? null : natural),
-          where: positionText,
+          where: option ? `${option.label} · ${shapeFrets(scale, option)}` : positionText,
           bpm: rhythm ? RHYTHMS[rhythm].bpm : drill === "triads" ? 60 : drill === "sevenths" ? 63 : 72,
           goalBpm: rhythm ? RHYTHMS[rhythm].goal : drill === "triads" ? 100 : 116,
           pass: 0.85,
@@ -374,7 +410,7 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
           to: slots.length - 1,
           first: 0,
           last: notes.length - 1,
-          steps: stepsFor(notes, w, 0),
+          steps: stepsFor(notes, cw, 0),
           context: notes.map(() => ctx),
         });
       }
@@ -1260,6 +1296,12 @@ export function mixDecks(main: Deck, others: { tuneId: string; deck: Deck }[]): 
         intro.push(l[i]);
       }
   return { ...main, cards, intro };
+}
+
+/** A card by ID; a scale exercise asked for in its default shape is found in whichever shape it is played now. */
+export function findCard(cards: readonly Card[], id: string | undefined): Card | undefined {
+  if (!id) return undefined;
+  return cards.find((c) => c.id === id) ?? cards.find((c) => c.base === id);
 }
 
 /** Tutor modes that run a narrowed deck: the families each one works on. */

@@ -8,14 +8,14 @@ import { OPEN_MIDI } from "../core/scales";
 import { midiOf } from "../listen/pitch";
 import type { InputApi } from "../listen/useInput";
 import { mod, pitchClassToName } from "../musicTheory";
-import { SUMMON_NOTE } from "../song/notekeys";
+import { assignNoteKeys, commandMidis, SUMMON_NOTE } from "../song/notekeys";
 import { createStartPhrase, START_PHRASE_LENGTH } from "../song/startPhrase";
 import { melodyOverChords } from "../tunes/learn";
 import type { LeadSheet } from "../tunes/musicxml";
 import { printedResults, type Timeline } from "../tunes/order";
 import { flowOf } from "../tunes/flow";
 import { useScoreZoom } from "../song/scoreZoom";
-import { buildDeck, FAMILY_LABEL, familiesOnly, FOCUS_FAMILIES, FOCUS_LABEL, mixDecks, noteName as spelled, rhythmSourceId, wholeTuneCard, type Card, type Context, type Deck, type Focus } from "../song/deck";
+import { buildDeck, FAMILY_LABEL, familiesOnly, findCard, FOCUS_FAMILIES, FOCUS_LABEL, mixDecks, noteName as spelled, rhythmSourceId, wholeTuneCard, type Card, type Context, type Deck, type Focus } from "../song/deck";
 import { rhythmSheet } from "../song/rhythm";
 import { arrangementIdentity, goalDeck, loadActiveGoal } from "../song/goals";
 import { useGoals } from "../song/useGoals";
@@ -48,6 +48,9 @@ import { PracticeWindowBoundary } from "../platform/PracticeWindowBoundary";
 import { settlePracticeWrites } from "../platform/practiceWindow";
 import { TunePicker } from "./TunePicker";
 import { useSessionSet } from "../song/sessionSet";
+import { chooseShape, keepOwnShape, useShapeBook } from "../song/shapeBook";
+import { knownLine, placeOwn, shapeFrets, shapeLine, shapeOptions, variantId, type ShapeBook, type ShapeOption } from "../song/scaleShapes";
+import { useHeardPass } from "../song/useHeardPass";
 import { GuitarToolsRoom } from "../tools/GuitarTools";
 import { PoolRoom, usePoolCalm, usePoolEmit } from "../pool/PoolRoom";
 import { ROOM_MODES, useRoomRender, type RoomMode } from "../pool/mode";
@@ -329,7 +332,8 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
   const [mix, setMix] = useState(() => (explicitMix ? mixIds.length > 0 : loadStore(sheet.id).settings.mix !== false)); // the other tunes' exercises too
   // reading exercises bring new notes whenever this changes: every day, and after every session
   const [round, setRound] = useState(() => `${today()}:${loadStore(sheet.id).sessions.length}`);
-  const rawOwn = useMemo(() => buildDeck(sheet, tl, { window: windowP ?? undefined, round, seen: seenIn(sheet.id), rhythmFrom: rhythmSourceId(initialCardId), passageFrom: initialCardId }), [sheet, tl, windowP, round, initialCardId]);
+  const shapeBook = useShapeBook();
+  const rawOwn = useMemo(() => buildDeck(sheet, tl, { window: windowP ?? undefined, round, seen: seenIn(sheet.id), rhythmFrom: rhythmSourceId(initialCardId), passageFrom: initialCardId, shapes: shapeBook }), [sheet, tl, windowP, round, initialCardId, shapeBook]);
   const goals = useGoals();
   const activeGoal = useMemo(() => loadActiveGoal(sheet, rawOwn), [sheet, rawOwn, goals]);
   const own = useMemo(() => goalDeck(rawOwn, activeGoal), [rawOwn, activeGoal]);
@@ -350,11 +354,11 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
         ? []
         : mix
           ? mixable.map((o) => {
-              const built = buildDeck(o.sheet, o.tl, { window: loadStore(o.sheet.id).settings.window ?? undefined, round, seen: seenIn(o.sheet.id) });
+              const built = buildDeck(o.sheet, o.tl, { window: loadStore(o.sheet.id).settings.window ?? undefined, round, seen: seenIn(o.sheet.id), shapes: shapeBook });
               return { tuneId: o.sheet.id, sheet: o.sheet, deck: focus === "all" ? built : familiesOnly(built, FOCUS_FAMILIES[focus]) };
             })
           : [],
-    [explicitMix, focus, mix, mixable, round],
+    [explicitMix, focus, mix, mixable, round, shapeBook],
   );
   const deck = useMemo(() => mixDecks(focused, guests), [focused, guests]);
   const tuneIds = useMemo(() => [sheet.id, ...guests.map((g) => g.tuneId)], [sheet.id, guests]);
@@ -362,7 +366,7 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
   const arrangementFingerprints = useMemo(() => new Map([...sheets].map(([id, score]) => [id, arrangementIdentity(score).fingerprint])), [sheets]);
   const [direct] = useState(() => {
     if (!autoStart || !initialCardId) return null;
-    const card = deck.cards.find((c) => c.id === initialCardId);
+    const card = findCard(deck.cards, initialCardId);
     if (!card) return null;
     const ids = [card.id, ...(card.followedBy ? [card.followedBy] : [])];
     return {
@@ -480,7 +484,7 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
   const [chosenCard, setChosenCard] = useState(() => (direct ? undefined : initialCardId));
   const unavailablePassage = Boolean(chosenCard?.startsWith("mel:passage:") && !deck.cards.some((card) => card.id === chosenCard));
   const shaped = useMemo<SessionPlan>(() => {
-    const chosen = deck.cards.find((card) => card.id === chosenCard);
+    const chosen = findCard(deck.cards, chosenCard);
     if (chosen) {
       const ids = [chosen.id, ...(chosen.followedBy ? [chosen.followedBy] : [])];
       const minutes = Math.max(1, Math.ceil(ids.length * cardSeconds(store)[chosen.family] / 60));
@@ -662,11 +666,43 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
 
   // note keys: one note each, held for a moment, and the session does that
   const noteKeys = session.keys;
+  // Shapes: where on the neck a scale exercise is played. Chosen from the card or the guitar menu,
+  // or played: a whole pass of the scale that is not the score is offered as a shape of its own.
+  const shapes = useMemo(() => (cardNow ? playableShapes(cardNow, shapeBook) : []), [cardNow, shapeBook]);
+  const pickShape = (shapeId: string) => {
+    if (!cardNow?.base || cardNow.spot) return;
+    chooseShape(cardNow.base, shapeId);
+    session.swap(cardNow.id, variantId(cardNow.base, shapeId));
+  };
+  const cycleShape = () => {
+    if (shapes.length < 2 || !cardNow) return;
+    const at = shapes.findIndex((o) => o.id === (cardNow.shape ?? ""));
+    pickShape(shapes[(at + 1) % shapes.length].id);
+  };
+  const cardScale = cardNow?.family === "scales" ? cardNow.context[cardNow.first]?.scale ?? null : null;
+  const capturing = Boolean(cardScale && cardNow?.kind === "run" && !cardNow.spot) && inExercise && pad === null && !menu && !calib && !choosingTune && !tools && !session.paused && (session.phase === "pace" || session.phase === "time");
+  const keyIgnore = useMemo(() => new Set(Object.values(noteKeys).filter((m): m is number => m !== null)), [noteKeys]);
+  const heardPass = useHeardPass(input, capturing, cardScale?.pcs ?? null, keyIgnore, `${session.pos}:${cardNow?.id ?? ""}`);
+  const offer = useMemo(() => {
+    if (!heardPass || !cardNow || !cardScale) return null;
+    const lines = [cardNow.tl.targets.slice(cardNow.first, cardNow.last + 1).map((t) => t.midi), ...(shapeBook.own[cardScale.id] ?? []).map((o) => o.notes)];
+    return knownLine(heardPass, lines) ? null : heardPass;
+  }, [heardPass, cardNow, cardScale, shapeBook]);
+  const [dismissed, setDismissed] = useState<string | null>(null);
+  const shownOffer = offer && dismissed !== offer.join(",") ? offer : null;
+  const keepKey = useMemo(() => (shownOffer && cardNow ? assignNoteKeys(["keep"], [...commandMidis(cardNow), ...keyIgnore], { keep: [78, 73, 47] }).keep : null), [shownOffer, cardNow, keyIgnore]);
+  const keepOffer = () => {
+    if (!shownOffer || !cardNow?.base || !cardScale) return;
+    const id = keepOwnShape(cardScale.id, shownOffer, placeOwn(shownOffer, cardNow.p), today());
+    chooseShape(cardNow.base, id);
+    session.swap(cardNow.id, variantId(cardNow.base, id));
+  };
   // A whole-tune run and improvisation reserve every played note for the music.
-  const held = useNoteKeys(input, inExercise && pad === null && !menu && !calib && !choosingTune && !tools && !session.paused && !wholeTune && !improvising, [noteKeys.hear, noteKeys.pace, noteKeys.time, noteKeys.next], (key) => {
+  const held = useNoteKeys(input, inExercise && pad === null && !menu && !calib && !choosingTune && !tools && !session.paused && !wholeTune && !improvising, [noteKeys.hear, noteKeys.pace, noteKeys.time, noteKeys.next, keepKey], (key) => {
     if (key === 0) session.hear();
     else if (key === 1) session.go("pace");
     else if (key === 2) session.go("time");
+    else if (key === 4) keepOffer();
     else session.next();
   });
 
@@ -738,7 +774,7 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
         { label: session.selfGuided ? "Done practising" : "Next exercise" },
         { label: "Click", value: session.click ? "on" : "off" },
         { label: "Loop", value: session.loopMode },
-        { label: session.spot ? "Return to the piece" : "Practise this bar" },
+        !session.spot && shapes.length > 1 ? { label: "Shape", value: shapes.find((o) => o.id === (cardNow?.shape ?? ""))?.label ?? "Default" } : { label: session.spot ? "Return to the piece" : "Practise this bar" },
         { label: "Sound & setup" },
       ],
       fire: [
@@ -746,7 +782,7 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
         () => (closePad(false), session.next()),
         () => session.setClick((c) => !c),
         cycleLoopMode,
-        () => (closePad(false), barAlone()),
+        () => (!session.spot && shapes.length > 1 ? cycleShape() : (closePad(false), barAlone())),
         () => setPad(2),
       ],
     },
@@ -953,6 +989,12 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
           sideWhy={sessionSideWhy}
           onGuitarMenu={openPad}
           onTools={openTools}
+          shapes={shapes}
+          onShape={pickShape}
+          offer={shownOffer}
+          keepKey={keepKey}
+          onKeep={keepOffer}
+          onDismiss={() => shownOffer && setDismissed(shownOffer.join(","))}
         />
       )}
       {!freeInstruments ? <div className="ss-chrome">
@@ -1295,6 +1337,12 @@ function Running({
   sideWhy,
   onGuitarMenu,
   onTools,
+  shapes,
+  onShape,
+  offer,
+  keepKey,
+  onKeep,
+  onDismiss,
 }: {
   deck: Deck;
   session: SessionApi;
@@ -1309,6 +1357,12 @@ function Running({
   sideWhy: string;
   onGuitarMenu(): void;
   onTools(tool: RoomTool): void;
+  shapes: ShapeOption[]; // a scale exercise's shapes, the default first; empty elsewhere
+  onShape(shapeId: string): void;
+  offer: number[] | null; // a pass of the player's own, heard and not yet kept
+  keepKey: number | null;
+  onKeep(): void;
+  onDismiss(): void;
 }) {
   const byId = useMemo(() => new Map(deck.cards.map((c) => [c.id, c])), [deck]);
   const roleByPos = useMemo(() => {
@@ -1393,6 +1447,17 @@ function Running({
           {s.box === 0 ? " · new" : ""}
         </p>
         <h1 className="ss-title">{card.title}</h1>
+        {shapes.length > 1 && !s.spot ? <ShapePicker card={card} shapes={shapes} onShape={onShape} /> : null}
+        {offer ? (
+          <div className="ss-shape-offer" role="status">
+            <span>Heard <b>{passName(offer)}</b> · {offer.length} notes</span>
+            <button type="button" onClick={onKeep} aria-label={`Keep as a shape${keepKey !== null ? ` · hold ${keyName(keepKey)}` : ""}`}>
+              <NoteTag midi={keepKey} held={held === 4} />
+              <span>Keep as shape</span>
+            </button>
+            <button type="button" className="ss-shape-offer-x" onClick={onDismiss} aria-label="Not this one">×</button>
+          </div>
+        ) : null}
         {s.spot ? (
           <p className="ss-why ss-spotline" key="spot">
             <b>{barsOf(card, sheet)}</b>
@@ -2036,7 +2101,7 @@ function LineStage({ card, session: s, sheet, labels }: { card: Card; session: S
       <div className={`ss-board ss-board--aside ${neck === "away" ? "is-away" : ""} ${card.spot ? "is-spot" : ""}`}>
         <Fretboard
           notes={notes}
-          fretCount={FRET_COUNT}
+          fretCount={Math.max(FRET_COUNT, ...card.steps.map((st) => (st ? st.fret + 1 : 0)))}
           position={position}
           labels={card.spot ? "names" : labels}
           pattern={pattern}
@@ -2125,6 +2190,56 @@ function excerptOf(sheet: LeadSheet, bars: number[]) {
  * keep the page, where hiding and naming notes by bar make sense.
  */
 const FLOW_BARS = 8;
+const NOTE_NAMES = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
+const noteWithOctave = (midi: number) => `${NOTE_NAMES[mod(midi)]}${Math.floor(midi / 12) - 1}`;
+
+/** "C3 → A4 → C3", with the low turn when it goes under where it started. */
+function passName(pass: readonly number[]): string {
+  const top = Math.max(...pass);
+  const low = Math.min(...pass);
+  return [pass[0], top, ...(low < pass[0] ? [low] : []), pass[pass.length - 1]].map(noteWithOctave).join(" → ");
+}
+
+/** Where on the neck this scale exercise is played: the current shape, and the others one click away. */
+function ShapePicker({ card, shapes, onShape }: { card: Card; shapes: ShapeOption[]; onShape(shapeId: string): void }) {
+  const [open, setOpen] = useState(false);
+  const scale = card.context[card.first]?.scale;
+  const current = shapes.find((o) => o.id === (card.shape ?? "")) ?? shapes[0];
+  const played = card.steps.flatMap((st) => (st ? [st.fret] : []));
+  const span = played.length ? (Math.min(...played) === Math.max(...played) ? `fret ${played[0]}` : `frets ${Math.min(...played)}–${Math.max(...played)}`) : "";
+  const frets = (o: ShapeOption) => (o.id === (card.shape ?? "") ? span : o.p === null || !scale ? "" : shapeFrets(scale, o));
+  return (
+    <div className={`ss-shape ${open ? "is-open" : ""}`}>
+      <button type="button" className="ss-shape-now" aria-expanded={open} onClick={() => setOpen((v) => !v)} title="Guitar menu → Session controls → Shape">
+        <span>{current.label}</span>
+        <em>{frets(current)}</em>
+        <i className="ss-shape-caret" aria-hidden="true" />
+      </button>
+      {open ? (
+        <ul className="ss-shape-list" role="menu">
+          {shapes.map((o) => (
+            <li key={o.id || "default"}>
+              <button type="button" role="menuitemradio" aria-checked={o.id === current.id} className={o.id === current.id ? "is-now" : ""} onClick={() => { setOpen(false); if (o.id !== current.id) onShape(o.id); }}>
+                <span>{o.label}</span>
+                <em>{o.id === "" && o.id !== current.id ? "the deck's own line" : frets(o)}</em>
+              </button>
+            </li>
+          ))}
+          <li className="ss-shape-hint" data-nav-skip>guitar menu · Session controls · Shape</li>
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+/** The shapes a scale exercise can be played in (none for other exercises): the default and every shape that holds a line. */
+function playableShapes(card: Card, book: ShapeBook): ShapeOption[] {
+  const scale = card.family === "scales" && card.base ? card.context[card.first]?.scale : null;
+  if (!scale) return [];
+  const drill = card.kind as "run" | "thirds" | "triads" | "sevenths";
+  return shapeOptions(scale, book).filter((o) => o.id === "" || shapeLine(drill, scale, o).length > 0);
+}
+
 function flows(card: Card): boolean {
   return card.view === "score" && card.family === "melody" && !card.memory && !card.spot && (Boolean(card.run) || card.step?.kind === "tune" || card.to - card.from + 1 > FLOW_BARS);
 }

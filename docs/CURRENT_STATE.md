@@ -103,6 +103,22 @@ cleanup and late-start cancellation have mounted coverage; physical audio remain
   same music in any session; the rhythm pyramid arpeggiates I–IV–V7–I (one chord a bar) and
   enclosures lead into the 3rds of I, IV, V7 and back to I, with the band playing those changes.
   Audio of the new backing is unverified by ear.
+- **Scale shapes** (`song/scaleShapes.ts`, `song/shapeBook.ts`, synced setting
+  `guitar-scale-shapes`): each scale exercise (run, thirds, diatonic triads, 7ths, each rhythm)
+  can be played in the default line, one of the five CAGED shapes of its key (major: E/D/C/A/G
+  barre shapes; minor: the minor-chord shapes, e.g. D minor A shape = frets 5–8; chosen shapes
+  may reach fret 15) or a version the player played. A chosen shape is its own card
+  (`scale:C-major:run@E`) with its own box and tempo; the default keeps the old id and history,
+  `needs` follows the chosen shape, and the tree shows the best of a skill's shapes. CAGED lines go
+  root to root (two octaves when the shape holds them, else up to the tonic triad's top note) and
+  thirds/triads/7ths turn round under the top note. Chosen from a pill under the card title or
+  the guitar menu (Session controls → Shape, cycles). On run cards `useHeardPass` listens (shared
+  input, `midiOf`) for a whole up-and-back pass in the scale that is not the score (slips of ≤2
+  notes with the same turnarounds still count as the score) and offers it; a held note keeps it as
+  "My version" and switches the card to it. Code-verified (`scaleShapes.test.ts`) and driven with
+  the synthetic player in headless Chrome (offer, keep, switch); not yet played on a real guitar.
+  The fretboard shows where a kept version is assumed to sit (the shape it was played from, else
+  the best-fitting window); the string is not heard (T22).
 - **Next session** (`song/sessionSet.ts`, synced setting `guitar-session-set`): unset means every
   tune (previous behaviour). Editable from Home (song ✓/+ on the tree, song card, Add songs sheet),
   Library cards, a song's page and guitar mode's chooser (F4). Guitar mode mixes in only those
@@ -654,7 +670,8 @@ fullscreen behavior remain unverified.
 - Kinship (`song/kin.ts`): a clean scale pass credits relatives (same scale other pattern 0.34;
   same notes other tonic 0.5; one note apart 0.5; a fifth away 0.25). A whole box of credit moves a
   relative up unplayed.
-- Scale cards are shared across tunes (`guitar-skills`); other families are per-tune.
+- Scale cards are shared across tunes (`guitar-skills`); other families are per-tune. A scale card
+  in a chosen shape has an `@shape` suffix and its own state.
 - The map (`song/tree.ts` + `SkillTree.tsx`) is derived from the boxes and free-play log: circle of
   fifths hubs, relative minors inside, skills growing outward, tunes on the rim. Read-only.
 
@@ -705,6 +722,7 @@ card. Progressions are not logged to `guitar-freeplay` or the map yet.
 | `guitar-song-deck:<tune>` | `song/leitner.ts` | Per-tune card box: cards, sessions, settings, history, credit, meta. |
 | `guitar-goals-v1` | `song/goals.ts` | Immutable arrangement-bound goals and active selection; portable journaled state. |
 | `guitar-skills` | `song/leitner.ts` | Shared scale card states and credit. |
+| `guitar-scale-shapes` | `song/shapeBook.ts` | Shape chosen per scale exercise and the player's kept versions; portable journaled state. |
 | `guitar-freeplay` | `song/freeplay.ts` | Free-play log (`FreeEntry[]`), capped. |
 | `guitar-freeplay-prefs` | `song/useFreePlay.ts` | Band on/off. |
 | `guitar-room-render` | `pool/mode.ts` | Room mode `still`/`water`/`living`/`living-power`, default living-power (water on battery); device-local, excluded from sync/backup. |

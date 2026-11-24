@@ -595,3 +595,75 @@
   .ss-ready-queue li { padding: 9px 0; }
   .ss-ready-arrival { gap: 13px; }
 }
+
+/* Where on the neck a scale exercise is played: the shape now, the others a click away. */
+.ss-shape { position: relative; display: inline-grid; justify-items: center; }
+.ss .ss-shape-now {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+.ss .ss-shape-now em { color: var(--ink-faint); font: 500 10px/1 var(--font-mono); font-style: normal; letter-spacing: 0.04em; }
+.ss .ss-shape-now .ss-shape-caret { width: 5px; height: 5px; margin-left: 1px; border-right: 1.5px solid var(--ink-faint); border-bottom: 1.5px solid var(--ink-faint); transform: translateY(-2px) rotate(45deg); }
+.ss .ss-shape.is-open .ss-shape-caret { transform: translateY(1px) rotate(225deg); }
+.ss .ss-shape-now:hover,
+.ss .ss-shape.is-open .ss-shape-now {
+  border-color: color-mix(in srgb, var(--fam) 35%, transparent);
+  background: color-mix(in srgb, var(--fam) 8%, transparent);
+  color: var(--ink);
+}
+.ss-shape-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  z-index: 30;
+  display: grid;
+  gap: 2px;
+  min-width: 230px;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
+  text-align: left;
+}
+.ss .ss-shape-list button {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 7px;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+.ss .ss-shape-list button em { color: var(--ink-faint); font: 500 10px/1.6 var(--font-mono); font-style: normal; }
+.ss .ss-shape-list button:hover,
+.ss .ss-shape-list button.is-now { background: color-mix(in srgb, var(--fam) 10%, transparent); color: var(--ink); }
+.ss-shape-hint { padding: 6px 10px 2px; color: var(--ink-faint); font: 500 9px/1.4 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; }
+
+/* A pass of the player's own, heard: kept with a held note. */
+.ss-shape-offer {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 6px 4px 12px;
+  border: 1px solid color-mix(in srgb, var(--fam) 40%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fam) 9%, transparent);
+  color: var(--ink-soft);
+  font-size: 12px;
+  animation: ss-rise 0.4s ease both;
+}
+.ss-shape-offer b { color: var(--ink); font-weight: 500; }
+.ss .ss-shape-offer button { display: inline-flex; align-items: center; gap: 7px; padding: 3px 8px; border-radius: 999px; color: var(--ink); font-size: 12px; }
+.ss .ss-shape-offer button:hover { background: color-mix(in srgb, var(--fam) 14%, transparent); }
+.ss .ss-shape-offer .ss-nk { min-width: 29px; height: 20px; }
+.ss .ss-shape-offer .ss-shape-offer-x { padding: 3px 7px; color: var(--ink-faint); }

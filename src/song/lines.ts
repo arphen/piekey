@@ -62,6 +62,46 @@ export function scaleLine(drill: ScaleDrill, scale: Scale, w: Window, noteBeats?
   return inTime(idx.map((i) => notes[i]), noteBeats ?? dur);
 }
 
+/** Where a line turns round: it starts (and ends) on `start`, climbs to `top`, comes down to `bottom`. */
+export interface Bounds {
+  start: number;
+  top: number;
+  bottom: number; // `start` when nothing is played below it
+}
+
+const DRILL_OFFSETS: Record<Exclude<ScaleDrill, "run">, number[]> = { thirds: [0, 2], triads: [0, 2, 4], sevenths: [0, 2, 4, 6] };
+
+/**
+ * A scale drill between turning points, for a chosen shape. The run climbs from `start` to `top`,
+ * comes down to `bottom` and, if that is lower, back up to `start`. Thirds, triads and 7ths stack
+ * each degree from `start` while the stack fits under `top`, then come down from the degree below
+ * the top (so the top note is not struck twice) and end on `start`. `exact` replaces the run with
+ * notes the player played themselves.
+ */
+export function boundedLine(drill: ScaleDrill, pcs: readonly number[], b: Bounds, noteBeats?: number, exact?: readonly number[]): LineNote[] {
+  if (drill === "run" && exact?.length) return inTime([...exact], noteBeats ?? 0.5);
+  const bottom = Math.min(b.start, b.bottom);
+  const notes = notesIn([...pcs], bottom, b.top);
+  const s = notes.indexOf(b.start);
+  const t = notes.length - 1;
+  if (s < 0 || t <= s) return [];
+  let idx: number[];
+  if (drill === "run") idx = [...range(s, t), ...range(0, t - 1).reverse(), ...range(1, s)];
+  else {
+    const offsets = DRILL_OFFSETS[drill];
+    const span = offsets[offsets.length - 1];
+    idx = [];
+    for (let d = s; d + span <= t; d++) idx.push(...offsets.map((o) => d + o));
+    if (!idx.length) return [];
+    // down from the degree under the top, to the lowest stack, then (below the start) back up to it
+    for (let d = t - 1; d - span >= 0; d--) idx.push(...offsets.map((o) => d - o));
+    if (s > 0) for (let d = 1; d + span <= s; d++) idx.push(...offsets.map((o) => d + o));
+    // a descent that cannot reach the start (a short range) still comes home to it
+    if (idx[idx.length - 1] !== s) idx.push(s);
+  }
+  return inTime(idx.map((i) => notes[i]), noteBeats ?? (drill === "triads" ? 1 / 3 : 0.5));
+}
+
 /** Lowest root in the window that leaves room to climb `above` semitones. */
 function rootFor(c: Chord, w: Window, above: number): number {
   const roots = notesIn([c.root], w.low - 1, w.high);

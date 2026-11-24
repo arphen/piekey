@@ -15,9 +15,9 @@ export interface ScaleTopic {
 
 const LETTER_PC: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 
-/** "scale:Bb-harmonicMinor:thirds", "scale:C-major:run:triplets". */
+/** "scale:Bb-harmonicMinor:thirds", "scale:C-major:run:triplets", "scale:C-major:run@E" (a chosen shape). */
 export function parseScaleId(id: string): ScaleTopic | null {
-  const m = /^scale:([A-G])([b#]*)-(major|naturalMinor|harmonicMinor|melodicMinor):([a-z]+)(?::([a-z]+))?$/.exec(id);
+  const m = /^scale:([A-G])([b#]*)-(major|naturalMinor|harmonicMinor|melodicMinor):([a-z]+)(?::([a-z]+))?(?:@[A-Za-z0-9-]+)?$/.exec(id);
   if (!m) return null;
   const alter = [...m[2]].reduce((n, ch) => n + (ch === "b" ? -1 : 1), 0);
   return { root: mod(LETTER_PC[m[1]] + alter), kind: m[3] as ScaleKind, drill: m[4], rhythm: m[5] ?? "" };
