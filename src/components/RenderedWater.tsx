@@ -136,7 +136,7 @@ void main() {
 
   vec2 coord = p + drift + swirl * 0.42 + curl * 0.14 + waveShift;
 
-  vec3 abyss = vec3(0.016, 0.032, 0.024);
+  vec3 abyss = vec3(0.008, 0.022, 0.056);
   vec3 raw = abyss;
 
   if (hasTexA > 0.5) {
@@ -152,39 +152,53 @@ void main() {
     }
   } else {
     float w = smoothstep(0.35, 0.8, f0);
-    raw = mix(abyss, vec3(0.08, 0.26, 0.11), w * 0.45);
+    raw = mix(abyss, vec3(0.05, 0.24, 0.20), w * 0.45);
   }
 
   float luma = dot(raw, vec3(0.2126, 0.7152, 0.0722));
-  float greenness = max(0.0, raw.g - max(raw.r * 0.92, raw.b));
-  float algaeMask = smoothstep(0.035, 0.22, greenness) * smoothstep(0.16, 0.58, luma);
+  float greenness = max(0.0, raw.g - max(raw.r * 0.90, raw.b * 0.95));
+  float matMask = smoothstep(0.04, 0.20, greenness) * smoothstep(0.16, 0.56, luma);
+  float algaeMask = smoothstep(0.06, 0.24, greenness) * smoothstep(0.22, 0.60, luma);
 
-  // Restrained, dark and inviting at rest; rich, saturated and luminous as you earn the zone.
-  vec3 graded = mix(vec3(luma), raw, 0.82 + bloom * 0.48 + zone * 0.56);
-  graded = pow(max(graded, 0.0), vec3(1.68 - bloom * 0.14 - zone * 0.18));
+  // Nocturnal abyssal dark-blue harbor water matching Home, Library & Progress.
+  vec3 deepOcean = abyss * (0.85 + 0.95 * smoothstep(0.08, 0.84, f0));
+  vec3 waterSheen = vec3(0.010, 0.048, 0.135) * smoothstep(0.28, 0.86, f0) * (0.62 + 0.38 * sin(t * 0.25 + p.x * 2.0));
+  vec3 baseWater = deepOcean + waterSheen;
 
-  // At rest the algae hover at the distant perimeter; as you enter the zone they creep in and embrace the room.
+  // Sculpt real algae texture into nocturnal emerald-teal mats that enrich as you enter the zone.
+  vec3 darkMat = mix(
+    vec3(0.008, 0.048, 0.105),
+    vec3(0.036, 0.185, 0.155),
+    smoothstep(0.16, 0.72, luma)
+  );
+  vec3 photoDetail = pow(max(raw, 0.0), vec3(2.35 - bloom * 0.28 - zone * 0.22)) * vec3(0.34, 0.66, 0.68);
+  vec3 algaeBody = mix(darkMat, photoDetail, 0.44 + bloom * 0.24 + zone * 0.20);
+
+  // Calm center keeps text & scores crisp; algae hover at the rim at rest and embrace the room in the zone.
   float centerDist = length((uv - vec2(0.5, 0.48)) * vec2(1.08, 1.0));
-  float innerRim = mix(0.32, 0.10, zone);
+  float innerRim = mix(0.28, 0.08, zone);
   float rimPresence = smoothstep(innerRim, 0.84, centerDist);
-  float visibility = mix(0.12 + bloom * 0.18 + zone * 0.24, 0.36 + bloom * 0.32 + zone * 0.30, rimPresence);
+  float visibility = mix(0.22 + bloom * 0.20 + zone * 0.26, 0.64 + bloom * 0.20 + zone * 0.14, rimPresence);
 
-  vec3 color = mix(abyss, graded, clamp(visibility, 0.0, 0.96));
+  vec3 color = mix(baseWater, algaeBody, clamp(matMask * visibility, 0.0, 0.86));
 
-  // Bioluminescence: barely a distant whisper early on, blossoming into intoxicating emerald-gold radiance in the zone.
-  vec3 poisonNeon = mix(vec3(0.22, 0.92, 0.38), vec3(0.56, 1.0, 0.22), noteHue);
-  vec3 birchGold = vec3(0.88, 0.75, 0.38);
+  // Bioluminescence: subtle cyan-emerald ambient whisper at rest, blossoming into luminous algae-gold in the zone.
+  vec3 poisonNeon = mix(vec3(0.16, 0.88, 0.64), vec3(0.54, 1.0, 0.30), noteHue);
+  vec3 birchGold = vec3(0.90, 0.78, 0.42);
+  float breath = 0.5 + 0.5 * sin(t * 0.34 + f0 * 6.2831 + p.x * 1.3);
   float noteNear = exp(-dot(p - notePos, p - notePos) / 0.24) * noteWarmth;
-  float glowStrength = 0.015 + bloom * 0.18 + zone * 0.92 + swellLight * (0.14 + 0.34 * bloom) + noteNear * (0.08 + 0.26 * zone);
-  color += poisonNeon * algaeMask * raw.g * glowStrength * (0.35 + 0.85 * rimPresence);
+  float glowStrength = (0.08 + 0.08 * breath) + bloom * 0.24 + zone * 0.92 + swellLight * (0.16 + 0.34 * bloom) + noteNear * (0.10 + 0.26 * zone);
+  color += poisonNeon * algaeMask * raw.g * glowStrength * (0.38 + 0.82 * rimPresence);
 
   // Subtle golden warmth breathing softly in the deep zone on downbeats.
   vec3 tideColor = mix(poisonNeon, birchGold, downbeat * 0.65);
-  color += tideColor * algaeMask * sway * zone * 0.24 * (0.35 + 0.65 * rimPresence);
+  color += tideColor * algaeMask * sway * zone * 0.26 * (0.35 + 0.65 * rimPresence);
 
-  // Soft filmic knee so peak bioluminescence glows richly without clipping harsh white.
-  vec3 over = max(color - 0.58, 0.0);
-  color = min(color, 0.58) + over / (1.0 + over / 0.38);
+  // Subtle dark-blue vignette + filmic highlight knee matching AbyssalWater.
+  float vig = smoothstep(1.32, 0.22, centerDist);
+  color *= mix(0.64, 1.02, vig);
+  vec3 over = max(color - 0.54, 0.0);
+  color = min(color, 0.54) + over / (1.0 + over / 0.36);
 
   float dither = (hash12(gl_FragCoord.xy) - 0.5) / 255.0;
   gl_FragColor = vec4(max(color + dither, 0.0), 1.0);

@@ -43,7 +43,9 @@ const TABS: { id: Tab; label: string; glyph: GlyphName | UtilityGlyphName }[] = 
 /** The guitar walks the three tabs and then Play, the room they lead to. */
 const TAB_CYCLE: Tab[] = ["tutor", "tunes", "progress", "play"];
 const primaryTab = (tab: Tab) => tab === "tunes" || tab === "progress" ? tab : tab === "play" ? "play" : tab === "free" ? "free" : "tutor";
-const tabRank = (route: Route) => {
+const tabRank = (route: Route, tool: "tuner" | "metronome" | null = null) => {
+  if (tool === "tuner") return 4;
+  if (tool === "metronome") return 4.5;
   const p = primaryTab(route.tab);
   if (p === "tutor") return 0;
   if (p === "tunes") return route.song ? 1.5 : 1;
@@ -52,7 +54,9 @@ const tabRank = (route: Route) => {
   return 2;
 };
 
-type ViewTransitionDocument = Document & { startViewTransition?(update: () => Promise<void> | void): unknown };
+type ViewTransitionLike = { finished?: Promise<unknown> };
+type ViewTransitionDocument = Document & { startViewTransition?(update: () => Promise<void> | void): ViewTransitionLike };
+type TransitionKind = "right" | "left" | "fade" | "room-in" | "room-out";
 /** Resolves once a selector has appeared, checked on timers (rendering is held during a view transition). */
 const appeared = (selector: string, ms: number) => new Promise<void>((resolve) => {
   const until = Date.now() + ms;
@@ -67,39 +71,56 @@ function markMorphSource(from: Element | null): () => void {
     from?.closest("[data-morph]") ??
     from?.closest(".hm-skill-card, .hm-ex-row, .hm-mode-pill")?.querySelector("strong") ??
     from?.closest(".hm-rhythm-chip")?.querySelector("span") ??
-    from?.closest(".hm-card, .lib-card")?.querySelector("h3, .lib-card-title") ??
+    from?.closest(".hm-card, .lib-card, .lib-row")?.querySelector("h3, .lib-card-title, .lib-row-title") ??
     from?.closest("button");
   if (!(el instanceof HTMLElement)) return () => undefined;
   el.style.viewTransitionName = "room-title";
   return () => { el.style.viewTransitionName = ""; };
 }
 const ROOM_TITLE = ".room-host:not([hidden]) .ss-ready .ss-display, .room-host:not([hidden]) .ss-run .ss-title";
+let vtSerial = 0;
 /**
- * Arriving in the Play tab: where the browser has view transitions, the view blooms smoothly from
- * the pressed point (and any pressed title glides into the room's heading) while the tab ink
- * slides to Play; without them, or with reduced motion, it falls back cleanly.
+ * Unified screen transitions: glides the topbar tab ink and cross-slides the stage across every
+ * screen (Home, Library, Song, Progress, Practice Room, Free play, Instruments). Entering Play
+ * blooms from the pressed point and morphs any pressed title into the room heading; leaving Play
+ * dissolves cleanly back into the shell's abyssal water. Falls back cleanly without View Transitions
+ * or under reduced motion.
  */
-function arriveInRoom(update: () => void, press: PressOrigin | null) {
-  const rootStyle = document.documentElement.style;
-  if (press && (press.x || press.y)) {
-    rootStyle.setProperty("--room-ox", `${Math.round(press.x)}px`);
-    rootStyle.setProperty("--room-oy", `${Math.round(press.y)}px`);
-  } else {
-    rootStyle.setProperty("--room-ox", "50%");
-    rootStyle.setProperty("--room-oy", "50%");
+function transitionScreen(
+  kind: TransitionKind,
+  update: () => void,
+  options?: { press?: PressOrigin | null; waitSelector?: string },
+) {
+  const rootEl = document.documentElement;
+  const rootStyle = rootEl.style;
+  if (kind === "room-in" || kind === "room-out") {
+    const press = options?.press;
+    if (press && (press.x || press.y)) {
+      rootStyle.setProperty("--room-ox", `${Math.round(press.x)}px`);
+      rootStyle.setProperty("--room-oy", `${Math.round(press.y)}px`);
+    } else {
+      rootStyle.setProperty("--room-ox", "50%");
+      rootStyle.setProperty("--room-oy", "50%");
+    }
   }
   const doc = document as ViewTransitionDocument;
   const still = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (!doc.startViewTransition || still) { update(); return; }
-  const unmark = markMorphSource(press?.el ?? null);
+  const token = ++vtSerial;
+  rootEl.dataset.vt = kind;
+  const unmark = kind === "room-in" ? markMorphSource(options?.press?.el ?? null) : () => undefined;
+  const clear = () => { if (vtSerial === token) delete rootEl.dataset.vt; };
   try {
-    doc.startViewTransition(async () => {
+    const vt = doc.startViewTransition(async () => {
       unmark();
       flushSync(update);
-      await appeared(ROOM_TITLE, 450);
+      if (options?.waitSelector) await appeared(options.waitSelector, 450);
     });
+    if (vt?.finished && typeof vt.finished.finally === "function") void vt.finished.finally(clear);
+    else window.setTimeout(clear, 550);
   } catch {
     unmark();
+    clear();
     update();
   }
 }
@@ -131,6 +152,8 @@ export default function App() {
   const [stateRevision, setStateRevision] = useState(0);
   const [devicesOpen, setDevicesOpen] = useState(() => new URLSearchParams(location.hash.slice(1)).has("pair"));
   const [toolsTool, setToolsTool] = useState<"tuner" | "metronome" | null>(null);
+  const toolsRef = useRef(toolsTool);
+  toolsRef.current = toolsTool;
   const toolsOpen = toolsTool !== null;
   const topbar = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -147,12 +170,26 @@ export default function App() {
   useEffect(() => {
     try { history.replaceState({ ...(history.state ?? {}), ffl: routeRef.current }, ""); } catch { /* history is a convenience */ }
     const onPop = (event: PopStateEvent) => {
-      setToolsTool(null);
-      setLaunch(undefined);
+      const prev = routeRef.current;
+      const prevTool = toolsRef.current;
       const nextRoute = routeOf(event.state) ?? HOME;
-      const diff = tabRank(nextRoute) - tabRank(routeRef.current);
-      setNavDir(diff > 0 ? "right" : diff < 0 ? "left" : "fade");
-      setRoute(nextRoute);
+      const diff = tabRank(nextRoute) - tabRank(prev, prevTool);
+      const dir: "right" | "left" | "fade" = diff > 0 ? "right" : diff < 0 ? "left" : "fade";
+      const wasRoom = prev.tab === "play" && !prevTool;
+      const toRoom = nextRoute.tab === "play";
+      const kind: TransitionKind = toRoom ? "room-in" : wasRoom ? "room-out" : dir;
+      routeRef.current = nextRoute;
+      toolsRef.current = null;
+      transitionScreen(
+        kind,
+        () => {
+          setToolsTool(null);
+          setLaunch(undefined);
+          setNavDir(dir);
+          setRoute(nextRoute);
+        },
+        { waitSelector: toRoom ? ROOM_TITLE : undefined },
+      );
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
@@ -160,20 +197,30 @@ export default function App() {
   /** Move to a place. Returns whether a history entry was added. */
   const go = useCallback((tab: Tab, song: string | null = null, replace = false, commit?: () => void): boolean => {
     const now = routeRef.current;
-    if (now.tab === tab && now.song === song) {
+    const prevTool = toolsRef.current;
+    if (now.tab === tab && now.song === song && !prevTool) {
       commit?.();
       return false;
     }
     const next: Route = { tab, song, depth: replace ? now.depth : tab === "tutor" && song === null ? 0 : now.depth + 1 };
-    const diff = tabRank(next) - tabRank(now);
-    setNavDir(diff > 0 ? "right" : diff < 0 ? "left" : "fade");
+    const diff = tabRank(next) - tabRank(now, prevTool);
+    const dir: "right" | "left" | "fade" = diff > 0 ? "right" : diff < 0 ? "left" : "fade";
+    const wasRoom = now.tab === "play" && !prevTool;
+    const toRoom = tab === "play";
+    const kind: TransitionKind = toRoom ? "room-in" : wasRoom ? "room-out" : dir;
     routeRef.current = next;
+    toolsRef.current = null;
     const apply = () => {
+      setToolsTool(null);
+      setNavDir(dir);
       commit?.();
       setRoute(next);
+      window.scrollTo?.(0, 0);
     };
-    if (tab === "play") arriveInRoom(apply, lastPress.current);
-    else apply();
+    transitionScreen(kind, apply, {
+      press: toRoom ? lastPress.current : null,
+      waitSelector: toRoom ? ROOM_TITLE : undefined,
+    });
     try {
       if (replace || next.depth === 0) history.replaceState({ ffl: next }, "");
       else history.pushState({ ffl: next }, "");
@@ -181,12 +228,22 @@ export default function App() {
     return !replace && next.depth > 0;
   }, []);
   const historyBack = useCallback(() => { history.back(); }, []);
+  const closeTools = useCallback(() => {
+    if (!toolsRef.current) return;
+    const prev = routeRef.current;
+    const toRoom = prev.tab === "play";
+    toolsRef.current = null;
+    transitionScreen("left", () => {
+      setNavDir("left");
+      setToolsTool(null);
+    }, { waitSelector: toRoom ? ROOM_TITLE : undefined });
+  }, []);
   const back = useCallback(() => {
-    if (toolsOpen) { setToolsTool(null); return; }
+    if (toolsOpen) { closeTools(); return; }
     setLaunch(undefined);
     if (routeRef.current.depth > 0) historyBack();
     else go("tutor");
-  }, [go, toolsOpen, historyBack]);
+  }, [go, toolsOpen, closeTools, historyBack]);
 
   // the key only drives the scale-shape explorer; songs bring their own
   const [key, setKey] = useState<KeyInfo>(() => {
@@ -220,7 +277,6 @@ export default function App() {
   const startPractice = useCallback(async (tuneId: string | null, cardId?: string, prepared = false, options?: PracticeLaunchOptions) => {
     if (tuneId && !isKeyStudyId(tuneId)) trySaveTune(tuneId);
     if (!prepared) openPractice(input);
-    setToolsTool(null);
     setLaunch(undefined);
     await roomHandle.current?.leave();
     roomSerial.current += 1;
@@ -233,7 +289,6 @@ export default function App() {
   const startTune = useCallback((tuneId: string, cardId?: string, prepared = false, options?: PracticeLaunchOptions) => { void startPractice(tuneId, cardId, prepared, options); }, [startPractice]);
   /** The Play tab: back to the room as it was left, or the next session when none is open. */
   const openPlay = useCallback(() => {
-    setToolsTool(null);
     setLaunch(undefined);
     if (room) go("play");
     else void startPractice(null);
@@ -266,14 +321,13 @@ export default function App() {
 
   const moveTab = useCallback((dir: 1 | -1) => {
     setLaunch(undefined);
-    setToolsTool(null);
     const at = TAB_CYCLE.indexOf(primaryTab(routeRef.current.tab));
     const next = TAB_CYCLE[(at + dir + TAB_CYCLE.length) % TAB_CYCLE.length];
     if (next === "play") openPlay();
     else go(next);
   }, [go, openPlay]);
 
-  const openLibrary = useCallback(() => { setLaunch(undefined); setToolsTool(null); go("tunes", null); }, [go]);
+  const openLibrary = useCallback(() => { setLaunch(undefined); go("tunes", null); }, [go]);
   const openTunes = openLibrary;
   const openSong = useCallback((tuneId: string) => {
     trySaveTune(tuneId);
@@ -294,15 +348,21 @@ export default function App() {
    * trainers (Triads, Ear) first let the room finish and save.
    */
   const askRoom = useCallback((kind: RoomRequest["kind"]) => {
-    setToolsTool(null);
     setLaunch(undefined);
-    setRoomRequest((prev) => ({ serial: (prev?.serial ?? 0) + 1, kind }));
-    go("play");
+    go("play", null, false, () => {
+      setRoomRequest((prev) => ({ serial: (prev?.serial ?? 0) + 1, kind }));
+    });
   }, [go]);
   const openTools = useCallback((tool: "tuner" | "metronome") => {
     setDevicesOpen(false);
-    if (room) askRoom(tool);
-    else setToolsTool(tool);
+    if (room) { askRoom(tool); return; }
+    const diff = tabRank(routeRef.current, tool) - tabRank(routeRef.current, toolsRef.current);
+    const dir: "right" | "left" | "fade" = diff > 0 ? "right" : diff < 0 ? "left" : "fade";
+    toolsRef.current = tool;
+    transitionScreen(dir, () => {
+      setNavDir(dir);
+      setToolsTool(tool);
+    });
   }, [room, askRoom]);
   const openSettings = useCallback(() => {
     setDevicesOpen(false);
@@ -358,7 +418,7 @@ export default function App() {
               {TABS.map((t) => {
                 const on = primaryTab(tab) === t.id && !toolsOpen;
                 return (
-                  <button key={t.id} type="button" className={on ? "is-on" : ""} aria-current={on ? "page" : undefined} onClick={() => { setToolsTool(null); setLaunch(undefined); go(t.id); }}>
+                  <button key={t.id} type="button" className={on ? "is-on" : ""} aria-current={on ? "page" : undefined} onClick={() => { setLaunch(undefined); go(t.id); }}>
                     <Glyph name={t.glyph} size={20} /><span>{t.label}</span>{on ? <i className="tab-ink" aria-hidden="true" /> : null}
                   </button>
                 );
@@ -370,13 +430,13 @@ export default function App() {
               </button>
               <span className="tabs-rule" aria-hidden="true" />
               <button type="button" className={`tab-tool ${tab === "free" && !toolsOpen ? "is-on" : ""}`} aria-current={tab === "free" && !toolsOpen ? "page" : undefined} onClick={() => openMode("free")} title="Free play">
-                <Glyph name="free" size={20} /><span>Free play</span>
+                <Glyph name="free" size={20} /><span>Free play</span>{tab === "free" && !toolsOpen ? <i className="tab-ink" aria-hidden="true" /> : null}
               </button>
               <button type="button" className={`tab-tool ${toolsTool === "tuner" ? "is-on" : ""}`} aria-current={toolsTool === "tuner" ? "page" : undefined} onClick={() => openTools("tuner")} title="Chromatic tuner">
-                <Glyph name="tools" size={20} /><span>Tuner</span>
+                <Glyph name="tools" size={20} /><span>Tuner</span>{toolsTool === "tuner" ? <i className="tab-ink" aria-hidden="true" /> : null}
               </button>
               <button type="button" className={`tab-tool ${toolsTool === "metronome" ? "is-on" : ""}`} aria-current={toolsTool === "metronome" ? "page" : undefined} onClick={() => openTools("metronome")} title="Metronome">
-                <Glyph name="clock" size={20} /><span>Metronome</span>
+                <Glyph name="clock" size={20} /><span>Metronome</span>{toolsTool === "metronome" ? <i className="tab-ink" aria-hidden="true" /> : null}
               </button>
             </nav>
             <div className="shell-end">
@@ -388,7 +448,7 @@ export default function App() {
           <SaveNotice />
           <PlatformStatus />
 
-          {devicesOpen ? <main className="device-sync-placeholder" aria-hidden="true" /> : toolsTool ? <GuitarTools input={input} initialTool={toolsTool} onClose={() => setToolsTool(null)} /> : tab === "play" ? null : tab === "tutor" ? (
+          {devicesOpen ? <main className="device-sync-placeholder" aria-hidden="true" /> : toolsTool ? <GuitarTools input={input} initialTool={toolsTool} onClose={closeTools} /> : tab === "play" ? null : tab === "tutor" ? (
             <OverviewView key={stateRevision} input={input} onOpenMode={openMode} onOpenSong={openSong} onOpenLibrary={openLibrary} onListenSong={listenSong} onStartPractice={startTune} />
           ) : tab === "progress" ? (
             <ProgressView key={stateRevision} onOpenSong={openSong} onStartPractice={startTune} />

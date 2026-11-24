@@ -461,7 +461,7 @@ vec4 dawn(vec2 uv) {
   l = dawnLayer(s, vec2(0.08, 0.8), vec2(0.974, 2.435), 0.43, vec3(0.639, 0.451, 0.302), 0.231, l);
   return l;
 }
-const vec3 WATER = vec3(0.022, 0.044, 0.032);
+const vec3 WATER = vec3(0.008, 0.024, 0.058);
 
 void lenses(vec2 p, out float calm, out float glass, out vec2 centre, out float rim) {
   calm = 0.0; glass = 0.0; centre = p; rim = 0.0;
@@ -500,25 +500,35 @@ void scene(vec2 uv, out vec3 colour, out vec3 glow, out float lens) {
   vec3 raw = mix(pondAt(b + uDrift, m, w), pondAt(a + uDrift, m, w), uFlowMix);
   vec2 local = mix(b, a, uFlowMix);
   float mask = roomMask(uv);
-  vec3 base = WATER;
-  colour = mix(base, pow(grade(raw, uSaturation, uSepia), vec3(uContrast)), uBrightness * mask);
-  // what this point looked like at rest: calm lenses lean back toward it so text keeps its contrast
-  vec3 rest = mix(WATER, pow(grade(raw, 0.7, 0.0), vec3(1.65)), 0.24 * roomMaskAtRest(uv));
+
+  // Nocturnal abyssal dark-blue lagoon base, matching Home, Library & Progress.
+  float luma = dot(raw, vec3(0.2126, 0.7152, 0.0722));
+  float greenness = max(0.0, raw.g - max(raw.r * 0.90, raw.b * 0.95));
+  float matMask = smoothstep(0.035, 0.20, greenness) * smoothstep(0.16, 0.56, luma);
+  float waterNoise = fbm3(here * 1.15);
+  vec3 base = WATER * (0.86 + 0.85 * smoothstep(0.10, 0.86, waterNoise))
+    + vec3(0.009, 0.044, 0.125) * smoothstep(0.26, 0.86, waterNoise) * 0.75;
+  vec3 darkMat = mix(vec3(0.008, 0.048, 0.105), vec3(0.036, 0.185, 0.155), smoothstep(0.16, 0.72, luma));
+  vec3 photoDetail = pow(grade(raw, uSaturation, uSepia), vec3(uContrast)) * vec3(0.46, 0.78, 0.84);
+  vec3 pond = mix(darkMat, photoDetail, 0.45 + 0.35 * smoothstep(0.28, 0.88, uBrightness));
+  float matVis = clamp(matMask * (0.48 + 0.52 * uBrightness) * mask, 0.0, 0.86);
+  colour = mix(base, pond, matVis);
+  // what this point looked like at rest: calm lenses lean back toward deep abyssal water so text keeps contrast
+  vec3 rest = mix(base, darkMat, matMask * 0.32 * roomMaskAtRest(uv));
   float quiet = mix(1.0, 0.25, calm);
   calm *= uCalmDepth;
   lens = calm;
 
-  // the algae rest dark until earned, then awaken into a lush bioluminescent embrace in the zone
-  float luma = dot(raw, vec3(0.2126, 0.7152, 0.0722));
-  float algae = smoothstep(0.04, 0.22, raw.g - max(raw.r * 0.92, raw.b)) * smoothstep(0.18, 0.56, luma);
-  vec3 neon = mix(vec3(0.34, 1.0, 0.22), uTint, 0.24);
-  glow = algae * neon * raw.g * (0.015 + uEmission * 1.32) * (1.0 + uKick * 0.55) * mask * quiet;
+  // the algae glow softly in cyan-emerald at rest and blossom into bioluminescent radiance in the zone
+  float algae = smoothstep(0.05, 0.23, greenness) * smoothstep(0.20, 0.58, luma);
+  vec3 neon = mix(vec3(0.18, 0.90, 0.58), mix(vec3(0.38, 1.0, 0.28), uTint, 0.32), smoothstep(0.05, 0.65, uEmission));
+  glow = algae * neon * raw.g * (0.065 + uEmission * 1.28) * (1.0 + uKick * 0.55) * (0.45 + 0.55 * mask) * quiet;
 
-  // ripples catch the light: a silver ring even on the quiet pool, a glint where they tilt to the sky
+  // ripples catch cool nocturnal moonlight and cyan-emerald sheen
   vec3 n = normalize(vec3(-grad, 1.0));
   float spec = pow(max(dot(n, normalize(vec3(-0.25, 0.35, 1.0))), 0.0), 60.0);
   float sheen = clamp(length(grad) * 0.22, 0.0, 0.1);
-  colour += vec3(0.72, 0.82, 0.68) * (spec * 0.35 + sheen) * mix(1.0, 0.3, calm);
+  colour += vec3(0.56, 0.84, 0.90) * (spec * 0.35 + sheen) * mix(1.0, 0.3, calm);
 
   // warm blobs rise: translucent, backlit leaf veins glowing through
   float t = texture(uHeat, uv).x;

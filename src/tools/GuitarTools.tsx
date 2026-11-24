@@ -76,7 +76,7 @@ export function GuitarToolsRoom({ input, onClose, initialTool = "tuner", initial
   keyboard.current = { pad, close };
   useEffect(() => {
     const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    room.current?.querySelector<HTMLButtonElement>('.guitar-tools-tabs [aria-pressed="true"]')?.focus({ preventScroll: true });
+    room.current?.querySelector<HTMLButtonElement>('.guitar-tools-return')?.focus({ preventScroll: true });
     return () => { if (trigger?.isConnected) trigger.focus({ preventScroll: true }); };
   }, []);
   useEffect(() => {
@@ -191,10 +191,6 @@ export function GuitarToolsRoom({ input, onClose, initialTool = "tuner", initial
     <div className="guitar-tools-flow" aria-hidden={pad !== null || undefined} style={{ visibility: pad !== null ? "hidden" : undefined }}>
       <header className="guitar-tools-head" data-pool="calm">
         <div><p className="guitar-tools-kicker">Your practice room</p><h1 id="guitar-tools-title">Instruments</h1></div>
-        <nav className="guitar-tools-tabs" aria-label="guitar tools">
-          <button type="button" aria-pressed={tool === "tuner"} onClick={() => changeTool("tuner")}><Glyph name="tools" size={16} />Tuner</button>
-          <button type="button" aria-pressed={tool === "metronome"} onClick={() => changeTool("metronome")}><Glyph name="free" size={17} />Metronome</button>
-        </nav>
         <button type="button" className="guitar-tools-return" onClick={close} aria-label="Return to practice"><Glyph name="arrow" size={16} /><span>Return</span></button>
       </header>
       {tool === "tuner" ? <section className="guitar-tools-tuner" aria-label="chromatic tuner">

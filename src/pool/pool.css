@@ -10,10 +10,10 @@
 /* The living pool keeps its own calm lenses behind text, so the room's shade can lift. */
 .practice-atmosphere[data-pool="ready"] > .pa-shade { opacity: 0.65; }
 /* As the pool glows, the room's shade deepens behind the material so text keeps its contrast. */
-.practice-atmosphere[data-pool="ready"] > .pa-shade::after { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 46%, #0a0e0d 18%, transparent 78%); opacity: calc(var(--pool-glow, 0) * 0.6); }
+.practice-atmosphere[data-pool="ready"] > .pa-shade::after { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 46%, #030812 18%, transparent 78%); opacity: calc(var(--pool-glow, 0) * 0.6); }
 
 /* The room breathes with the pool: colour and opacity only, never layout. */
-.beat-pulse-dots li.is-now:not(.is-accent) > i { box-shadow: 0 0 calc(14px + var(--pool-glow, 0) * 18px) rgba(var(--pool-tint, 208, 231, 170), calc(0.21 + var(--pool-glow, 0) * 0.3)); }
-.beat-pulse-resonance > i { border-color: color-mix(in srgb, var(--pulse-ink) calc(100% - var(--pool-glow, 0) * 45%), rgb(var(--pool-tint, 186, 201, 171))); }
+.beat-pulse-dots li.is-now:not(.is-accent) > i { box-shadow: 0 0 calc(14px + var(--pool-glow, 0) * 18px) rgba(var(--pool-tint, 110, 232, 186), calc(0.24 + var(--pool-glow, 0) * 0.3)); }
+.beat-pulse-resonance > i { border-color: color-mix(in srgb, var(--pulse-ink) calc(100% - var(--pool-glow, 0) * 45%), rgb(var(--pool-tint, 56, 232, 198))); }
 
 @media (prefers-reduced-motion: reduce) { .pa-pool { transition: none; } }

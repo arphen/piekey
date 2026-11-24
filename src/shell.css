@@ -4,13 +4,20 @@
 .app {
   --bg: #040914;
   --abyss: #030812;
+  --surface: #071324;
+  --surface-2: #0a1a30;
+  --surface-3: #102642;
   --abyss-glass: rgba(5, 13, 25, 0.72);
   --abyss-glass-strong: rgba(5, 13, 26, 0.86);
   --abyss-glass-hover: rgba(8, 22, 36, 0.84);
+  --ink: #e9f6f2;
+  --ink-soft: #9ec0c4;
+  --ink-faint: #678791;
   --algae: #5ae86b;
   --algae-bright: #9bff6b;
   --algae-cyan: #38e8c6;
-  --brass: #e0bf6a;
+  --brass: #e4c16a;
+  --good: #6ef056;
   --line: rgba(112, 214, 198, 0.14);
   --line-strong: rgba(112, 232, 186, 0.28);
   position: relative;
@@ -33,10 +40,11 @@
   backface-visibility: hidden;
   will-change: transform;
   contain: strict;
+  transition: opacity 0.38s ease;
 }
 .abyssal-water.is-suspended { opacity: 0; }
 body:has(.ss:not(.is-parked)) .abyssal-water,
-body:has(.ss:not(.is-parked)) .abyssal-water-fallback { display: none; }
+body:has(.ss:not(.is-parked)) .abyssal-water-fallback { opacity: 0; visibility: hidden; }
 
 .abyssal-water-fallback {
   background:
@@ -258,13 +266,22 @@ body:has(.ss:not(.is-parked)) .abyssal-water-fallback { display: none; }
   .app .brand { display: none; }
 }
 
-/* ---------- the Play tab's room: under the header, not over it ---------- */
+/* ---------- the Play tab's room & standalone rooms: under the header, not over it ---------- */
 
-.room-host .ss,
-.ss.fp-standalone { top: var(--topbar-h, 48px); }
+.room-host:not([hidden]) {
+  position: fixed;
+  inset: var(--topbar-h, 48px) 0 0 0;
+  z-index: 200;
+}
+.room-host .ss {
+  position: absolute;
+  inset: 0;
+}
+.ss.fp-standalone,
+.app > .ss.guitar-tools { top: var(--topbar-h, 48px); }
 .app.tab-play .app-legal { display: none; }
 /* playing with the mouse still, the header steps back like the room's own chrome */
-.app .topbar { transition: opacity 0.6s ease; }
+.app .topbar { transition: opacity 0.6s ease; view-transition-name: app-topbar; }
 body:has(.room-host:not([hidden]) .ss.is-idle.is-exercise) .app .topbar:not(:hover, :focus-within) { opacity: 0.14; }
 
 .room-empty {
@@ -287,33 +304,109 @@ body:has(.room-host:not([hidden]) .ss.is-idle.is-exercise) .app .topbar:not(:hov
   margin-top: 8px;
   padding: 10px 16px;
   border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  background: rgba(109, 230, 75, 0.08);
+  border-radius: 12px;
+  background: rgba(5, 14, 28, 0.74);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   color: var(--ink);
 }
 
-/* ---------- arriving in the room (view transitions where the browser has them) ---------- */
+/* ---------- unified screen transitions (View Transitions API + graceful CSS fallback) ---------- */
 
+.app > main,
+.room-host:not([hidden]) {
+  view-transition-name: app-stage;
+}
 .room-host:not([hidden]) .ss-ready .ss-display,
 .room-host:not([hidden]) .ss-run .ss-title { view-transition-name: room-title; }
 .room-host:not([hidden]) .ss { transform-origin: var(--room-ox, 50%) var(--room-oy, 50%); }
-/* the transition carries the arrival, so the room's own fade-ins would only hide the morph */
-@supports (view-transition-name: none) {
-  .room-host .ss,
-  .room-host .ss-ready,
-  .room-host .ss-run .ss-head { animation: none; }
+
+/* When a browser View Transition is running, it owns the motion — prevent double enter animations. */
+html[data-vt] .app > main,
+html[data-vt] .room-host .ss,
+html[data-vt] .room-host .ss-ready,
+html[data-vt] .room-host .ss-run .ss-head,
+html[data-vt] .ss.guitar-tools,
+html[data-vt] .ss.fp-standalone {
+  animation: none !important;
 }
-::view-transition-group(room-title) { animation-duration: 0.44s; animation-timing-function: cubic-bezier(0.2, 0.85, 0.25, 1); }
+
+/* Pin the topbar completely steady while tab-ink glides smoothly across it */
+::view-transition-group(app-topbar) { animation-duration: 0s; z-index: 50; }
+::view-transition-old(app-topbar),
+::view-transition-new(app-topbar) { animation: none; }
+::view-transition-group(tab-ink) {
+  animation-duration: 0.34s;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  z-index: 51;
+}
+::view-transition-old(tab-ink),
+::view-transition-new(tab-ink) { animation: none; height: 100%; }
+
+/* Smooth background crossfade (water stays continuous with no scale jump) */
+::view-transition-old(root) { animation: 0.3s ease both vt-fade-out; }
+::view-transition-new(root) { animation: 0.34s ease both vt-fade-in; }
+
+/* Morphing title into the Practice Room */
+::view-transition-group(room-title) {
+  animation-duration: 0.42s;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  z-index: 45;
+}
 ::view-transition-old(room-title),
 ::view-transition-new(room-title) { height: 100%; object-fit: contain; }
-::view-transition-group(tab-ink) { animation-duration: 0.36s; animation-timing-function: cubic-bezier(0.3, 0.7, 0.2, 1); }
-::view-transition-old(root) {
-  animation: 0.24s cubic-bezier(0.4, 0, 1, 1) both room-out;
-  transform-origin: var(--room-ox, 50%) var(--room-oy, 50%);
+
+/* Stage transitions by direction / room entry-exit (never squash height between scrollable pages and fixed rooms) */
+::view-transition-group(app-stage) { animation: none; }
+::view-transition-image-pair(app-stage) { isolation: auto; }
+::view-transition-old(app-stage),
+::view-transition-new(app-stage) {
+  height: auto;
+  min-height: 100%;
+  object-fit: cover;
+  object-position: top center;
 }
-::view-transition-new(root) {
-  animation: 0.42s 0.04s cubic-bezier(0.2, 0.85, 0.25, 1) both room-in;
-  transform-origin: var(--room-ox, 50%) var(--room-oy, 50%);
+::view-transition-old(app-stage) { animation: 0.24s cubic-bezier(0.4, 0, 1, 1) both vt-fade-out; }
+::view-transition-new(app-stage) { animation: 0.34s 0.04s cubic-bezier(0.22, 1, 0.36, 1) both vt-fade-in; }
+
+html[data-vt="right"]::view-transition-old(app-stage) {
+  animation: 0.24s cubic-bezier(0.4, 0, 1, 1) both vt-slide-out-left;
 }
-@keyframes room-out { to { opacity: 0; transform: scale(1.03); } }
-@keyframes room-in { from { opacity: 0; transform: scale(0.965); } }
+html[data-vt="right"]::view-transition-new(app-stage) {
+  animation: 0.36s 0.03s cubic-bezier(0.22, 1, 0.36, 1) both vt-slide-in-right;
+}
+
+html[data-vt="left"]::view-transition-old(app-stage) {
+  animation: 0.24s cubic-bezier(0.4, 0, 1, 1) both vt-slide-out-right;
+}
+html[data-vt="left"]::view-transition-new(app-stage) {
+  animation: 0.36s 0.03s cubic-bezier(0.22, 1, 0.36, 1) both vt-slide-in-left;
+}
+
+/* Entering and leaving the room use the same sideways glide as Home / Library / Progress. */
+html[data-vt="room-in"]::view-transition-old(app-stage) {
+  animation: 0.24s cubic-bezier(0.4, 0, 1, 1) both vt-slide-out-left;
+}
+html[data-vt="room-in"]::view-transition-new(app-stage) {
+  animation: 0.36s 0.03s cubic-bezier(0.22, 1, 0.36, 1) both vt-slide-in-right;
+}
+
+html[data-vt="room-out"]::view-transition-old(app-stage) {
+  animation: 0.24s cubic-bezier(0.4, 0, 1, 1) both vt-slide-out-right;
+}
+html[data-vt="room-out"]::view-transition-new(app-stage) {
+  animation: 0.36s 0.03s cubic-bezier(0.22, 1, 0.36, 1) both vt-slide-in-left;
+}
+
+@keyframes vt-fade-out { to { opacity: 0; } }
+@keyframes vt-fade-in { from { opacity: 0; } }
+@keyframes vt-slide-out-left { to { opacity: 0; transform: translate3d(-26px, 0, 0) scale(0.992); } }
+@keyframes vt-slide-in-right { from { opacity: 0; transform: translate3d(32px, 0, 0) scale(0.992); } }
+@keyframes vt-slide-out-right { to { opacity: 0; transform: translate3d(26px, 0, 0) scale(0.992); } }
+@keyframes vt-slide-in-left { from { opacity: 0; transform: translate3d(-32px, 0, 0) scale(0.992); } }
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) { animation: none !important; }
+}

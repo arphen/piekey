@@ -313,13 +313,14 @@ export function AbyssalWater({ scene, suspended = false }: { scene: WaterScene; 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<WaterScene>(scene);
   const suspendedRef = useRef(suspended);
-  const wakeRef = useRef<() => void>(() => undefined);
+  const wakeRef = useRef<(gentleSurge?: boolean) => void>(() => undefined);
   const transitionRef = useRef<((next: WaterScene) => void) | null>(null);
   const [fallback, setFallback] = useState(false);
 
   useEffect(() => {
+    const wasSuspended = suspendedRef.current;
     suspendedRef.current = suspended;
-    if (!suspended) wakeRef.current();
+    if (!suspended) wakeRef.current(wasSuspended);
   }, [suspended]);
 
   useEffect(() => {
@@ -660,7 +661,10 @@ export function AbyssalWater({ scene, suspended = false }: { scene: WaterScene; 
       }
     };
 
-    wakeRef.current = start;
+    wakeRef.current = (gentleSurge) => {
+      if (gentleSurge) surge = Math.min(0.45, surge + 0.16);
+      start();
+    };
     transitionRef.current = (next) => applySceneTextures(next, false);
     applySceneTextures(sceneRef.current, true);
 

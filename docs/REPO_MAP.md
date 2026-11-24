@@ -134,7 +134,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 
 ## src
 
-- `src/App.tsx` — `App:112`
+- `src/App.tsx` — `App:133`
 - `src/__tests__/attacks.test.ts`
 - `src/__tests__/audio-scoring.test.ts`
 - `src/__tests__/calibration.test.ts`
@@ -221,7 +221,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/components/PracticeRoom.tsx` — `RoomLaunch:19`, `sessionLead:26`, `PracticeRoom:36`
 - `src/components/ProgressView.tsx` — `ProgressView:598`
 - `src/components/RecordingStatus.tsx` — `RecordingStatus:13`, `downloadTake:21`, `RecordingRecovery:32`
-- `src/components/RenderedWater.tsx` — `RenderedWaterProps:194`, `RenderedWater:228`
+- `src/components/RenderedWater.tsx` — `RenderedWaterProps:208`, `RenderedWater:242`
 - `src/components/SaveNotice.tsx` — `SaveNotice:7`
 - `src/components/ScalesView.tsx` — `ScalesView:12`
 - `src/components/Score.tsx` — `drawChord:98`, `Score:212`
@@ -289,7 +289,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/pool/bus.ts` — `PoolAnchor:8`, `PoolEvent:9`, `PublisherProps:14`, `Publisher:15`, `PoolSink:17`, `PoolBus:22`
 - `src/pool/engine/gl.ts` — `Program:3`, `Target:5`, `Pair:12`, `Format:14`, `formats:16`, `compile:28`, `target:67`, `pair:85`, `complete:91`, `release:96`, `releasePair:102`, `image:109`
 - `src/pool/engine/renderer.ts` — `Tier:9`, `TIERS:10`, `Vec2:17`, `Vec3:18`, `Stone:19`, `Flash:20`, `Vortex:21`, `Swirl:22`, `Emitter:23`, `Ring:24`, `PoolRect:25`, `ROCK:26`, `CALM:27`, `GLASS:28`, `FrameState:31`, `PHOTO_SCALE:58` (+1 more)
-- `src/pool/engine/shaders.ts` — `VERTEX:14`, `CURL:58`, `FORCES:71`, `DIVERGENCE:131`, `PRESSURE:144`, `GRADIENT:160`, `ADVECT:176`, `HEAT:189`, `MARBLE:214`, `WAVES:228`, `DYE:255`, `PARTICLES:279`, `FLOATER_VERTEX:302`, `FLOATER_FRAGMENT:332`, `BRIGHT:557`, `BLUR:565` (+2 more)
+- `src/pool/engine/shaders.ts` — `VERTEX:14`, `CURL:58`, `FORCES:71`, `DIVERGENCE:131`, `PRESSURE:144`, `GRADIENT:160`, `ADVECT:176`, `HEAT:189`, `MARBLE:214`, `WAVES:228`, `DYE:255`, `PARTICLES:279`, `FLOATER_VERTEX:302`, `FLOATER_FRAGMENT:332`, `BRIGHT:567`, `BLUR:575` (+2 more)
 - `src/pool/golden.ts` — `PHI:3`, `GOLDEN_ANGLE:4`, `FIBONACCI:5`, `PHRASE_WRAP:6`, `phyllotaxis:11`, `spiral:19`, `goldenSpread:26`, `wander:29`, `mulberry32:36`
 - `src/pool/groove.ts` — `GrooveFrame:11`, `GrooveContext:12`, `GrooveOnset:17`, `GrooveState:19`, `createGroove:62`
 - `src/pool/host.ts` — `createHost:51`, `PoolHost:55`
