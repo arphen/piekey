@@ -42,11 +42,12 @@ interface ScoreProps {
 
 const BARS_PER_LINE_WIDE = 4;
 const BARS_PER_LINE_NARROW = 2;
-const LINE_HEIGHT = 150;
+const LINE_HEIGHT = 156; // crisp balance: clears low guitar ledger lines without leaving a dead-space void
+const TOP_PAD = 48; // generous headroom above top stave so high notes (G5-B5) and cursor never clip
+const BOTTOM_PAD = 30; // prevents low ledger lines / stems from ever clipping at SVG bottom
 const MARK_ROOM = 34; // above the staff for endings and rehearsal marks
-const FIRST_BAR_EXTRA = 70; // room for clef + key signature
 const STRING_MARKS = ["①", "②", "③", "④", "⑤", "⑥"]; // string 0 = high e
-const CURSOR_WIDTH = 34;
+const CURSOR_WIDTH = 30;
 const PLAYHEAD_WIDTH = 2;
 
 function prettyChord(symbol: string): string {
@@ -65,6 +66,7 @@ const GLYPHS: Record<string, { code: string; point: number; dx: number; dy: numb
   "♯": { code: "accidentalSharp", point: 26, dx: 1, dy: -6 },
   "Δ": { code: "csymMajorSeventh", point: 30, dx: -3, dy: -1 },
 };
+
 /** Right edge of the text element just drawn, from its rendered box (estimates misjudge fallback glyphs such as Δ). */
 function drawnRight(ctx: ReturnType<Renderer["getContext"]>, text: string, x: number): number {
   const el = (ctx as unknown as { parent?: Element }).parent?.lastElementChild as SVGTextElement | null | undefined;
@@ -76,7 +78,6 @@ function drawnRight(ctx: ReturnType<Renderer["getContext"]>, text: string, x: nu
   }
   return x + ctx.measureText(text).width;
 }
-
 
 /** Draws a chord symbol, ♭ ♯ Δ as music-font glyphs (text fonts set them loosely); returns its right edge. */
 export function drawChord(ctx: ReturnType<Renderer["getContext"]>, symbol: string, x: number, y: number, color: string): number {
@@ -118,15 +119,74 @@ function repetitionFor(kind: string, text: string): number {
   }
 }
 
-/** Bars per line; a rehearsal mark starts a new line, like a printed lead sheet. */
-function layout(bars: ReadingBar[], perLine: number): { line: number; col: number }[] {
+/** Build StaveNotes, tuplets, voice and beams for one bar so we can both measure and draw it accurately. */
+function buildBarVoice(bar: ReadingBar) {
+  const notes = bar.notes.map((n) => {
+    const sn = new StaveNote({
+      keys: [n.rest ? "b/4" : n.vexKey],
+      duration: n.duration,
+      type: n.rest ? "r" : undefined,
+      auto_stem: !n.rest,
+      align_center: n.rest && n.duration === "w" && bar.notes.length === 1,
+    });
+    if (!n.rest && n.accidental) sn.addModifier(new Accidental(n.accidental), 0);
+    if (n.dotted) Dot.buildAndAttach([sn], { all: true });
+    return sn;
+  });
+
+  // Tuplets first: they change the notes' ticks before the voice counts them.
+  const tuplets: Tuplet[] = [];
+  let group: StaveNote[] = [];
+  bar.notes.forEach((n, ni) => {
+    if (!n.tuplet) {
+      group = [];
+      return;
+    }
+    if (n.tuplet.edge === "start") group = [];
+    group.push(notes[ni]);
+    const closes = n.tuplet.edge === "stop" || (!bar.notes.some((m) => m.tuplet?.edge) && group.length === n.tuplet.actual);
+    if (closes) {
+      tuplets.push(new Tuplet(group, { num_notes: n.tuplet.actual, notes_occupied: n.tuplet.normal }));
+      group = [];
+    }
+  });
+
+  const voice = new Voice({ num_beats: 4, beat_value: 4 }).setStrict(false).addTickables(notes);
+  const beams = Beam.generateBeams(notes, { maintain_stem_directions: false });
+  const formatter = new Formatter().joinVoices([voice]);
+  let minNoteWidth = 64;
+  try {
+    minNoteWidth = Math.max(64, formatter.preCalculateMinTotalWidth([voice]));
+  } catch {
+    // jsdom fallback where text metrics are unavailable
+  }
+  return { notes, tuplets, voice, beams, formatter, minNoteWidth };
+}
+
+/** Measure the actual modifier width (clef + key signature + time signature) of a stave. */
+function modifierWidth(first: boolean, key: string, prevKey: string, bar: ReadingBar, isFirstBar: boolean, time?: string): number {
+  const probe = new Stave(0, 0, 300);
+  if (first) probe.addClef("treble").addKeySignature(key);
+  else if (bar.keyChange) probe.addKeySignature(key, prevKey);
+  if ((isFirstBar && time) || bar.timeChange) probe.addTimeSignature(time!);
+  if (bar.repeatStart) probe.setBegBarType(BarlineType.REPEAT_BEGIN);
+  return Math.max(0, probe.getNoteStartX());
+}
+
+/** Bars per line; a rehearsal mark starts a new line, and dense bars wrap early instead of spilling past barlines. */
+function layout(bars: ReadingBar[], perLine: number, minWidths: number[], firstExtra: number, usable: number): { line: number; col: number }[] {
   let line = 0;
   let col = 0;
+  let lineUsed = 0;
   return bars.map((b, i) => {
-    if (i > 0 && (col === perLine || (b.section && col > 0))) {
+    const need = minWidths[i] + (col === 0 ? firstExtra : 0);
+    const overflowsLine = col > 0 && lineUsed + need > usable * 0.98;
+    if (i > 0 && (col === perLine || (b.section && col > 0) || overflowsLine)) {
       line++;
       col = 0;
+      lineUsed = 0;
     }
+    lineUsed += col === 0 ? minWidths[i] + firstExtra : minWidths[i];
     return { line, col: col++ };
   });
 }
@@ -176,41 +236,92 @@ export function Score({
     host.innerHTML = "";
 
     const css = getComputedStyle(host);
-    const ink = css.getPropertyValue("--ink").trim() || "#f3ece2";
-    const soft = css.getPropertyValue("--ink-faint").trim() || "#7a7068";
-    const chordInk = css.getPropertyValue("--brass").trim() || "#e0a956";
+    const ink = css.getPropertyValue("--ink").trim() || "#edf4ea";
+    const soft = css.getPropertyValue("--ink-faint").trim() || "#6f8574";
+    const chordInk = css.getPropertyValue("--brass").trim() || "#dfc068";
 
-    const perLine = barsPerLine ?? (width < 640 ? BARS_PER_LINE_NARROW : BARS_PER_LINE_WIDE);
-    const places = layout(exercise.bars, perLine);
+    const maxPerLine = barsPerLine ?? (width < 640 ? BARS_PER_LINE_NARROW : BARS_PER_LINE_WIDE);
+    const usable = width - 8;
+
+    // Pre-build each bar's voice so we know exact note + accidental widths before placing staves.
+    const built = exercise.bars.map((bar) => buildBarVoice(bar));
+    const minNoteWidths = built.map((b) => Math.ceil(b.minNoteWidth) + 14);
+    const firstMod = modifierWidth(true, exercise.keySignature, exercise.keySignature, exercise.bars[0] ?? ({ notes: [], chordSymbols: [], barIndex: 0 } as ReadingBar), true, exercise.timeSignature);
+    const places = layout(exercise.bars, maxPerLine, minNoteWidths, firstMod, usable);
     const lines = (places[places.length - 1]?.line ?? 0) + 1;
+
+    // Compute exact per-line bar widths weighted by each bar's note density + actual clef/key/time modifiers,
+    // so dense 8th/16th bars with accidentals get the space they need and NEVER spill past barlines.
+    const lineGroups: number[][] = Array.from({ length: lines }, () => []);
+    places.forEach((p, idx) => lineGroups[p.line].push(idx));
+
+    const barGeom: { x: number; w: number; modW: number }[] = new Array(exercise.bars.length);
+    let trackKey = exercise.keySignature;
+    let trackTime = exercise.timeSignature;
+    const barMods: number[] = exercise.bars.map((bar, i) => {
+      const prev = trackKey;
+      if (bar.keyChange) trackKey = bar.keyChange;
+      if (bar.timeChange) trackTime = bar.timeChange;
+      return modifierWidth(places[i].col === 0, trackKey, prev, bar, i === 0, trackTime);
+    });
+
+    // If a line's total minimum required width still exceeds `usable` (very narrow viewport + dense bar),
+    // render into a slightly wider viewBox and scale smoothly into `width` so zero clipping occurs.
+    let renderWidth = usable;
+    for (const indices of lineGroups) {
+      const needed = indices.reduce((sum, idx) => sum + barMods[idx] + minNoteWidths[idx], 0);
+      if (needed > renderWidth) renderWidth = Math.ceil(needed + 16);
+    }
+
+    for (const indices of lineGroups) {
+      const targetLineWidth = indices.length < maxPerLine && lines > 1
+        ? Math.min(renderWidth, Math.max(
+            indices.reduce((sum, idx) => sum + barMods[idx] + minNoteWidths[idx], 0),
+            (renderWidth * indices.length) / maxPerLine + barMods[indices[0]],
+          ))
+        : renderWidth;
+      const totalMod = indices.reduce((sum, idx) => sum + barMods[idx], 0);
+      const totalMinNotes = indices.reduce((sum, idx) => sum + minNoteWidths[idx], 0);
+      const extra = Math.max(0, targetLineWidth - totalMod - totalMinNotes);
+      let cx = 4;
+      for (const idx of indices) {
+        const share = extra * (minNoteWidths[idx] / Math.max(1, totalMinNotes));
+        const w = barMods[idx] + minNoteWidths[idx] + share;
+        barGeom[idx] = { x: cx, w, modW: barMods[idx] };
+        cx += w;
+      }
+    }
+
     const hasMarks = exercise.bars.some((b) => b.volta || b.section || b.tempo || b.jumps?.length);
     const markRoom = hasMarks ? MARK_ROOM : 0;
     const fingerRoom = showFingering ? 24 : 0;
-    const labelRoom = noteLabels ? 20 : 0;
+    const labelRoom = noteLabels ? 22 : 0;
     const lineHeight = LINE_HEIGHT + fingerRoom + labelRoom + markRoom;
+    const totalHeight = lines * lineHeight + BOTTOM_PAD;
 
     const renderer = new Renderer(host, Renderer.Backends.SVG);
-    renderer.resize(width, lines * lineHeight + 10);
+    renderer.resize(renderWidth + 8, totalHeight);
     const ctx = renderer.getContext();
     ctx.setFillStyle(ink);
     ctx.setStrokeStyle(ink);
     const svg = host.querySelector("svg")!;
+    svg.setAttribute("viewBox", `0 0 ${renderWidth + 8} ${totalHeight}`);
+    svg.setAttribute("preserveAspectRatio", "xMidYMin meet");
+    svg.style.width = "100%";
+    svg.style.height = "auto";
 
     const els: SVGElement[] = [];
     const rects: SVGRectElement[] = [];
-    const drawn: { sn: StaveNote; line: number; bar: number; n: ReadingBar["notes"][number]; top: number; height: number }[] = []; // non-rest notes
-    const usable = width - 2;
-    const barW = (usable - FIRST_BAR_EXTRA) / perLine;
+    const drawn: { sn: StaveNote; line: number; bar: number; n: ReadingBar["notes"][number]; top: number; height: number }[] = [];
     let key = exercise.keySignature;
     let time = exercise.timeSignature;
-    let chordEnd = -Infinity; // right edge of the last chord symbol on this line
+    let chordEnd = -Infinity;
 
     exercise.bars.forEach((bar, i) => {
       const { line, col } = places[i];
       const first = col === 0;
-      const x = first ? 0 : FIRST_BAR_EXTRA + col * barW;
-      const w = first ? barW + FIRST_BAR_EXTRA : barW;
-      const y = line * lineHeight + 30 + markRoom;
+      const { x, w } = barGeom[i];
+      const y = line * lineHeight + TOP_PAD + markRoom;
       const last = i === exercise.bars.length - 1;
 
       const stave = new Stave(x, y, w);
@@ -234,14 +345,14 @@ export function Score({
       stave.setContext(ctx).draw();
 
       // highlight band behind the bar (loop, playhead); clicks are mapped to bars by position
-      const top = stave.getYForLine(0) - 14;
-      const bottom = stave.getYForLine(4) + 14;
+      const top = stave.getYForLine(0) - 16;
+      const bottom = stave.getYForLine(4) + 18;
       const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
       rect.setAttribute("x", String(stave.getNoteStartX() - 6));
       rect.setAttribute("y", String(top));
-      rect.setAttribute("width", String(Math.max(10, x + w - stave.getNoteStartX() + 4)));
+      rect.setAttribute("width", String(Math.max(10, x + w - stave.getNoteStartX() + 2)));
       rect.setAttribute("height", String(bottom - top));
-      rect.setAttribute("rx", "6");
+      rect.setAttribute("rx", "8");
       rect.setAttribute("class", "score-bar");
       rect.dataset.bar = String(i);
       svg.insertBefore(rect, svg.firstChild);
@@ -272,47 +383,16 @@ export function Score({
         ctx.restore();
       }
 
-      const notes = bar.notes.map((n) => {
-        const sn = new StaveNote({
-          keys: [n.rest ? "b/4" : n.vexKey],
-          duration: n.duration,
-          type: n.rest ? "r" : undefined,
-          auto_stem: !n.rest,
-          align_center: n.rest && n.duration === "w" && bar.notes.length === 1,
-        });
-        if (!n.rest && n.accidental) sn.addModifier(new Accidental(n.accidental), 0);
-        if (n.dotted) Dot.buildAndAttach([sn], { all: true });
-        return sn;
-      });
-
-      // Tuplets first: they change the notes' ticks before the voice counts them.
-      const tuplets: Tuplet[] = [];
-      let group: StaveNote[] = [];
-      bar.notes.forEach((n, ni) => {
-        if (!n.tuplet) {
-          group = [];
-          return;
-        }
-        if (n.tuplet.edge === "start") group = [];
-        group.push(notes[ni]);
-        const closes = n.tuplet.edge === "stop" || (!bar.notes.some((m) => m.tuplet?.edge) && group.length === n.tuplet.actual);
-        if (closes) {
-          tuplets.push(new Tuplet(group, { num_notes: n.tuplet.actual, notes_occupied: n.tuplet.normal }));
-          group = [];
-        }
-      });
-
-      const voice = new Voice({ num_beats: 4, beat_value: 4 }).setStrict(false).addTickables(notes);
-      const beams = Beam.generateBeams(notes, { maintain_stem_directions: false });
-      new Formatter().joinVoices([voice]).format([voice], Math.max(40, x + w - stave.getNoteStartX() - 16));
+      const { notes, tuplets, voice, beams, formatter } = built[i];
+      const endMargin = last || bar.repeatEnd || bar.barline === "final" ? 22 : 16;
+      formatter.format([voice], Math.max(40, x + w - stave.getNoteStartX() - endMargin));
       voice.draw(ctx, stave);
       ctx.openGroup("score-note-links");
       beams.forEach((b) => b.setContext(ctx).draw());
       tuplets.forEach((t) => t.setContext(ctx).draw());
       ctx.closeGroup();
 
-      // Chord symbols above the staff, at their beat: over the note starting there, or in
-      // proportion between notes (a chord can change under a held note). Never overlapping.
+      // Chord symbols above the staff, at their beat: never overlapping.
       const barStartBeat = bar.notes[0]?.startBeat ?? 0;
       const barBeats = bar.beats ?? bar.notes.reduce((a, n) => a + n.durationBeats, 0);
       const points = [
@@ -341,12 +421,12 @@ export function Score({
         bar.notes.forEach((n, ni) => {
           if (n.rest) return;
           const nx = notes[ni].getAbsoluteX();
-          ctx.fillText(`${STRING_MARKS[n.string]}${n.fret}`, nx - 6, stave.getYForLine(4) + 42 + fingerRoom / 2);
+          ctx.fillText(`${STRING_MARKS[n.string]}${n.fret}`, nx - 6, stave.getYForLine(4) + 52 + fingerRoom / 2);
         });
         ctx.restore();
       }
 
-      // Optional label under each note (its degree over the chord), below any fingering.
+      // Optional label under each note (its degree over the chord), below any fingering and low ledger lines.
       if (noteLabels) {
         ctx.save();
         ctx.setFont("JetBrains Mono, monospace", 11, "bold");
@@ -355,7 +435,7 @@ export function Score({
         bar.notes.forEach((n, ni) => {
           if (n.rest) return;
           const label = noteLabels[k++];
-          if (label) ctx.fillText(label, notes[ni].getAbsoluteX() - 3, stave.getYForLine(4) + 40 + fingerRoom + 6);
+          if (label) ctx.fillText(label, notes[ni].getAbsoluteX() - 3, stave.getYForLine(4) + 54 + fingerRoom + 6);
         });
         ctx.restore();
       }
@@ -364,7 +444,7 @@ export function Score({
         if (n.rest) return;
         const el = notes[ni].getSVGElement();
         if (el) els.push(el);
-        drawn.push({ sn: notes[ni], line, bar: i, n, top: top - 12, height: bottom - top + 24 });
+        drawn.push({ sn: notes[ni], line, bar: i, n, top: top - 4, height: bottom - top + 12 });
       });
     });
 
@@ -387,7 +467,7 @@ export function Score({
         openSlurs.delete(d.n.slur.stop);
       }
       if (d.n.slur?.start !== undefined) openSlurs.set(d.n.slur.start, d);
-      if (d.n.vibrato === "both") new VibratoBracket({ start: d.sn, stop: nextOnLine }).setContext(ctx).draw(); // over the held note
+      if (d.n.vibrato === "both") new VibratoBracket({ start: d.sn, stop: nextOnLine }).setContext(ctx).draw();
       if (d.n.vibrato === "start") openVibrato = d;
       if (d.n.vibrato === "stop" && openVibrato) {
         span(openVibrato, d, (f, t) => new VibratoBracket({ start: f, stop: t }));
@@ -407,7 +487,7 @@ export function Score({
       const g = document.createElementNS("http://www.w3.org/2000/svg", "rect");
       g.setAttribute("class", "score-playhead");
       g.setAttribute("width", String(PLAYHEAD_WIDTH));
-      g.setAttribute("rx", "1");
+      g.setAttribute("rx", "1.5");
       svg.insertBefore(g, svg.firstChild);
       playheadEl.current = g;
     }
@@ -421,8 +501,7 @@ export function Score({
     }
   }, [exercise, width, barsPerLine, showFingering, noteLabels, cursor, hasPlayhead]);
 
-  // The ghost playhead: read on every frame from the heard music, moved, never redrawn. Between two
-  // notes on a line it glides from one head to the next; after a line's last note, to its bar's end.
+  // The ghost playhead: read on every frame from the heard music, moved, never redrawn.
   useEffect(() => {
     const el = playheadEl.current;
     if (!el || !playhead) return;
@@ -431,7 +510,7 @@ export function Score({
         const b = note.querySelector<SVGGraphicsElement>(".vf-notehead")?.getBBox?.();
         return b ? b.x + b.width / 2 : null;
       } catch {
-        return null; // not laid out (tests)
+        return null;
       }
     });
     const barEnd = (bar: number) => {
@@ -483,7 +562,6 @@ export function Score({
       const concealed = noteVisibility === "played" ? !results[i] : noteVisibility === "hidden" || firstInBar.get(bar) !== i;
       el.classList.toggle("is-hidden", hide !== null && hide.has(bar) && concealed);
     });
-    // Beams, ties and slurs can disclose hidden pitches even without their noteheads.
     hostRef.current?.querySelectorAll(".vf-score-note-links").forEach((el) => el.setAttribute("opacity", hide !== null && noteVisibility !== "played" ? "0" : "1"));
   }, [activeKey, focusKey, hideKey, noteVisibility, results, exercise, width, barsPerLine, showFingering, noteLabels]);
 
@@ -510,7 +588,7 @@ export function Score({
     const c = cursorEl.current;
     if (!c || !cursorPulse) return;
     c.classList.remove("is-calling");
-    void c.getBoundingClientRect(); // restart the animation
+    void c.getBoundingClientRect();
     c.classList.add("is-calling");
   }, [cursorPulse]);
 
@@ -521,8 +599,7 @@ export function Score({
     });
   }, [marked, playingBar, exercise, width, barsPerLine, showFingering]);
 
-  // Keep the cursor's line in view: scroll once it nears the bottom, or after a jump back up.
-  // Inside a scrolling panel (marked data-scroll-host) the panel scrolls instead of the page.
+  // Keep the cursor's line in view.
   useEffect(() => {
     const el = noteEls.current[activeStep];
     if (!autoScroll || !el) return;

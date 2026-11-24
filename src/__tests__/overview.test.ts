@@ -12,7 +12,8 @@ import { buildTimeline } from "../tunes/order";
 import { buildPracticeBrief } from "../agent/brief";
 import { createGoal } from "../song/goals";
 import { resolveSessionSet } from "../song/sessionSet";
-import { songKey } from "../overview/map";
+import { hubIdForKey, keyDetail, practiceMap, songKey } from "../overview/map";
+import { keyRelevantModes, keyStudySheet, resolveTreeSelection } from "../song/keyStudy";
 
 const note = (midi: number, startBeat: number): ReadingNote => ({
   rest: false,
@@ -70,6 +71,13 @@ describe("tutor overview", () => {
     expect(songKey("G-minor", "C")).toBe("C-major"); // a C blues misread as G minor
     expect(songKey(undefined, "Am")).toBe("A-minor");
     expect(songKey("E-major", "nonsense")).toBe("E-major");
+    expect(hubIdForKey("D-minor")).toBe("m2");
+    expect(hubIdForKey("C-major")).toBe("M0");
+    const map = practiceMap([{ id: "one", title: "One", key: "D-minor", fill: 0.4 }]);
+    const detail = keyDetail("m2", map)!;
+    expect(detail).toMatchObject({ shortName: "Dm", fullName: "D minor", relativeHubId: "M5", relativeName: "F major" });
+    expect(detail.skills).toHaveLength(6);
+    expect(detail.ideas.length).toBeGreaterThan(0);
   });
 
   it("exports only observed practice evidence, with empty measurements unknown and private source data omitted", () => {
@@ -247,5 +255,58 @@ describe("tutor overview", () => {
     }
     expect(deck.intro).toContain("ear:1");
     expect(familiesOnly(deck, ["ear"]).cards.every((card) => card.family === "ear")).toBe(true);
+  });
+
+  it("synthesizes playable major and minor key studies with real scale and harmony cards", () => {
+    const dMaj = keyStudySheet("M2");
+    expect(dMaj).not.toBeNull();
+    const dDeck = buildDeck(dMaj!, buildTimeline(dMaj!));
+    expect(dDeck.cards.some((c) => c.family === "scales")).toBe(true);
+    expect(dDeck.cards.some((c) => c.family === "harmony" || c.family === "chords")).toBe(true);
+
+    const aMin = keyStudySheet("m9");
+    expect(aMin).not.toBeNull();
+    const aDeck = buildDeck(aMin!, buildTimeline(aMin!));
+    expect(aDeck.cards.some((c) => c.id.includes("naturalMinor"))).toBe(true);
+    expect(keyRelevantModes("M0").map((m) => m.name)).toContain("C Major");
+    expect(keyRelevantModes("m9").map((m) => m.name)).toContain("A Harmonic Minor");
+  });
+
+  it("resolves dynamic center-orb plans for full mix, key focus, solo song, tuneless key, and custom mixes", () => {
+    const one = sheet("one", "First Steps");
+    const two = sheet("two", "Blue Hour");
+    const s1 = summarizeSong(one, buildDeck(one, buildTimeline(one)), emptyStore(), "2026-11-16");
+    const s2 = summarizeSong(two, buildDeck(two, buildTimeline(two)), emptyStore(), "2026-11-16");
+    const songs = [s1, s2];
+    const songHubs = new Map([["one", "M0"], ["two", "M0"]]);
+
+    const full = resolveTreeSelection({ selectedKeys: [], selectedSongs: [], selectedFocus: null, songs, songHubs, sessionIds: ["one", "two"], leadId: "one" });
+    expect(full.kind).toBe("full-mix");
+    expect(full.orbLabel).toBe("MIX");
+    expect(full.tuneIds).toEqual(["one", "two"]);
+
+    const keyC = resolveTreeSelection({ selectedKeys: ["M0"], selectedSongs: [], selectedFocus: null, songs, songHubs, sessionIds: ["one", "two"], leadId: "one" });
+    expect(keyC.kind).toBe("key");
+    expect(keyC.orbLabel).toBe("C");
+    expect(keyC.tuneIds).toEqual(["one", "two"]);
+    expect(keyC.studyHubIds).toEqual([]);
+    expect(keyC.exercises.length).toBeGreaterThan(0);
+
+    const keyD = resolveTreeSelection({ selectedKeys: ["M2"], selectedSongs: [], selectedFocus: null, songs, songHubs, sessionIds: ["one", "two"], leadId: "one" });
+    expect(keyD.kind).toBe("key");
+    expect(keyD.orbLabel).toBe("D");
+    expect(keyD.tuneIds).toEqual([]);
+    expect(keyD.studyHubIds).toEqual(["M2"]);
+
+    const solo = resolveTreeSelection({ selectedKeys: [], selectedSongs: ["two"], selectedFocus: null, songs, songHubs, sessionIds: ["one", "two"], leadId: "one" });
+    expect(solo.kind).toBe("song");
+    expect(solo.tuneIds).toEqual(["two"]);
+    expect(solo.orbSub).toBe("solo focus");
+
+    const custom = resolveTreeSelection({ selectedKeys: ["M2"], selectedSongs: ["one"], selectedFocus: "scales", songs, songHubs, sessionIds: ["one", "two"], leadId: "one" });
+    expect(custom.kind).toBe("custom-mix");
+    expect(custom.tuneIds).toEqual(["one"]);
+    expect(custom.studyHubIds).toEqual(["M2"]);
+    expect(custom.focus).toBe("scales");
   });
 });

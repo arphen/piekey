@@ -34,10 +34,13 @@ export function LibraryGrid({ library, issues, session, busy, onOpen, onPlay, on
         return (
           <article key={tune.id} className={`lib-card ${inSession ? "is-session" : ""}`}>
             <button type="button" className="lib-card-open" onClick={() => onOpen(tune.id)} disabled={busy} aria-label={`Open ${title}`}>
-              <span className="lib-card-key">{[song ? keyLabel(song.key) : null, song?.composer].filter(Boolean).join(" · ") || "Score"}</span>
+              <span className="lib-card-top">
+                <span className="lib-card-key">{song ? keyLabel(song.key) : "Score"}</span>
+                <span className="lib-card-pct">{Math.round(fill * 100)}%</span>
+              </span>
               <span className="lib-card-title">{title}</span>
-              <span className="lib-card-meta">{[song?.barCount ? `${song.barCount} bars` : null, song?.tempo ? `♩ ${song.tempo}` : null].filter(Boolean).join(" · ")}</span>
-              <span className="lib-meter" aria-label={`${Math.round(fill * 100)}% of exercises climbed`}><i style={{ width: `${Math.max(fill * 100, fill > 0 ? 4 : 0)}%` }} /></span>
+              <span className="lib-card-meta">{[song?.composer, song?.barCount ? `${song.barCount} bars` : null, song?.tempo ? `♩ ${song.tempo}` : null].filter(Boolean).join(" · ")}</span>
+              <span className="lib-meter" aria-label={`${Math.round(fill * 100)}% of exercises climbed`}><i style={{ width: `${Math.max(fill * 100, fill > 0 ? 5 : 0)}%` }} /></span>
             </button>
             {confirming === tune.id ? (
               <div className="lib-card-confirm" role="group" aria-label={`Remove ${title}?`}>
@@ -50,7 +53,7 @@ export function LibraryGrid({ library, issues, session, busy, onOpen, onPlay, on
                 <button type="button" className="lib-btn lib-session" aria-pressed={inSession} onClick={() => session.toggle(tune.id)}>
                   <Glyph name={inSession ? "check" : "plus"} size={18} />{inSession ? "In next session" : "Next session"}
                 </button>
-                {onPlay ? <button type="button" className="lib-btn lib-icon" onClick={() => onPlay(tune.id)} disabled={busy} aria-label={`Play ${title} in guitar mode`} title="Guitar mode"><Glyph name="play" size={20} /></button> : null}
+                {onPlay ? <button type="button" className="lib-btn lib-icon is-play" onClick={() => onPlay(tune.id)} disabled={busy} aria-label={`Play ${title} in guitar mode`} title="Play in Guitar mode"><Glyph name="play" size={17} /></button> : null}
                 <button type="button" className="lib-btn lib-icon" onClick={() => setConfirming(tune.id)} disabled={busy} aria-label={`Remove ${title}`} title="Remove"><Glyph name="close" size={18} /></button>
               </div>
             )}

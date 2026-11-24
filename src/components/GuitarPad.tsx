@@ -98,6 +98,19 @@ function useHeld(input: InputApi, enabled: boolean, ms: number, read: (midi: num
 
 export const SUMMON_HINT = "D♯5 (high e, fret 11) three times quickly · or hold, release, hold";
 
+/** Compact visual cue for opening the guitar menu: miniature high-e fret-11 indicator + ×3 pips. */
+export function SummonVisual({ then }: { then?: string } = {}) {
+  return (
+    <span className="ss-summon-vis" title={SUMMON_HINT}>
+      <span className="ss-summon-fret" aria-hidden="true">
+        <i>e</i>
+        <b>11</b>
+      </span>
+      <span className="ss-summon-copy">High e · fret 11 · tap ×3{then ? ` → ${then}` : ""}</span>
+    </span>
+  );
+}
+
 /**
  * A held musical note only arms the menu. Actual silence and a second hold confirm intent.
  * `blocked`: the music itself is on the menu note right now, so it cannot call the menu.

@@ -1,83 +1,162 @@
-/* The shell around every laptop-mode view: one night palette shared with guitar mode, big
-   touch-sized navigation, a Back that is always in the same place, and views that fade in
-   instead of snapping. */
+/* The shell around every laptop-mode view: one abyssal harbor palette shared with guitar mode,
+   a slim minimal top strip that gives the map and music room to breathe, and views that fade in. */
 
 .app {
-  --bg: #0d0c0f;
+  --bg: #070d0a;
 }
 
 .app .topbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  gap: 16px;
-  min-height: 76px;
-  padding: 0 clamp(14px, 2vw, 28px);
-  background: #0d0c0f;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 clamp(14px, 2vw, 24px);
+  background: #060b09;
   border-bottom: 1px solid var(--line);
 }
-.shell-start, .shell-end { display: flex; align-items: center; gap: 14px; min-width: 0; }
-.shell-end { justify-content: flex-end; gap: 6px; }
-.app .brand { padding: 0; gap: 10px; min-width: 0; }
-.app .brand h1 { overflow: hidden; color: var(--ink-soft); font: 400 15px/1 var(--font-display); letter-spacing: -0.01em; text-overflow: ellipsis; white-space: nowrap; }
+.shell-start, .shell-end { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.shell-end { justify-content: flex-end; gap: 4px; }
+.app .brand { padding: 0; gap: 8px; min-width: 0; }
+.app .brand-mark { color: var(--algae); opacity: 0.85; }
+.app .brand-mark svg { width: 16px; height: 16px; }
+.app .brand h1 {
+  overflow: hidden;
+  color: var(--ink-soft);
+  font: 400 13px/1 var(--font-display);
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .app .topbar button { font-weight: 400; transform: none; filter: none; }
 .app .shell-back {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-height: 52px;
-  padding: 0 18px 0 14px;
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  background: rgba(255, 240, 220, 0.04);
-  color: var(--ink);
-  font-size: 15px;
-  transition: opacity 0.2s, background 0.2s;
-}
-.app .shell-back svg { transform: rotate(180deg); }
-.app .shell-back:hover:not(:disabled) { background: rgba(255, 240, 220, 0.09); }
-.app .shell-back:disabled { opacity: 0; pointer-events: none; }
-.app .shell-back:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
-
-.app .tabs {
-  align-self: center;
-  gap: 4px;
-  margin: 0;
-  padding: 5px;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px 0 9px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: rgba(255, 240, 220, 0.03);
+  background: rgba(109, 230, 75, 0.04);
+  color: var(--ink-soft);
+  font-size: 12px;
+  transition: opacity 0.2s, background 0.2s, color 0.2s, border-color 0.2s;
+}
+.app .shell-back svg { width: 15px; height: 15px; transform: rotate(180deg); }
+.app .shell-back:hover:not(:disabled) { background: rgba(109, 230, 75, 0.1); border-color: var(--line-strong); color: var(--ink); }
+.app .shell-back:disabled { opacity: 0; pointer-events: none; width: 0; padding: 0; border: 0; overflow: hidden; margin-right: -10px; }
+.app .shell-back:focus-visible { outline: 2px solid var(--algae); outline-offset: 2px; }
+
+.app .tabs {
+  align-self: stretch;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   overflow: visible;
 }
 .app .tabs button {
-  min-height: 52px;
-  padding: 0 22px;
-  border-radius: 999px;
-  color: var(--ink-soft);
-  font-size: 15px;
-  gap: 9px;
-  transition: background 0.2s, color 0.2s;
+  position: relative;
+  min-height: 48px;
+  padding: 0 16px;
+  border-radius: 0;
+  color: var(--ink-faint);
+  font-size: 13px;
+  gap: 7px;
+  transition: color 0.18s, background 0.18s;
 }
-.app .tabs button::after { display: none; }
-.app .tabs button:hover { background: rgba(255, 240, 220, 0.05); color: var(--ink); }
-.app .tabs button.is-on { background: rgba(224, 169, 86, 0.16); color: #f6dfb0; }
-.app .tabs button.is-on svg { color: #f0c478; }
+.app .tabs button svg { width: 15px; height: 15px; opacity: 0.72; transition: opacity 0.18s, color 0.18s; }
+.app .tabs button::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--algae);
+  box-shadow: 0 0 12px rgba(109, 230, 75, 0.55);
+  opacity: 0;
+  transform: scaleX(0.4);
+  transition: opacity 0.2s, transform 0.2s;
+}
+.app .tabs button:hover { background: rgba(154, 214, 146, 0.04); color: var(--ink); }
+.app .tabs button:hover svg { opacity: 1; }
+.app .tabs button.is-on { background: transparent; color: var(--ink); }
+.app .tabs button.is-on svg { color: var(--algae); opacity: 1; }
+.app .tabs button.is-on::after { opacity: 1; transform: scaleX(1); }
 
 .app .shell-end .device-sync-trigger {
   position: static;
-  min-height: 52px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
   margin: 0;
-  padding: 0 16px;
-  border-radius: 999px;
+  padding: 0 11px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
   color: var(--ink-soft);
-  font-size: 14px;
+  font-size: 12px;
+  transition: background 0.18s, color 0.18s, border-color 0.18s;
 }
+.app .shell-end .device-sync-trigger svg { width: 15px; height: 15px; opacity: 0.78; }
 .app .shell-end .device-sync-trigger:hover,
-.app .shell-end .device-sync-trigger[aria-pressed="true"] { background: rgba(255, 240, 220, 0.06); color: var(--ink); }
+.app .shell-end .device-sync-trigger[aria-pressed="true"] {
+  background: rgba(109, 230, 75, 0.08);
+  border-color: var(--line);
+  color: var(--ink);
+}
+.app .shell-end .device-sync-trigger[aria-pressed="true"] svg { color: var(--algae); opacity: 1; }
+
+/* Floating global instrument dock: Free play, Tuner & Metronome reachable from anywhere */
+.shell-dock {
+  position: fixed;
+  right: 18px;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  z-index: 48;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: rgba(6, 13, 10, 0.9);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(109, 230, 75, 0.08) inset;
+}
+body:has(.ss) .shell-dock { display: none; }
+.shell-dock button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+  transition: transform 0.2s cubic-bezier(0.22, 1.4, 0.36, 1), color 0.18s, background 0.18s, border-color 0.18s;
+}
+.shell-dock button svg { color: var(--algae); opacity: 0.85; }
+.shell-dock button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(114, 232, 84, 0.36);
+  background: rgba(109, 230, 75, 0.12);
+  color: var(--ink);
+  filter: none;
+}
+.shell-dock button:hover svg { opacity: 1; }
+.shell-dock button:active { transform: scale(0.97); }
 
 /* views fade in; nothing snaps between laptop mode and guitar mode */
-.app > main { animation: shell-view-in 0.38s ease-out backwards; }
+.app > main { animation: shell-view-in 0.34s ease-out backwards; }
 @keyframes shell-view-in { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .app > main { animation: none; } }
 
@@ -85,9 +164,9 @@
   .app .brand h1 { display: none; }
 }
 @media (max-width: 760px) {
-  .app .topbar { grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; padding-block: 8px; }
-  .app .tabs button { padding: 0 12px; }
+  .app .topbar { grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px; }
+  .app .tabs button { padding: 0 11px; }
   .app .tabs button span, .app .shell-end .device-sync-trigger span, .app .shell-back span { display: none; }
-  .app .shell-back { padding: 0 14px; }
+  .app .shell-back { padding: 0 10px; }
   .app .brand { display: none; }
 }

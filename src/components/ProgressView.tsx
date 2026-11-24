@@ -8,6 +8,8 @@ import { allAttempts, buildProfile, type Axis } from "../song/profile";
 import { weeklyMinutes } from "../overview/progress";
 import { cachedSong, useSongSummaries } from "../overview/useSongSummaries";
 import { relativeDay } from "../overview/visual";
+import { songFill } from "../overview/map";
+import { wholeTuneCard } from "../song/deck";
 import { Glyph } from "./Glyph";
 import { GoalChooser } from "./GoalChooser";
 import { PracticeHistory } from "./PracticeHistory";
@@ -172,15 +174,60 @@ export function ProgressView({ onOpenSong, onStartPractice }: { onOpenSong(tuneI
   const [selected, setSelected] = useState<string | null>(null);
   const current = songs.find((song) => song.tuneId === selected) ?? songs.find((song) => song.tuneId === currentTuneId) ?? songs[0];
   const music = current ? cachedSong(current.tuneId) : undefined;
+  const wholeId = music ? wholeTuneCard(music.deck)?.id : undefined;
+  const fill = current ? songFill(current) : 0;
   const day = today();
   return <main className="tutor progress-view">
-    <header className="progress-heading"><p className="tutor-eyebrow">Your playing</p><h2>Progress</h2></header>
-    {loading ? <p role="status">Loading practice history…</p> : error ? <p role="alert">{error}</p> : !current ? <section className="progress-welcome"><Glyph name="melody" size={32} /><h3>No practice recorded</h3><p>Choose a tune in Songs to start.</p></section> : <>
+    <header className="progress-heading">
+      <div>
+        <p className="tutor-eyebrow">Your playing</p>
+        <h2>Progress</h2>
+      </div>
+      {songs.length > 1 ? (
+        <div className="progress-song-pills" role="tablist" aria-label="Choose a song">
+          {songs.map((song) => (
+            <button
+              key={song.tuneId}
+              type="button"
+              role="tab"
+              aria-selected={current?.tuneId === song.tuneId}
+              className={current?.tuneId === song.tuneId ? "is-on" : ""}
+              onClick={() => setSelected(song.tuneId)}
+            >
+              <span>{song.title}</span>
+              <small>{Math.round(songFill(song) * 100)}%</small>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </header>
+    {loading ? <p role="status">Loading practice history…</p> : error ? <p role="alert">{error}</p> : !current ? <section className="progress-welcome"><Glyph name="melody" size={32} /><h3>No practice recorded</h3><p>Choose a tune in Library to start.</p></section> : <>
       <section className="progress-music" aria-label="music and performances">
-        <div className="progress-song-heading"><label>Music<select value={current.tuneId} onChange={(event) => setSelected(event.target.value)}>{songs.map((song) => <option key={song.tuneId} value={song.tuneId}>{song.title}</option>)}</select></label><button type="button" className="tutor-link" onClick={() => onOpenSong(current.tuneId)}>Open score <Glyph name="arrow" size={16} /></button></div>
-        <div className="progress-musical-facts"><div><span>Last played</span><strong>{relativeDay(current.lastPlayed, day) || "No recorded practice"}</strong></div><div><span>Historical milestones</span><strong>{current.path.ready} / {current.path.total}</strong></div><button type="button" className="tutor-secondary" onClick={() => onStartPractice(current.tuneId)}>Practise this tune <Glyph name="play" size={16} /></button></div>
-        {current.path.milestones.length ? <ul className="progress-milestones">{current.path.milestones.map((milestone) => <li key={milestone.id}><Glyph name={milestone.ready ? "check" : "clock"} size={17} /><span>{milestone.label}</span><small>{milestone.ready ? "Recorded clean at target" : "No qualifying take recorded"}</small></li>)}</ul> : null}
-        <p className="progress-caption">Historical task records can include earlier score versions or help that was not recorded. A fresh goal check tracks the current arrangement. Review boxes schedule practice; related-exercise credit is preparation.</p>
+        <div className="progress-hero-card">
+          <div className="progress-ring" aria-label={`${Math.round(fill * 100)}% grown`}>
+            <svg viewBox="0 0 84 84" aria-hidden="true">
+              <circle className="pr-track" cx="42" cy="42" r="35" />
+              <circle className="pr-fill" cx="42" cy="42" r="35" pathLength={1} strokeDasharray={`${Math.max(fill, fill > 0 ? 0.04 : 0).toFixed(3)} 1`} transform="rotate(-90 42 42)" />
+            </svg>
+            <strong>{Math.round(fill * 100)}<small>%</small></strong>
+          </div>
+          <div className="progress-hero-body">
+            <div className="progress-song-heading">
+              <label>Music<select value={current.tuneId} onChange={(event) => setSelected(event.target.value)}>{songs.map((song) => <option key={song.tuneId} value={song.tuneId}>{song.title}</option>)}</select></label>
+              <button type="button" className="tutor-link" onClick={() => onOpenSong(current.tuneId)}>Open score <Glyph name="arrow" size={16} /></button>
+            </div>
+            <div className="progress-musical-facts">
+              <div><span>Last played</span><strong>{relativeDay(current.lastPlayed, day) || "No recorded practice"}</strong></div>
+              <div><span>Milestones</span><strong>{current.path.ready} / {current.path.total}</strong></div>
+              <div className="progress-hero-actions">
+                {wholeId ? <button type="button" className="progress-primary-btn" onClick={() => onStartPractice(current.tuneId, wholeId)}><Glyph name="play" size={15} />Play whole tune</button> : null}
+                <button type="button" className="tutor-secondary" onClick={() => onStartPractice(current.tuneId)}>Practise this tune <Glyph name="play" size={15} /></button>
+              </div>
+            </div>
+          </div>
+        </div>
+        {current.path.milestones.length ? <ul className="progress-milestones">{current.path.milestones.map((milestone) => <li key={milestone.id} className={milestone.ready ? "is-ready" : ""}><Glyph name={milestone.ready ? "check" : "clock"} size={16} /><span>{milestone.label}</span><small>{milestone.ready ? "Recorded clean at target" : "No qualifying take recorded"}</small></li>)}</ul> : null}
+        <p className="progress-caption">Historical task records can include earlier score versions or help that was not recorded. A fresh goal check tracks the current arrangement.</p>
         {music ? <GoalChooser key={music.sheet.id} sheet={music.sheet} deck={music.deck} /> : null}
       </section>
       <PracticeHistory key={current.tuneId} tuneId={current.tuneId} music={music} />

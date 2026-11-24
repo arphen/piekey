@@ -9,7 +9,8 @@ import { KeyContext, RomanContext } from "./components/keyContext";
 import { OverviewView } from "./components/OverviewView";
 import { ProgressView } from "./components/ProgressView";
 import { ScalesView } from "./components/ScalesView";
-import { TuneView } from "./components/TuneView";
+import { TuneView, type PracticeLaunchOptions } from "./components/TuneView";
+import { isKeyStudyId } from "./song/keyStudy";
 import { FreePlayView } from "./components/FreePlayView";
 import { SaveNotice } from "./components/SaveNotice";
 import { PlatformStatus } from "./platform/PlatformStatus";
@@ -26,7 +27,7 @@ import "./practice.css";
 import "./shell.css";
 
 type Tab = "tutor" | "progress" | TutorTargetTab;
-type PracticeLaunch = { kind: "song" | "listen" | "session" | "card"; tuneId?: string; cardId?: string };
+type PracticeLaunch = PracticeLaunchOptions & { kind: "song" | "listen" | "session" | "card"; tuneId?: string; cardId?: string };
 /** Where the shell is. Mirrored into the browser history, so Back (button, key, swipe) walks it. */
 interface Route { tab: Tab; song: string | null; depth: number }
 
@@ -54,7 +55,8 @@ export default function App() {
   const ownPop = useRef(false); // a Back the shell asked for itself, as opposed to the browser's
   const [stateRevision, setStateRevision] = useState(0);
   const [devicesOpen, setDevicesOpen] = useState(() => new URLSearchParams(location.hash.slice(1)).has("pair"));
-  const [toolsOpen, setToolsOpen] = useState(false);
+  const [toolsTool, setToolsTool] = useState<"tuner" | "metronome" | null>(null);
+  const toolsOpen = toolsTool !== null;
   const topbar = useRef<HTMLElement>(null);
   useEffect(() => {
     const header = topbar.current;
@@ -77,7 +79,7 @@ export default function App() {
         try { history.pushState({ ffl: routeRef.current }, ""); } catch { /* ignore */ }
         return;
       }
-      setToolsOpen(false);
+      setToolsTool(null);
       setLaunch(undefined);
       returnAfterSession.current = false;
       setRoute(routeOf(event.state) ?? HOME);
@@ -100,7 +102,7 @@ export default function App() {
   }, []);
   const historyBack = useCallback(() => { ownPop.current = true; history.back(); }, []);
   const back = useCallback(() => {
-    if (toolsOpen) { setToolsOpen(false); return; }
+    if (toolsOpen) { setToolsTool(null); return; }
     setLaunch(undefined);
     if (routeRef.current.depth > 0) historyBack();
     else go("tutor");
@@ -134,12 +136,12 @@ export default function App() {
   useEffect(() => { autoStart(); }, [autoStart]);
   const moveTab = useCallback((dir: 1 | -1) => {
     setLaunch(undefined);
-    setToolsOpen(false);
+    setToolsTool(null);
     const at = TABS.findIndex((t) => t.id === primaryTab(routeRef.current.tab));
     go(TABS[(at + dir + TABS.length) % TABS.length].id);
   }, [go]);
 
-  const openLibrary = useCallback(() => { setLaunch(undefined); setToolsOpen(false); go("tunes", null); }, [go]);
+  const openLibrary = useCallback(() => { setLaunch(undefined); setToolsTool(null); go("tunes", null); }, [go]);
   const openTunes = openLibrary;
   const openSong = useCallback((tuneId: string) => {
     trySaveTune(tuneId);
@@ -154,10 +156,10 @@ export default function App() {
   /** TuneView moves between its library and a song itself (a pick, a tune change in guitar mode). */
   const songRoute = useCallback((tuneId: string | null, replace = false) => { go("tunes", tuneId, replace); }, [go]);
 
-  const startPractice = useCallback((tuneId: string, cardId?: string, prepared = false) => {
-    trySaveTune(tuneId);
+  const startPractice = useCallback((tuneId: string, cardId?: string, prepared = false, options?: PracticeLaunchOptions) => {
+    if (!isKeyStudyId(tuneId)) trySaveTune(tuneId);
     if (!prepared) openPractice(input);
-    setLaunch({ kind: cardId ? "card" : "session", tuneId, cardId });
+    setLaunch({ kind: cardId ? "card" : "session", tuneId, cardId, ...options });
     returnAfterSession.current = go("tunes", tuneId);
   }, [input, go]);
   /** Leaving guitar mode returns to wherever it was entered from. */
@@ -198,21 +200,21 @@ export default function App() {
             </div>
             <nav className="tabs" aria-label="views">
               {TABS.map((t) => (
-                <button key={t.id} type="button" className={primaryTab(tab) === t.id && !toolsOpen ? "is-on" : ""} aria-current={primaryTab(tab) === t.id ? "page" : undefined} onClick={() => { setToolsOpen(false); setLaunch(undefined); go(t.id); }}>
+                <button key={t.id} type="button" className={primaryTab(tab) === t.id && !toolsOpen ? "is-on" : ""} aria-current={primaryTab(tab) === t.id ? "page" : undefined} onClick={() => { setToolsTool(null); setLaunch(undefined); go(t.id); }}>
                   <Glyph name={t.glyph} size={20} /><span>{t.label}</span>
                 </button>
               ))}
             </nav>
             <div className="shell-end">
-              <button type="button" className="device-sync-trigger guitar-tools-trigger" aria-pressed={toolsOpen} onClick={() => { setDevicesOpen(false); setToolsOpen(true); }} aria-label="Guitar tools"><Glyph name="tools" size={20} /><span>Tools</span></button>
-              <DeviceSync open={devicesOpen} onOpenChange={(open) => { setToolsOpen(false); setDevicesOpen(open); }} onUpdated={refreshState} />
+              <button type="button" className="device-sync-trigger guitar-tools-trigger" aria-pressed={toolsOpen} onClick={() => { setDevicesOpen(false); setToolsTool("tuner"); }} aria-label="Guitar tools"><Glyph name="tools" size={20} /><span>Tools</span></button>
+              <DeviceSync open={devicesOpen} onOpenChange={(open) => { setToolsTool(null); setDevicesOpen(open); }} onUpdated={refreshState} />
             </div>
           </header>
 
           <SaveNotice />
           <PlatformStatus />
 
-          {devicesOpen ? <main className="device-sync-placeholder" aria-hidden="true" /> : toolsOpen ? <GuitarTools input={input} onClose={() => setToolsOpen(false)} /> : tab === "tutor" ? (
+          {devicesOpen ? <main className="device-sync-placeholder" aria-hidden="true" /> : toolsTool ? <GuitarTools input={input} initialTool={toolsTool} onClose={() => setToolsTool(null)} /> : tab === "tutor" ? (
             <OverviewView key={stateRevision} input={input} onOpenMode={openMode} onOpenSong={openSong} onOpenLibrary={openLibrary} onListenSong={listenSong} onStartPractice={startPractice} />
           ) : tab === "progress" ? (
             <ProgressView key={stateRevision} onOpenSong={openSong} onStartPractice={startPractice} />
@@ -231,6 +233,19 @@ export default function App() {
           ) : (
             <EarHub key={stateRevision} input={input} onOpenTunes={openTunes} />
           )}
+          {!devicesOpen && !toolsOpen && tab !== "free" ? (
+            <nav className="shell-dock" aria-label="Quick instruments">
+              <button type="button" onClick={() => openMode("free")} title="Open Free play">
+                <Glyph name="free" size={16} /><span>Free play</span>
+              </button>
+              <button type="button" onClick={() => { setDevicesOpen(false); setToolsTool("tuner"); }} title="Open chromatic tuner">
+                <Glyph name="tools" size={15} /><span>Tuner</span>
+              </button>
+              <button type="button" onClick={() => { setDevicesOpen(false); setToolsTool("metronome"); }} title="Open metronome">
+                <Glyph name="clock" size={15} /><span>Metronome</span>
+              </button>
+            </nav>
+          ) : null}
           <footer className="app-legal" data-nav-skip>
             <a href={import.meta.env.VITE_SOURCE_URL} target="_blank" rel="noreferrer">Source</a>
             <a href={`${import.meta.env.BASE_URL}licenses/index.html`} target="_blank" rel="noreferrer">AGPLv3 · licenses</a>

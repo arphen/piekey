@@ -2,51 +2,55 @@
 /* ---------- tokens ---------- */
 
 .app {
-  --bg: #121014;
-  --surface: #1b181d;
-  --surface-2: #241f27;
-  --surface-3: #2e2831;
-  --line: rgba(255, 240, 220, 0.09);
-  --line-strong: rgba(255, 240, 220, 0.18);
-  --ink: #f3ece2;
-  --ink-soft: #b9ad9e;
-  --ink-faint: #7a7068;
-  --brass: #e0a956;
-  --brass-soft: rgba(224, 169, 86, 0.16);
-  --good: #7cc48a;
-  --warn: #e98a6b;
+  --bg: #070d0a;
+  --surface: #0d1612;
+  --surface-2: #121f19;
+  --surface-3: #192b22;
+  --line: rgba(154, 214, 146, 0.11);
+  --line-strong: rgba(154, 214, 146, 0.24);
+  --ink: #ecf3e8;
+  --ink-soft: #9bb1a0;
+  --ink-faint: #5f7566;
+  --algae: #6de64b;
+  --algae-bright: #9cff63;
+  --algae-deep: #2a7830;
+  --algae-soft: rgba(109, 230, 75, 0.14);
+  --brass: #dfc068;
+  --brass-soft: rgba(223, 192, 104, 0.15);
+  --good: #72e854;
+  --warn: #e58363;
 
-  --wood: #2a221c;
-  --wood-edge: #3a2f26;
-  --wire: #8d8478;
-  --string: #c9bfb2;
+  --wood: #17211b;
+  --wood-edge: #24332a;
+  --wire: #7f9484;
+  --string: #c4d1c4;
 
-  --root-fill: #f6e7c8;
-  --root-ink: #1d1712;
-  --changed: #ffcf5a;
+  --root-fill: #eef6e4;
+  --root-ink: #0a140d;
+  --changed: #f3cb63;
 
-  --sc: #5fb3a8; /* scale color, set per parent scale below */
+  --sc: #6de64b; /* scale color, set per parent scale below */
 
   --font-ui: "Inter", "Avenir Next", system-ui, sans-serif;
   --font-display: "Fraunces", Georgia, serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
   --radius: 14px;
-  --shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 12px 30px rgba(0, 0, 0, 0.35);
+  --shadow: 0 1px 0 rgba(180, 245, 165, 0.04) inset, 0 16px 38px rgba(0, 0, 0, 0.52);
 }
 
-.scale-relMajor { --sc: #5fb3a8; }
-.scale-harmMinor { --sc: #e7826a; }
-.scale-bVIIMajor { --sc: #93c35f; }
-.scale-bVIMajor { --sc: #a394e0; }
+.scale-relMajor { --sc: #58c996; }
+.scale-harmMinor { --sc: #e28264; }
+.scale-bVIIMajor { --sc: #8de654; }
+.scale-bVIMajor { --sc: #8ca8d6; }
 
 /* ---------- shell ---------- */
 
 .app {
   min-height: 100vh;
   background:
-    radial-gradient(1200px 500px at 85% -10%, rgba(224, 169, 86, 0.09), transparent 60%),
-    radial-gradient(900px 500px at -10% 30%, rgba(95, 179, 168, 0.07), transparent 60%),
+    radial-gradient(1200px 560px at 85% -12%, rgba(92, 214, 68, 0.08), transparent 60%),
+    radial-gradient(900px 520px at -10% 35%, rgba(42, 128, 72, 0.08), transparent 62%),
     var(--bg);
   color: var(--ink);
   font-family: var(--font-ui);
@@ -1502,27 +1506,47 @@
 }
 
 .score {
-  min-height: 160px;
+  min-height: 170px;
 }
 
 .score svg {
   display: block;
+  overflow: visible;
+}
+
+/* refined engraving: soft mineral-emerald staves so notes float cleanly above them */
+.score .vf-stave path,
+.score .vf-stave rect {
+  fill: rgba(186, 224, 172, 0.28);
+  stroke: rgba(186, 224, 172, 0.28);
+}
+
+.score .vf-stavebarline rect,
+.score .vf-stavebarline path {
+  fill: rgba(196, 232, 182, 0.44);
+  stroke: rgba(196, 232, 182, 0.44);
+}
+
+.score .vf-clef path,
+.score .vf-keysignature path,
+.score .vf-timesignature path {
+  fill: rgba(226, 240, 220, 0.84);
 }
 
 .score .vf-stavenote {
-  transition: fill 0.08s linear;
+  transition: fill 0.09s linear;
 }
 
 .score .vf-stavenote.is-active,
 .score .vf-stavenote.is-active path {
-  fill: var(--brass);
-  stroke: var(--brass);
+  fill: #e2ff9e;
+  stroke: #e2ff9e;
 }
 
 .score .vf-stavenote.is-hit,
 .score .vf-stavenote.is-hit path {
-  fill: var(--good);
-  stroke: var(--good);
+  fill: #7cf258;
+  stroke: #7cf258;
 }
 
 .score .vf-stavenote.is-miss,

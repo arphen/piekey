@@ -1183,6 +1183,11 @@ export const FOCUS_FAMILIES: Record<Exclude<Focus, "all">, Family[]> = {
 };
 export const FOCUS_LABEL: Record<Exclude<Focus, "all">, string> = { changes: "Changes", scales: "Scales", reading: "Reading", ear: "Ear" };
 
+/** The whole-tune melody card (or run-through fallback) so a player can jump straight into playing the song. */
+export function wholeTuneCard(deck: Deck): Card | undefined {
+  return deck.cards.find((c) => c.step?.kind === "tune") ?? deck.cards.find((c) => c.run);
+}
+
 /**
  * The same deck narrowed to some families, for a focused session (Changes uses `chords` and
  * `harmony`). Cards whose `needs` card was removed lose that dependency: the focused deck is not a

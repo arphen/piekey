@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, type CSSProperties } from "react";
+import { midiOf } from "../listen/pitch";
 import type { InputApi } from "../listen/useInput";
 import type { BeatSignal } from "../song/pulse";
 import { useRoomRender } from "../pool/mode";
@@ -8,16 +9,26 @@ import "../song/atmosphere.css";
 
 const unit = (n: number) => Math.max(0, Math.min(1, n));
 
-/** A quiet room that opens with the player. Loudness moves it; steadiness earns the colour. */
-export function PracticeAtmosphere({ input, warmth, flow, playing, beat, bpm }: { input: InputApi; warmth: number; flow: number; playing: boolean; beat?: BeatSignal; bpm?: number }) {
+/** A quiet harbor room that opens with the player. Loudness, live pitch and landed notes awaken its poison-green algae. */
+export function PracticeAtmosphere({ input, warmth, flow, playing, hitSerial = 0, beat, bpm }: { input: InputApi; warmth: number; flow: number; playing: boolean; hitSerial?: number; beat?: BeatSignal; bpm?: number }) {
   const room = useRef<HTMLDivElement>(null);
-  const state = useRef({ warmth, flow, playing });
-  state.current = { warmth, flow, playing };
-  const energy = useRef<{ level: number; heard: number; played: number; wake?: () => void }>({ level: 0, heard: -Infinity, played: 0 });
+  const state = useRef({ warmth, flow, playing, hitSerial });
+  state.current = { warmth, flow, playing, hitSerial };
+  const energy = useRef<{ level: number; heard: number; played: number; hit: number; lastHit: number; noteX: number; noteY: number; noteHue: number; noteAt: number; wake?: () => void }>({
+    level: 0, heard: -Infinity, played: 0, hit: 0, lastHit: hitSerial, noteX: 0, noteY: 0, noteHue: 0.5, noteAt: -Infinity,
+  });
   const render = useRoomRender();
   const living = render.effective === "living";
   // Inside a pool room this atmosphere publishes to the shared pool, and its canvas moves in here.
   const pooled = usePoolPublisher(room, { playing, warmth, flow, beat, bpm });
+
+  useEffect(() => {
+    if (hitSerial !== energy.current.lastHit) {
+      energy.current.lastHit = hitSerial;
+      energy.current.hit = Math.min(1, energy.current.hit + 0.55);
+      energy.current.wake?.();
+    }
+  }, [hitSerial]);
 
   useEffect(() => {
     if (input.status !== "listening" || input.paused) {
@@ -26,10 +37,20 @@ export function PracticeAtmosphere({ input, warmth, flow, playing, beat, bpm }: 
       return;
     }
     return input.subscribe((frame) => {
-      // Reuse the shared analyser; this decoration performs no pitch or spectrum analysis.
+      // Reuse the shared analyser & per-frame pitch cache; no extra detector runs here.
       energy.current.level = unit(Math.sqrt(frame.rms) * 2.5);
       if (frame.rms > 0.008) {
-        energy.current.heard = performance.now();
+        const now = performance.now();
+        energy.current.heard = now;
+        const midi = midiOf(frame);
+        if (midi !== null) {
+          const norm = unit((midi - 40) / 36); // E2 (0) .. E5 (1)
+          const fifths = ((midi * 7) % 12) / 11; // harmonic position 0..1
+          energy.current.noteX = (fifths - 0.5) * 1.15;
+          energy.current.noteY = (norm - 0.5) * 0.72;
+          energy.current.noteHue = norm;
+          energy.current.noteAt = now;
+        }
         if (state.current.playing) energy.current.wake?.();
       }
     });
@@ -50,18 +71,20 @@ export function PracticeAtmosphere({ input, warmth, flow, playing, beat, bpm }: 
       const dt = Math.min(150, now - last);
       last = now;
       const s = state.current;
-      const heard = s.playing && now - energy.current.heard < 900;
+      const heard = s.playing && now - energy.current.heard < 1400;
       if (heard) energy.current.played += dt;
+      energy.current.hit *= Math.exp(-dt / 1400);
       // Listening to a demo and leaving the room open cannot warm it up.
-      const warm = Math.min(unit(s.warmth), unit(energy.current.played / 30000));
-      const target = heard ? Math.pow(warm, 1.6) * unit((s.flow - 0.48) / 0.44) : 0;
-      bloom += (target - bloom) * (1 - Math.exp(-dt / (target > bloom ? 4000 : 12000)));
-      breath += ((heard ? energy.current.level : 0) - breath) * (1 - Math.exp(-dt / 600));
-      if (!media?.matches && s.playing) drift += dt / 1000;
+      const warm = Math.max(0.25, Math.min(1, unit(s.warmth * 1.4) + unit(energy.current.played / 18000)));
+      const target = heard ? Math.min(1, warm * (0.45 + 0.55 * unit((s.flow - 0.25) / 0.65)) + energy.current.hit * 0.35) : energy.current.hit * 0.35;
+      bloom += (target - bloom) * (1 - Math.exp(-dt / (target > bloom ? 1800 : 5200)));
+      breath += ((heard ? energy.current.level : 0) - breath) * (1 - Math.exp(-dt / 420));
+      if (!media?.matches) drift += (dt / 1000) * (s.playing ? 1 + bloom * 0.8 : 0.45);
       el.style.setProperty("--bloom", bloom.toFixed(3));
       el.style.setProperty("--breath", (media?.matches ? 0 : breath).toFixed(3));
-      el.style.setProperty("--drift-x", `${(Math.sin(drift / 23) * 2).toFixed(3)}%`);
-      el.style.setProperty("--drift-y", `${(Math.cos(drift / 29) * 1.5).toFixed(3)}%`);
+      el.style.setProperty("--hit", (media?.matches ? 0 : energy.current.hit).toFixed(3));
+      el.style.setProperty("--drift-x", `${(Math.sin(drift / 18) * 2.6).toFixed(3)}%`);
+      el.style.setProperty("--drift-y", `${(Math.cos(drift / 23) * 2.0).toFixed(3)}%`);
     };
     frame = requestAnimationFrame(paint);
     return () => cancelAnimationFrame(frame);
@@ -73,7 +96,7 @@ export function PracticeAtmosphere({ input, warmth, flow, playing, beat, bpm }: 
       <div className="pa-water" />
       <div className="pa-water pa-water-colour" />
       <div className="pa-leaf" />
-      {render.effective === "water" ? <RenderedWater playing={playing} warmth={warmth} flow={flow} beat={beat} level={energy} /> : null}
+      {render.effective === "water" ? <RenderedWater playing={playing} warmth={warmth} flow={flow} hitSerial={hitSerial} beat={beat} level={energy} /> : null}
       <svg className="pa-current" viewBox="0 0 1600 1000" preserveAspectRatio="none">
         <g>
           <path d="M-140 900 C200 420 440 1150 850 680 S1400 550 1730 40" />

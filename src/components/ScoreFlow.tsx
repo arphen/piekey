@@ -29,13 +29,13 @@ interface ScoreFlowProps {
   onZoom?: (step: 1 | -1) => void; // closer (1) or wider (-1)
 }
 
-const STAVE_Y = 50; // section names above, then chord symbols, then the staff
-const SECTION_Y = 19;
+const STAVE_Y = 54; // section names above, then chord symbols, then the staff
+const SECTION_Y = 20;
 const STAFF_TOP = STAVE_Y + 40;
 const STAFF_BOTTOM = STAVE_Y + 80;
-const PAD_R = 8; // after the last note of a bar, before its barline
+const PAD_R = 14; // generous breathing room after the last note of a bar before its barline
 const HEAD = 5.5; // half a notehead: where a note is
-const MIN_GAP = 30; // the closest two of the commonest short notes may sit
+const MIN_GAP = 36; // the closest two of the commonest short notes may sit without crowding accidentals
 const Z_MIN = 0.72;
 const Z_MAX = 2.6;
 const CHUNK = 1400; // the river is drawn in pieces about this wide
@@ -83,8 +83,8 @@ function render(host: HTMLDivElement, flow: Flow, labels: readonly (string | nul
   const chordInk = css.getPropertyValue("--flow-chord").trim() || "#e3b45e";
   const { bars } = flow.exercise;
   const ppb = beatWidth(bars);
-  const labelRoom = labels ? 22 : 0;
-  const height = STAFF_BOTTOM + 44 + labelRoom;
+  const labelRoom = labels ? 26 : 0;
+  const height = STAFF_BOTTOM + 68 + labelRoom;
 
   // where every bar goes: a barline, its own clef/key/meter if any, then its beats in proportion
   let key = flow.exercise.keySignature;
@@ -247,7 +247,7 @@ function render(host: HTMLDivElement, flow: Flow, labels: readonly (string | nul
         const label = labels[k++];
         const lx = notes[ni].getAbsoluteX() - 2;
         if (!label || lx < labelEnd + 4) return; // a crowded run keeps the first of its labels
-        ctx.fillText(label, lx, STAFF_BOTTOM + 46);
+        ctx.fillText(label, lx, STAFF_BOTTOM + 58);
         labelEnd = lx + label.length * 7;
       });
       ctx.restore();
@@ -387,16 +387,27 @@ export function ScoreFlow({ flow, results, active, clock, heard, follow, hold = 
     }
   }, [layout, z]);
 
-  // results and the note in play, toggled on the drawn notes
+  // results and the note in play, toggled on the drawn notes; a fresh hit flares the stationary now-line
   const activeKey = active.join(",");
+  const prevHitsRef = useRef(0);
   useEffect(() => {
     if (!layout) return;
     const on = new Set(active);
+    let hits = 0;
     layout.notes.forEach((el, i) => {
+      const hit = results[i] === "hit";
+      if (hit) hits++;
       el.classList.toggle("is-active", on.has(i));
-      el.classList.toggle("is-hit", results[i] === "hit");
+      el.classList.toggle("is-hit", hit);
       el.classList.toggle("is-miss", results[i] === "miss");
     });
+    if (hits > prevHitsRef.current && nowLine.current) {
+      const line = nowLine.current;
+      line.classList.remove("is-struck");
+      void line.offsetWidth;
+      line.classList.add("is-struck");
+    }
+    prevHitsRef.current = hits;
   }, [layout, activeKey, results]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {

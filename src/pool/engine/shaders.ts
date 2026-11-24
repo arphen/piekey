@@ -461,7 +461,7 @@ vec4 dawn(vec2 uv) {
   l = dawnLayer(s, vec2(0.08, 0.8), vec2(0.974, 2.435), 0.43, vec3(0.639, 0.451, 0.302), 0.231, l);
   return l;
 }
-const vec3 WATER = vec3(0.063, 0.086, 0.082);
+const vec3 WATER = vec3(0.022, 0.044, 0.032);
 
 void lenses(vec2 p, out float calm, out float glass, out vec2 centre, out float rim) {
   calm = 0.0; glass = 0.0; centre = p; rim = 0.0;
@@ -500,20 +500,19 @@ void scene(vec2 uv, out vec3 colour, out vec3 glow, out float lens) {
   vec3 raw = mix(pondAt(b + uDrift, m, w), pondAt(a + uDrift, m, w), uFlowMix);
   vec2 local = mix(b, a, uFlowMix);
   float mask = roomMask(uv);
-  vec4 haze = dawn(uv);
-  vec3 base = WATER * (1.0 - haze.a * uDawn) + haze.rgb * uDawn;
+  vec3 base = WATER;
   colour = mix(base, pow(grade(raw, uSaturation, uSepia), vec3(uContrast)), uBrightness * mask);
   // what this point looked like at rest: calm lenses lean back toward it so text keeps its contrast
-  vec3 rest = mix(WATER * (1.0 - haze.a * 0.1) + haze.rgb * 0.1, grade(raw, 0.12, 0.3), 0.15 * roomMaskAtRest(uv));
+  vec3 rest = mix(WATER, pow(grade(raw, 0.7, 0.0), vec3(1.65)), 0.24 * roomMaskAtRest(uv));
   float quiet = mix(1.0, 0.25, calm);
   calm *= uCalmDepth;
   lens = calm;
 
   // the unnaturally green algae become their own light
   float luma = dot(raw, vec3(0.2126, 0.7152, 0.0722));
-  float algae = smoothstep(0.05, 0.25, raw.g - max(raw.r, raw.b)) * smoothstep(0.25, 0.6, luma);
-  vec3 neon = mix(vec3(0.32, 1.0, 0.18), uTint, 0.25);
-  glow = algae * neon * raw.g * uEmission * (1.0 + uKick) * mask * quiet;
+  float algae = smoothstep(0.04, 0.22, raw.g - max(raw.r * 0.92, raw.b)) * smoothstep(0.18, 0.56, luma);
+  vec3 neon = mix(vec3(0.36, 1.0, 0.2), uTint, 0.22);
+  glow = algae * neon * raw.g * (0.06 + uEmission * 1.15) * (1.0 + uKick) * mask * quiet;
 
   // ripples catch the light: a silver ring even on the quiet pool, a glint where they tilt to the sky
   vec3 n = normalize(vec3(-grad, 1.0));

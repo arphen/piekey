@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { BeatPulse, PracticeAtmosphere } from "../components/PracticeAtmosphere";
 import { Glyph } from "../components/Glyph";
-import { GuitarPad, SUMMON_HINT, useSummon, type PadRow } from "../components/GuitarPad";
+import { GuitarPad, SummonVisual, useSummon, type PadRow } from "../components/GuitarPad";
 import { InputBar } from "../components/InputBar";
 import type { InputApi } from "../listen/useInput";
 import { PracticeWindowBoundary } from "../platform/PracticeWindowBoundary";
@@ -20,6 +20,27 @@ const STRINGS = [{ midi: 40, note: "E", octave: 2 }, { midi: 45, note: "A", octa
 const DIVISIONS = [1, 2, 3, 4] as const;
 const DIVISION_LABEL = { 1: "Quarter notes", 2: "Eighth notes", 3: "Triplets", 4: "Sixteenth notes" };
 type Tool = "tuner" | "metronome";
+const TUNER_TICKS = Array.from({ length: 21 }, (_, i) => {
+  const value = (i - 10) * 5; // -50 .. +50 cents
+  return {
+    value,
+    angle: (value / 50) * 60,
+    major: value % 25 === 0,
+    medium: value % 10 === 0,
+  };
+});
+
+function arcPoint(cx: number, cy: number, r: number, deg: number): [number, number] {
+  const rad = ((deg - 90) * Math.PI) / 180;
+  return [cx + r * Math.cos(rad), cy + r * Math.sin(rad)];
+}
+
+function tunerArcPath(cx: number, cy: number, r: number, fromDeg: number, toDeg: number): string {
+  const [x1, y1] = arcPoint(cx, cy, r, fromDeg);
+  const [x2, y2] = arcPoint(cx, cy, r, toDeg);
+  const sweep = toDeg >= fromDeg ? 1 : 0;
+  return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 0 ${sweep} ${x2.toFixed(2)} ${y2.toFixed(2)}`;
+}
 interface GuitarToolsRoomProps {
   input: InputApi;
   onClose(): void;
@@ -151,7 +172,10 @@ export function GuitarToolsRoom({ input, onClose, initialTool = "tuner", initial
   const pitch = tuner.state === "pitch" ? tuner.pitch : null;
   const listening = input.status === "listening" && !input.paused;
   const cents = pitch?.cents ?? 0;
-  const settled = listening && pitch !== null && Math.abs(cents) <= 3;
+  const clampedCents = Math.max(-50, Math.min(50, cents));
+  const needleAngle = (clampedCents / 50) * 60;
+  const reading = listening && pitch !== null;
+  const settled = reading && Math.abs(cents) <= 3;
   // The pool shows the string's beating; at most ten readings a second, and nothing comes back.
   const tuned = useRef(0);
   useEffect(() => {
@@ -162,32 +186,79 @@ export function GuitarToolsRoom({ input, onClose, initialTool = "tuner", initial
   const tunerText = !listening ? input.paused ? "Resume listening below." : "Enable listening below." : tuner.state === "quiet" ? "One string. Let it ring." : tuner.state === "uncertain" ? "One clear string at a time." : settled ? "In tune" : cents > 0 ? "A little lower" : "A little higher";
   const inputText = input.status === "starting" ? "Opening input…" : input.paused ? "Input paused" : listening ? "Guitar listening" : input.status === "error" ? "Reconnect guitar" : "Input off";
 
-  return <main ref={room} tabIndex={-1} className={`ss guitar-tools instrument-room is-${tool} ${settled ? "is-in-tune" : ""}`} role="dialog" aria-modal="true" aria-labelledby="guitar-tools-title">
-    <PracticeAtmosphere input={input} warmth={0} flow={0} playing={listening && pad === null} beat={tool === "metronome" ? beat : undefined} bpm={bpm} />
+  return <main ref={room} tabIndex={-1} className={`ss guitar-tools instrument-room is-${tool} ${reading ? "is-reading" : ""} ${settled ? "is-in-tune" : ""}`} role="dialog" aria-modal="true" aria-labelledby="guitar-tools-title">
+    <PracticeAtmosphere input={input} warmth={settled ? 0.85 : reading ? 0.35 : 0} flow={settled ? 0.92 : reading ? 0.45 : 0} playing={listening && pad === null} beat={tool === "metronome" ? beat : undefined} bpm={bpm} />
     <div className="guitar-tools-flow" aria-hidden={pad !== null || undefined} style={{ visibility: pad !== null ? "hidden" : undefined }}>
       <header className="guitar-tools-head" data-pool="calm">
         <div><p className="guitar-tools-kicker">Your practice room</p><h1 id="guitar-tools-title">Instruments</h1></div>
-        <button type="button" className="guitar-tools-return" onClick={close} aria-label="Return to practice"><Glyph name="arrow" size={18} /><span>Return</span></button>
+        <nav className="guitar-tools-tabs" aria-label="guitar tools">
+          <button type="button" aria-pressed={tool === "tuner"} onClick={() => changeTool("tuner")}><Glyph name="tools" size={16} />Tuner</button>
+          <button type="button" aria-pressed={tool === "metronome"} onClick={() => changeTool("metronome")}><Glyph name="free" size={17} />Metronome</button>
+        </nav>
+        <button type="button" className="guitar-tools-return" onClick={close} aria-label="Return to practice"><Glyph name="arrow" size={16} /><span>Return</span></button>
       </header>
-      <nav className="guitar-tools-tabs" aria-label="guitar tools">
-        <button type="button" aria-pressed={tool === "tuner"} onClick={() => changeTool("tuner")}><Glyph name="tools" size={18} />Tuner</button>
-        <button type="button" aria-pressed={tool === "metronome"} onClick={() => changeTool("metronome")}><Glyph name="free" size={19} />Metronome</button>
-      </nav>
       {tool === "tuner" ? <section className="guitar-tools-tuner" aria-label="chromatic tuner">
-        <p className="guitar-tools-overline">Chromatic · A 440</p>
-        <div className="guitar-tools-pitch" aria-live="off" data-pool="calm">
-          <p className="guitar-tools-note">{listening && pitch ? <>{pitch.noteName.replace("#", "♯")}<small>{pitch.octave}</small></> : "—"}</p>
-          <p className="guitar-tools-cents">{listening && pitch ? <><span>{cents > 0 ? "+" : ""}{cents}</span> cents <i />{pitch.frequency.toFixed(1)} Hz</> : "Pluck a string"}</p>
+        <div className="guitar-tools-tuner-stage" data-pool="calm" data-pool-anchor="tuner" style={{ "--tuner-angle": `${needleAngle.toFixed(2)}deg`, "--tuner-position": `${50 + clampedCents}%` } as CSSProperties}>
+          <p className="guitar-tools-overline">Chromatic · A 440 Hz</p>
+          <div className="guitar-tools-dial" aria-hidden="true">
+            <svg viewBox="0 0 360 185" className="guitar-tools-arc-svg">
+              <defs>
+                <radialGradient id="gt-lock-glow" cx="50%" cy="18%" r="55%">
+                  <stop offset="0%" stopColor="#8eff58" stopOpacity="0.28" />
+                  <stop offset="100%" stopColor="#6de64b" stopOpacity="0" />
+                </radialGradient>
+              </defs>
+              {settled ? <circle cx="180" cy="180" r="158" fill="url(#gt-lock-glow)" /> : null}
+              <path className="gt-arc-bg" d={tunerArcPath(180, 180, 144, -60, 60)} />
+              <path className="gt-arc-inner" d={tunerArcPath(180, 180, 122, -60, 60)} />
+              <path className="gt-arc-zone" d={tunerArcPath(180, 180, 144, -3.6, 3.6)} />
+              {reading && Math.abs(needleAngle) > 0.5 ? (
+                <path className={`gt-arc-active ${settled ? "is-locked" : ""}`} d={tunerArcPath(180, 180, 144, Math.min(0, needleAngle), Math.max(0, needleAngle))} />
+              ) : null}
+              {TUNER_TICKS.map((tick) => {
+                const outer = tick.major ? 154 : tick.medium ? 150 : 147;
+                const inner = tick.major ? 132 : tick.medium ? 136 : 140;
+                const [x1, y1] = arcPoint(180, 180, inner, tick.angle);
+                const [x2, y2] = arcPoint(180, 180, outer, tick.angle);
+                return <line key={tick.value} className={`gt-tick ${tick.value === 0 ? "is-zero" : tick.major ? "is-major" : ""}`} x1={x1} y1={y1} x2={x2} y2={y2} />;
+              })}
+              <g className={`gt-needle ${reading ? "is-reading" : ""}`} style={{ transform: `rotate(${needleAngle.toFixed(2)}deg)` }}>
+                <line x1="180" y1="168" x2="180" y2="34" />
+                <circle cx="180" cy="36" r="4.5" />
+              </g>
+              <text className="gt-arc-label" x="48" y="132">♭ −50</text>
+              <text className="gt-arc-label is-zero" x="180" y="18" textAnchor="middle">0</text>
+              <text className="gt-arc-label" x="312" y="132" textAnchor="end">+50 ♯</text>
+            </svg>
+            <div className="guitar-tools-pitch" aria-live="off">
+              <p className="guitar-tools-note">{reading ? <>{pitch.noteName.replace("#", "♯")}<small>{pitch.octave}</small></> : "—"}</p>
+            </div>
+          </div>
+          <p className="guitar-tools-cents">
+            {reading ? (
+              <>
+                <span className="gt-cents-val">{cents > 0 ? `+${cents}` : cents} cents</span>
+                <span className="gt-hz-val">{pitch.frequency.toFixed(1)} Hz</span>
+              </>
+            ) : (
+              <span className="gt-idle-hint">Pluck a single string</span>
+            )}
+          </p>
+          <p className="guitar-tools-status" role="status">{tunerText}</p>
         </div>
-        <div className="guitar-tools-meter" aria-hidden="true" data-pool="calm" data-pool-anchor="tuner" style={{ "--tuner-position": `${50 + Math.max(-50, Math.min(50, cents))}%` } as CSSProperties}>
-          <div className="guitar-tools-meter-track"><span className="guitar-tools-tune-zone" /><i className={listening && pitch ? "is-reading" : ""} /><b /></div>
-          <div className="guitar-tools-meter-labels"><span>♭ −50</span><span>0</span><span>+50 ♯</span></div>
-        </div>
-        <p className="guitar-tools-status" role="status">{tunerText}</p>
         <ol className="guitar-tools-strings" aria-label="Standard guitar tuning, low to high" data-pool="calm">
-          {STRINGS.map((string, index) => <li key={string.midi} className={listening && pitch?.midi === string.midi ? "is-heard" : ""}><span className="guitar-tools-string-number">{6 - index}</span><span className="guitar-tools-string-note">{string.note}<small>{string.octave}</small></span><i style={{ height: `${2.5 - index * 0.3}px` }} /></li>)}
+          {STRINGS.map((string, index) => {
+            const heard = reading && pitch.midi === string.midi;
+            return (
+              <li key={string.midi} className={`${heard ? "is-heard" : ""} ${heard && settled ? "is-locked" : ""}`}>
+                <span className="guitar-tools-string-number">{6 - index}</span>
+                <span className="guitar-tools-string-note">{string.note}<small>{string.octave}</small></span>
+                <i style={{ height: `${2.8 - index * 0.34}px` }} />
+              </li>
+            );
+          })}
         </ol>
-        <p className="guitar-tools-string-caption">Standard tuning · low to high</p>
+        <p className="guitar-tools-string-caption">Standard tuning · E A D G B E</p>
       </section> : <section className="guitar-tools-metronome" aria-label="metronome">
         <div className="guitar-tools-clock">
           <label className="guitar-tools-bar-length"><select aria-label="Beats per bar" value={beats} onChange={(event) => changeMeter(Number(event.target.value) as BeatsPerBar)}>{METERS.map((value) => <option key={value} value={value}>{value}</option>)}</select><span>beats / bar</span></label>
@@ -208,7 +279,7 @@ export function GuitarToolsRoom({ input, onClose, initialTool = "tuner", initial
         </div>
       </section>}
       <footer className="guitar-tools-foot" data-pool="calm">
-        <button type="button" className="guitar-tools-guitar" onClick={() => setPad(0)} aria-label="Open guitar instrument controls"><svg viewBox="0 0 42 42" aria-hidden="true"><circle cx="21" cy="21" r="17" /><circle ref={ring} className="guitar-tools-summon" cx="21" cy="21" r="17" pathLength="1" /><path d="M14 16h14M14 21h14M14 26h14" /></svg><span>Guitar controls<small>{SUMMON_HINT}</small></span></button>
+        <button type="button" className="guitar-tools-guitar" onClick={() => setPad(0)} aria-label="Open guitar instrument controls"><svg viewBox="0 0 42 42" aria-hidden="true"><circle cx="21" cy="21" r="17" /><circle ref={ring} className="guitar-tools-summon" cx="21" cy="21" r="17" pathLength="1" /><path d="M14 16h14M14 21h14M14 26h14" /></svg><span>Guitar controls<SummonVisual /></span></button>
         <div className="guitar-tools-room-options"><span className={`guitar-tools-input-state ${listening ? "is-listening" : ""}`}><i />{inputText}</span><button type="button" className="guitar-tools-render" aria-pressed={render.mode !== "still"} onClick={render.cycle}>Room<span>{render.value}</span></button></div>
         <div className="guitar-tools-input">{input.paused ? <button type="button" className="guitar-tools-resume" onClick={() => void input.start()}>Resume listening</button> : <InputBar input={input} prominent={!listening} />}</div>
       </footer>

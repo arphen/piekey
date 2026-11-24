@@ -15,13 +15,13 @@ export interface TutorMode {
 }
 
 export const FAMILY_META: Record<Family, { color: string; glyph: GlyphName }> = {
-  scales: { color: "#5fb3a8", glyph: "scales" },
-  harmony: { color: "#e0a956", glyph: "harmony" },
-  melody: { color: "#b3a4ec", glyph: "melody" },
-  chords: { color: "#e7826a", glyph: "chords" },
-  reading: { color: "#8cc4ea", glyph: "reading" },
-  ear: { color: "#d98fd3", glyph: "ear" },
-  fretboard: { color: "#c9b46a", glyph: "scales" },
+  scales: { color: "#6de64b", glyph: "scales" },
+  harmony: { color: "#dfc068", glyph: "harmony" },
+  melody: { color: "#8ee6a8", glyph: "melody" },
+  chords: { color: "#d69463", glyph: "chords" },
+  reading: { color: "#7cc8c2", glyph: "reading" },
+  ear: { color: "#a4d97c", glyph: "ear" },
+  fretboard: { color: "#c9ba68", glyph: "scales" },
 };
 
 export const TUTOR_MODES: TutorMode[] = [
@@ -31,7 +31,7 @@ export const TUTOR_MODES: TutorMode[] = [
     blurb: "Melody · sections",
     requiresTune: true,
     targetTab: "tunes",
-    color: "#b3a4ec",
+    color: "#8ee6a8",
     glyph: "melody",
   },
   {
@@ -40,7 +40,7 @@ export const TUTOR_MODES: TutorMode[] = [
     blurb: "Voicings · harmony",
     requiresTune: true,
     targetTab: "changes",
-    color: "#e7826a",
+    color: "#d69463",
     glyph: "chords",
   },
   {
@@ -49,7 +49,7 @@ export const TUTOR_MODES: TutorMode[] = [
     blurb: "Runs · patterns",
     requiresTune: false,
     targetTab: "scales",
-    color: "#5fb3a8",
+    color: "#6de64b",
     glyph: "scales",
   },
   {
@@ -58,7 +58,7 @@ export const TUTOR_MODES: TutorMode[] = [
     blurb: "Echo phrases",
     requiresTune: false,
     targetTab: "ear",
-    color: "#d98fd3",
+    color: "#a4d97c",
     glyph: "ear",
   },
   {
@@ -67,7 +67,7 @@ export const TUTOR_MODES: TutorMode[] = [
     blurb: "Notation",
     requiresTune: true,
     targetTab: "reading",
-    color: "#8cc4ea",
+    color: "#7cc8c2",
     glyph: "reading",
   },
   {
@@ -76,7 +76,7 @@ export const TUTOR_MODES: TutorMode[] = [
     blurb: "By heart · card box",
     requiresTune: false,
     targetTab: "triads",
-    color: "#d9b26a",
+    color: "#dfc068",
     glyph: "harmony",
   },
   {
@@ -85,7 +85,7 @@ export const TUTOR_MODES: TutorMode[] = [
     blurb: "Adaptive click",
     requiresTune: false,
     targetTab: "free",
-    color: "#7cc48a",
+    color: "#72e854",
     glyph: "free",
   },
 ];

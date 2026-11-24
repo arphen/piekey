@@ -8,13 +8,14 @@ import { OPEN_MIDI } from "../core/scales";
 import { midiOf } from "../listen/pitch";
 import type { InputApi } from "../listen/useInput";
 import { mod, pitchClassToName } from "../musicTheory";
-import { OPEN_STRINGS, SUMMON_NOTE } from "../song/notekeys";
+import { SUMMON_NOTE } from "../song/notekeys";
+import { createStartPhrase, START_PHRASE_LENGTH } from "../song/startPhrase";
 import { melodyOverChords } from "../tunes/learn";
 import type { LeadSheet } from "../tunes/musicxml";
 import { printedResults, type Timeline } from "../tunes/order";
 import { flowOf } from "../tunes/flow";
 import { useScoreZoom } from "../song/scoreZoom";
-import { buildDeck, FAMILY_LABEL, familiesOnly, FOCUS_FAMILIES, FOCUS_LABEL, mixDecks, noteName as spelled, rhythmSourceId, type Card, type Context, type Deck, type Focus } from "../song/deck";
+import { buildDeck, FAMILY_LABEL, familiesOnly, FOCUS_FAMILIES, FOCUS_LABEL, mixDecks, noteName as spelled, rhythmSourceId, wholeTuneCard, type Card, type Context, type Deck, type Focus } from "../song/deck";
 import { rhythmSheet } from "../song/rhythm";
 import { arrangementIdentity, goalDeck, loadActiveGoal } from "../song/goals";
 import { useGoals } from "../song/useGoals";
@@ -34,7 +35,7 @@ import { loadProfile } from "../listen/calibration";
 import { Calibrate } from "./Calibrate";
 import { Ear } from "./Ear";
 import { FreePlay } from "./FreePlay";
-import { drawerToneKeys, GuitarPad, NoteTag, noteName as keyName, SUMMON_HINT, ToneTag, toneKeysFor, useNoteKeys, useSummon, useToneKeys, type PadRow } from "./GuitarPad";
+import { drawerToneKeys, GuitarPad, NoteTag, noteName as keyName, SummonVisual, ToneTag, toneKeysFor, useNoteKeys, useSummon, useToneKeys, type PadRow } from "./GuitarPad";
 import { Fretboard, type FretGhost, type FretPulse, type LabelMode } from "./Fretboard";
 import { BeatPulse, PracticeAtmosphere } from "./PracticeAtmosphere";
 import { Score } from "./Score";
@@ -66,14 +67,13 @@ interface SongCoachProps {
   tunes?: { id: string; title: string }[]; // the library, to move to another tune from the guitar
   onTune?(id: string): void | Promise<void>;
   others?: { sheet: LeadSheet; tl: Timeline }[]; // the library's other tunes: their exercises can be mixed into the session
+  mixIds?: readonly string[]; // explicit guest IDs for a tree selection (solo = [], key/custom mix = [...])
   focus?: Focus; // a tutor mode: only that mode's card families
   initialCardId?: string; // an exercise chosen on the overview or a focused mode
 }
 
 const FRET_COUNT = 12;
 const PAGE = 8; // notes of a long run shown on the fretboard at once
-const HOLD_MS = 700; // a note held this long is a "yes"
-const HOLD_GAP_MS = 160;
 const IDLE_MS = 2600; // then the corner buttons and the cursor fade
 // A♯: free · C♯: settings · G♯: mix · F: length · E♭: self · F♯: tune · C: instruments. Every pitch class
 // off the open strings is in use; the metronome is one switch inside the instruments room.
@@ -274,45 +274,35 @@ function useIdle(enabled: boolean): boolean {
   return idle;
 }
 
-/** The guitar's "yes": a fretted note held for a moment. Fills the ring it returns while the note rings. Notes in `except` (pitch classes) mean something else; open strings ring on and get tuned, so they never count. */
-function useHold(input: InputApi, enabled: boolean, onHold: () => void, except: number[] = []): RefObject<SVGCircleElement> {
+/** The guitar's start phrase: any 3 distinct fretted notes in succession. Fills the listening ring in 3 clear steps; open strings stay free for tuning, and single held notes never trigger it. */
+function useStartPhrase(input: InputApi, enabled: boolean, onStart: () => void): { ring: RefObject<SVGCircleElement>; notes: number[] } {
   const ring = useRef<SVGCircleElement>(null);
-  const cb = useRef(onHold);
-  cb.current = onHold;
-  const skip = useRef(except);
-  skip.current = except;
-  const listening = input.status === "listening";
+  const [notes, setNotes] = useState<number[]>([]);
+  const cb = useRef(onStart);
+  cb.current = onStart;
+  const listening = input.status === "listening" && !input.paused;
   const { subscribe } = input;
   useEffect(() => {
-    const set = (p: number) => {
+    const setRing = (p: number) => {
       if (ring.current) ring.current.style.strokeDashoffset = String(1 - p);
     };
-    set(0);
+    setRing(0);
+    setNotes([]);
     if (!enabled || !listening) return;
-    let pc: number | null = null;
-    let since = 0;
-    let seen = 0;
-    let fired = false;
+    const tracker = createStartPhrase();
+    let shownKey = "";
     return subscribe((f) => {
-      if (fired) return;
-      const heard = midiOf(f);
-      const m = heard !== null && (skip.current.includes(mod(heard)) || OPEN_STRINGS.includes(heard)) ? null : heard;
-      if (m !== null) {
-        if (pc === null || mod(m) !== pc) {
-          pc = mod(m);
-          since = f.now;
-        }
-        seen = f.now;
-      } else if (pc !== null && f.now - seen > HOLD_GAP_MS) pc = null;
-      const p = pc === null ? 0 : Math.min(1, (f.now - since) / HOLD_MS);
-      set(p);
-      if (p >= 1) {
-        fired = true;
-        cb.current();
+      const state = tracker.step(midiOf(f), f.now);
+      setRing(state.progress);
+      const nextKey = state.notes.join(",");
+      if (nextKey !== shownKey) {
+        shownKey = nextKey;
+        setNotes(state.notes);
       }
+      if (state.fired) cb.current();
     });
   }, [enabled, listening, subscribe]);
-  return ring;
+  return { ring, notes };
 }
 
 /** How often each exercise of a tune has been played: decides what its reading exercises bring next. */
@@ -324,9 +314,10 @@ export function SongCoach(props: SongCoachProps) {
 }
 
 /** The practice room must remain inside a stable PracticeWindowBoundary while changing tunes. */
-export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_TUNES, focus = "all", initialCardId }: SongCoachProps) {
+export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_TUNES, mixIds, focus = "all", initialCardId }: SongCoachProps) {
+  const explicitMix = mixIds !== undefined;
   const [windowP, setWindowP] = useState<number | null>(() => loadStore(sheet.id).settings.window);
-  const [mix, setMix] = useState(() => loadStore(sheet.id).settings.mix !== false); // the other tunes' exercises too
+  const [mix, setMix] = useState(() => (explicitMix ? mixIds.length > 0 : loadStore(sheet.id).settings.mix !== false)); // the other tunes' exercises too
   // reading exercises bring new notes whenever this changes: every day, and after every session
   const [round, setRound] = useState(() => `${today()}:${loadStore(sheet.id).sessions.length}`);
   const rawOwn = useMemo(() => buildDeck(sheet, tl, { window: windowP ?? undefined, round, seen: seenIn(sheet.id), rhythmFrom: rhythmSourceId(initialCardId), passageFrom: initialCardId }), [sheet, tl, windowP, round, initialCardId]);
@@ -339,19 +330,22 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
   const roomIds = useMemo(() => [sheet.id, ...others.map((o) => o.sheet.id)], [sheet.id, others]);
   const sessionSet = useSessionSet(roomIds);
   const setKey = sessionSet.ids.join("\u0000");
-  const [mixKey, setMixKey] = useState(setKey);
+  const [mixKey, setMixKey] = useState(() => (explicitMix ? mixIds.join("\u0000") : setKey));
   const mixable = useMemo(() => {
     const chosen = new Set(mixKey ? mixKey.split("\u0000") : []);
     return others.filter((o) => chosen.has(o.sheet.id));
   }, [others, mixKey]);
   const guests = useMemo(
     () =>
-      focus !== "all"
+      !explicitMix && focus !== "all"
         ? []
         : mix
-          ? mixable.map((o) => ({ tuneId: o.sheet.id, sheet: o.sheet, deck: buildDeck(o.sheet, o.tl, { window: loadStore(o.sheet.id).settings.window ?? undefined, round, seen: seenIn(o.sheet.id) }) }))
+          ? mixable.map((o) => {
+              const built = buildDeck(o.sheet, o.tl, { window: loadStore(o.sheet.id).settings.window ?? undefined, round, seen: seenIn(o.sheet.id) });
+              return { tuneId: o.sheet.id, sheet: o.sheet, deck: focus === "all" ? built : familiesOnly(built, FOCUS_FAMILIES[focus]) };
+            })
           : [],
-    [focus, mix, mixable, round],
+    [explicitMix, focus, mix, mixable, round],
   );
   const deck = useMemo(() => mixDecks(focused, guests), [focused, guests]);
   const tuneIds = useMemo(() => [sheet.id, ...guests.map((g) => g.tuneId)], [sheet.id, guests]);
@@ -377,14 +371,33 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
   const switchStopped = useRef(false);
   const themeSources = useMemo(() => [{ id: sheet.id, title: sheet.title, tl }, ...others.map((other) => ({ id: other.sheet.id, title: other.sheet.title, tl: other.tl }))], [sheet.id, sheet.title, tl, others]);
   const session = useSession(deck, tuneIds, input, { gap: gapIds, arrangementFingerprint, arrangementFingerprints, tempoBounds: activeGoal?.tempo, suspended: choosingTune || Boolean(tools) || free || menu || pad !== null || calib });
-  // Decoration only: the pool hears that a card passed cleanly or changed, and nothing comes back.
+  // Decoration only: the pool hears landed notes, clean passes and exercise moves; nothing comes back.
   usePoolCalm(menu || calib);
   const emitPool = usePoolEmit();
-  const pooled = useRef<{ outcome: unknown; pos: number | null }>({ outcome: session.outcome, pos: null });
+  const [hitSerial, setHitSerial] = useState(0);
+  const pooled = useRef<{ outcome: unknown; pos: number | null; hits: number; run: number }>({ outcome: session.outcome, pos: null, hits: 0, run: 0 });
+  const currentHits = useMemo(
+    () => (session.results ?? []).filter((r) => r === "hit").length,
+    [session.results],
+  );
+  useEffect(() => {
+    if (currentHits > pooled.current.hits) {
+      setHitSerial((n) => n + 1);
+      if (currentHits % 3 === 0) emitPool({ kind: "bloom", strength: 0.45, at: "focus" });
+    }
+    pooled.current.hits = currentHits;
+  }, [currentHits, emitPool]);
+  useEffect(() => {
+    if (session.run > pooled.current.run) setHitSerial((n) => n + 1);
+    pooled.current.run = session.run;
+  }, [session.run]);
   useEffect(() => {
     if (session.outcome === pooled.current.outcome) return;
     pooled.current.outcome = session.outcome;
-    if (session.outcome?.result === "clean") emitPool({ kind: "bloom", strength: 1, at: "focus" });
+    if (session.outcome?.result === "clean") {
+      setHitSerial((n) => n + 1);
+      emitPool({ kind: "bloom", strength: 1, at: "focus" });
+    }
   }, [session.outcome, emitPool]);
   useEffect(() => {
     if (pooled.current.pos !== null && pooled.current.pos !== session.pos) emitPool({ kind: "sweep", direction: 1 });
@@ -463,6 +476,13 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
     else session.begin(plan);
     setChosenCard(undefined);
   };
+  const beginCard = (cardId: string) => {
+    if (calib || menu || free || choosingTune || tools) return;
+    setGapIds(new Set());
+    session.begin([cardId]);
+    setChosenCard(undefined);
+  };
+  const wholeCard = useMemo(() => wholeTuneCard(own), [own]);
   const toggleFull = () => {
     if (document.fullscreenElement) document.exitFullscreen().catch(() => undefined);
     else document.documentElement.requestFullscreen?.().catch(() => undefined);
@@ -783,7 +803,7 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
       role="dialog"
       aria-label="practice session"
     >
-      {!free && !choosingTune && !tools ? <PracticeAtmosphere input={input} warmth={Math.min(1, session.elapsed() / 45000)} flow={inExercise ? session.flow : 0} playing={inExercise && (session.phase === "pace" || session.phase === "time") && !session.paused && !session.away && !session.listeningOff && pad === null && !menu && !calib} beat={inExercise && !session.paused && pad === null && !menu && !calib ? session.beat : undefined} bpm={session.bpm} /> : null}
+      {!free && !choosingTune && !tools ? <PracticeAtmosphere input={input} warmth={Math.min(1, session.elapsed() / 45000)} flow={inExercise ? session.flow : 0} hitSerial={hitSerial} playing={inExercise && (session.phase === "pace" || session.phase === "time") && !session.paused && !session.away && !session.listeningOff && pad === null && !menu && !calib} beat={inExercise && !session.paused && pad === null && !menu && !calib ? session.beat : undefined} bpm={session.bpm} /> : null}
       <div style={{ display: choosingTune || tools ? "none" : "contents" }} aria-hidden={choosingTune || Boolean(tools) || undefined}>
       {free ? (
         <FreePlay input={input} deck={deck} onClose={closeFree} onPractise={practise} active={!choosingTune && !tools} onChooseTune={onTune ? openTunePicker : undefined} onToolsChange={setFreeInstruments} />
@@ -799,6 +819,8 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
           onLength={cycleLength}
           onBegin={() => beginNow()}
           onSelfBegin={() => beginNow(true)}
+          onStartCard={beginCard}
+          wholeCardId={wholeCard?.id}
           onFree={openFree}
           onSettings={openMenu}
           onChooseTune={onTune ? openTunePicker : undefined}
@@ -897,6 +919,8 @@ function Ready({
   onLength,
   onBegin,
   onSelfBegin,
+  onStartCard,
+  wholeCardId,
   onFree,
   onSettings,
   onChooseTune,
@@ -918,6 +942,8 @@ function Ready({
   onLength(): void;
   onBegin(): void;
   onSelfBegin(): void;
+  onStartCard(cardId: string): void;
+  wholeCardId?: string;
   onFree(): void;
   onSettings(): void;
   onChooseTune?(): void;
@@ -930,8 +956,8 @@ function Ready({
   unavailablePassage: boolean;
 }) {
   const byId = useMemo(() => new Map(deck.cards.map((c) => [c.id, c])), [deck]);
-  // any held note begins, except the ones that mean something else here
-  const ring = useHold(input, plan.length > 0 && keysOn, onBegin, READY_KEYS.map((m) => mod(m)));
+  // a short 3-note fretted phrase begins, leaving single held option keys and open strings free
+  const { ring, notes: phraseNotes } = useStartPhrase(input, plan.length > 0 && keysOn, onBegin);
   const held = useNoteKeys(input, keysOn, [READY_KEYS[0], READY_KEYS[1], guests.length ? READY_KEYS[2] : null, READY_KEYS[3], READY_KEYS[4], onChooseTune ? READY_KEYS[5] : null, READY_KEYS[6]], (k) => (k === 0 ? onFree() : k === 1 ? onSettings() : k === 2 ? onMix() : k === 3 ? onLength() : k === 4 ? onSelfBegin() : k === 5 ? onChooseTune?.() : onTools("tuner")), true);
   const from = new Set(plan.map((id) => byId.get(id)?.tune).filter(Boolean));
   const listening = input.status === "listening" && !input.paused;
@@ -948,32 +974,50 @@ function Ready({
           : "Let’s hear your guitar";
   const inputLabel = listening ? "Guitar listening" : input.status === "starting" ? "Opening input" : input.paused ? "Audio suspended" : "Input off";
   const startLabel = listening ? "Begin session" : input.status === "starting" ? "Opening input…" : input.paused ? "Resume listening" : input.status === "error" ? "Reconnect input" : "Enable listening";
+  const isWholeSelected = Boolean(wholeCardId && plan.length === 1 && plan[0] === wholeCardId);
   return (
     <div className="ss-ready ss-ready-flow">
       <div className="ss-ready-story">
-        <p className="ss-kicker">{focus !== "all" ? FOCUS_LABEL[focus] : days > 1 ? `Day ${days} · Your practice` : "Your practice"}</p>
+        <div className="ss-ready-eyebrow">
+          <span className="ss-ready-key">{sheet.keySignature}</span>
+          <p className="ss-kicker">{focus !== "all" ? FOCUS_LABEL[focus] : days > 1 ? `Day ${days}` : "In the room"}</p>
+          {plan.length > 0 ? <span className="ss-ready-meta">{plan.length} · ~{shaped.minutes}m{from.size > 1 ? ` · ${from.size} tunes` : ""}</span> : null}
+        </div>
         <h1 className="ss-display">{sheet.title}</h1>
-        <p className="ss-sub">
-          {plan.length} exercise{plan.length === 1 ? "" : "s"} · about {shaped.minutes} minutes
-          {from.size > 1 ? ` · ${from.size} tunes` : ""}
-        </p>
-        {shaped.why ? <p className="ss-focus">Focus · {shaped.why}</p> : null}
+        {shaped.why ? <p className="ss-focus">{shaped.why}</p> : null}
+        {wholeCardId && !isWholeSelected ? (
+          <button
+            type="button"
+            className="ss-whole-jump"
+            disabled={!keysOn || unavailablePassage}
+            onClick={() => onStartCard(wholeCardId)}
+          >
+            <Glyph name="play" size={14} />
+            <span>Play the whole tune</span>
+            <small>scrolling score · jump right in</small>
+          </button>
+        ) : null}
         {first ? (
           <div className="ss-ready-preview">
-            <p className="ss-section-label">The opening exercises</p>
             <ol className="ss-ready-queue">
               {plan.slice(0, 3).map((id, i) => {
                 const card = byId.get(id);
                 if (!card) return null;
                 return (
                   <li key={id} className={`fam-${card.family}`}>
-                    <span>{String(i + 1).padStart(2, "0")}</span>
-                    <div><strong>{card.title}</strong><small>{FAMILY_LABEL[card.family]}{from.size > 1 ? ` · ${card.tune}` : ""}</small></div>
+                    <button type="button" className="ss-ready-row" disabled={!keysOn} onClick={() => onStartCard(id)}>
+                      <span className="ss-ready-num">{String(i + 1).padStart(2, "0")}</span>
+                      <span className="ss-ready-copy">
+                        <strong>{card.title}</strong>
+                        <small>{FAMILY_LABEL[card.family]}{from.size > 1 ? ` · ${card.tune}` : ""}</small>
+                      </span>
+                      <span className="ss-ready-go" aria-hidden="true">↗</span>
+                    </button>
                   </li>
                 );
               })}
             </ol>
-            {plan.length > 3 ? <p className="ss-ready-more">+ {plan.length - 3} more · full plan in settings</p> : null}
+            {plan.length > 3 ? <p className="ss-ready-more">+{plan.length - 3} more in queue</p> : null}
           </div>
         ) : null}
       </div>
@@ -981,11 +1025,20 @@ function Ready({
       <div className="ss-ready-arrival">
         <span className={`ss-connection ${listening ? "is-live" : ""}`}><i />{inputLabel}</span>
         <Ear input={input} size="big" ring={ring} />
+        {listening && plan.length > 0 ? (
+          <ol className="ss-phrase-steps" aria-label={`Start phrase progress: ${phraseNotes.length} of ${START_PHRASE_LENGTH} notes`}>
+            {Array.from({ length: START_PHRASE_LENGTH }, (_, i) => (
+              <li key={i} className={phraseNotes[i] !== undefined ? "is-lit" : ""}>
+                {phraseNotes[i] !== undefined ? keyName(phraseNotes[i]) : String(i + 1)}
+              </li>
+            ))}
+          </ol>
+        ) : null}
         <p className="ss-say" aria-live="polite">{say}</p>
         <p className="ss-ready-instruction">
           {unavailablePassage ? "Return to Songs to choose a passage with melody notes in this arrangement." : !plan.length
-            ? deck.cards.length ? "Hold F below to choose more time, or open free play." : "Free play is always available."
-            : listening ? "Hold a fretted note for 0.7 seconds. The circle fills as you hold." : input.paused ? "A click resumes the audio, then the guitar takes over." : "Connect an interface or allow the microphone to begin."}
+            ? deck.cards.length ? "Hold F below for more time, or open free play." : "Free play is always available."
+            : listening ? "Play 3 fretted notes to begin · open strings stay free" : input.paused ? "Tap to wake audio, then play to begin." : "Connect an interface or allow the microphone."}
         </p>
         {input.error ? <p className="ss-input-detail" role="status">{input.error}</p> : null}
         <button
@@ -996,8 +1049,8 @@ function Ready({
         >
           {startLabel}<span aria-hidden="true">↗</span>
         </button>
-        <button type="button" onClick={onSelfBegin} disabled={!keysOn || !plan.length}>
-          <NoteTag midi={READY_KEYS[4]} held={held === 4} octave={false} /> Practise without scoring
+        <button type="button" className="ss-self-begin" onClick={onSelfBegin} disabled={!keysOn || !plan.length}>
+          <NoteTag midi={READY_KEYS[4]} held={held === 4} octave={false} /> <span>Practise without scoring</span>
         </button>
       </div>
 
@@ -1220,7 +1273,7 @@ function Running({
           <div className="ss-memory-aid">
             <span aria-live="polite">{s.memoryReview ? "Later review" : "Memory practice"} · {s.memoryStage === "page" ? "page shown" : s.memoryStage === "landmarks" ? "bar-start notes" : "notes hidden"} · chords remain</span>
             <button type="button" onClick={s.toggleMemoryPage} disabled={s.phase === "result" || Boolean(s.spot)}>{s.memoryStage === "page" ? "Use landmarks" : "Reveal page"}</button>
-            <small>{SUMMON_HINT}, then D♯</small>
+            <SummonVisual then="D♯" />
           </div>
         ) : null}
       </header>
@@ -1288,7 +1341,7 @@ function Running({
           <Ear input={input} size="small" ring={ring} tag={earTag} />
           <span className="ss-menu-access">
             <button type="button" onClick={onGuitarMenu}>Guitar menu</button>
-            <small>{SUMMON_HINT}</small>
+            <SummonVisual />
           </span>
         </span>
         <div className="ss-played-controls">
@@ -1828,6 +1881,7 @@ function MelodyStage({ card, session: s, sheet: source }: { card: Card; session:
           cursorPulse={s.nudge}
         />
         {!s.memoryStage || s.memoryStage === "page" ? <ScoreShadows host={host} wrong={wrong} keySignature={cut.exercise.keySignature} /> : null}
+        <ScoreGlints host={host} results={results} reset={`${card.id}:${s.phase}`} />
       </div>
       {card.spot ? <SpotNeck card={card} session={s} /> : null}
     </div>

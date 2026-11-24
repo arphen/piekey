@@ -38,8 +38,9 @@ rows remain reachable on phone screens.
 No command anywhere sits on an open-string pitch class (E, A, D, G, B): open strings ring on and
 get tuned. Ready uses A♯ free play, C♯ settings, G♯ mix, F length, E♭ without scoring, F♯ tune
 and C instruments (the metronome is a switch inside); the summary uses C, A♯, C♯, F and F♯. On
-Ready, any other fretted note held 0.7 s begins; exact open-string pitches never do, including
-the fretted unisons that sound the same (for example A2 at the fifth fret of the low E string).
+Ready, playing any short 3-note fretted phrase (three distinct consecutive pitch classes within
+about 1.8 s per step) begins the session; exact open-string pitches stay free for tuning and a
+single held note never starts the session.
 Double taps are off while the six-row menu is open; the paused drawer prefers the card's own
 notes to open strings.
 

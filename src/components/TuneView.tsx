@@ -16,7 +16,8 @@ import { buildTimeline } from "../tunes/order";
 import { passageId, passageLabel, passageOccurrences, passageTimeline, validPassage, type PassageRange } from "../tunes/passage";
 import { usePlayback } from "../tunes/usePlayback";
 import type { NoteResult } from "../core/contract";
-import { buildDeck, familiesOnly, type Family } from "../song/deck";
+import { buildDeck, familiesOnly, type Family, type Focus } from "../song/deck";
+import { hubIdFromStudyId, isKeyStudyId, keyStudySheet } from "../song/keyStudy";
 import { allStores, BOXES, loadStore, today } from "../song/leitner";
 import { addSessionTune, useSessionSet } from "../song/sessionSet";
 import { loadActiveGoal } from "../song/goals";
@@ -36,7 +37,13 @@ const EXERCISE_FAMILIES: Family[] = ["scales", "harmony", "chords", "reading", "
 
 const noteLabel = (midi: number) => `${pitchClassToName(midi).replace("#", "♯")}${Math.floor(midi / 12) - 1}`;
 
-interface Launch {
+export interface PracticeLaunchOptions {
+  focus?: Focus;
+  mixIds?: string[];
+  studyHubIds?: string[];
+}
+
+interface Launch extends PracticeLaunchOptions {
   kind: "song" | "listen" | "session" | "card";
   tuneId?: string;
   cardId?: string;
@@ -115,40 +122,48 @@ export function TuneView({ input, launch, onLaunched, songId, onSong, onSessionE
     return () => { gone = true; };
   }, []);
 
+  const selectedStudyHub = hubIdFromStudyId(selected);
   const selectedIssue = libraryIssues.find((issue) => issue.id === selected);
-  const entry = selectedIssue || browsing ? null : library.find((t) => t.id === selected)
+  const entry = selectedIssue || browsing || selectedStudyHub ? null : library.find((t) => t.id === selected)
     ?? (demoPreview?.id === selected ? demoPreview : null) ?? library[0] ?? null;
   const libraryIds = useMemo(() => library.map((tune) => tune.id), [library]);
   const sessionSet = useSessionSet(libraryIds);
   useEffect(() => { setBrief(null); setStudyOpen(false); }, [entry, revision]);
   const study = useMemo(() => entry ? getDemoStudy(entry) : undefined, [entry]);
   const parsed = useMemo((): { sheet: LeadSheet | null; error: string | null } => {
+    if (selectedStudyHub) {
+      const built = keyStudySheet(selectedStudyHub);
+      return built ? { sheet: built, error: null } : { sheet: null, error: "Could not build that key study." };
+    }
     if (!entry) return { sheet: null, error: null };
     try {
       return { sheet: parseTuneEntry(entry), error: null };
     } catch (e) {
       return { sheet: null, error: e instanceof Error ? e.message : "Couldn't read this tune." };
     }
-  }, [entry]);
+  }, [entry, selectedStudyHub]);
   const sheet = parsed.sheet;
   const tl = useMemo(() => buildTimeline(sheet ?? { bars: [], comp: [] }), [sheet]);
 
-  // the rest of the library, read only while the practice session is open: it can mix them in
-  const others = useMemo(
-    () =>
-      coach
-        ? library.flatMap((t) => {
-            if (t.id === entry?.id) return [];
-            try {
-              const s = parseTuneEntry(t);
-              return [{ sheet: s, tl: buildTimeline(s) }];
-            } catch {
-              return [];
-            }
-          })
-        : [],
-    [coach, library, entry],
-  );
+  // the rest of the library + any virtual key studies in a custom mix, read only while the practice session is open
+  const others = useMemo(() => {
+    if (!coach) return [];
+    const fromLibrary = library.flatMap((t) => {
+      if (t.id === sheet?.id) return [];
+      try {
+        const s = parseTuneEntry(t);
+        return [{ sheet: s, tl: buildTimeline(s) }];
+      } catch {
+        return [];
+      }
+    });
+    const fromStudies = (sessionLaunch?.studyHubIds ?? []).flatMap((hub) => {
+      const s = keyStudySheet(hub);
+      if (!s || s.id === sheet?.id) return [];
+      return [{ sheet: s, tl: buildTimeline(s) }];
+    });
+    return [...fromLibrary, ...fromStudies];
+  }, [coach, library, sheet?.id, sessionLaunch?.studyHubIds]);
 
   // a new tune: its own tempo, no loop
   useEffect(() => {
@@ -162,7 +177,7 @@ export function TuneView({ input, launch, onLaunched, songId, onSong, onSessionE
   const pick = useCallback((id: string, replace = false) => {
     if (controlled) onSong?.(id, replace);
     else setOwnSelected(id);
-    saveCurrentTuneId(id);
+    if (!isKeyStudyId(id)) saveCurrentTuneId(id);
   }, [controlled, onSong]);
   const toLibrary = useCallback((replace = false) => {
     if (controlled) onSong?.(null, replace);
@@ -170,7 +185,11 @@ export function TuneView({ input, launch, onLaunched, songId, onSong, onSessionE
 
   useEffect(() => {
     if (!launch || loading || launched.current === launch) return;
-    if (launch.tuneId && entry?.id !== launch.tuneId) {
+    if (launch.tuneId && sheet?.id !== launch.tuneId) {
+      if (isKeyStudyId(launch.tuneId)) {
+        pick(launch.tuneId, true);
+        return;
+      }
       if (libraryIssues.some((issue) => issue.id === launch.tuneId)) {
         toLibrary(true);
         launched.current = launch;
@@ -202,7 +221,7 @@ export function TuneView({ input, launch, onLaunched, songId, onSong, onSessionE
       setCoach(true);
     } else setCoach(false);
     onLaunched?.();
-  }, [launch, loading, sheet, entry?.id, library, libraryIssues, pick, toLibrary, onLaunched]);
+  }, [launch, loading, sheet, library, libraryIssues, pick, toLibrary, onLaunched]);
 
   const candidate = pending[0];
   useEffect(() => { setReplaceId(candidate?.repairId ?? ""); }, [candidate?.xml, candidate?.repairId]);
@@ -533,6 +552,8 @@ export function TuneView({ input, launch, onLaunched, songId, onSong, onSessionE
         pick(id, true);
       }}
       others={others}
+      mixIds={sessionLaunch?.mixIds}
+      focus={sessionLaunch?.focus}
       initialCardId={sessionLaunch?.kind === "card" ? sessionLaunch.cardId : undefined}
     />
   );
@@ -569,15 +590,28 @@ export function TuneView({ input, launch, onLaunched, songId, onSong, onSessionE
         </button> : null}
       </header>}
 
-      {browsing && toolsOpen ? <div id="song-library-tools" className="tunes-backup" aria-label="Library tools">
-        <button type="button" onClick={() => void exportPractice()} disabled={loading || busy}>Export practice backup</button>
-        <button type="button" aria-expanded={briefOpen} onClick={() => setBriefOpen((open) => !open)} disabled={loading || busy}>Practice brief<Glyph name="arrow" size={15} /></button>
-        <button type="button" onClick={() => backupRef.current?.click()} disabled={busy}>Restore backup…</button>
-        <button type="button" onClick={() => {
-          const saved = retryStorageWrites();
-          setNotice(saved ? "Pending changes saved." : "Some changes are still unsaved. Keep the app open and export a backup.");
-        }} disabled={busy}>Retry saving</button>
-        <p className="tunes-note">Backups include tunes, settings and progress · audio recordings excluded</p>
+      {browsing && toolsOpen ? <div id="song-library-tools" className="tunes-backup-deck" aria-label="Library tools">
+        <div className="tunes-backup-grid">
+          <button type="button" className="tunes-backup-card" onClick={() => void exportPractice()} disabled={loading || busy}>
+            <strong><Glyph name="download" size={16} />Export practice backup</strong>
+            <span>Download a JSON file of your songs, box progress and settings. Audio stays local or in a full .fretpack transfer.</span>
+          </button>
+          <button type="button" className="tunes-backup-card" onClick={() => backupRef.current?.click()} disabled={busy}>
+            <strong><Glyph name="plus" size={16} />Restore backup…</strong>
+            <span>Recover tunes, settings and practice history from a previously exported JSON backup file.</span>
+          </button>
+          <button type="button" className="tunes-backup-card" aria-expanded={briefOpen} onClick={() => setBriefOpen((open) => !open)} disabled={loading || busy}>
+            <strong><Glyph name="arrow" size={16} />Practice brief</strong>
+            <span>Create a private, read-only summary of recent practice data to share with a teacher or external assistant.</span>
+          </button>
+        </div>
+        <div className="tunes-backup-foot">
+          <p className="tunes-note">Everything stays local in your browser · use Devices for full encrypted .fretpack sync including audio.</p>
+          <button type="button" className="tunes-retry-link" onClick={() => {
+            const saved = retryStorageWrites();
+            setNotice(saved ? "Pending changes saved." : "Some changes are still unsaved. Keep the app open and export a backup.");
+          }} disabled={busy}>Retry saving</button>
+        </div>
         {briefOpen ? <PracticeBriefPanel brief={brief} scope="all-music" days={briefDays} hasTune={false} busy={loading || busy}
           onScope={(scope) => { setBriefScope(scope); setBrief(null); }} onDays={(days) => { setBriefDays(days); setBrief(null); }}
           onPrepare={() => void generateBrief()} onClose={() => setBriefOpen(false)} /> : null}

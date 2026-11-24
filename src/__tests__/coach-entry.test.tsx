@@ -403,4 +403,51 @@ describe("coach entry", () => {
     await act(async () => [...host.querySelectorAll("button")].find((item) => item.textContent === "Close free instruments")!.click());
     expect(host.querySelector(".ss-chrome")).not.toBeNull();
   });
+
+  it("begins Ready on a 3-note fretted phrase while ignoring open strings and single held notes", async () => {
+    mocked.calibrated = true;
+    const listeners = new Set<(frame: InputFrame) => void>();
+    const input = inputAt("listening", "guitar");
+    input.subscribe = (listener) => { listeners.add(listener); return () => listeners.delete(listener); };
+    let midi: number | null = null;
+    vi.spyOn(pitch, "midiOf").mockImplementation(() => midi);
+    let now = 0;
+    const send = (note: number | null, advance = 35) => {
+      midi = note; now += advance;
+      const frame: InputFrame = { now, rms: note === null ? 0 : 0.05, buf: new Float32Array(16), sampleRate: 48000 };
+      [...listeners].forEach((listener) => listener(frame));
+    };
+    await act(async () => root.render(<SongCoach sheet={sheet} tl={tl} input={input} onClose={() => undefined} />));
+    // Prime with quiet, then tune open strings (E2, A2, D3): must never begin.
+    await act(async () => {
+      for (let i = 0; i < 4; i++) send(null);
+      for (const open of [40, 45, 50, 55]) { send(open); send(open, 70); send(null, 120); }
+    });
+    expect(mocked.session.begin).not.toHaveBeenCalled();
+
+    // Holding a single fretted note (even long) must not begin on its own.
+    await act(async () => {
+      send(57); send(57, 70); send(57, 300); send(57, 500);
+      send(null, 2000); // pause resets phrase
+    });
+    expect(mocked.session.begin).not.toHaveBeenCalled();
+
+    // Play a short 3-note fretted phrase (A3 → C4 → D4): begins cleanly.
+    await act(async () => {
+      for (const note of [57, 60, 62]) { send(note); send(note, 70); }
+    });
+    expect(mocked.session.begin).toHaveBeenCalledTimes(1);
+  });
+
+  it("lets the player jump straight into the whole tune from Ready", async () => {
+    mocked.calibrated = true;
+    const deck = buildDeck(sheet, tl);
+    const whole = deck.cards.find((c) => c.step?.kind === "tune")!;
+    expect(whole).toBeDefined();
+    await act(async () => root.render(<SongCoach sheet={sheet} tl={tl} input={inputAt("listening", "guitar")} onClose={() => undefined} />));
+    const button = [...host.querySelectorAll("button")].find((item) => item.textContent?.includes("Play the whole tune"));
+    expect(button).toBeDefined();
+    await act(async () => button!.click());
+    expect(mocked.session.begin).toHaveBeenCalledWith([whole.id]);
+  });
 });

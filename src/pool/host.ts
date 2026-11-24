@@ -26,8 +26,8 @@ const FLAGS: Record<string, number> = { rock: ROCK, calm: CALM, glass: GLASS };
 // is fetched only when its turn is near; a turn speeds up as the groove builds and waits while
 // the room is calmed. Seconds at rest: how long a photograph stays, how long the turn takes.
 const PONDS = [swirlUrl, marbleUrl, neonUrl, bandsUrl, photoUrl];
-const POND_STAY = 48;
-const POND_TURN = 36;
+const POND_STAY = 20;
+const POND_TURN = 18;
 
 interface Anchor { x: number; y: number; r: number }
 interface Tune { cents: number | null; frequency: number | null; at: number }

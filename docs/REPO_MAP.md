@@ -134,7 +134,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 
 ## src
 
-- `src/App.tsx` — `App:47`
+- `src/App.tsx` — `App:48`
 - `src/__tests__/attacks.test.ts`
 - `src/__tests__/audio-scoring.test.ts`
 - `src/__tests__/calibration.test.ts`
@@ -199,33 +199,33 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/components/Glyph.tsx` — `UtilityGlyphName:4`, `Glyph:73`
 - `src/components/GoalChooser.tsx` — `GoalChooser:9`
 - `src/components/GuitarNav.tsx` — `GuitarNav:16`
-- `src/components/GuitarPad.tsx` — `PAD_NOTES:23`, `SUMMON_HINT:99`, `useSummon:105`, `toneKeysFor:176`, `drawerToneKeys:188`, `useToneKeys:205`, `noteName:256`, `useNoteKeys:263`, `NoteTag:321`, `ToneTag:331`, `PadRow:341`, `GuitarPad:347`
+- `src/components/GuitarPad.tsx` — `PAD_NOTES:23`, `SUMMON_HINT:99`, `SummonVisual:102`, `useSummon:118`, `toneKeysFor:189`, `drawerToneKeys:201`, `useToneKeys:218`, `noteName:269`, `useNoteKeys:276`, `NoteTag:334`, `ToneTag:344`, `PadRow:354`, `GuitarPad:360`
 - `src/components/HoverDemo.tsx` — `HoverDemo:25`
 - `src/components/InputBar.tsx` — `InputBar:17`
 - `src/components/LeadSheet.tsx` — `LeadSheet:35`, `ChordSymbol:210`
 - `src/components/LearnView.tsx` — `LearnView:33`
 - `src/components/LibraryGrid.tsx` — `LibraryGrid:13`
-- `src/components/OverviewView.tsx` — `OverviewView:41`
-- `src/components/PracticeAtmosphere.tsx` — `PracticeAtmosphere:12`, `BeatPulse:104`
+- `src/components/OverviewView.tsx` — `OverviewView:73`
+- `src/components/PracticeAtmosphere.tsx` — `PracticeAtmosphere:13`, `BeatPulse:127`
 - `src/components/PracticeBriefPanel.tsx` — `PracticeBriefPanel:6`
 - `src/components/PracticeHistory.tsx` — `PracticeHistory:59`
-- `src/components/ProgressView.tsx` — `ProgressView:170`
+- `src/components/ProgressView.tsx` — `ProgressView:172`
 - `src/components/RecordingStatus.tsx` — `RecordingStatus:13`, `downloadTake:21`, `RecordingRecovery:32`
-- `src/components/RenderedWater.tsx` — `RenderedWaterProps:63`, `RenderedWater:72`
+- `src/components/RenderedWater.tsx` — `RenderedWaterProps:180`, `RenderedWater:212`
 - `src/components/SaveNotice.tsx` — `SaveNotice:7`
 - `src/components/ScalesView.tsx` — `ScalesView:12`
-- `src/components/Score.tsx` — `drawChord:82`, `Score:136`
+- `src/components/Score.tsx` — `drawChord:83`, `Score:196`
 - `src/components/ScoreFlow.tsx` — `ScoreFlow:335`
 - `src/components/SessionSummary.tsx` — `SessionSummary:85`
 - `src/components/ShapesView.tsx` — `ShapesView:16`
 - `src/components/SkillTree.tsx` — `SkillTree:18`
-- `src/components/SongCoach.tsx` — `openPractice:239`, `SongCoach:321`, `SongCoachRoom:327`
-- `src/components/SongMap.tsx` — `SongMap:21`
+- `src/components/SongCoach.tsx` — `openPractice:239`, `SongCoach:311`, `SongCoachRoom:317`
+- `src/components/SongMap.tsx` — `SongMap:123`
 - `src/components/Transport.tsx` — `Transport:18`
 - `src/components/TriadWheel.tsx` — `TriadWheel:48`
 - `src/components/TriadsView.tsx` — `TriadsView:153`
 - `src/components/TunePicker.tsx` — `TunePicker:14`
-- `src/components/TuneView.tsx` — `TuneView:47`
+- `src/components/TuneView.tsx` — `PracticeLaunchOptions:40`, `TuneView:54`
 - `src/components/UnitCard.tsx` — `UnitCard:22`
 - `src/components/goal-chooser.css`
 - `src/components/keyContext.ts` — `KeyContext:4`, `useKey:6`, `RomanContext:13`
@@ -258,7 +258,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/nav/useGuitarNav.ts` — `NAV_KEYS:10`, `setNavMuted:26`, `sessionOpen:31`, `pressables:34`, `step:41`, `press:52`, `useGuitarNav:67`
 - `src/overview/focus.css`
 - `src/overview/home.css`
-- `src/overview/map.ts` — `MapSong:10`, `PracticeMap:17`, `MAP_VIEW:23`, `keyFromSignature:28`, `songKey:49`, `keyName:57`, `songFill:64`, `practiceMap:70`
+- `src/overview/map.ts` — `MapSong:10`, `PracticeMap:17`, `KeySkillSummary:22`, `KeyTuneIdea:32`, `KeyDetail:37`, `MAP_VIEW:52`, `keyFromSignature:57`, `songKey:122`, `keyName:130`, `hubIdForKey:137`, `keyDetail:143`, `songFill:176`, `practiceMap:182`
 - `src/overview/modes.ts` — `GlyphName:3`, `TutorTargetTab:4`, `TutorModeId:5`, `TutorMode:7`, `FAMILY_META:17`, `TUTOR_MODES:27`
 - `src/overview/overview.css`
 - `src/overview/progress.css`
@@ -276,7 +276,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/pool/bus.ts` — `PoolAnchor:8`, `PoolEvent:9`, `PublisherProps:14`, `Publisher:15`, `PoolSink:17`, `PoolBus:22`
 - `src/pool/engine/gl.ts` — `Program:3`, `Target:5`, `Pair:12`, `Format:14`, `formats:16`, `compile:28`, `target:67`, `pair:85`, `complete:91`, `release:96`, `releasePair:102`, `image:109`
 - `src/pool/engine/renderer.ts` — `Tier:9`, `TIERS:10`, `Vec2:17`, `Vec3:18`, `Stone:19`, `Flash:20`, `Vortex:21`, `Swirl:22`, `Emitter:23`, `Ring:24`, `PoolRect:25`, `ROCK:26`, `CALM:27`, `GLASS:28`, `FrameState:31`, `PHOTO_SCALE:58` (+1 more)
-- `src/pool/engine/shaders.ts` — `VERTEX:14`, `CURL:58`, `FORCES:71`, `DIVERGENCE:131`, `PRESSURE:144`, `GRADIENT:160`, `ADVECT:176`, `HEAT:189`, `MARBLE:214`, `WAVES:228`, `DYE:255`, `PARTICLES:279`, `FLOATER_VERTEX:302`, `FLOATER_FRAGMENT:332`, `BRIGHT:558`, `BLUR:566` (+2 more)
+- `src/pool/engine/shaders.ts` — `VERTEX:14`, `CURL:58`, `FORCES:71`, `DIVERGENCE:131`, `PRESSURE:144`, `GRADIENT:160`, `ADVECT:176`, `HEAT:189`, `MARBLE:214`, `WAVES:228`, `DYE:255`, `PARTICLES:279`, `FLOATER_VERTEX:302`, `FLOATER_FRAGMENT:332`, `BRIGHT:557`, `BLUR:565` (+2 more)
 - `src/pool/golden.ts` — `PHI:3`, `GOLDEN_ANGLE:4`, `FIBONACCI:5`, `PHRASE_WRAP:6`, `phyllotaxis:11`, `spiral:19`, `goldenSpread:26`, `wander:29`, `mulberry32:36`
 - `src/pool/groove.ts` — `GrooveFrame:7`, `GrooveContext:8`, `GrooveOnset:13`, `GrooveState:15`, `createGroove:58`
 - `src/pool/host.ts` — `createHost:51`, `PoolHost:55`
@@ -293,7 +293,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/song/atmosphere.css`
 - `src/song/coach-flow.css`
 - `src/song/cues.ts` — `padChord:29`, `bassHint:36`, `hintNote:42`, `tickIn:48`, `chime:58`, `glint:66`, `interlude:75`, `hush:95`, `say:101`
-- `src/song/deck.ts` — `Family:27`, `Kind:28`, `Rhythm:29`, `Context:31`, `Card:38`, `Deck:79`, `FAMILY_LABEL:86`, `KIND_LABEL:87`, `buildDeck:299`, `rhythmSourceId:1062`, `rhythmStudy:1068`, `noteName:1137`, `mixDecks:1148`, `Focus:1177`, `FOCUS_FAMILIES:1178`, `FOCUS_LABEL:1184` (+1 more)
+- `src/song/deck.ts` — `Family:27`, `Kind:28`, `Rhythm:29`, `Context:31`, `Card:38`, `Deck:79`, `FAMILY_LABEL:86`, `KIND_LABEL:87`, `buildDeck:299`, `rhythmSourceId:1062`, `rhythmStudy:1068`, `noteName:1137`, `mixDecks:1148`, `Focus:1177`, `FOCUS_FAMILIES:1178`, `FOCUS_LABEL:1184` (+2 more)
 - `src/song/ear.ts` — `EarTier:8`, `EAR_TIERS:16`, `scaleNotes:24`, `earPhrase:36`, `echoOfTune:89`
 - `src/song/estimator.ts` — `Estimator:6`, `createEstimator:20`
 - `src/song/evidence.ts` — `Tally:10`, `Timing:12`, `Evidence:20`, `EvidenceLog:43`, `createEvidence:54`, `timingOf:98`
@@ -306,6 +306,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/song/harmony.ts` — `ChordKind:15`, `Chord:17`, `parseChord:53`, `isDominant:108`, `isMinorType:109`, `pretty:114`, `ScaleKind:125`, `Scale:139`, `Mode:148`, `Key:149`, `nice:163`, `makeScale:171`, `makeKey:179`, `spellIn:191`, `ChordEvent:200`, `KeyCentre:212` (+4 more)
 - `src/song/ids.ts` — `GLUE:6`, `isShared:9`, `glue:11`, `localId:14`, `tuneOf:20`
 - `src/song/judge.ts` — `takeShare:11`, `cleanTake:16`
+- `src/song/keyStudy.ts` — `KEY_STUDY_PREFIX:17`, `TreeFocus:19`, `RelevantMode:21`, `RelevantExercise:30`, `CenterPlan:41`, `isKeyStudyId:76`, `keyStudyId:80`, `hubIdFromStudyId:84`, `parseHubId:90`, `keyStudySheet:158`, `keyRelevantModes:230`, `resolveTreeSelection:273`
 - `src/song/kin.ts` — `ScaleTopic:9`, `parseScaleId:19`, `kinship:33`
 - `src/song/leitner.ts` — `Result:18`, `CardState:20`, `Settings:30`, `AttemptConditions:41`, `Attempt:52`, `SessionEntry:70`, `Store:79`, `BOX_DAYS:89`, `BOXES:90`, `loadSharedSkills:118`, `loadStore:140`, `saveStore:159`, `loadStores:181`, `chronologicalAttempts:198`, `saveStores:211`, `saveMeta:231` (+11 more)
 - `src/song/lines.ts` — `LineNote:10`, `Span:16`, `ScaleDrill:22`, `scaleLine:42`, `arpLine:84`, `guideLine:97`, `chainLine:127`
@@ -324,6 +325,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/song/sessionSet.ts` — `SESSION_SET_KEY:10`, `loadSessionSet:30`, `subscribeSessionSet:34`, `resolveSessionSet:40`, `saveSessionSet:46`, `toggleSessionTune:53`, `addSessionTune:61`, `SessionSetApi:68`, `useSessionSet:76`
 - `src/song/song.css`
 - `src/song/spot.ts` — `Spot:11`, `Trouble:26`, `spotOf:35`, `createTrouble:47`, `spotCard:98`, `fingerFor:116`
+- `src/song/startPhrase.ts` — `START_PHRASE_LENGTH:9`, `StartPhraseState:15`, `StartPhraseTracker:21`, `createStartPhrase:26`
 - `src/song/stats.ts` — `familyOf:9`, `attemptsOf:19`, `CardTrend:23`, `cardTrend:31`, `SessionPoint:47`, `sessionTrend:51`, `totals:55`, `meanShare:67`
 - `src/song/support.ts` — `Support:25`, `createSupport:36`
 - `src/song/theme.ts` — `THEME_MIN_NOTES:4`, `THEME_MAX_NOTES:5`, `THEME_MAX_TUNES:6`, `ThemeSource:8`, `OpeningTheme:14`, `ThemeCatalog:20`, `ThemeCandidate:25`, `buildThemeCatalog:34`, `rankThemeMatches:56`, `ThemeCapture:72`, `initThemeCapture:84`, `stepThemeCapture:92`
@@ -347,7 +349,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/sync/state.ts` — `MergeResult:7`, `SyncConflict:7`, `SyncSnapshot:7`, `SyncTransaction:7`, `parseSyncSnapshot:8`, `flushSyncJournal:9`, `getSyncState:9`, `subscribeSyncState:9`, `initializeSyncJournal:15`, `captureSnapshot:29`, `mergeSnapshot:94`
 - `src/sync/sync.css`
 - `src/sync/transport.ts` — `PairedDevice:3`, `PairInvite:10`, `SyncConnection:18`, `SyncTransportOptions:29`, `SyncTransport:42`, `syncNetworkConfig:51`, `encodePairInvite:149`, `decodePairInvite:153`, `createSyncTransport:458`
-- `src/tools/GuitarTools.tsx` — `GuitarTools:30`, `GuitarToolsRoom:35`
+- `src/tools/GuitarTools.tsx` — `GuitarTools:51`, `GuitarToolsRoom:56`
 - `src/tools/timing.ts` — `MIN_TOOL_BPM:1`, `MAX_TOOL_BPM:2`, `clampToolBpm:4`, `tapTempo:9`
 - `src/tools/tools.css`
 - `src/tools/useTuner.ts` — `TunerReading:6`, `useTuner:9`

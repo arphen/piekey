@@ -10,11 +10,11 @@ export const ANCHORS = {
   orbit: [0.025, 0.04, 0.08, 0.13, 0.2], // vortex orbit, rad/s
   velocityHalfLife: [3, 3.5, 4, 6, 8], // s
   flowPeriod: [14, 12, 10, 8, 6], // s for each flow phase before it restarts unseen
-  saturation: [1, 1.12, 1.25, 1.38, 1.52], // poison green against the dark water, from the start
-  sepia: [0.04, 0.02, 0, 0, 0],
-  brightness: [0.54, 0.58, 0.63, 0.68, 0.72], // photograph opacity over the dark water
-  contrast: [1.3, 1.4, 1.52, 1.62, 1.72], // a tone curve that keeps the water gaps dark
-  spread: [0.65, 0.8, 0.95, 1, 1], // how far the photograph reaches beyond the room's lower-right
+  saturation: [1.12, 1.24, 1.38, 1.52, 1.66], // poison green against the dark water, from the start
+  sepia: [0, 0, 0, 0, 0],
+  brightness: [0.58, 0.64, 0.70, 0.76, 0.82], // photograph opacity over the dark water
+  contrast: [1.38, 1.48, 1.58, 1.66, 1.74], // a tone curve that keeps the water gaps dark
+  spread: [0.78, 0.88, 0.96, 1, 1], // wraps the harbor room from the start
   emission: [0, 0.15, 0.4, 0.7, 1],
   bloom: [0, 0.08, 0.3, 0.55, 0.8],
   rippleHalfLife: [0.6, 0.8, 1.1, 1.5, 2],
