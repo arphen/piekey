@@ -5,6 +5,7 @@
   --melody: #8ee6a8;
   --chords: #d69463;
   --scales: #6de64b;
+  --technique: #58d4b4;
   --harmony: #dfc068;
   --reading: #7cc8c2;
   --ear: #a4d97c;
@@ -61,6 +62,7 @@
 }
 
 .fam-scales { --fam: var(--scales); }
+.fam-technique { --fam: var(--technique); }
 .fam-harmony { --fam: var(--harmony); }
 .fam-melody { --fam: var(--melody); }
 .fam-chords { --fam: var(--chords); }
@@ -348,6 +350,12 @@
   color: var(--good);
 }
 
+.ss-say.is-soft {
+  color: var(--ink-soft);
+  font-size: clamp(16px, 1.7vw, 21px);
+  letter-spacing: 0.01em;
+}
+
 .ss-ready .ss-say {
   margin-top: clamp(10px, 2.4vh, 26px);
 }
@@ -389,6 +397,10 @@
   flex: 1;
   background: rgba(255, 240, 220, 0.07);
   transition: background 0.6s;
+}
+
+.ss-progress li.is-block-start {
+  margin-left: 8px;
 }
 
 .ss-progress li.is-now {
@@ -489,10 +501,103 @@
 }
 
 .ss-countin {
-  font-size: clamp(120px, 26vh, 260px);
+  font-size: clamp(96px, 20vh, 180px);
   font-weight: 400;
-  color: var(--fam);
+  color: color-mix(in srgb, var(--fam) 64%, transparent);
+  text-shadow: 0 0 36px rgba(109, 230, 75, 0.32);
   animation: ss-beat 0.55s ease-out both;
+}
+
+/* Eye-level beat rail directly above the score: felt in the reading line of sight */
+.ss-beat-rail {
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 12px;
+  border: 1px solid rgba(154, 214, 146, 0.16);
+  border-radius: 999px;
+  background: rgba(6, 13, 9, 0.78);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.ss-beat-rail.is-downbeat {
+  border-color: rgba(156, 255, 99, 0.45);
+  box-shadow: 0 0 18px rgba(109, 230, 75, 0.18);
+}
+.ss-beat-rail.is-reentry {
+  border-color: rgba(242, 207, 102, 0.58);
+  background: rgba(16, 24, 12, 0.9);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.42), 0 0 22px rgba(242, 207, 102, 0.18);
+}
+.ss-beat-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ss-beat-dot {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid rgba(154, 214, 146, 0.2);
+  border-radius: 50%;
+  color: rgba(190, 218, 188, 0.46);
+  font: 600 10px/1 var(--font-mono);
+  transition: transform 0.12s, background 0.14s, border-color 0.14s, color 0.14s;
+}
+.ss-beat-dot.is-one {
+  border-color: rgba(223, 192, 104, 0.42);
+  color: rgba(235, 212, 140, 0.76);
+}
+.ss-beat-dot.is-now {
+  transform: scale(1.16);
+  border-color: rgba(156, 255, 99, 0.9);
+  background: rgba(109, 230, 75, 0.28);
+  color: #eefce7;
+  box-shadow: 0 0 12px rgba(109, 230, 75, 0.52);
+  animation: ss-beat-dot-hit var(--beat-decay, 0.5s) ease-out both;
+}
+.ss-beat-dot.is-one.is-now {
+  transform: scale(1.24);
+  border-color: #f2cf66;
+  background: rgba(242, 207, 102, 0.34);
+  color: #fffbe6;
+  box-shadow: 0 0 16px rgba(242, 207, 102, 0.6);
+}
+@keyframes ss-beat-dot-hit {
+  0% { transform: scale(1.26); }
+  100% { transform: scale(1.04); }
+}
+.ss-beat-cue {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding-left: 10px;
+  border-left: 1px solid rgba(154, 214, 146, 0.22);
+  font: 500 11px/1.2 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #f7e49e;
+}
+.ss-beat-cue i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f2cf66;
+  box-shadow: 0 0 8px rgba(242, 207, 102, 0.8);
+}
+
+/* First-note landing anticipation during final 2 beats before Bar 1 loops back */
+.ss .score .vf-stavenote.is-reentry .vf-notehead path {
+  fill: #f2cf66;
+  stroke: #f2cf66;
+  filter: drop-shadow(0 0 7px rgba(242, 207, 102, 0.72));
 }
 
 .ss-veil {
@@ -1423,32 +1528,125 @@
   stroke: var(--warn);
 }
 
-/* on the staff: a hollow head at the height that was played */
+/* on the staff: engraved wrong notehead with real ledger lines, line/space helpers & upright accidental */
 
 .ss-score {
   position: relative;
 }
 
-.ss-ghost-note {
+.ss-ghost-wrap {
   position: absolute;
-  box-sizing: border-box;
-  border: 1.5px solid var(--warn);
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--warn) 16%, transparent);
-  transform: rotate(-20deg);
-  opacity: 0.85;
   pointer-events: none;
-  animation: ss-ghost-note 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  z-index: 3;
+  animation: ss-ghost-note 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
-.ss-ghost-note i {
+.ss-ghost-head {
   position: absolute;
-  right: calc(100% + 2px);
+  inset: 0;
+  box-sizing: border-box;
+  border: 1.8px solid var(--warn);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--warn) 22%, rgba(6, 12, 9, 0.72));
+  transform: rotate(-20deg);
+}
+
+.ss-ghost-ledger {
+  position: absolute;
+  left: -45%;
+  width: 190%;
+  height: 1.4px;
+  background: rgba(242, 154, 122, 0.85);
+  transform: translateY(-50%);
+}
+
+.ss-ghost-line {
+  position: absolute;
+  left: -38%;
   top: 50%;
-  transform: translateY(-55%) rotate(20deg);
-  font: 500 15px/1 var(--font-display);
+  width: 176%;
+  height: 1.1px;
+  background: rgba(242, 154, 122, 0.45);
+  transform: translateY(-50%);
+}
+
+.ss-ghost-space {
+  position: absolute;
+  left: -32%;
+  width: 164%;
+  height: 1px;
+  background: rgba(242, 154, 122, 0.32);
+}
+.ss-ghost-space.is-top { top: 0; }
+.ss-ghost-space.is-bot { bottom: 0; }
+
+.ss-ghost-acc {
+  position: absolute;
+  right: calc(100% + 3px);
+  top: 50%;
+  transform: translateY(-52%);
+  font: 600 15px/1 var(--font-display);
   font-style: normal;
-  color: var(--warn);
+  color: #ffab8c;
+  text-shadow: 0 1px 4px rgba(5, 10, 8, 0.9);
+}
+
+.ss-ghost-name {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 5px);
+  transform: translateX(-50%);
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(14, 10, 9, 0.88);
+  color: #ffb195;
+  font: 600 10px/1.15 var(--font-mono);
+  white-space: nowrap;
+}
+
+/* Visual-mechanical micro-staff mistake comparison below the score */
+.ss-mistake-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  margin: 2px auto 0;
+  padding: 6px 14px 6px 10px;
+  border: 1px solid rgba(229, 131, 99, 0.34);
+  border-radius: 12px;
+  background: rgba(14, 14, 12, 0.82);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.38);
+  animation: ss-rise 0.22s ease-out both;
+}
+.ss-mistake-staff {
+  flex: none;
+  overflow: visible;
+}
+.ss-ms-line { stroke: rgba(212, 232, 206, 0.32); stroke-width: 0.9; }
+.ss-ms-ledger { stroke-width: 1.1; }
+.ss-ms-ledger.is-played { stroke: rgba(255, 168, 134, 0.85); }
+.ss-ms-ledger.is-want { stroke: rgba(156, 255, 99, 0.82); }
+.ss-ms-head.is-played { fill: rgba(229, 131, 99, 0.25); stroke: #ff9c78; stroke-width: 1.5; }
+.ss-ms-head.is-want { fill: #8eff66; stroke: #8eff66; stroke-width: 1; }
+.ss-ms-acc.is-played { fill: #ffae90; font: 600 11px/1 var(--font-display); text-anchor: middle; }
+.ss-ms-arrow { stroke: rgba(242, 207, 102, 0.55); stroke-width: 1; stroke-dasharray: 2 2; }
+
+.ss-mistake-copy {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+}
+.ss-mistake-pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font: 500 12.5px/1.2 var(--font-display);
+}
+.ss-mistake-pair b.is-played { color: #ffaa8c; font-weight: 600; }
+.ss-mistake-pair b.is-want { color: #9cff63; font-weight: 600; }
+.ss-mistake-pair em { color: var(--ink-faint); font-style: normal; }
+.ss-mistake-copy small {
+  color: var(--ink-soft);
+  font: 400 10.5px/1.2 var(--font-mono);
 }
 
 .ss .ss-score .vf-stavenote path {
@@ -1497,17 +1695,29 @@
 /* the melody playing along: only there while it is */
 
 .ss-aid {
-  display: inline-grid;
-  width: 22px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   color: var(--fam);
-  transition: opacity 1.2s;
+  transition: opacity 1.1s;
 }
 
 .ss-aid svg {
+  width: 20px;
+  height: 20px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;
   stroke-linecap: round;
+}
+
+.ss-aid em {
+  font: 500 9.5px/1 var(--font-mono);
+  font-style: normal;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--fam) 85%, var(--ink));
+  white-space: nowrap;
 }
 
 @keyframes ss-ghost {
@@ -1958,6 +2168,12 @@
 
 .ss-passes i.is-in {
   background: var(--good);
+}
+
+.ss-passes i.is-settle {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.25px color-mix(in srgb, var(--fam) 68%, var(--ink-soft));
+  opacity: 0.78;
 }
 
 .ss-runbars {

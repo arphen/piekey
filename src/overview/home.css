@@ -930,3 +930,72 @@
   .hm-drills { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hm-legend { display: none; }
 }
+
+/* ---------- holistic foundations / mechanics shelf ---------- */
+
+.hm-foundations {
+  display: grid;
+  gap: 9px;
+  padding: 13px 14px;
+  border: 1px solid rgba(88, 212, 180, 0.2);
+  border-radius: 14px;
+  background: linear-gradient(160deg, rgba(10, 26, 22, 0.62), rgba(6, 13, 10, 0.78));
+}
+.hm-foundations > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.hm-foundations > header h2 {
+  margin: 0;
+  font: 500 13px/1.2 var(--font-display);
+  color: var(--ink);
+  letter-spacing: 0.01em;
+}
+.hm-foundations > header span {
+  font: 400 10px/1 var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(124, 216, 194, 0.78);
+}
+.hm-found-list {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.home .hm-found-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid rgba(154, 214, 146, 0.12);
+  border-radius: 10px;
+  background: rgba(7, 16, 13, 0.64);
+  text-align: left;
+}
+.home .hm-found-row:hover {
+  border-color: rgba(88, 212, 180, 0.5);
+  background: rgba(12, 30, 24, 0.84);
+  transform: translateX(2px);
+}
+.hm-found-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.hm-found-copy strong {
+  font: 500 12.5px/1.2 var(--font-ui);
+  color: var(--ink);
+}
+.hm-found-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 400 10px/1.3 var(--font-mono);
+  color: var(--ink-faint);
+}

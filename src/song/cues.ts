@@ -68,6 +68,12 @@ export function glint() {
   if (a) [84, 91].forEach((m, i) => a.shots.play(pluckBuffer(m), a.out, a.now + i * 0.07, 0.22, 0.9, 0.3));
 }
 
+/** A quiet rising fifth when a clean pass lifts the tempo a notch. */
+export function lift() {
+  const a = ready();
+  if (a) [79, 86].forEach((m, i) => a.shots.play(pluckBuffer(m), a.out, a.now + i * 0.065, 0.2, 0.7, 0.25));
+}
+
 /**
  * A few bars of air between sessions: the home chord opened out slowly, then its fourth and
  * back. Returns how long it lasts, in ms (0 when audio isn't running).

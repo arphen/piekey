@@ -14,7 +14,7 @@ import { loadStore, today } from "../song/leitner";
 import * as followerHook from "../follow/useFollower";
 
 const playback = vi.hoisted(() => ({
-  playing: false, counting: 0, beat: null, activeTarget: -1, activeSlot: -1,
+  playing: false, counting: 0, breathing: false, beat: null, activeTarget: -1, activeSlot: -1,
   results: [], wrong: [], lastPass: null as PassScore | null, drift: null,
   play: vi.fn(async () => undefined), stop: vi.fn(),
 }));
@@ -22,7 +22,7 @@ const playbackMix = vi.hoisted(() => ({ current: {} as Record<string, unknown> }
 vi.mock("tone", () => ({ start: async () => undefined }));
 vi.mock("../audio/context", () => ({ ensureAudio: () => undefined }));
 vi.mock("../tunes/usePlayback", () => ({ usePlayback: (_tl: unknown, mix: Record<string, unknown>) => { playbackMix.current = mix; return playback; } }));
-vi.mock("../song/cues", () => ({ bassHint() {}, chime() {}, glint() {}, hintNote() {}, hush() {}, padChord() {}, say() {} }));
+vi.mock("../song/cues", () => ({ bassHint() {}, chime() {}, glint() {}, hintNote() {}, hush() {}, lift() {}, padChord() {}, say() {} }));
 
 describe("session assessment trust", () => {
   let root: Root;
@@ -314,6 +314,46 @@ describe("session assessment trust", () => {
     expect(session.phase).toBe("time");
   });
 
+  it("forgives a rough Pass 1 as a settle-in pass without blocking clean, slowing, or polluting evidence", async () => {
+    input.status = "listening";
+    await act(async () => session.begin([card.id]));
+    await act(async () => session.go("time"));
+    await act(async () => vi.advanceTimersByTime(950));
+    const start = session.bpm;
+    // Pass 1 stumble: forgiven settle-in pass
+    await pass(card, { hit: 4, total: 10 });
+    expect(session.settling).toBe(true);
+    expect(session.passes).toHaveLength(0);
+    expect(session.passLog).toEqual([{ share: 0.4, settle: true }]);
+    expect(session.bpm).toBe(start);
+    // Pass 2 clean: still concludes "clean" because Pass 1 was forgiven
+    await pass(card);
+    expect(session.settling).toBe(false);
+    expect(session.outcome).toMatchObject({ result: "clean", bpm: start });
+  });
+
+  it("tightens adaptive loop turnaround to continuous once a clean pass lands and supports loop override", async () => {
+    const melody = deck.cards.find((candidate) => candidate.family === "melody" && !candidate.memory && !candidate.run)!;
+    input.status = "listening";
+    await act(async () => session.begin([melody.id]));
+    await act(async () => session.go("time"));
+    await act(async () => vi.advanceTimersByTime(950));
+    expect(session.loopMode).toBe("adaptive");
+    expect(playbackMix.current.breath).toBe(true); // Box 0 starts with live-band turnaround
+    await act(async () => session.setLoopMode("continuous"));
+    expect(playbackMix.current.breath).toBe(false);
+    await act(async () => session.setLoopMode("turnaround"));
+    expect(playbackMix.current.breath).toBe(true);
+    await act(async () => session.setLoopMode("adaptive"));
+    // Lower bpm below target; first pass after manual tempo change establishes the new tempo,
+    // then the next clean pass locks adaptive loop into continuous mode while climbing.
+    await act(async () => session.tempo(-8));
+    await pass(melody, { bpm: session.bpm, tempoStable: false });
+    await pass(melody, { bpm: session.bpm, tempoStable: true });
+    expect(session.loopLocked).toBe(true);
+    expect(playbackMix.current.breath).toBe(false);
+  });
+
   it("slows a step without lowering the first time's goal, and holds the tempo when the timing was not caught", async () => {
     input.status = "listening";
     await act(async () => session.begin([card.id]));
@@ -321,8 +361,9 @@ describe("session assessment trust", () => {
     await act(async () => vi.advanceTimersByTime(950));
     const start = session.bpm;
     const goal = session.target;
-    await pass(card, { hit: 6, total: 10 });
-    await pass(card, { hit: 6, total: 10 });
+    await pass(card, { hit: 6, total: 10 }); // Pass 1 settle-in (forgiven)
+    await pass(card, { hit: 6, total: 10 }); // scored miss 1
+    await pass(card, { hit: 6, total: 10 }); // scored miss 2 → slows
     expect(session.bpm).toBe(start - 4);
     expect(session.target).toBe(goal); // a clean pass earns the way back
     await pass(card);
@@ -345,6 +386,7 @@ describe("session assessment trust", () => {
     await act(async () => session.go("time"));
     await act(async () => vi.advanceTimersByTime(950));
     const start = session.bpm;
+    await pass(tune, uneven(tune)); // Pass 1 settle-in
     await pass(tune, uneven(tune));
     await pass(tune, uneven(tune));
     expect(session.bpm).toBe(start); // the notes are there: neither slower nor faster
@@ -360,6 +402,7 @@ describe("session assessment trust", () => {
     await act(async () => vi.advanceTimersByTime(950));
     const start = session.bpm;
     const uneven = { at: card.tl.targets.map((_, i) => (i % 2 ? 140 : -140)) };
+    await pass(card, uneven); // Pass 1 settle-in
     await pass(card, uneven);
     await pass(card, uneven);
     expect(session.bpm).toBe(start - 4);

@@ -36,6 +36,7 @@ interface ScoreProps {
   noteLabels?: (string | null)[] | null; // a label under each note, e.g. its degree over the chord
   cursor?: boolean; // a lit column behind the active note: where the eyes come back to
   cursorPulse?: number; // changes when the cursor should call for attention
+  reentryCue?: boolean; // last 2 beats before Bar 1 loops back: softly highlight note 0 as the landing target
   barsPerLine?: number; // short excerpts can fill their available width
   playhead?: () => number | null; // where the heard music is, as a printed note index and the way to the next (3.4): a faint line glides there
 }
@@ -209,6 +210,7 @@ export function Score({
   noteLabels = null,
   cursor = false,
   cursorPulse = 0,
+  reentryCue = false,
   barsPerLine,
   playhead,
 }: ScoreProps) {
@@ -556,6 +558,7 @@ export function Score({
     noteEls.current.forEach((el, i) => {
       const bar = noteBars.current[i];
       el.classList.toggle("is-active", active.has(i));
+      el.classList.toggle("is-reentry", Boolean(reentryCue && i === 0));
       el.classList.toggle("is-hit", results[i] === "hit");
       el.classList.toggle("is-miss", results[i] === "miss");
       el.classList.toggle("is-dim", focus !== null && !focus.has(bar));
@@ -563,7 +566,7 @@ export function Score({
       el.classList.toggle("is-hidden", hide !== null && hide.has(bar) && concealed);
     });
     hostRef.current?.querySelectorAll(".vf-score-note-links").forEach((el) => el.setAttribute("opacity", hide !== null && noteVisibility !== "played" ? "0" : "1"));
-  }, [activeKey, focusKey, hideKey, noteVisibility, results, exercise, width, barsPerLine, showFingering, noteLabels]);
+  }, [activeKey, focusKey, hideKey, noteVisibility, results, reentryCue, exercise, width, barsPerLine, showFingering, noteLabels]);
 
   // The cursor slides to the active note; it is moved, never redrawn.
   useEffect(() => {

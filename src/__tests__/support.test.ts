@@ -39,4 +39,13 @@ describe("the melody shadow", () => {
     expect(later[0]).toBeLessThan(one);
     expect(later[4]).toBe(0);
   });
+
+  it("supports a gentle warm-start blend that dissolves as the player lands notes", () => {
+    const s = createSupport(times, { warmStart: 0.36 });
+    const first = pass(s, () => true);
+    expect(first[0]).toBeGreaterThan(0.15); // joins in softly on note 1
+    expect(first[15]).toBeLessThan(first[0]); // fades out as notes land
+    const second = pass(s, () => true);
+    expect(second[15]).toBe(0); // player carries it solo
+  });
 });

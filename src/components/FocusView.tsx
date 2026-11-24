@@ -18,6 +18,7 @@ type Mode = Exclude<Focus, "all">;
 const COPY: Record<Mode, { label: string; empty: string; glyph: GlyphName }> = {
   changes: { label: "Changes", empty: "No chord exercises in this tune.", glyph: "chords" },
   scales: { label: "Scales", empty: "No scale exercises in this tune.", glyph: "scales" },
+  technique: { label: "Technique", empty: "No technique drills available yet.", glyph: "scales" },
   ear: { label: "Ear", empty: "No ear exercises in this tune.", glyph: "ear" },
   reading: { label: "Reading", empty: "No reading exercises in this tune.", glyph: "reading" },
 };

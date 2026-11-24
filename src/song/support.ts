@@ -33,11 +33,18 @@ export interface Support {
   level(): number;
 }
 
-export function createSupport(times: number[]): Support {
+export interface SupportOptions {
+  /** Initial blend-in gain (0..1) so new/unfamiliar phrases breathe softly with you on note 1 and dissolve as notes land. */
+  warmStart?: number;
+}
+
+export function createSupport(times: number[], opts: SupportOptions = {}): Support {
   const n = times.length;
-  const hits = new Float64Array(n).fill(PRIOR_P * PRIOR_WEIGHT);
-  const misses = new Float64Array(n).fill((1 - PRIOR_P) * PRIOR_WEIGHT);
-  const gains = new Float64Array(n);
+  const warm = Math.max(0, Math.min(0.6, opts.warmStart ?? 0));
+  const prior = warm > 0 ? 0.68 : PRIOR_P;
+  const hits = new Float64Array(n).fill(prior * PRIOR_WEIGHT);
+  const misses = new Float64Array(n).fill((1 - prior) * PRIOR_WEIGHT);
+  const gains = new Float64Array(n).fill(warm);
   const seen = new Float64Array(n); // the clock when each note was last scored
   let clock = 0;
 

@@ -76,7 +76,7 @@ export function lineSheet(card: Card, keySignature: string): Pick<ReadingExercis
       const v = value(dur);
       const shown = v.tuplet ? dur : PLAIN.find((x) => x <= dur + 1e-3) ?? dur; // an odd length is written short, then a rest
       const sym = card.context[i]?.chord?.symbol ?? "";
-      if (card.family !== "scales" && sym && sym !== lastChord) {
+      if (card.family !== "scales" && card.family !== "technique" && sym && sym !== lastChord) {
         chordSymbols.push(sym);
         chordBeats.push(target.t - slot.start);
         lastChord = sym;

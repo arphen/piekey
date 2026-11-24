@@ -42,10 +42,11 @@ const MINOR_SLOTS: { skill: string; label: string; dR: number; dA: number; paren
 
 const SCION_MODES: { id: TreeFocus; label: string; angle: number }[] = [
   { id: "scales", label: "Scales", angle: -90 },
-  { id: "changes", label: "Changes", angle: -18 },
-  { id: "triads", label: "Triads", angle: 54 },
-  { id: "ear", label: "Ear", angle: 126 },
-  { id: "reading", label: "Reading", angle: 198 },
+  { id: "technique", label: "Technique", angle: -30 },
+  { id: "changes", label: "Changes", angle: 30 },
+  { id: "triads", label: "Triads", angle: 90 },
+  { id: "ear", label: "Ear", angle: 150 },
+  { id: "reading", label: "Reading", angle: 210 },
 ];
 
 type RhythmTier = "none" | "straight" | "triplets" | "sixteenths";

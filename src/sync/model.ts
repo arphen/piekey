@@ -142,7 +142,8 @@ function validSettings(value: unknown): boolean {
   return isRecord(value) && optional(value.newPerSession, count)
     && [value.guide, value.voice, value.shuffle, value.mix].every((flag) => optional(flag, (entry) => typeof entry === "boolean"))
     && optional(value.window, (fret) => fret === null || count(fret))
-    && optional(value.length, (length) => typeof length === "string" && ["short", "normal", "long"].includes(length));
+    && optional(value.length, (length) => typeof length === "string" && ["short", "normal", "long"].includes(length))
+    && optional(value.loop, (mode) => typeof mode === "string" && ["adaptive", "turnaround", "continuous"].includes(mode));
 }
 
 function validGoal(value: unknown, tuneId: string, id: string): boolean {

@@ -27,6 +27,8 @@ export interface CardState {
   last: Result | null;
 }
 
+export type LoopMode = "adaptive" | "turnaround" | "continuous";
+
 export interface Settings {
   newPerSession: number;
   guide: boolean; // hear the melody while playing it in time
@@ -35,6 +37,7 @@ export interface Settings {
   shuffle?: boolean; // the session's exercises in a mixed order
   mix?: boolean; // exercises from the other tunes in the library too (on unless turned off)
   length?: "short" | "normal" | "long"; // how long a session is planned for
+  loop?: LoopMode; // how looped exercises wrap back to bar 1
 }
 
 /** One time through an exercise, for the numbers over time. */
@@ -299,13 +302,44 @@ export function planExtra(deck: Deck, store: Store, n = 6): string[] {
     .slice(0, n);
 }
 
+const SPEED_BUILD_CAP_BOX = 3; // while below 90% of goalBpm, stay on 1–3 day spacing to build speed
+const SPEED_READY_RATIO = 0.9;
+
 export function applyResult(prev: CardState | undefined, card: Card, result: Result, playedBpm: number, day: string): CardState {
   const s: CardState = prev ?? { box: 1, due: day, bpm: card.bpm, seen: 0, clean: 0, last: null };
   if (result === "skip") return { ...s, last: "skip" };
-  const box = result === "clean" ? Math.min(BOXES, s.box + 1) : result === "ok" ? Math.max(1, s.box) : 1;
-  const bpm = result === "clean" ? Math.min(card.goalBpm, playedBpm + 4) : playedBpm;
-  return { ...s, box, due: addDays(day, BOX_DAYS[box]), bpm, seen: s.seen + 1, clean: s.clean + (result === "clean" ? 1 : 0), last: result,
-    ...(result === "clean" && Number.isFinite(playedBpm) && playedBpm > 0 ? { bestCleanBpm: Math.max(s.bestCleanBpm ?? 0, playedBpm) } : {}) };
+  const buildingSpeed = card.goalBpm > card.bpm && playedBpm < card.goalBpm * SPEED_READY_RATIO;
+  let box: number;
+  let bpm: number;
+  let due: string;
+  if (result === "clean") {
+    const rawBox = Math.min(BOXES, s.box + 1);
+    box = buildingSpeed ? Math.min(SPEED_BUILD_CAP_BOX, rawBox) : rawBox;
+    const farBelow = prev !== undefined && s.box >= 2 && card.goalBpm - playedBpm >= 20;
+    const step = farBelow ? 6 : 4;
+    bpm = Math.min(card.goalBpm, playedBpm + step);
+    due = addDays(day, BOX_DAYS[box]);
+  } else if (result === "ok") {
+    box = Math.max(1, s.box);
+    bpm = playedBpm;
+    due = addDays(day, BOX_DAYS[box]);
+  } else {
+    // Soft decay: step back gently instead of wiping a mastered card all the way to box 1,
+    // and ease tempo slightly so the next visit meets the player comfortably.
+    box = Math.max(1, s.box - 2);
+    bpm = Math.max(40, Math.min(playedBpm, s.bpm) - 4);
+    due = day;
+  }
+  return {
+    ...s,
+    box,
+    due,
+    bpm,
+    seen: s.seen + 1,
+    clean: s.clean + (result === "clean" ? 1 : 0),
+    last: result,
+    ...(result === "clean" && Number.isFinite(playedBpm) && playedBpm > 0 ? { bestCleanBpm: Math.max(s.bestCleanBpm ?? 0, playedBpm) } : {}),
+  };
 }
 
 /** A first clean pass on an exercise its relatives have prepared starts it further up the box. */

@@ -158,9 +158,10 @@ describe("coach entry", () => {
     Object.assign(mocked.session, {
       running: true, card, whole: card, active: -1, queue: [card.id], pos: 0, box: 2,
       phase: "time", memoryStage: "hidden", memoryReview: true, toggleMemoryPage: reveal,
-      passes: [], log: [], results: [], shadows: [], takes: { clean: 0, unclean: 0 }, flow: 0.5, run: 0, needClean: 0, pulse: null, beat: IDLE_BEAT,
+      passes: [], passLog: [], settling: false, loopMode: "adaptive", setLoopMode() {}, loopLocked: false, tempoLift: null, breathing: false, reentry: 0,
+      log: [], results: [], shadows: [], takes: { clean: 0, unclean: 0 }, flow: 0.5, run: 0, needClean: 0, pulse: null, beat: IDLE_BEAT,
       bpm: card.bpm, target: card.bpm, click: true,
-      playback: { playing: false, counting: 0, beat: IDLE_BEAT, activeTarget: -1, activeSlot: -1, lastPass: null, drift: null, results: [], wrong: [], async play() {}, stop() {}, beatAt: () => null },
+      playback: { playing: false, counting: 0, breathing: false, reentry: 0, beat: IDLE_BEAT, activeTarget: -1, activeSlot: -1, lastPass: null, drift: null, results: [], wrong: [], async play() {}, stop() {}, beatAt: () => null },
       togglePause() {}, hear() {}, go() {}, next() {},
     } satisfies Partial<SessionApi>);
     await act(async () => root.render(<SongCoach sheet={sheet} tl={tl} input={inputAt("listening", "guitar")} onClose={() => undefined} />));
@@ -297,10 +298,11 @@ describe("coach entry", () => {
     const togglePause = vi.fn(() => { mocked.session.paused = !mocked.session.paused; });
     Object.assign(mocked.session, {
       running: true, card, whole: card, active: -1, queue: [card.id], pos: 0, box: 2,
-      phase: "time", passes: [], log: [], results: [], shadows: [], takes: { clean: 0, unclean: 0 },
+      phase: "time", passes: [], passLog: [], settling: false, loopMode: "adaptive", setLoopMode() {}, loopLocked: false, tempoLift: null, breathing: false, reentry: 0,
+      log: [], results: [], shadows: [], takes: { clean: 0, unclean: 0 },
       flow: 0.5, run: 0, needClean: 0, pulse: null, beat: IDLE_BEAT,
       bpm: card.bpm, target: card.bpm, click: true,
-      playback: { playing: false, counting: 0, beat: IDLE_BEAT, activeTarget: -1, activeSlot: -1, lastPass: null, drift: null, results: [], wrong: [], async play() {}, stop() {}, beatAt: () => null },
+      playback: { playing: false, counting: 0, breathing: false, reentry: 0, beat: IDLE_BEAT, activeTarget: -1, activeSlot: -1, lastPass: null, drift: null, results: [], wrong: [], async play() {}, stop() {}, beatAt: () => null },
       togglePause, hear: vi.fn(), go: vi.fn(), next: vi.fn(),
     } satisfies Partial<SessionApi>);
     const listeners = new Set<(frame: InputFrame) => void>();

@@ -143,12 +143,29 @@ describe("the card box", () => {
   const deck = buildDeck(s, buildTimeline(s));
   const card = deck.cards[0];
 
-  it("moves cards up on a clean pass, back to box 1 on a miss", () => {
+  it("climbs tempo while capping long-term spacing until near goal, and decays gently on a miss", () => {
     const a = applyResult(undefined, card, "clean", card.bpm, "2026-11-13");
     expect(a).toMatchObject({ box: 2, due: "2026-11-14", bpm: card.bpm + 4 });
-    const b = applyResult({ ...a, box: 4 }, card, "fail", card.bpm, "2026-11-13");
-    expect(b).toMatchObject({ box: 1, due: "2026-11-13" });
+    // Still well below goalBpm: caps at box 3 (3-day speed-building spacing) and climbs +6 when far below
+    const mid = applyResult({ ...a, box: 3 }, card, "clean", card.bpm, "2026-11-13");
+    expect(mid.box).toBe(3);
+    expect(mid.bpm).toBe(Math.min(card.goalBpm, card.bpm + 6));
+    // Once near goalBpm (>= 90%), graduates cleanly into box 4 (7-day spacing)
+    const fast = applyResult({ ...a, box: 3 }, card, "clean", card.goalBpm, "2026-11-13");
+    expect(fast).toMatchObject({ box: 4, due: "2026-11-20" });
+    // Soft decay on fail: steps back 2 boxes instead of wiping to box 1, and trims tempo slightly
+    const b = applyResult({ ...a, box: 4, bpm: 80 }, card, "fail", 80, "2026-11-13");
+    expect(b).toMatchObject({ box: 2, due: "2026-11-13", bpm: 76 });
     expect(applyResult(a, card, "ok", card.bpm, "2026-11-13").box).toBe(2);
+  });
+
+  it("includes holistic shared technique cards (spiders, pyramid, skips, shifting, enclosures) inside playable frets", () => {
+    const tech = deck.cards.filter((c) => c.family === "technique");
+    expect(tech.map((c) => c.kind)).toEqual(expect.arrayContaining(["spider", "pyramid", "skip", "shift", "enclose"]));
+    for (const c of tech) {
+      expect(c.id.startsWith("tech:")).toBe(true);
+      expect(c.steps.every((st) => st !== null && st.fret <= MAX_FRET)).toBe(true);
+    }
   });
 
   it("plans due cards first, a few new ones, a scale card to warm up", () => {

@@ -280,8 +280,10 @@ describe("input lifecycle", () => {
     expect(playback.beatAt()).toBeCloseTo(0.14, 2); // heard 14.2 s and a paint ahead: 0.14 beats into the pass
     const near = (a: number, b: number) => Math.abs(a - b) < 1e-6;
     const breath = scheduledClicks.filter((c) => c.at > 12.15 - 1e-6 && c.at < 14.15 - 1e-6);
-    expect(breath.map((c) => c.buffer)).toEqual(["accent", "click", "click", "click"]);
-    expect(breath.map((c) => c.at).every((at, k) => near(at, 12.15 + k * 0.5))).toBe(true);
+    // Musical turnaround: groove (kick + hat) stays alive on all 4 beats, with subtle pickup clicks on the final 2 beats
+    expect(breath.filter((c) => c.buffer === "kick").map((c) => c.at)).toEqual([12.15, 12.65, 13.15, 13.65]);
+    expect(breath.filter((c) => c.buffer === "hat").map((c) => c.at)).toEqual([12.15, 12.65, 13.15, 13.65]);
+    expect(breath.filter((c) => c.buffer === "click").map((c) => c.at)).toEqual([13.15, 13.65]);
     expect(scheduledClicks.filter((c) => c.buffer === "kick" && near(c.at, 14.15))).toHaveLength(1); // the next pass starts on its beat
     await act(async () => playback.stop());
   });

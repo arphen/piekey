@@ -9,6 +9,7 @@ import { chronologicalAttempts, type Attempt, type SessionEntry, type Store } fr
 export function familyOf(id: string): Family {
   const own = localId(id);
   if (own.startsWith("scale:")) return "scales";
+  if (own.startsWith("tech:")) return "technique";
   if (own.startsWith("mel:")) return "melody";
   if (own.startsWith("read:")) return "reading";
   if (own.startsWith("ear:")) return "ear";

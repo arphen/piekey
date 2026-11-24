@@ -16,7 +16,14 @@ export type Length = "short" | "normal" | "long";
 export const LENGTHS: Length[] = ["short", "normal", "long"];
 export const LENGTH_MINUTES: Record<Length, number> = { short: 10, normal: 25, long: 45 };
 
-export type Role = "warmup" | "focus" | "review" | "music";
+export type Role = "warmup" | "focus" | "review" | "side" | "music";
+export const ROLE_LABEL: Record<Role, string> = {
+  warmup: "Warm-up",
+  focus: "Focus",
+  review: "Review",
+  side: "Side study",
+  music: "Music",
+};
 
 export interface Block {
   role: Role;
@@ -35,10 +42,11 @@ export interface SessionPlan {
   ids: string[]; // the cards in order
   minutes: number; // estimated
   why: string; // the focus, as one fact; empty when there is none
+  sideWhy?: string; // optional side-education reason when a holistic discovery card is woven in
   arc: Arc | null; // the arc to keep after this plan (new, carried on, or none)
 }
 
-const SECS: Record<Family, number> = { scales: 100, harmony: 130, melody: 160, chords: 130, reading: 100, ear: 70, fretboard: 60 };
+const SECS: Record<Family, number> = { scales: 100, technique: 85, harmony: 130, melody: 160, chords: 130, reading: 100, ear: 70, fretboard: 60 };
 const BETWEEN_S = 15; // intro and result screens around each card
 const ARC_DAYS = 10; // an arc rests after this long, resolved or not
 const RESOLVED = 0.5; // ... or once the mistake is down to this share of where it began
@@ -49,12 +57,19 @@ const ZONE_LOW = 0.6;
 const ZONE_HIGH = 0.85;
 const RUN_DAYS = 14; // a run-through's short bars are worked on for this long after it
 const AXIS_FAMILIES: Record<Axis, Family[]> = {
-  pitch: ["melody", "scales", "fretboard"],
-  time: ["scales", "melody"],
-  tempo: ["scales"],
+  pitch: ["melody", "scales", "technique", "fretboard"],
+  time: ["scales", "technique", "melody"],
+  tempo: ["scales", "technique"],
   chords: ["chords", "harmony"],
   reading: ["reading"],
   ear: ["ear"],
+};
+const WEAKNESS_TECH: Partial<Record<MistakeClass, string[]>> = {
+  crossing: ["tech:skip:adjacent", "tech:skip:octave"],
+  leaps: ["tech:skip:octave", "tech:skip:adjacent"],
+  shifts: ["tech:shift:connect"],
+  unsteady: ["tech:pyramid:core"],
+  accidental: ["tech:enclose:core", "tech:spider:1234"],
 };
 const ARC_KEY = "guitar-arc";
 
@@ -153,10 +168,14 @@ export function planBlocks(deck: Deck, store: Store, day: string, opts: PlanOpti
   // depends on how the last sessions went (the zone where practice teaches most)
   const base = planSession(goal ? { ...deck, intro: deck.intro.filter(servesGoal) } : deck, store, day, used, newCards(store));
 
-  // warm-up: something the hands know, never new
-  const warm =
+  // warm-up: something the hands know, never new. Rotates between known mechanics (spider/pyramid)
+  // and known scales once both have been met.
+  const knownTechWarm = deck.intro.find((id) => !used.has(id) && byId.get(id)?.family === "technique" && (store.cards[id]?.box ?? 0) >= 2);
+  const knownScaleWarm =
     deck.intro.find((id) => !used.has(id) && byId.get(id)?.family === "scales" && (store.cards[id]?.box ?? 0) >= 2) ??
     base.find((id) => byId.get(id)?.family === "scales" && known(id));
+  const preferTech = Boolean(knownTechWarm) && (store.sessions.length % 2 === 1 || !knownScaleWarm);
+  const warm = preferTech ? knownTechWarm : knownScaleWarm ?? knownTechWarm;
   const warmup: string[] = [];
 
   // focus: the arc's mistake, where it shows most
@@ -255,11 +274,52 @@ export function planBlocks(deck: Deck, store: Store, day: string, opts: PlanOpti
   focus = fit(focus, remaining);
   remaining -= spent(focus);
   if (!focus.length) why = "";
+
+  // Side study (holistic tutor education on the side): in normal/long un-goaled sessions for players
+  // with existing history, reserve one targeted mechanics drill or neglected holistic pillar before
+  // reviews fill the remaining budget, so side-education is never crowded out by review backlogs.
+  const side: string[] = [];
+  let sideWhy = "";
+  const hasHistory = Object.keys(store.cards).length > 0;
+  if (!goal && hasHistory && budget >= 20 && remaining >= 1) {
+    const pickUnlocked = (id: string) => byId.has(id) && !used.has(id) && unlocked(byId.get(id), store) && cost(id) <= remaining;
+    // 1. If a weakness arc has a matching physical/rhythmic technique drill, prescribe it quietly on the side.
+    const prescribed = weak ? (WEAKNESS_TECH[weak.cls] ?? []).find(pickUnlocked) : undefined;
+    if (prescribed) {
+      side.push(prescribed);
+      used.add(prescribed);
+      remaining -= cost(prescribed);
+      sideWhy = `Paired with ${weak!.fact}`;
+    } else {
+      // 2. Otherwise pick one holistic pillar not yet represented in this session (technique → reading → ear → fretboard).
+      const presentFamilies = new Set([...warmup, ...focus, ...base.slice(0, 4), ...music].map((id) => byId.get(id)?.family));
+      const pillars: { family: Family; reason: string }[] = [
+        { family: "technique", reason: "Foundations · finger & rhythm control" },
+        { family: "reading", reason: "Fresh eyes · sight-reading" },
+        { family: "ear", reason: "By ear · call & response" },
+        { family: "fretboard", reason: "Neck fluency · landmarks" },
+      ];
+      for (const pillar of pillars) {
+        if (presentFamilies.has(pillar.family)) continue;
+        const cand = deck.intro
+          .filter((id) => byId.get(id)?.family === pillar.family && pickUnlocked(id))
+          .sort((a, b) => (store.cards[a]?.box ?? 0) - (store.cards[b]?.box ?? 0))[0];
+        if (cand) {
+          side.push(cand);
+          used.add(cand);
+          remaining -= cost(cand);
+          sideWhy = pillar.reason;
+          break;
+        }
+      }
+    }
+  }
+
   const review = fit(base, remaining);
   remaining -= spent(review);
 
   // nothing at all due or named: the box's leftovers, so there is always a session
-  if (!focus.length && !review.length && !music.length) {
+  if (!focus.length && !review.length && !side.length && !music.length) {
     const extra = deck.intro.filter((id) => servesGoal(id) && !used.has(id) && known(id)).sort((a, b) => store.cards[a].box - store.cards[b].box);
     review.push(...fit(extra, remaining));
   }
@@ -269,11 +329,12 @@ export function planBlocks(deck: Deck, store: Store, day: string, opts: PlanOpti
       { role: "warmup", cards: warmup },
       { role: "focus", cards: focus },
       { role: "review", cards: review },
+      { role: "side", cards: side },
       { role: "music", cards: music },
     ] as const
   )
     .filter((b) => b.cards.length)
     .map((b) => ({ role: b.role, cards: [...b.cards], minutes: Math.round(spent(b.cards)) }));
   const ids = blocks.flatMap((b) => b.cards);
-  return { blocks, ids, minutes: ids.length ? Math.min(budget, Math.max(1, Math.round(spent(ids)))) : 0, why, arc };
+  return { blocks, ids, minutes: ids.length ? Math.min(budget, Math.max(1, Math.round(spent(ids)))) : 0, why, ...(sideWhy ? { sideWhy } : {}), arc };
 }

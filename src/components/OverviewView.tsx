@@ -4,9 +4,10 @@ import { cachedSong, useSongSummaries } from "../overview/useSongSummaries";
 import { hubIdForKey, keyDetail, keyName, practiceMap, songFill, songKey, type MapSong } from "../overview/map";
 import type { SongSummary } from "../overview/summary";
 import { FAMILY_LABEL, wholeTuneCard } from "../song/deck";
-import { BOXES } from "../song/leitner";
+import { BOXES, loadSharedSkills } from "../song/leitner";
 import { parseScaleId } from "../song/kin";
 import { keyStudyId, parseHubId, resolveTreeSelection, type CenterPlan, type TreeFocus } from "../song/keyStudy";
+import { TECHNIQUE_TRACKS } from "../song/technique";
 import { loadLibraryAsync, saveCurrentTuneId, saveLibrary } from "../tunes/library";
 import { DEMO_TUNES, type DemoTune } from "../tunes/demos";
 import { useSessionSet } from "../song/sessionSet";
@@ -267,6 +268,28 @@ export function OverviewView({
   const patternSkills = pickedKey ? pickedKey.skills.filter((s) => !s.skill.startsWith("run:")) : [];
   const rhythmSkills = pickedKey ? pickedKey.skills.filter((s) => s.skill === "run" || s.skill.startsWith("run:")) : [];
   const empty = !loading && !songs.length;
+  const foundations = useMemo(() => {
+    const shared = loadSharedSkills().cards;
+    // Show the active spider stage (highest unlocked) plus the 4 other holistic foundation pillars.
+    const spiders = TECHNIQUE_TRACKS.filter((t) => t.kind === "spider");
+    const activeSpider =
+      spiders.find((t) => !shared[t.id] || shared[t.id].box < 2) ?? spiders[spiders.length - 1];
+    const skips = TECHNIQUE_TRACKS.filter((t) => t.kind === "skip");
+    const activeSkip = skips.find((t) => !shared[t.id] || shared[t.id].box < 2) ?? skips[skips.length - 1];
+    const core = [
+      activeSpider,
+      TECHNIQUE_TRACKS.find((t) => t.kind === "pyramid")!,
+      activeSkip,
+      TECHNIQUE_TRACKS.find((t) => t.kind === "shift")!,
+      TECHNIQUE_TRACKS.find((t) => t.kind === "enclose")!,
+    ].filter(Boolean);
+    return core.map((t) => {
+      const st = shared[t.id];
+      const box = st?.box ?? 0;
+      const status = box >= 4 ? "mastered" as const : box > 0 ? "growing" as const : "unexplored" as const;
+      return { ...t, box, bpm: st?.bpm ?? t.bpm, status };
+    });
+  }, [revision, songs]);
 
   return (
     <main className="home">
@@ -640,7 +663,35 @@ export function OverviewView({
               </div>
             ) : null}
           </div>
-        ) : null}
+        ) : (
+          <section className="hm-foundations" aria-labelledby="hm-foundations-title">
+            <header>
+              <h2 id="hm-foundations-title">Foundations</h2>
+              <span>mechanics &amp; time</span>
+            </header>
+            <ul className="hm-found-list">
+              {foundations.map((f) => (
+                <li key={f.id}>
+                  <button
+                    type="button"
+                    className={`hm-found-row is-${f.status}`}
+                    onClick={() => {
+                      const targetTune = leadId ?? keyStudyId("M0");
+                      play(targetTune, f.id, leadId ? undefined : { focus: "technique", mixIds: [], studyHubIds: ["M0"] });
+                    }}
+                    title={f.why}
+                  >
+                    <span className="hm-found-copy">
+                      <strong>{f.short}</strong>
+                      <small>♩{f.bpm}→{f.goalBpm} · {f.insight}</small>
+                    </span>
+                    <BoxPips box={f.box} status={f.status} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         {input && input.status === "error" ? <ConnectGuitar input={input} /> : null}
         {error ? <p className="hm-error" role="alert">{error}</p> : null}

@@ -33,7 +33,7 @@ import "../tunes/tunes.css";
 import "../tunes/library.css";
 
 const NO_RESULTS: NoteResult[] = [];
-const EXERCISE_FAMILIES: Family[] = ["scales", "harmony", "chords", "reading", "ear", "fretboard"];
+const EXERCISE_FAMILIES: Family[] = ["scales", "technique", "harmony", "chords", "reading", "ear", "fretboard"];
 
 const noteLabel = (midi: number) => `${pitchClassToName(midi).replace("#", "♯")}${Math.floor(midi / 12) - 1}`;
 

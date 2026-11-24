@@ -16,7 +16,7 @@ import { makeScale, nice } from "./harmony";
 
 export const KEY_STUDY_PREFIX = "key-study:";
 
-export type TreeFocus = "scales" | "changes" | "reading" | "ear" | "triads";
+export type TreeFocus = "scales" | "changes" | "reading" | "ear" | "triads" | "technique";
 
 export interface RelevantMode {
   name: string;
@@ -71,6 +71,7 @@ const FOCUS_LABEL: Record<TreeFocus, string> = {
   reading: "Reading",
   ear: "Ear",
   triads: "Triads",
+  technique: "Technique",
 };
 
 export function isKeyStudyId(id: string | null | undefined): boolean {
@@ -371,14 +372,17 @@ export function resolveTreeSelection({
     }
     const ordered = sessionIds.length ? [...sessionIds] : songs.map((s) => s.tuneId);
     const tuneIds = ordered.filter((id) => byId.has(id));
+    const studyHubIds = tuneIds.length === 0 && selectedFocus === "technique" ? ["M0"] : [];
     return {
       kind: "focus",
       orbLabel: label,
-      orbSub: tuneIds.length ? `${tuneIds.length} song${tuneIds.length === 1 ? "" : "s"}` : "focus",
-      headline: `${label} focus`,
-      summary: `Focus strictly on ${label.toLowerCase()} exercises across your session.`,
+      orbSub: selectedFocus === "technique" ? "mechanics" : tuneIds.length ? `${tuneIds.length} song${tuneIds.length === 1 ? "" : "s"}` : "focus",
+      headline: selectedFocus === "technique" ? "Foundations · Technique" : `${label} focus`,
+      summary: selectedFocus === "technique"
+        ? "Spiders, rhythm pyramid, string skipping, position shifting & chord-tone enclosures."
+        : `Focus strictly on ${label.toLowerCase()} exercises across your session.`,
       tuneIds,
-      studyHubIds: [],
+      studyHubIds,
       focus: coachFocus,
       openTab: null,
       exercises: collectExercises(tuneIds, 4),

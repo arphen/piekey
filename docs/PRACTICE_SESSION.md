@@ -105,13 +105,19 @@ away. Asking for in time while a pass is already playing changes nothing: the pa
   the notes landed first time, forgiving the first and last note and one stray mark in twelve
   (`song/judge.ts`): detection is least reliable at the edges of a phrase.
 - **In time.** If the player came in with a steady tempo of their own, the click starts ~12 % under
-  it, so they settle down onto it. Only clean passes raise it; two short passes lower it a step
-  (4 bpm, as much as a clean pass earns). The first time, where the visit is heading stays put, so
+  it, so they settle down onto it. **First-run grace (settle-in pass):** on Pass 1 of a timed
+  exercise (outside a run-through or hidden memory review), a clean pass earns immediate credit,
+  while a rough first pass is forgiven as a warm-in (shown as a hollow settle bar, without counting
+  as missed, slowing tempo, extracting a spot or skewing profile evidence) and wakes the adaptive
+  shadow melody right where notes stumbled. For new/low-box melody and harmony cards (never fresh
+  sight-reading Pass 1 or memory), the shadow starts softly blended in (~36%) and dissolves as
+  soon as notes land. Only clean passes raise tempo (capped at 3 climbs per visit, with a subtle
+  lift cue); two scored short passes lower it a step (4 bpm, as much as a clean pass earns). The first time, where the visit is heading stays put, so
   clean passes earn the way back; after that it comes down too. Right notes with too few attacks
   caught to time them hold the tempo without counting as short; three such passes end the
   exercise as ok. In a tune (melody cards) right notes whose time is not yet even do the same:
   the tempo holds rather than coming down, and three such passes end it as ok, kept in its box.
-  Only notes falling short slow a tune; a drill (scales and lines) still slows for uneven time. Two passes of mostly wrong notes send the band away until a take at the
+  Only notes falling short slow a tune; a drill (scales, technique and lines) still slows for uneven time. Two passes of mostly wrong notes send the band away until a take at the
   player's own pace is clean again. The tempo moves while the band plays. The first note may come early, the last may land
   late, and a finished pass keeps its colours for a moment.
   Untied repeated notes need separate attacks; ties remain a single target. Scale, melody and
@@ -125,10 +131,13 @@ away. Asking for in time while a pass is already playing changes nothing: the pa
 - **The beat.** Hearing the passage and playing it in time both carry a pulse when no click is
   asked for: a soft kick and hat on every beat, with a quiet eighth between beats slower than
   84 bpm, so rests are heard as time. In a gap only a soft hat stays.
-- **Coming round.** A looped phrase (melody, reading, ear) has a counted bar between passes: the
-  count-in clicks and the big number return, the finished pass keeps its colours through it, and
-  its score lands before the next pass starts. Scales, harmony drills and chord changes cycle on
-  without a break.
+- **Coming round.** Looped phrases (melody, reading, ear) use an **adaptive live-band turnaround**
+  by default (configurable via the guitar menu's `Loop` row or Settings: `adaptive`, `turnaround`,
+  `continuous`): while learning (Box 0–2, before a clean pass lands), a live-band turnaround bar
+  keeps the groove, bass and opening harmony breathing with a gentle 2-beat pickup click and a
+  top-edge return pill (never obscuring the score); once a clean pass lands (or from Box 3 up),
+  adaptive mode tightens seamlessly into a continuous loop without restarting audio. Scales,
+  technique drills, harmony drills and chord changes cycle on without a break.
 - **Gaps.** Once a scale drill is well known (box 4) the band drops out for two bars in four (four
   in eight in the top box) while it plays in time; the notes are still judged, so the time is the
   player's. During a focus on time every scale card in the focus plays this way. A tune always

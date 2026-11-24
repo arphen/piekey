@@ -21,10 +21,11 @@ import { arrangementIdentity, goalDeck, loadActiveGoal } from "../song/goals";
 import { useGoals } from "../song/useGoals";
 import { fitTiming, timingTolerance } from "../tunes/scoring";
 import { localId } from "../song/ids";
-import { KEY_FIFTHS, lineSheet } from "../song/notation";
+import { lineSheet } from "../song/notation";
+import { analyzeWrongNote, mistakeDeltaText, type StaffShadowInfo } from "../song/staffShadow";
 import { makeScale, nice, pretty, spellIn } from "../song/harmony";
-import { allStores, BOXES, boxCounts, loadStore, saveMeta, today, type Store } from "../song/leitner";
-import { cardSeconds, LENGTH_MINUTES, LENGTHS, loadArc, planBlocks, saveArc, type SessionPlan } from "../song/planner";
+import { allStores, BOXES, boxCounts, loadStore, saveMeta, today, type LoopMode, type Store } from "../song/leitner";
+import { cardSeconds, LENGTH_MINUTES, LENGTHS, loadArc, planBlocks, ROLE_LABEL, saveArc, type Role, type SessionPlan } from "../song/planner";
 import { currentInputSetup } from "../audio/setup";
 import { allAttempts, buildProfile } from "../song/profile";
 import { latencyMeasured } from "../audio/latency";
@@ -117,30 +118,6 @@ function ghostSpot(midi: number, to: { string: number; fret: number }, p: number
     }
   }
   return best;
-}
-
-const LETTERS = "cdefgab";
-const NATURAL_PC = [0, 2, 4, 5, 7, 9, 11];
-const SHARP_LETTER = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
-const FLAT_LETTER = [0, 1, 1, 2, 2, 3, 4, 4, 5, 5, 6, 6];
-
-/**
- * Where a wrong note sits on the staff relative to the printed one: staff steps up, and the
- * accidental it needs in this key. `vexKey` is the printed note, `want` its sounding pitch.
- */
-function staffShadow(midi: number, want: number, vexKey: string, key: string): { steps: number; acc: string } {
-  const fifths = KEY_FIFTHS[key] ?? 0;
-  const flats = fifths < 0;
-  const altered = (flats ? [6, 2, 5, 1, 4, 0, 3] : [3, 0, 4, 1, 5, 2, 6]).slice(0, Math.abs(fifths)); // letters the signature changes
-  const m = foldNear(midi, want);
-  const pc = mod(m);
-  const letter = (flats ? FLAT_LETTER : SHARP_LETTER)[pc];
-  const black = pc !== NATURAL_PC[letter];
-  const acc = black ? (altered.includes(letter) ? "" : flats ? "♭" : "♯") : altered.includes(letter) ? "♮" : "";
-  const wantLetter = Math.max(0, LETTERS.indexOf(vexKey[0]));
-  const wantOctave = Math.round((want - NATURAL_PC[wantLetter]) / 12) - 1;
-  // a flat C sits in the octave above its pitch's, a sharp B in the one below: only black keys are spelled here
-  return { steps: (Math.floor(m / 12) - 1) * 7 + letter - (wantOctave * 7 + wantLetter), acc };
 }
 
 /** What sounded, spelled the way the harmony under it spells its notes. */
@@ -352,6 +329,9 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
   const sheets = useMemo(() => new Map<string, LeadSheet>([[sheet.id, sheet], ...guests.map((g) => [g.tuneId, g.sheet] as [string, LeadSheet])]), [sheet, guests]);
   const arrangementFingerprints = useMemo(() => new Map([...sheets].map(([id, score]) => [id, arrangementIdentity(score).fingerprint])), [sheets]);
   const [gapIds, setGapIds] = useState<ReadonlySet<string>>(() => new Set()); // a focus on time: these play with gaps in the band
+  const [sessionBlocks, setSessionBlocks] = useState<SessionPlan["blocks"]>([]);
+  const [sessionWhy, setSessionWhy] = useState("");
+  const [sessionSideWhy, setSessionSideWhy] = useState("");
   const outputs = useOutputs();
   const [labels, setLabels] = useState<LabelMode>("names");
   const [menu, setMenu] = useState(false);
@@ -472,6 +452,9 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
     saveArc(shaped.arc);
     const onTime = shaped.arc && ["rushing", "dragging", "unsteady"].includes(shaped.arc.cls);
     setGapIds(new Set(onTime ? shaped.blocks.find((b) => b.role === "focus")?.cards ?? [] : []));
+    setSessionBlocks(shaped.blocks);
+    setSessionWhy(shaped.why);
+    setSessionSideWhy(shaped.sideWhy ?? "");
     if (self) session.begin(plan, true);
     else session.begin(plan);
     setChosenCard(undefined);
@@ -479,6 +462,9 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
   const beginCard = (cardId: string) => {
     if (calib || menu || free || choosingTune || tools) return;
     setGapIds(new Set());
+    setSessionBlocks([{ role: "focus", cards: [cardId], minutes: 2 }]);
+    setSessionWhy("");
+    setSessionSideWhy("");
     session.begin([cardId]);
     setChosenCard(undefined);
   };
@@ -681,6 +667,8 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
   // a flowing score comes closer or steps back: the menu's "Score" row, Z / X, a pinch
   const flowing = Boolean(cardNow && flows(cardNow));
   const scoreZoom = useScoreZoom(session.box);
+  const LOOP_MODES: LoopMode[] = ["adaptive", "turnaround", "continuous"];
+  const cycleLoopMode = () => session.setLoopMode(LOOP_MODES[(LOOP_MODES.indexOf(session.loopMode) + 1) % LOOP_MODES.length]);
   const padPages: { title: string; rows: PadRow[]; fire: (() => void)[] }[] = [
     {
       title: `${session.card?.title ?? ""} · ♩ ${session.bpm}`,
@@ -696,7 +684,7 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
         { label: "Exercise controls" },
         { label: session.selfGuided ? "Done practising" : "Next exercise" },
         { label: "Click", value: session.click ? "on" : "off" },
-        { label: session.memoryStage ? "Hear again" : "Support melody", value: session.memoryStage ? "on request" : session.settings.guide ? "always" : "when needed" },
+        { label: "Loop", value: session.loopMode },
         { label: session.spot ? "Return to the piece" : "Practise this bar" },
         { label: "Sound & setup" },
       ],
@@ -704,7 +692,7 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
         () => setPad(0),
         () => (closePad(false), session.next()),
         () => session.setClick((c) => !c),
-        () => session.memoryStage ? (closePad(false), session.hear()) : session.updateSettings({ guide: !session.settings.guide }),
+        cycleLoopMode,
         () => (closePad(false), barAlone()),
         () => setPad(2),
       ],
@@ -854,6 +842,9 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
           ring={summonRing}
           earTag={<ToneTag pc={tonesLive && !menu ? toneKeys[1] : null} lit={tapped === 1} />}
           held={held}
+          blocks={sessionBlocks}
+          focusWhy={sessionWhy}
+          sideWhy={sessionSideWhy}
           onGuitarMenu={openPad}
           onTools={openTools}
         />
@@ -984,7 +975,13 @@ function Ready({
           {plan.length > 0 ? <span className="ss-ready-meta">{plan.length} · ~{shaped.minutes}m{from.size > 1 ? ` · ${from.size} tunes` : ""}</span> : null}
         </div>
         <h1 className="ss-display">{sheet.title}</h1>
-        {shaped.why ? <p className="ss-focus">{shaped.why}</p> : null}
+        {shaped.why || shaped.sideWhy ? (
+          <p className="ss-focus">
+            {shaped.why}
+            {shaped.why && shaped.sideWhy ? " · " : ""}
+            {shaped.sideWhy ? <span>{shaped.sideWhy}</span> : null}
+          </p>
+        ) : null}
         {wholeCardId && !isWholeSelected ? (
           <button
             type="button"
@@ -1003,13 +1000,21 @@ function Ready({
               {plan.slice(0, 3).map((id, i) => {
                 const card = byId.get(id);
                 if (!card) return null;
+                const role = shaped.blocks.find((b) => b.cards.includes(id))?.role;
+                const cardState = session.store.cards[id];
+                const cardBpm = cardState?.bpm ?? card.bpm;
                 return (
                   <li key={id} className={`fam-${card.family}`}>
                     <button type="button" className="ss-ready-row" disabled={!keysOn} onClick={() => onStartCard(id)}>
                       <span className="ss-ready-num">{String(i + 1).padStart(2, "0")}</span>
                       <span className="ss-ready-copy">
                         <strong>{card.title}</strong>
-                        <small>{FAMILY_LABEL[card.family]}{from.size > 1 ? ` · ${card.tune}` : ""}</small>
+                        <small>
+                          {role ? `${ROLE_LABEL[role]} · ` : ""}
+                          {FAMILY_LABEL[card.family]}
+                          {card.goalBpm > card.bpm ? ` · ♩${cardBpm}→${card.goalBpm}` : ""}
+                          {from.size > 1 ? ` · ${card.tune}` : ""}
+                        </small>
                       </span>
                       <span className="ss-ready-go" aria-hidden="true">↗</span>
                     </button>
@@ -1125,7 +1130,7 @@ function barsOf(card: Card, sheet: LeadSheet): string {
  * The one line under the material. It reports what was heard, in numbers where there are any, and
  * stays silent while the player plays: what there is to do is on the page already.
  */
-function coachLine(card: Card, s: SessionApi, last: number | undefined): { text: string; tone?: "good" } {
+function coachLine(card: Card, s: SessionApi, last: number | undefined): { text: string; tone?: "good" | "soft" } {
   if (s.paused) return { text: "" };
   if (s.ending) return { text: "Finishing after this pass" };
   if (s.selfGuided) return { text: "Self-guided · no mic score" };
@@ -1135,6 +1140,7 @@ function coachLine(card: Card, s: SessionApi, last: number | undefined): { text:
   }
   if (s.phase === "time") {
     if (s.waiting) return { text: "The band comes back in on a note." };
+    if (s.settling) return { text: "Settling in · next pass counts", tone: "soft" };
     if (s.playback.counting || last === undefined) return { text: "" };
     return { text: `${Math.round(last * 100)}%`, tone: last >= card.pass ? "good" : undefined };
   }
@@ -1184,6 +1190,9 @@ function Running({
   ring,
   earTag,
   held,
+  blocks,
+  focusWhy,
+  sideWhy,
   onGuitarMenu,
   onTools,
 }: {
@@ -1195,15 +1204,30 @@ function Running({
   ring: RefObject<SVGCircleElement>;
   earTag: ReactNode;
   held: number | null; // the note key being held
+  blocks: SessionPlan["blocks"];
+  focusWhy: string;
+  sideWhy: string;
   onGuitarMenu(): void;
   onTools(tool: RoomTool): void;
 }) {
   const byId = useMemo(() => new Map(deck.cards.map((c) => [c.id, c])), [deck]);
+  const roleByPos = useMemo(() => {
+    const out: (Role | null)[] = [];
+    for (const b of blocks) for (let k = 0; k < b.cards.length; k++) out.push(b.role);
+    return out;
+  }, [blocks]);
   // a tempo set by hand shows itself, even while the dial would otherwise show the player's own pulse
   const [setByHand, setSetByHand] = useState<string | null>(null);
+  const lifted = useLately(s.tempoLift?.key ?? 0, 2400);
   const card = s.card;
   if (!card) return null;
   const say = coachLine(card, s, s.passes[s.passes.length - 1]);
+  const curRole = roleByPos[s.pos] ?? null;
+  const roleContext = curRole === "focus" && focusWhy ? focusWhy : curRole === "side" && sideWhy ? sideWhy : "";
+  const marginInsight = card.insight ?? card.why;
+  const hasTempoGoal = card.goalBpm > card.bpm && card.family !== "ear" && card.family !== "fretboard";
+  const tempoPct = hasTempoGoal ? Math.max(0, Math.min(1, (s.bpm - card.bpm) / Math.max(1, card.goalBpm - card.bpm))) : 1;
+  const aidLevel = s.phase === "time" ? s.shadow?.level() ?? 0 : 0;
 
   // the three ways to work on it: each one a note away
   // improvising, every note is music: the keys are off, so none are shown
@@ -1218,6 +1242,8 @@ function Running({
   const order = ["intro", "listen", "pace", "time", "result"];
   const stateOf = (id: string) => (s.phase === id ? "is-now" : order.indexOf(s.phase) > order.indexOf(id) ? "is-done" : "");
   const counting = s.phase === "time" && !s.paused ? s.playback.counting : 0;
+  const turnaround = s.phase === "time" && !s.paused && Boolean(s.breathing);
+  const initialCount = counting && !turnaround ? counting : 0;
   const pips = s.phase === "pace" && card.view !== "chords" && s.needClean > 1;
   const handKey = `${card.id}:${s.phase}`;
   const own = s.phase === "pace" && s.pulse !== null && setByHand !== handKey;
@@ -1234,22 +1260,31 @@ function Running({
     time: free ? "Improvising" : "In time",
     result: "Pass complete",
   }[s.phase];
-  const phase = s.paused ? s.away ? "Resting" : s.listeningOff ? "Input paused" : "Paused" : counting ? "Count-in" : phaseName;
+  const phase = s.paused ? s.away ? "Resting" : s.listeningOff ? "Input paused" : "Paused" : turnaround ? "Turnaround" : initialCount ? "Count-in" : phaseName;
 
   return (
-    <div className={`ss-run phase-${s.phase} ${s.paused ? "is-paused" : ""}`}>
+    <div className={`ss-run phase-${s.phase} ${s.paused ? "is-paused" : ""} ${turnaround ? "is-turnaround" : ""}`}>
       <RoomInstruments onOpen={onTools} />
       <ol className="ss-progress" aria-label={`exercise ${s.pos + 1} of ${s.queue.length}`}>
         {s.queue.map((id, i) => {
           const o = s.log.find((x) => x.at === i);
-          return <li key={i} className={`fam-${byId.get(id)?.family ?? "melody"} ${i === s.pos ? "is-now" : ""} ${o ? `is-${o.result}` : ""}`} />;
+          const role = roleByPos[i];
+          const blockStart = i > 0 && role && role !== roleByPos[i - 1];
+          return <li key={i} className={`fam-${byId.get(id)?.family ?? "melody"} ${i === s.pos ? "is-now" : ""} ${o ? `is-${o.result}` : ""} ${blockStart ? "is-block-start" : ""}`} title={role ? ROLE_LABEL[role] : undefined} />;
         })}
       </ol>
 
       <header className="ss-head" key={`${s.pos}:${card.id}`} data-pool="calm">
         <div className="ss-phasebar">
           <span className="ss-exercise-count">{String(s.pos + 1).padStart(2, "0")} <em>/ {String(s.queue.length).padStart(2, "0")}</em></span>
+          {curRole ? <span className={`ss-role-pill is-${curRole}`}>{ROLE_LABEL[curRole]}{roleContext ? ` · ${roleContext}` : ""}</span> : null}
           <span className="ss-phase-name" aria-live="polite"><i />{phase}</span>
+          {hasTempoGoal ? (
+            <span className="ss-tempo-goal" title={`Current tempo ${s.bpm} bpm toward ${card.goalBpm} bpm goal`}>
+              <span>♩ {s.bpm}<em>/{card.goalBpm}</em></span>
+              <i aria-hidden="true"><b style={{ width: `${Math.round(tempoPct * 100)}%` }} /></i>
+            </span>
+          ) : null}
           <span className={`ss-connection ${listening ? "is-live" : ""}`}><i />{s.selfGuided ? "Self-guided · unscored" : listening ? "Input live" : "Input off"}</span>
         </div>
         <p className="ss-kicker">
@@ -1265,9 +1300,14 @@ function Running({
             {card.to > card.from ? "themselves" : "itself"}
           </p>
         ) : (
-          <p className="ss-why">
-            {card.detail} {s.box === 0 ? card.why : ""}
-          </p>
+          <>
+            <p className="ss-why">
+              {card.detail} {card.why}
+            </p>
+            {marginInsight && s.phase !== "intro" && s.phase !== "result" ? (
+              <p className="ss-insight" aria-live="off">{marginInsight}</p>
+            ) : null}
+          </>
         )}
         {s.memoryStage ? (
           <div className="ss-memory-aid">
@@ -1279,6 +1319,15 @@ function Running({
       </header>
 
       <div className="ss-stage">
+        {(s.phase === "time" || s.phase === "listen") && !s.paused ? (
+          <StageBeatRail
+            beat={s.beat}
+            counting={initialCount}
+            reentry={s.phase === "time" ? s.reentry : 0}
+            turnaround={turnaround}
+            bpm={s.bpm}
+          />
+        ) : null}
         <div className="ss-material">
           {card.view === "score" && flows(card) ? (
             <FlowStage card={card} session={s} sheet={sheet} />
@@ -1294,9 +1343,9 @@ function Running({
             <LineStage card={card} session={s} sheet={sheet} labels={labels} />
           )}
         </div>
-        {counting ? (
-          <span className="ss-countin" key={counting} aria-live="off">
-            {counting}
+        {initialCount ? (
+          <span className="ss-countin" key={initialCount} aria-live="off">
+            {initialCount}
           </span>
         ) : null}
         {s.paused ? (
@@ -1324,10 +1373,10 @@ function Running({
           <span className={`ss-streak ${s.run >= 4 ? "" : "is-hidden"} ${s.run >= 16 ? "is-hot" : s.run >= 8 ? "is-warm" : ""}`} title="notes landed in a row">
             <b key={s.run}>{s.run}</b> in a row
           </span>
-          {s.phase === "time" && s.passes.length ? (
-            <span className="ss-passes" title="each time through: how much of it landed; the line is what it takes">
-              {s.passes.slice(-8).map((share, i) => (
-                <i key={i} className={share >= card.pass ? "is-in" : ""} style={{ height: `${Math.max(8, share * 100)}%` }} />
+          {s.phase === "time" && s.passLog.length ? (
+            <span className="ss-passes" title="each time through: hollow bar is Pass 1 settle-in; solid green landed cleanly">
+              {s.passLog.slice(-8).map((entry, i) => (
+                <i key={i} className={entry.settle ? "is-settle" : entry.clean ? "is-in" : ""} style={{ height: `${Math.max(12, entry.share * 100)}%` }} />
               ))}
               <em style={{ bottom: `${card.pass * 100}%` }} />
             </span>
@@ -1366,15 +1415,16 @@ function Running({
           ) : null}
         </div>
         <div className="ss-side" data-pool="calm">
-          <span className="ss-aid" style={{ opacity: s.phase === "time" ? Math.min(1, (s.shadow?.level() ?? 0) * 1.8) : 0 }} title="playing along with you, as much as you need">
+          <span className={`ss-aid ${aidLevel >= 0.08 ? "is-on" : ""}`} style={{ opacity: s.phase === "time" ? Math.min(1, aidLevel * 2.1) : 0 }} title="Adaptive guide melody blending in where needed and fading out as you carry it">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M3 12c2-5 4-5 6 0s4 5 6 0 4-5 6 0" />
             </svg>
+            <em>with band</em>
           </span>
           {s.phase === "time" ? <BeatMeter drift={s.playback.drift} beatMs={60000 / s.bpm} /> : null}
           <span className={`ss-tempo-cluster ${own ? "is-own" : ""}`} title={own ? "your own tempo" : s.target > s.bpm ? `the click, on its way to ${s.target}` : "tempo"}>
             <BeatPulse beat={s.beat} bpm={own ? s.pulse ?? s.bpm : s.bpm} onTempo={stepTempo} />
-            {s.phase === "time" && s.target > s.bpm ? <em>→ {s.target}</em> : null}
+            {lifted && s.tempoLift ? <b className="ss-tempo-lift">+{s.tempoLift.to - s.tempoLift.from} → {s.tempoLift.to}</b> : s.phase === "time" && s.target > s.bpm ? <em>→ {s.target}</em> : null}
           </span>
           <BoxPips box={s.box} />
         </div>
@@ -1454,6 +1504,8 @@ interface WrongNote {
   vexKey: string;
   name: string; // what sounded, by name
   wantName: string; // and what is written
+  spot?: { string: number; fret: number } | null;
+  degree?: string;
 }
 
 interface Ghost {
@@ -1462,7 +1514,7 @@ interface Ghost {
   y: number;
   w: number;
   h: number;
-  acc: string;
+  info: StaffShadowInfo;
   name: string;
   wantName: string;
   wx: number; // the written note: where its name goes
@@ -1470,9 +1522,60 @@ interface Ghost {
 }
 
 /**
- * The shadow score: a hollow head beside each missed note, at the height that was played, with
- * its name; the written note gets its name too. Seen side by side, the two names stick to the
- * two places. Lives inside the score's scrolling host.
+ * Eye-level beat rail directly above the score: 4 tactile beat pills pulsing strictly on the heard
+ * audio clock (beat 1 anchored brightly), plus an unmistakable "Bar 1 in N" re-entry countdown
+ * during count-in, turnaround bars, and post-final-note tails.
+ */
+function StageBeatRail({
+  beat,
+  counting,
+  reentry,
+  turnaround,
+  bpm,
+}: {
+  beat: SessionApi["beat"];
+  counting: number;
+  reentry: number;
+  turnaround: boolean;
+  bpm: number;
+}) {
+  const total = Math.max(2, Math.min(8, beat.beats || 4));
+  const active = beat.active ? beat.index : -1;
+  const tag = counting
+    ? `Count-in · bar 1 in ${counting}`
+    : reentry > 0
+      ? `${turnaround ? "Turnaround" : "Next pass"} · bar 1 in ${reentry}`
+      : null;
+  return (
+    <div
+      className={`ss-beat-rail ${beat.active ? "is-live" : ""} ${active === 0 ? "is-downbeat" : ""} ${counting || reentry > 0 ? "is-reentry" : ""}`}
+      style={{ "--beat-decay": `${Math.min(0.75, 50 / (bpm || 80))}s` } as CSSProperties}
+      aria-live="off"
+    >
+      <div className="ss-beat-dots" aria-hidden="true">
+        {Array.from({ length: total }, (_, i) => (
+          <span
+            key={i === active ? `${i}:${beat.serial}` : i}
+            className={`ss-beat-dot ${i === 0 ? "is-one" : ""} ${i === active ? "is-now" : ""}`}
+          >
+            {i + 1}
+          </span>
+        ))}
+      </div>
+      {tag ? (
+        <span className="ss-beat-cue">
+          <i aria-hidden="true" />
+          <b>{tag}</b>
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The shadow score: an engraved hollow head beside each missed note, at the exact staff height that
+ * was played, WITH real ledger lines, staff-line/space helper ticks, and upright accidental glyphs
+ * so mistakes actually reinforce sight-reading memory.
  */
 function ScoreShadows({ host, wrong, keySignature }: { host: RefObject<HTMLDivElement>; wrong: WrongNote[]; keySignature: string }) {
   const key = wrong.map((w) => `${w.n}:${w.midi}`).join(",");
@@ -1488,11 +1591,24 @@ function ScoreShadows({ host, wrong, keySignature }: { host: RefObject<HTMLDivEl
       wrong.flatMap((w) => {
         const head = el.querySelector(`[data-note="${w.n}"] .vf-notehead`)?.getBoundingClientRect();
         if (!head) return [];
-        const { steps, acc } = staffShadow(w.midi, w.want, w.vexKey, keySignature);
+        const info = analyzeWrongNote(w.midi, w.want, w.vexKey, keySignature);
         const left = head.left - h.left + el.scrollLeft;
         const top = head.top - h.top + el.scrollTop;
-        // a notehead is one staff space tall: half of it is one step
-        return [{ key: `${w.n}:${w.midi}`, x: left + head.width * 1.9, y: top - (steps * head.height) / 2, w: head.width, h: head.height, acc, name: w.name, wantName: w.wantName, wx: left + head.width / 2, wy: top + head.height }];
+        // a notehead is one staff space tall: half of it is one diatonic staff step
+        return [
+          {
+            key: `${w.n}:${w.midi}`,
+            x: left + head.width * 1.9,
+            y: top - (info.steps * head.height) / 2,
+            w: head.width,
+            h: head.height,
+            info,
+            name: w.name,
+            wantName: w.wantName,
+            wx: left + head.width / 2,
+            wy: top + head.height,
+          },
+        ];
       }),
     );
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1500,9 +1616,34 @@ function ScoreShadows({ host, wrong, keySignature }: { host: RefObject<HTMLDivEl
     <>
       {ghosts.map((g) => (
         <Fragment key={g.key}>
-          <span className="ss-ghost-note" style={{ left: g.x, top: g.y, width: g.w, height: g.h }} aria-hidden="true">
-            {g.acc ? <i>{g.acc}</i> : null}
-            <b>{g.name}</b>
+          <span
+            className={`ss-ghost-wrap ${g.info.onLine ? "is-line" : "is-space"}`}
+            style={{ left: g.x, top: g.y, width: g.w, height: g.h }}
+            aria-hidden="true"
+          >
+            {/* Exact engraved ledger lines for off-staff notes (below E4 or above F5) */}
+            {g.info.ledgerHalfSpaces.map((half) => (
+              <span
+                key={half}
+                className="ss-ghost-ledger"
+                style={{ top: `${50 + half * 50}%` }}
+              />
+            ))}
+            {/* Subtle line/space helper ticks so line vs space is unmistakable even in bar gaps */}
+            {g.info.inStaff && g.info.onLine ? (
+              <span className="ss-ghost-line" />
+            ) : g.info.inStaff ? (
+              <>
+                <span className="ss-ghost-space is-top" />
+                <span className="ss-ghost-space is-bot" />
+              </>
+            ) : null}
+            {/* Upright musical accidental glyph (♯ / ♭ / ♮) */}
+            {g.info.acc ? <i className="ss-ghost-acc">{g.info.acc}</i> : null}
+            {/* Hollow coral notehead tilted like real engraving */}
+            <span className="ss-ghost-head" />
+            {/* Played note name */}
+            <b className="ss-ghost-name">{g.name}</b>
           </span>
           <span className="ss-want-name" style={{ left: g.wx, top: g.wy }} aria-hidden="true">
             {g.wantName}
@@ -1510,6 +1651,72 @@ function ScoreShadows({ host, wrong, keySignature }: { host: RefObject<HTMLDivEl
         </Fragment>
       ))}
     </>
+  );
+}
+
+/**
+ * Quiet visual-mechanical mistake comparison directly beneath the score: renders a real 5-line
+ * micro-staff with ledger lines comparing the note symbol you played (coral) against the written
+ * target (emerald), paired with the exact fret direction so eye, ear, and hand memorize the fix.
+ */
+function MistakeFlash({ wrong, keySignature }: { wrong: WrongNote[]; keySignature: string }) {
+  const latest = wrong[wrong.length - 1];
+  if (!latest) return null;
+  const info = analyzeWrongNote(latest.midi, latest.want, latest.vexKey, keySignature);
+  const delta = mistakeDeltaText(latest.midi, latest.want);
+  // Micro-staff geometry: 5 main staff lines at positions 0, 2, 4, 6, 8 (each diatonic step = 3.2px)
+  const stepPx = 3.2;
+  const minPos = Math.min(-2, info.wantPos, info.ghostPos);
+  const maxPos = Math.max(10, info.wantPos, info.ghostPos);
+  const yOf = (pos: number) => 10 + (maxPos - pos) * stepPx;
+  const svgH = Math.max(46, Math.ceil((maxPos - minPos) * stepPx + 20));
+  const ledgersFor = (pos: number): number[] => {
+    const out: number[] = [];
+    if (pos <= -2) for (let p = -2; p >= pos; p -= 2) out.push(p);
+    else if (pos >= 10) for (let p = 10; p <= pos; p += 2) out.push(p);
+    return out;
+  };
+  const ghostLedgers = ledgersFor(info.ghostPos);
+  const wantLedgers = ledgersFor(info.wantPos);
+  const gx = 28;
+  const wx = 66;
+  return (
+    <div className="ss-mistake-bar" aria-live="polite">
+      <svg className="ss-mistake-staff" viewBox={`0 0 92 ${svgH}`} width="92" height={svgH} aria-hidden="true">
+        {[0, 2, 4, 6, 8].map((p) => (
+          <line key={p} className="ss-ms-line" x1="6" x2="86" y1={yOf(p)} y2={yOf(p)} />
+        ))}
+        {ghostLedgers.map((p) => (
+          <line key={`gl:${p}`} className="ss-ms-ledger is-played" x1={gx - 9} x2={gx + 9} y1={yOf(p)} y2={yOf(p)} />
+        ))}
+        {wantLedgers.map((p) => (
+          <line key={`wl:${p}`} className="ss-ms-ledger is-want" x1={wx - 9} x2={wx + 9} y1={yOf(p)} y2={yOf(p)} />
+        ))}
+        {/* Played wrong notehead + accidental */}
+        {info.acc ? <text className="ss-ms-acc is-played" x={gx - 12} y={yOf(info.ghostPos) + 3.5}>{info.acc}</text> : null}
+        <ellipse className="ss-ms-head is-played" cx={gx} cy={yOf(info.ghostPos)} rx="4.6" ry="3.2" transform={`rotate(-18 ${gx} ${yOf(info.ghostPos)})`} />
+        {/* Arrow linking played -> written */}
+        <line className="ss-ms-arrow" x1={gx + 8} y1={yOf(info.ghostPos)} x2={wx - 9} y2={yOf(info.wantPos)} />
+        {/* Target written notehead */}
+        <ellipse className="ss-ms-head is-want" cx={wx} cy={yOf(info.wantPos)} rx="4.6" ry="3.2" transform={`rotate(-18 ${wx} ${yOf(info.wantPos)})`} />
+      </svg>
+      <div className="ss-mistake-copy">
+        <span className="ss-mistake-pair">
+          <b className="is-played">Played {latest.name}</b>
+          <em aria-hidden="true">→</em>
+          <b className="is-want">Written {latest.wantName}</b>
+        </span>
+        <small>
+          {[
+            delta,
+            latest.degree ? `deg ${latest.degree}` : null,
+            latest.spot ? `str ${latest.spot.string + 1} · ${latest.spot.fret === 0 ? "open" : `fret ${latest.spot.fret}`}` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </small>
+      </div>
+    </div>
   );
 }
 
@@ -1566,7 +1773,7 @@ function LineStage({ card, session: s, sheet, labels }: { card: Card; session: S
   // is called for, where the one note is that is being looked for.
   const called = useLately(s.nudge, NECK_MS);
   const astray = [active, active - 1, active - 2].some((i) => i >= card.first && s.results[i] === "miss");
-  const neck = card.spot || card.family === "scales" || (!card.fresh && s.box < 2) ? "all" : called || astray ? (card.fresh ? "note" : "all") : "away";
+  const neck = card.spot || card.family === "scales" || card.family === "technique" || (!card.fresh && s.box < 2) ? "all" : called || astray ? (card.fresh ? "note" : "all") : "away";
   const whole = shapeOf(card, active);
   const here = card.steps[active];
   const shape = neck === "note" ? { key: `${card.id}:${active}`, spots: new Set(here ? [`${here.string}-${here.fret}`] : []) } : whole;
@@ -1583,14 +1790,19 @@ function LineStage({ card, session: s, sheet, labels }: { card: Card; session: S
   const written = useMemo(() => lineSheet(card, sheet.keySignature), [card, sheet.keySignature]);
   const heads = useMemo(() => written.bars.flatMap((b) => b.notes.filter((n) => !n.rest)), [written]);
   const results = useMemo(() => s.results.slice(card.first, card.last + 1), [s.results, card]);
-  // under the notes: nothing while reading, the names in a part taken out, degrees when asked for
+  // under the notes: finger numbers on spiders, names in a spot, degrees when asked for
   const degrees = useMemo(
     () =>
       card.spot
         ? heads.map((_, k) => spelled(card, card.first + k))
-        : labels === "degrees" && !card.fresh
-          ? heads.map((_, k) => degreeOf(card.family, card.context[card.first + k], card.tl.targets[card.first + k].midi))
-          : null,
+        : card.kind === "spider"
+          ? heads.map((_, k) => {
+              const st = card.steps[card.first + k];
+              return st ? String(fingerFor(st.fret, card.p)) : "";
+            })
+          : labels === "degrees" && !card.fresh
+            ? heads.map((_, k) => degreeOf(card.family, card.context[card.first + k], card.tl.targets[card.first + k].midi))
+            : null,
     [labels, heads, card],
   );
   const wrong = useMemo(() => {
@@ -1599,7 +1811,16 @@ function LineStage({ card, session: s, sheet, labels }: { card: Card; session: S
       const midi = s.shadows[i];
       const k = i - card.first;
       if (midi != null && s.results[i] === "miss" && heads[k])
-        out.push({ n: k, midi, want: card.tl.targets[i].midi, vexKey: heads[k].vexKey, name: playedName(card.context[i], midi), wantName: spelled(card, i) });
+        out.push({
+          n: k,
+          midi,
+          want: card.tl.targets[i].midi,
+          vexKey: heads[k].vexKey,
+          name: playedName(card.context[i], midi),
+          wantName: spelled(card, i),
+          spot: card.steps[i] ?? null,
+          degree: degreeOf(card.family, card.context[i], mod(card.tl.targets[i].midi)),
+        });
     }
     return out;
   }, [s.shadows, s.results, card, heads]);
@@ -1650,7 +1871,7 @@ function LineStage({ card, session: s, sheet, labels }: { card: Card; session: S
   );
   return (
     <div className="ss-line">
-      {card.family === "scales" ? null : <Harm ctx={ctx} scale />}
+      {card.family === "scales" || card.kind === "spider" ? null : <Harm ctx={ctx} scale />}
       <div className="ss-score ss-score--line" data-scroll-host ref={host} data-pool="rock calm" data-pool-anchor="focus">
         <Score
           exercise={written}
@@ -1663,11 +1884,13 @@ function LineStage({ card, session: s, sheet, labels }: { card: Card; session: S
           noteLabels={degrees}
           cursor
           cursorPulse={s.nudge}
+          reentryCue={s.phase === "time" && s.reentry > 0 && s.reentry <= 2}
           playhead={playhead}
         />
         <ScoreShadows host={host} wrong={wrong} keySignature={sheet.keySignature} />
         <ScoreGlints host={host} results={results} reset={`${card.id}:${s.phase}`} />
       </div>
+      <MistakeFlash wrong={wrong} keySignature={sheet.keySignature} />
       <div className={`ss-board ss-board--aside ${neck === "away" ? "is-away" : ""} ${card.spot ? "is-spot" : ""}`}>
         <Fretboard
           notes={notes}
@@ -1857,7 +2080,16 @@ function MelodyStage({ card, session: s, sheet: source }: { card: Card; session:
       const t = card.tl.targets[i];
       const n = t?.notes[0];
       if (midi == null || n === undefined || printed[n] !== "miss" || !heads[n]) return;
-      out.push({ n: n - cut.offset, midi, want: t.midi, vexKey: heads[n].vexKey, name: playedName(card.context[i], midi), wantName: spelled(card, i) });
+      out.push({
+        n: n - cut.offset,
+        midi,
+        want: t.midi,
+        vexKey: heads[n].vexKey,
+        name: playedName(card.context[i], midi),
+        wantName: spelled(card, i),
+        spot: card.steps[i] ?? null,
+        degree: degreeOf(card.family, card.context[i], mod(t.midi)),
+      });
     });
     return out;
   }, [s.shadows, printed, card, heads, cut.offset]);
@@ -1879,10 +2111,12 @@ function MelodyStage({ card, session: s, sheet: source }: { card: Card; session:
           noteLabels={s.memoryStage && s.memoryStage !== "page" ? null : labels}
           cursor
           cursorPulse={s.nudge}
+          reentryCue={s.phase === "time" && s.reentry > 0 && s.reentry <= 2}
         />
         {!s.memoryStage || s.memoryStage === "page" ? <ScoreShadows host={host} wrong={wrong} keySignature={cut.exercise.keySignature} /> : null}
         <ScoreGlints host={host} results={results} reset={`${card.id}:${s.phase}`} />
       </div>
+      {!s.memoryStage || s.memoryStage === "page" ? <MistakeFlash wrong={wrong} keySignature={cut.exercise.keySignature} /> : null}
       {card.spot ? <SpotNeck card={card} session={s} /> : null}
     </div>
   );
@@ -2180,6 +2414,16 @@ function Drawer({
             ]}
             onChange={onLabels}
           />
+          <Seg
+            label="Loop wrap"
+            value={s.loopMode}
+            options={[
+              { value: "adaptive" as LoopMode, label: "adaptive", title: "Live-band turnaround while settling, tightening into continuous groove once locked in" },
+              { value: "turnaround" as LoopMode, label: "turnaround", title: "Always play a live-band turnaround bar between passes" },
+              { value: "continuous" as LoopMode, label: "continuous", title: "Loop continuously with no turnaround bar" },
+            ]}
+            onChange={s.setLoopMode}
+          />
           <Switch on={Boolean(settings.shuffle)} onChange={(v) => updateSettings({ shuffle: v })}>
             Shuffle the session
           </Switch>
@@ -2236,7 +2480,7 @@ function Drawer({
               </div>
             ))}
           </div>
-          <p className="ss-note">Clean: up a box. Struggled: stays. Missed: back to 1. Box 1 comes every session, then after 1, 3, 7 and 21 days.</p>
+          <p className="ss-note">Clean: climbs tempo and moves up a box (graduating to 7–21 day spacing near goal tempo). Missed: steps back gently.</p>
         </section>
 
         <section>

@@ -37,7 +37,7 @@ export interface PlaybackMix {
   guide?: boolean; // the timeline's unscored guide melody (default on)
   fill?: boolean; // a quiet click on the beats where no chord sounds, so the time is never lost
   pulse?: boolean; // a felt kick and hat on every beat the click is not on (eighths when slow; the hat alone in gaps): the beat is never guessed
-  breath?: boolean; // looping: a counted bar between passes, to come back to the top of the phrase
+  breath?: boolean | number; // looping: a musical turnaround bar (or exact beat count) between passes; can tighten dynamically mid-loop
   shadow?: Support | null; // with `melody` off: the melody under the player, as loud as they need it
   gap?: { on: number; off: number } | null; // beats with the band, then beats without it (still scored): the player keeps the time
 }
@@ -89,14 +89,21 @@ interface Pass {
   start: number; // performance.now() when it began to be heard
 }
 
+interface IterSpan {
+  iter: number;
+  r0: number; // beats past t0 where this pass begins
+  len: number; // music beats in this pass
+  breath: number; // live-band turnaround beats after this pass before the next
+}
+
 interface Session {
   out: Tone.Volume;
   shots: OneShots;
   t0: number; // context time of the range start (after count-in)
   from: number; // range in beats
   length: number;
-  breath: number; // counted beats between looped passes
-  period: number; // beats from one pass to the next: the passage and its breath
+  barBeats: number; // default turnaround bar length (beats of the opening bar)
+  iters: IterSpan[]; // per-pass start offsets so turnaround can tighten seamlessly mid-loop
   loop: boolean;
   first: number; // targets at the edges of the range
   last: number;
@@ -106,7 +113,7 @@ interface Session {
   pending: Pending[];
   pass: Pass; // the pass being heard
   closing: Pass | null; // the one before, while its last note may still land
-  held: { results: NoteResult[]; until: number } | null;
+  held: { results: NoteResult[]; wrong: (number | null)[]; until: number } | null;
 }
 
 interface Sample {
@@ -127,6 +134,8 @@ const median = (xs: number[]) => {
 export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, scoring: boolean, anyOctave: boolean, ignore?: ReadonlySet<number>) {
   const [playing, setPlaying] = useState(false);
   const [counting, setCounting] = useState(0); // count-in beats left
+  const [breathing, setBreathing] = useState(false); // true during a musical turnaround bar between passes
+  const [reentry, setReentry] = useState(0); // beats left until bar 1 re-enters (turnaround OR post-final-note tail)
   const [active, setActive] = useState({ target: -1, slot: -1 });
   const [results, setResults] = useState<NoteResult[]>(() => tl.targets.map(() => null));
   const [wrong, setWrong] = useState<(number | null)[]>([]); // the pitch heard instead of each missed note
@@ -149,6 +158,8 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
   const samples = useRef<Sample[]>([]);
   const activeRef = useRef(active);
   const countRef = useRef(0);
+  const breathRef = useRef(false);
+  const reentryRef = useRef(0);
   const driftRef = useRef<number | null>(null);
   // The timeline beat being heard, while there is one. Through a gap the band is silent and there is
   // nothing heard to follow; a score that must keep moving may still ask where the music is.
@@ -176,6 +187,10 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
     setPlaying(false);
     countRef.current = 0;
     setCounting(0);
+    breathRef.current = false;
+    setBreathing(false);
+    reentryRef.current = 0;
+    setReentry(0);
     activeRef.current = { target: -1, slot: -1 };
     setActive(activeRef.current);
   }, []);
@@ -203,12 +218,23 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
       const from = t.slots[a].start;
       const length = t.slots[b].start + t.slots[b].beats - from;
       const spb0 = 60 / mixRef.current.bpm;
-      const countBeats = mixRef.current.countIn ? Math.max(2, Math.round(t.slots[a].beats)) : 0;
-      const breath = loop && mixRef.current.breath ? Math.max(2, Math.round(t.slots[a].beats)) : 0;
+      const barBeats = Math.max(2, Math.round(t.slots[a].beats));
+      const breathBeats = (b: PlaybackMix["breath"]) => (!loop || !b ? 0 : typeof b === "number" ? Math.max(0, Math.round(b)) : barBeats);
+      const countBeats = mixRef.current.countIn ? barBeats : 0;
+      const initialBreath = breathBeats(mixRef.current.breath);
       const t0 = ctx.currentTime + 0.15 + countBeats * spb0;
       const inRange = (x: number, lo: number, hi: number) => x >= lo - 1e-9 && x < hi - 1e-9;
       const ranged = t.targets.map((n, i) => (inRange(n.t, from, from + length) ? i : -1)).filter((i) => i >= 0);
+      const lastRangedTarget = ranged.length ? t.targets[ranged[ranged.length - 1]] : null;
+      // When the final note is a long held resolution (e.g. a 4-beat whole note at the end of a scale),
+      // its remaining hold beats after beat 1 act as the re-entry runway into Bar 1 in continuous loops.
+      const tailStart = lastRangedTarget
+        ? Math.max(0, lastRangedTarget.t + (lastRangedTarget.dur >= 2 ? 1 : lastRangedTarget.dur) - from)
+        : length;
       const beatGrid = clicks.filter((c) => inRange(c.t, from, from + length));
+      // Harmony & bass anchor for musical turnaround bars: resolve gently into Bar 1's opening chord.
+      const turnaroundComp = t.comp.find((c) => c.t >= from - 1e-6 && c.t < from + length - 1e-6) ?? t.comp[0] ?? null;
+      const turnaroundBass = (t.bass ?? []).find((v) => v.t >= from - 1e-6 && v.t < from + length - 1e-6) ?? t.bass?.[0] ?? null;
       let lastBeat = "";
 
       // render the notes ahead of time so the first bar doesn't stutter
@@ -218,8 +244,15 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
       const out = new Tone.Volume(-4).toDestination();
       const shots = new OneShots();
       const countDivision = mixRef.current.clickSubdivision ?? 1;
-      for (let k = 0; k < countBeats; k++) for (let part = 0; part < countDivision; part++)
-        shots.play(clickBuffer(k === 0 && part === 0), out, t0 - (countBeats - k - part / countDivision) * spb0, part === 0 ? 0.6 : 0.22);
+      for (let k = 0; k < countBeats; k++) {
+        const beatTime = t0 - (countBeats - k) * spb0;
+        if (mixRef.current.pulse) {
+          shots.play(hatBuffer(), out, beatTime, k === 0 ? 0.65 : 0.45);
+          if (k === 0) shots.play(kickBuffer(), out, beatTime, 0.42);
+        }
+        for (let part = 0; part < countDivision; part++)
+          shots.play(clickBuffer(k === 0 && part === 0), out, t0 - (countBeats - k - part / countDivision) * spb0, part === 0 ? (mixRef.current.pulse ? 0.44 : 0.6) : 0.22);
+      }
 
       const blank = () => t.targets.map((): NoteResult => null);
       const scheduledTempos = new Map<number, { min: number; max: number }>();
@@ -230,8 +263,8 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
         t0,
         from,
         length,
-        breath,
-        period: length + breath,
+        barBeats,
+        iters: [{ iter: 0, r0: 0, len: length, breath: initialBreath }],
         loop,
         first: ranged[0] ?? -1,
         last: ranged[ranged.length - 1] ?? -1,
@@ -250,6 +283,45 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
       setDrift(null);
       setPlaying(true);
 
+      // Dynamic iteration spans: each pass reads the current `breath` setting when scheduled so
+      // adaptive loop mode can tighten smoothly from a turnaround into a continuous loop without restarting.
+      const iterAt = (r: number): IterSpan => {
+        if (r <= 0) return s.iters[0];
+        let last = s.iters[s.iters.length - 1];
+        while (r >= last.r0 + last.len + last.breath - 1e-9) {
+          const next: IterSpan = {
+            iter: last.iter + 1,
+            r0: last.r0 + last.len + last.breath,
+            len: s.length,
+            breath: breathBeats(mixRef.current.breath),
+          };
+          s.iters.push(next);
+          last = next;
+          if (s.iters.length > 16) s.iters.shift();
+        }
+        for (let k = s.iters.length - 1; k >= 0; k--) {
+          if (s.iters[k].r0 <= r + 1e-9) return s.iters[k];
+        }
+        return s.iters[0];
+      };
+      const iterById = (id: number): IterSpan => {
+        const found = s.iters.find((it) => it.iter === id);
+        if (found) return found;
+        let last = s.iters[s.iters.length - 1];
+        while (last.iter < id) {
+          const next: IterSpan = {
+            iter: last.iter + 1,
+            r0: last.r0 + last.len + last.breath,
+            len: s.length,
+            breath: breathBeats(mixRef.current.breath),
+          };
+          s.iters.push(next);
+          last = next;
+          if (s.iters.length > 16) s.iters.shift();
+        }
+        return last;
+      };
+
       // beats past t0 ↔ context time, through every tempo change so far
       const segAt = (r: number) => {
         let k = s.segs.length - 1;
@@ -266,19 +338,48 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
         return s.segs[k].r + (time - s.segs[k].time) / s.segs[k].spb;
       };
 
-      const schedule = (lo: number, hi: number, iterStart: number) => {
+      const schedule = (lo: number, hi: number, span: IterSpan) => {
         const m = mixRef.current;
+        const iterStart = span.r0;
         const at = (beat: number) => timeOf(iterStart + beat - s.from);
         const spb = segAt(iterStart + lo - s.from).spb;
         const perfOf = (time: number) => ctxToPerf(ctx, time);
-        const pass = Math.round(iterStart / Math.max(1e-9, s.period));
+        const pass = span.iter;
         const end = s.from + s.length;
-        // the breath after a looped pass: a bar counted in to the next one, nothing else
-        if (s.breath) {
+        // Musical turnaround bar: keep the band's groove, bass, and opening harmony breathing
+        // instead of cutting to dead air; give only a gentle pickup click on the final two beats.
+        if (span.breath > 0 && hi > end + 1e-9) {
+          const tLo = Math.max(lo, end);
+          if (m.chords && turnaroundComp && inRange(end, tLo, hi)) {
+            for (const midi of turnaroundComp.midis) shots.play(keysBuffer(midi), out, at(end), 0.14, span.breath * spb * 0.92, 0.18);
+          }
+          if (m.bass !== false && turnaroundBass) {
+            for (let k = 0; k < span.breath; k += 2) {
+              const when = end + k;
+              if (inRange(when, tLo, hi)) shots.play(bassBuffer(turnaroundBass.midi), out, at(when), k === 0 ? 0.56 : 0.42, Math.min(2, span.breath - k) * spb * 0.85, 0.1);
+            }
+          }
           const division = m.clickSubdivision ?? 1;
-          for (let k = 0; k < s.breath; k++) for (let part = 0; part < division; part++) {
-            const when = end + k + part / division;
-            if (inRange(when, Math.max(lo, end), hi)) shots.play(clickBuffer(k === 0 && part === 0), out, at(when), part === 0 ? 0.6 : 0.22);
+          const pickupFrom = Math.max(0, span.breath - 2);
+          for (let k = 0; k < span.breath; k++) {
+            const when = end + k;
+            if (inRange(when, tLo, hi)) {
+              if (m.pulse) {
+                shots.play(kickBuffer(), out, at(when), k === 0 ? 0.48 : 0.28);
+                shots.play(hatBuffer(), out, at(when), k === 0 ? 0.72 : 0.54);
+              }
+              if (m.click || k >= pickupFrom) {
+                shots.play(clickBuffer(k === 0 && m.click), out, at(when), k >= pickupFrom ? 0.42 : 0.26);
+              }
+            }
+            const off = when + 0.5;
+            if (m.pulse && spb >= SLOW_SPB && inRange(off, tLo, hi)) shots.play(hatBuffer(), out, at(off), 0.28);
+            if (division > 1) {
+              for (let part = 1; part < division; part++) {
+                const sub = when + part / division;
+                if (inRange(sub, tLo, hi) && (m.click || k >= pickupFrom)) shots.play(clickBuffer(false), out, at(sub), 0.18);
+              }
+            }
           }
         }
         hi = Math.min(hi, end);
@@ -286,6 +387,9 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
         // in a gap the band and the click leave the player alone; the notes are still judged
         const cycle = m.gap ? m.gap.on + m.gap.off : 0;
         const quiet = (beat: number) => cycle > 0 && ((((pass * s.length + beat - s.from) % cycle) + cycle) % cycle) >= m.gap!.on - 1e-9; // counted across loops, breaths left out
+        const prevSpan = pass > 0 ? s.iters.find((it) => it.iter === pass - 1) : null;
+        const prevPeriod = prevSpan ? prevSpan.len + prevSpan.breath : span.len + span.breath;
+        const curPeriod = span.len + span.breath;
         t.targets.forEach((n, i) => {
           if (!inRange(n.t, lo, hi)) return;
           const time = at(n.t);
@@ -294,29 +398,43 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
             [...n.chord.voicing].sort((x, y) => x - y).forEach((midi, k) => shots.play(pluckBuffer(midi), out, time + k * 0.03, 0.55 * vol, n.dur * spb * 0.95, 0.12));
           else if (vol > 0) shots.play(pluckBuffer(n.midi), out, time, 0.9 * vol, n.dur * spb * 0.95 + 0.04, 0.08);
           const before = i === s.first ? (s.loop ? t.targets[s.last] : null) : t.targets[i - 1];
-          const previousStart = before ? perfOf(timeOf(iterStart + before.t - s.from - (i === s.first ? s.period : 0))) : null;
+          const previousStart = before ? perfOf(timeOf(iterStart + before.t - s.from - (i === s.first ? prevPeriod : 0))) : null;
           const after = i === s.last ? (s.loop ? t.targets[s.first] : null) : t.targets[i + 1];
-          const nextStart = after ? perfOf(timeOf(iterStart + after.t - s.from + (i === s.last ? s.period : 0))) : null;
+          const nextStart = after ? perfOf(timeOf(iterStart + after.t - s.from + (i === s.last ? curPeriod : 0))) : null;
           s.pending.push({ target: i, start: perfOf(time), end: perfOf(time + n.dur * spb), iter: pass, previousStart, nextStart });
         });
         if (m.chords) for (const c of t.comp) if (inRange(c.t, lo, hi) && !quiet(c.t)) for (const midi of c.midis) shots.play(keysBuffer(midi), out, at(c.t), 0.2, c.dur * spb, 0.15);
-        // the pulse: felt on every beat, and between them when they are far apart; in a gap only the hat stays
-        const pulse = (c: (typeof clicks)[number]) => {
+        // the pulse: felt on every beat, and between them when they are far apart; in a gap only the hat stays.
+        // Even when the click is on (scales/drills), keep a supportive felt kick + hat groove and slow 8th-note
+        // subdivision underneath so the player always feels beat 1 and the pocket rather than a dry bare tick.
+        const pulse = (c: (typeof clicks)[number], underClick = false) => {
           if (quiet(c.t)) return shots.play(hatBuffer(), out, at(c.t), c.accent ? 0.45 : 0.28);
-          shots.play(kickBuffer(), out, at(c.t), c.accent ? 0.6 : 0.4);
-          shots.play(hatBuffer(), out, at(c.t), c.accent ? 0.9 : 0.65);
+          shots.play(kickBuffer(), out, at(c.t), underClick ? (c.accent ? 0.56 : 0.24) : (c.accent ? 0.6 : 0.4));
+          shots.play(hatBuffer(), out, at(c.t), underClick ? (c.accent ? 0.52 : 0.36) : (c.accent ? 0.9 : 0.65));
         };
+        const tailPickupFrom = s.loop && span.breath === 0 && s.length - tailStart >= 1.25 ? s.from + Math.max(tailStart, s.length - 2) : Infinity;
         if (m.click) {
           const division = m.clickSubdivision ?? 1;
-          for (const c of clicks) for (let part = 0; part < division; part++) {
-            const when = c.t + part / division;
-            if (!inRange(when, lo, hi)) continue;
-            if (!quiet(when)) shots.play(clickBuffer(part === 0 && c.accent), out, at(when), part ? 0.18 : c.accent ? 0.5 : 0.35);
-            else if (m.pulse && part === 0) pulse(c);
+          for (const c of clicks) {
+            if (m.pulse && inRange(c.t, lo, hi)) {
+              pulse(c, true);
+              const off = c.t + 0.5;
+              if (division === 1 && spb >= SLOW_SPB && inRange(off, lo, hi) && !quiet(off)) shots.play(hatBuffer(), out, at(off), 0.28);
+            }
+            for (let part = 0; part < division; part++) {
+              const when = c.t + part / division;
+              if (!inRange(when, lo, hi)) continue;
+              const isPickup = part === 0 && when >= tailPickupFrom - 1e-9;
+              if (!quiet(when)) shots.play(clickBuffer(part === 0 && (c.accent || isPickup)), out, at(when), part ? 0.18 : c.accent ? 0.56 : isPickup ? 0.48 : 0.36);
+              else if (m.pulse && part === 0) pulse(c);
+            }
           }
         } else if (m.pulse) {
           for (const c of clicks) {
-            if (inRange(c.t, lo, hi)) pulse(c);
+            if (inRange(c.t, lo, hi)) {
+              pulse(c);
+              if (c.t >= tailPickupFrom - 1e-9 && !quiet(c.t)) shots.play(clickBuffer(false), out, at(c.t), 0.38);
+            }
             const off = c.t + 0.5;
             if (spb >= SLOW_SPB && inRange(off, lo, hi) && !quiet(off)) shots.play(hatBuffer(), out, at(off), 0.35);
           }
@@ -331,7 +449,7 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
       const show = () => {
         const held = s.held;
         setResults(held ? s.pass.results.map((r, i) => r ?? held.results[i] ?? null) : s.pass.results);
-        setWrong(s.pass.wrong);
+        setWrong(held ? held.wrong.map((m, i) => s.pass.wrong[i] ?? m ?? null) : s.pass.wrong);
       };
 
       const heardSince = (since: number) => samples.current.filter((x) => x.t >= since && (x.midi !== null || x.pcs?.length)).length;
@@ -435,16 +553,16 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
 
         const horizon = rOf(now + LOOKAHEAD_S);
         while (s.nextR < horizon && (s.loop || s.nextR < s.length)) {
-          const iterStart = Math.floor(s.nextR / s.period) * s.period;
-          const segEnd = Math.min(horizon, iterStart + s.period);
-          const iter = Math.round(iterStart / s.period);
+          const span = iterAt(s.nextR);
+          const spanEnd = span.r0 + span.len + span.breath;
+          const segEnd = Math.min(horizon, spanEnd);
           // a pass's tempo is the tempo of its notes; the breath after it may already count the next
-          if (s.nextR < iterStart + s.length - 1e-9) {
+          if (s.nextR < span.r0 + span.len - 1e-9) {
             const scheduledBpm = 60 / segAt(s.nextR).spb;
-            const tempo = scheduledTempos.get(iter);
-            scheduledTempos.set(iter, tempo ? { min: Math.min(tempo.min, scheduledBpm), max: Math.max(tempo.max, scheduledBpm) } : { min: scheduledBpm, max: scheduledBpm });
+            const tempo = scheduledTempos.get(span.iter);
+            scheduledTempos.set(span.iter, tempo ? { min: Math.min(tempo.min, scheduledBpm), max: Math.max(tempo.max, scheduledBpm) } : { min: scheduledBpm, max: scheduledBpm });
           }
-          schedule(s.from + s.nextR - iterStart, s.from + segEnd - iterStart, iterStart);
+          schedule(s.from + s.nextR - span.r0, s.from + segEnd - span.r0, span);
           s.nextR = segEnd;
         }
 
@@ -453,22 +571,38 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
         const r = rOf(heard);
         // Count-in buffers were scheduled at the opening tempo, even if the player changes it.
         const countPosition = (heard - s.t0) / spb0;
-        const iter = r < 0 ? 0 : Math.floor(r / s.period);
-        const pos = r < 0 ? 0 : r - iter * s.period; // beats into this pass
-        const breathing = s.loop && s.breath > 0 && r >= 0 && pos >= s.length - 1e-9; // counting in to the next pass
-        const count = breathing ? Math.max(1, Math.min(s.breath, Math.ceil(s.period - pos - 1e-9))) : countBeats && countPosition < 0 ? Math.min(countBeats, Math.ceil(-countPosition)) : 0;
+        const curSpan = r < 0 ? s.iters[0] : iterAt(r);
+        const iter = curSpan.iter;
+        const pos = r < 0 ? 0 : r - curSpan.r0; // beats into this pass
+        const inBreath = s.loop && curSpan.breath > 0 && r >= 0 && pos >= curSpan.len - 1e-9; // musical turnaround into the next pass
+        if (inBreath !== breathRef.current) setBreathing((breathRef.current = inBreath));
+        const count = inBreath
+          ? Math.max(1, Math.min(curSpan.breath, Math.ceil(curSpan.len + curSpan.breath - pos - 1e-9)))
+          : countBeats && countPosition < 0
+            ? Math.min(countBeats, Math.ceil(-countPosition))
+            : 0;
         if (count !== countRef.current) setCounting((countRef.current = count));
-        const beat = s.from + (r < 0 ? 0 : s.loop ? Math.min(pos, s.length - 1e-6) : Math.min(r, s.length - 1e-6));
+        // Beats remaining until Bar 1 re-enters: covers both turnaround bars AND any post-final-note tail
+        // (e.g. a scale ending on beat 1.5 of bar 4 with 2.5 beats left before bar 1 loops back).
+        const beatsLeftInPass = s.loop && r >= 0 ? curSpan.len + curSpan.breath - pos : 0;
+        const inTail = s.loop && r >= 0 && !inBreath && pos >= tailStart - 1e-9 && curSpan.len - tailStart >= 0.75;
+        const nextReentry = inBreath
+          ? Math.max(1, Math.min(curSpan.breath, Math.ceil(beatsLeftInPass - 1e-9)))
+          : inTail
+            ? Math.max(1, Math.min(curSpan.breath + s.barBeats, Math.ceil(beatsLeftInPass - 1e-9)))
+            : 0;
+        if (nextReentry !== reentryRef.current) setReentry((reentryRef.current = nextReentry));
+        const beat = s.from + (r < 0 ? 0 : s.loop ? Math.min(pos, curSpan.len - 1e-6) : Math.min(r, s.length - 1e-6));
         // Read the same output clock as the notation cursor; never pulse on lookahead scheduling.
         const gap = mixRef.current.gap;
         const gapCycle = gap ? gap.on + gap.off : 0;
-        const quietBeat = r >= 0 && !breathing && gapCycle > 0 && (iter * s.length + pos) % gapCycle >= gap!.on - 1e-9;
+        const quietBeat = r >= 0 && !inBreath && gapCycle > 0 && (iter * s.length + pos) % gapCycle >= gap!.on - 1e-9;
         let point: { id: string; index: number; beats: number; counting: boolean } | null = null;
         if (ctx.state === "running" && !quietBeat) {
           if (countPosition >= -countBeats && countPosition < 0) point = { id: `count:${Math.floor(countPosition)}`, index: countBeats + Math.floor(countPosition), beats: countBeats, counting: true };
-          else if (breathing) {
-            const k = Math.min(s.breath - 1, Math.floor(pos - s.length + 1e-9));
-            point = { id: `breath:${iter}:${k}`, index: k, beats: s.breath, counting: true };
+          else if (inBreath) {
+            const k = Math.min(curSpan.breath - 1, Math.floor(pos - curSpan.len + 1e-9));
+            point = { id: `breath:${iter}:${k}`, index: k, beats: curSpan.breath, counting: true };
           } else if (r >= 0 && (s.loop || r < s.length)) {
             let lo = 0;
             let hi = beatGrid.length;
@@ -492,12 +626,12 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
         // The note last struck stays current through the rest after it: falling back to "none"
         // in every rest sent the cursor (and a long score's scroll) to the top and back.
         let target = -1;
-        if (!breathing) for (let i = 0; i < t.targets.length; i++) {
+        if (!inBreath) for (let i = 0; i < t.targets.length; i++) {
           const n = t.targets[i];
           if (n.t > beat + 1e-9) break;
           if (n.t >= s.from - 1e-9) target = i;
         }
-        const slot = r < 0 || breathing ? -1 : t.slots.findIndex((sl) => beat >= sl.start - 1e-9 && beat < sl.start + sl.beats - 1e-9);
+        const slot = r < 0 || inBreath ? -1 : t.slots.findIndex((sl) => beat >= sl.start - 1e-9 && beat < sl.start + sl.beats - 1e-9);
         if (target !== activeRef.current.target || slot !== activeRef.current.slot) {
           activeRef.current = { target, slot };
           setActive(activeRef.current);
@@ -505,16 +639,17 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
 
         const perfNow = performance.now();
         // a new loop pass: the finished one is scored and keeps its colours for a moment, or through
-        // the breath before the next, which belongs to the pass it counts in
-        const passIter = breathing ? iter + 1 : iter;
+        // the turnaround before the next, which belongs to the pass it leads into
+        const passIter = inBreath ? iter + 1 : iter;
         if (s.loop && passIter > s.pass.iter) {
           settle(true);
           const done = s.pass;
-          const begins = breathing ? ctxToPerf(ctx, timeOf(passIter * s.period)) : perfNow;
+          const nextSpan = iterById(passIter);
+          const begins = inBreath ? ctxToPerf(ctx, timeOf(nextSpan.r0)) : perfNow;
           s.pass = { iter: passIter, results: blank(), wrong: [], offsets: [], at: t.targets.map(() => null), start: begins };
           if (s.pending.some((p) => p.iter === done.iter)) s.closing = done;
           else tally(done, true);
-          s.held = { results: done.results, until: Math.max(perfNow + HOLD_MS, begins) };
+          s.held = { results: done.results, wrong: done.wrong, until: Math.max(perfNow + HOLD_MS, begins) };
           show();
         }
         if (s.held && perfNow >= s.held.until) {
@@ -532,17 +667,17 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
       };
 
       // where the music is, read from the device's clock whenever it is asked (a ghost playhead);
-      // nothing during a count-in, a breath or a gap, where there is no music to follow
+      // nothing during a count-in, a turnaround or a gap, where there is no music to follow
       position.current = (throughGaps = false) => {
         if (session.current !== s || ctx.state !== "running") return null;
         const r = rOf(heardTime(ctx) + PAINT_LEAD_S);
         if (r < 0 || (!s.loop && r >= s.length)) return null;
-        const iter = Math.floor(r / s.period);
-        const pos = r - iter * s.period;
-        if (pos >= s.length) return null;
+        const curSpan = iterAt(r);
+        const pos = r - curSpan.r0;
+        if (pos >= curSpan.len) return null;
         const gap = mixRef.current.gap;
         const cycle = gap ? gap.on + gap.off : 0;
-        if (!throughGaps && cycle > 0 && (iter * s.length + pos) % cycle >= gap!.on - 1e-9) return null;
+        if (!throughGaps && cycle > 0 && (curSpan.iter * s.length + pos) % cycle >= gap!.on - 1e-9) return null;
         return s.from + pos;
       };
       s.timer = window.setInterval(tick, TICK_MS);
@@ -588,5 +723,5 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
 
   const beatAt = useCallback((throughGaps = false) => position.current?.(throughGaps) ?? null, []);
 
-  return { playing, counting, beat, activeTarget: active.target, activeSlot: active.slot, results, wrong, lastPass, drift, play, stop, beatAt };
+  return { playing, counting, breathing, reentry, beat, activeTarget: active.target, activeSlot: active.slot, results, wrong, lastPass, drift, play, stop, beatAt };
 }

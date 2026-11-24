@@ -14,18 +14,20 @@ import { arpLine, chainLine, guideLine, scaleLine, type LineNote, type ScaleDril
 import { seeded } from "./rand";
 import { freshLine, knownLine, pickKnown, vary } from "./reading";
 import { isolateRhythm } from "./rhythm";
+import { densityStartBpm, enclosureLine, pyramidLine, shiftLine, skipLine, spiderLine, TECHNIQUE_TRACKS, techniqueSteps, type SpiderPattern, type TechniqueKind, type TechniqueNote } from "./technique";
 import { voiceChords, type Voicing } from "./voicings";
 
 // A tune turned into a deck of exercise cards that together teach it:
 //   scales   — each key centre's parent scales in position: run, thirds, diatonic triads and 7ths
+//   technique — holistic guitar mechanics: spider permutations, string skipping, rhythm pyramids, shifting, enclosures
 //   harmony  — per section (and per cadence): arpeggios, guide-tone line, arpeggio chain
 //   chords   — shell voicings through each section and cadence, with the melody playing on top
 //   melody   — the learning plan's chunks, joins, sections and memory passes, over the backing
 //   reading  — notes that are new every visit, so they can only be read (see reading.ts)
 // Every card carries its own timeline (what to play, what the band plays) for the session player.
 
-export type Family = "scales" | "harmony" | "melody" | "chords" | "reading" | "ear" | "fretboard";
-export type Kind = ScaleDrill | "arps" | "guides" | "chain" | "voicings" | "comping" | "improv" | "melody" | "known" | "varied" | "line" | "echo" | "onstring" | "shape3" | "tones";
+export type Family = "scales" | "technique" | "harmony" | "melody" | "chords" | "reading" | "ear" | "fretboard";
+export type Kind = ScaleDrill | TechniqueKind | "arps" | "guides" | "chain" | "voicings" | "comping" | "improv" | "melody" | "known" | "varied" | "line" | "echo" | "onstring" | "shape3" | "tones";
 export type Rhythm = "quarters" | "triplets" | "sixteenths";
 
 export interface Context {
@@ -74,6 +76,7 @@ export interface Card {
   exact?: boolean; // the octave counts: the answer is one place on the neck
   rhythmPitch?: number; // source notation is shown on this one pitch, retaining its original rhythm
   followedBy?: string; // explicitly selected study continues with this card, outside the daily intro
+  insight?: string; // crisp one-line musical or mechanical side-education cue
 }
 
 export interface Deck {
@@ -83,12 +86,17 @@ export interface Deck {
   intro: string[]; // card ids in the order they are introduced
 }
 
-export const FAMILY_LABEL: Record<Family, string> = { scales: "Scales", harmony: "Over the changes", melody: "Melody", chords: "Chords", reading: "Reading", ear: "Ear", fretboard: "Fretboard" };
+export const FAMILY_LABEL: Record<Family, string> = { scales: "Scales", technique: "Technique", harmony: "Over the changes", melody: "Melody", chords: "Chords", reading: "Reading", ear: "Ear", fretboard: "Fretboard" };
 export const KIND_LABEL: Record<Kind, string> = {
   run: "Scale",
   thirds: "Thirds",
   triads: "Triads",
   sevenths: "7th arpeggios",
+  spider: "Spider",
+  skip: "String skip",
+  pyramid: "Rhythm pyramid",
+  shift: "Position shift",
+  enclose: "Enclosures",
   arps: "Arpeggios",
   guides: "Guide tones",
   chain: "Arpeggio chain",
@@ -664,7 +672,7 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
               ? "Top to bottom, as you'd play it."
               : "With the band playing the chords, so you hear where each note sits.",
       where: barsLabel(sheet, tl, step.from, step.to),
-      bpm: Math.max(40, Math.min(tempo, Math.round((tempo * 0.8) / 2) * 2)),
+      bpm: densityStartBpm(tl.targets.slice(first, last + 1), tempo),
       goalBpm: tempo,
       pass: step.pass,
       listen: step.listen,
@@ -783,12 +791,15 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
     const t1 = tl.slots[to].start + tl.slots[to].beats;
     const spans = spansIn(harmony.events, t0, t1);
     const lineId = `read:line:${ch.key}`;
-    const line = overTune(lineId, "line", spans.length ? freshLine(spans, w, rand(lineId), Math.min(2, Math.floor(seen(lineId) / 2))) : [], ch.from, to, {
+    const readLevel = Math.min(4, Math.floor(seen(lineId) / 2));
+    const readNotes = spans.length ? freshLine(spans, w, rand(lineId), readLevel) : [];
+    const readGoal = Math.max(84, Math.min(tempo, 108));
+    const line = overTune(lineId, "line", readNotes, ch.from, to, {
       title: `${ch.label} · a line to read`,
-      detail: "A line over these chords that was not there before.",
-      why: "Nobody has heard it, so it can only be read: chord tones on the beats, the scale between them.",
-      bpm: 60,
-      goalBpm: Math.max(80, Math.min(tempo, 104)),
+      detail: readLevel >= 3 ? "A syncopated line over these chords — new every visit." : "A line over these chords that was not there before.",
+      why: readLevel >= 4 ? "Chromatic approaches into chord tones; let the eyes read ahead by two beats." : readLevel >= 3 ? "Syncopations and wider skips over the changes — keep the picking hand swinging." : "Nobody has heard it, so it can only be read: chord tones on the beats, the scale between them.",
+      bpm: densityStartBpm(readNotes, readGoal),
+      goalBpm: readGoal,
     });
     const melody = tl.targets.filter((x) => x.t >= t0 - 1e-6 && x.t < t1 - 1e-6).map((x) => ({ midi: x.midi, t: x.t, dur: Math.min(x.dur, t1 - x.t) }));
     const varId = `read:var:${ch.key}`;
@@ -799,7 +810,7 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
       title: `${ch.label} · with notes moved`,
       detail: "The melody, but some of its notes are not where they were.",
       why: "The fingers know the tune. Only the eyes can find what moved.",
-      bpm: Math.max(40, Math.min(tempo, Math.round((tempo * 0.7) / 2) * 2)),
+      bpm: densityStartBpm(moved, tempo),
       goalBpm: tempo,
     });
     if (line) reading.push(line);
@@ -1003,7 +1014,70 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
   }
   for (const c of harmony.cadences) if (!queued.has(c.id)) harmonyQueue.push(...(cadenceCards.get(c.id) ?? []));
 
-  const streams = [technique, melodyCards, melodyCards, harmonyQueue, reading, earDeck, fretDeck];
+  // holistic mechanics & technique: spiders, rhythm pyramid, string skipping, shifting, enclosures
+  // Shared globally across all tunes in `guitar-skills` via `tech:*` IDs.
+  const mechanics: Card[] = [];
+  {
+    const homeScale = makeScale(home.tonic, home.mode === "minor" ? "naturalMinor" : "major", home.tonicName);
+    const tonicChord = parseChord(home.tonicName + (home.mode === "minor" ? "m7" : "maj7")) ?? parseChord(home.tonicName + (home.mode === "minor" ? "m" : ""))!;
+    const mechPos = Math.max(1, Math.min(MAX_FRET - 3, w.p));
+    for (const track of TECHNIQUE_TRACKS) {
+      let rawNotes: TechniqueNote[] = [];
+      let harmonic = true;
+      if (track.kind === "spider") {
+        const pat = track.id.split(":")[2] as SpiderPattern;
+        rawNotes = spiderLine(pat, mechPos);
+        harmonic = false; // chromatic drill: keep backing clean (click + pulse only)
+      } else if (track.kind === "skip") {
+        rawNotes = skipLine(track.id.endsWith(":octave") ? "octave" : "adjacent", homeScale, w);
+      } else if (track.kind === "pyramid") {
+        rawNotes = pyramidLine(homeScale, w);
+      } else if (track.kind === "shift") {
+        rawNotes = shiftLine(homeScale, w);
+      } else if (track.kind === "enclose") {
+        rawNotes = enclosureLine(homeScale, tonicChord, w);
+      }
+      if (!rawNotes.length) continue;
+      const total = rawNotes[rawNotes.length - 1].t + rawNotes[rawNotes.length - 1].dur;
+      const slots = synthSlots(total);
+      const spans: Span[] = [{ chord: tonicChord, t: 0, dur: slots.length * 4 }];
+      const timeline: Timeline = {
+        slots,
+        targets: toTargets({ slots }, rawNotes),
+        comp: harmonic ? padHits(spans) : [],
+        bass: harmonic ? bassLine(spans) : undefined,
+        total: slots.length * 4,
+      };
+      const ctx: Context = { chord: harmonic ? tonicChord : null, scale: homeScale, next: null, roman: home.mode === "minor" ? "i" : "I" };
+      mechanics.push({
+        ...base,
+        id: track.id,
+        p: mechPos,
+        family: "technique",
+        kind: track.kind,
+        needs: track.needs,
+        group: "Foundations",
+        title: track.title,
+        detail: track.detail,
+        why: track.why,
+        insight: track.insight,
+        where: track.kind === "shift" ? `frets ${Math.max(1, Math.min(MAX_FRET - 5, w.p))}–${Math.min(MAX_FRET, Math.max(1, Math.min(MAX_FRET - 5, w.p)) + 5)}` : `frets ${mechPos}–${mechPos + 3}`,
+        bpm: track.bpm,
+        goalBpm: track.goalBpm,
+        pass: 0.85,
+        click: true,
+        tl: timeline,
+        from: 0,
+        to: slots.length - 1,
+        first: 0,
+        last: rawNotes.length - 1,
+        steps: techniqueSteps(rawNotes, w),
+        context: rawNotes.map(() => ctx),
+      });
+    }
+  }
+
+  const streams = [technique, melodyCards, melodyCards, harmonyQueue, reading, earDeck, fretDeck, mechanics];
   const pos = streams.map(() => 0);
   const intro: string[] = [];
   const cards: Card[] = [];
@@ -1015,7 +1089,7 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
     intro.push(c.id);
   };
   let melodyAt = 0;
-  for (let round = 0; intro.length < technique.length + melodyCards.length + harmonyQueue.length + reading.length + earDeck.length + fretDeck.length && round < 1000; round++) {
+  for (let round = 0; intro.length < technique.length + melodyCards.length + harmonyQueue.length + reading.length + earDeck.length + fretDeck.length + mechanics.length && round < 1000; round++) {
     streams.forEach((stream, si) => {
       if (stream === melodyCards) {
         if (melodyAt < melodyCards.length) add(melodyCards[melodyAt++]);
@@ -1174,14 +1248,15 @@ export function mixDecks(main: Deck, others: { tuneId: string; deck: Deck }[]): 
 }
 
 /** Tutor modes that run a narrowed deck: the families each one works on. */
-export type Focus = "all" | "changes" | "scales" | "reading" | "ear";
+export type Focus = "all" | "changes" | "scales" | "reading" | "ear" | "technique";
 export const FOCUS_FAMILIES: Record<Exclude<Focus, "all">, Family[]> = {
   changes: ["chords", "harmony"],
   scales: ["scales", "fretboard"],
   reading: ["reading"],
   ear: ["ear"],
+  technique: ["technique"],
 };
-export const FOCUS_LABEL: Record<Exclude<Focus, "all">, string> = { changes: "Changes", scales: "Scales", reading: "Reading", ear: "Ear" };
+export const FOCUS_LABEL: Record<Exclude<Focus, "all">, string> = { changes: "Changes", scales: "Scales", reading: "Reading", ear: "Ear", technique: "Technique" };
 
 /** The whole-tune melody card (or run-through fallback) so a player can jump straight into playing the song. */
 export function wholeTuneCard(deck: Deck): Card | undefined {

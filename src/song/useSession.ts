@@ -12,14 +12,14 @@ import { assessTiming } from "../tunes/scoring";
 import { latencyMeasured } from "../audio/latency";
 import { mod } from "../musicTheory";
 import type { Card, Deck } from "./deck";
-import { bassHint, chime, glint, hintNote, hush, padChord, say } from "./cues";
+import { bassHint, chime, glint, hintNote, hush, lift, padChord, say } from "./cues";
 import { createEstimator } from "./estimator";
 import { cleanTake, takeShare } from "./judge";
 import { noteName } from "./deck";
 import { finishTake, record } from "../audio/recorder";
 import { keepPracticeWrite } from "../platform/practiceWindow";
 import { createEvidence, type EvidenceLog } from "./evidence";
-import { applyResult, carryOver, headStart, loadStores, logAttempt, planExtra, planSession, saveStores, today, type AttemptConditions, type Result, type Settings, type Store } from "./leitner";
+import { applyResult, carryOver, headStart, loadStores, logAttempt, planExtra, planSession, saveStores, today, type AttemptConditions, type LoopMode, type Result, type Settings, type Store } from "./leitner";
 import { assignNoteKeys, commandMidis } from "./notekeys";
 import { createTrouble, spotCard, spotOf, type Spot } from "./spot";
 import { meanShare } from "./stats";
@@ -65,6 +65,7 @@ const UNDER = 0.88; // the click starts this far under the player's own tempo
 const STEP_UP = 4; // bpm a clean pass earns
 const STEP_UP_FAR = 8; // while the tempo is far below where it is heading, after a steady pass
 const STEP_DOWN = 4; // as gentle as a step up: two short passes cost one clean one
+const MAX_CLIMBS = 3; // cap in-visit tempo climbs so no single exercise becomes a treadmill
 const MIN_BPM = 40;
 const MAX_BPM = 240;
 const MAX_MISSED_PASSES = 7;
@@ -90,6 +91,12 @@ const GAP_BARS = 2; // bars with the band, then bars without it (twice as many i
 const EMPTY: Timeline = { slots: [], targets: [], comp: [], total: 0 };
 const KEY_IDS = ["hear", "pace", "time", "next"];
 const even = (bpm: number) => Math.round(bpm / 2) * 2;
+
+export interface PassEntry {
+  share: number;
+  settle?: boolean; // Pass 1 warm-in grace: did not penalize or skew profile
+  clean?: boolean;
+}
 
 export interface Outcome {
   id: string;
@@ -161,6 +168,10 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
   const [takes, setTakes] = useState({ clean: 0, unclean: 0 });
   const [lastTake, setLastTake] = useState<{ hit: number; total: number; clean: boolean } | null>(null);
   const [passes, setPasses] = useState<number[]>([]);
+  const [passLog, setPassLog] = useState<PassEntry[]>([]);
+  const [settling, setSettling] = useState(false); // true briefly after a forgiven Pass 1 settle-in
+  const [loopLocked, setLoopLocked] = useState(false); // adaptive loop tightens to continuous once a pass lands cleanly
+  const [tempoLift, setTempoLift] = useState<{ from: number; to: number; key: number } | null>(null);
   const [silent, setSilent] = useState(0);
   const [slowed, setSlowed] = useState(0);
   const [backed, setBacked] = useState(0); // times the band stepped back to the player's own pace
@@ -182,6 +193,8 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
   logRef.current = log;
   const recorded = useRef({ outcomes: 0, ms: 0 }); // already written to the session history
   const timeStarts = useRef(0); // in-time loops started for this card
+  const passCount = useRef(0); // timed passes heard for this card (Pass 0 gets free settle-in grace if rough)
+  const climbs = useRef(0); // clean tempo bumps earned in this visit
   const runBars = useRef<Outcome["bars"]>(undefined); // the last run-through, bar by bar
   const missRun = useRef(0); // passes in a row that fell short
   const rhythmMisses = useRef(0); // right pitches without a steady pulse do not earn a faster click
@@ -259,6 +272,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
 
   // what this card asks for, given its box
   const long = card ? card.last - card.first + 1 > 24 : false;
+  const isDrill = card?.family === "scales" || card?.family === "technique";
   const needClean = spot
     ? SPOT_CLEAN
     : !card || !card.pace
@@ -267,7 +281,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
         ? 1 // new notes every time: always read through once first
         : card.view === "chords"
           ? (level <= 2 ? 1 : 0)
-          : card.family === "scales"
+          : isDrill
             ? (level <= 1 ? 1 : 0)
             : level <= 1
               ? (long ? 1 : 2)
@@ -295,25 +309,41 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
   const restartChords = chords.restart;
 
   const guideMelody = settings.guide && card?.family === "melody" && !memoryExercise;
-  // the notes under the player in time: silent while they land, fading in where they don't
-  const shadow = useMemo(() => (whole ? createSupport(whole.tl.targets.map((t) => t.t)) : null), [whole]);
+  // Adaptive shadow melody: for new/low-box melody & harmony cards (never fresh sight-reading or memory),
+  // start gently blended in so it "joins in" from note 1 and melts away as soon as your notes land.
+  const shadow = useMemo(() => {
+    if (!whole) return null;
+    const warmStart = !whole.fresh && !memoryExercise && whole.kind !== "improv" && whole.family !== "technique" && (storeRef.current.cards[whole.id]?.box ?? 0) <= 1 ? 0.36 : 0;
+    return createSupport(whole.tl.targets.map((t) => t.t), { warmStart });
+  }, [cardKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const loopMode: LoopMode = settings.loop ?? "adaptive";
+  const setLoopMode = useCallback((loop: LoopMode) => updateSettings({ loop }), [updateSettings]);
+  const phraseLoops = Boolean(
+    card &&
+      card.view !== "chords" &&
+      !card.run &&
+      (card.family === "scales" || card.family === "harmony" || card.family === "melody" || card.family === "reading" || card.family === "ear"),
+  );
+  const wantsBreath = phase === "time" && phraseLoops && (
+    loopMode === "turnaround" || (loopMode === "adaptive" && box < 3 && !loopLocked)
+  );
   const mix = {
     bpm,
     melody: phase === "listen" || (phase === "time" && guideMelody),
     shadow: phase === "time" && card?.kind !== "improv" && !memoryExercise ? shadow : null,
     fill: phase === "listen" || phase === "time",
     chords: true,
-    click: phase === "time" && (Boolean(card?.click) || card?.family === "scales") && click,
+    click: phase === "time" && (Boolean(card?.click) || isDrill) && click,
     pulse: phase === "listen" || phase === "time", // rests are heard as time, at any tempo
-    // a phrase comes round with a counted bar to get back to its first note; drills and changes cycle on
-    breath: phase === "time" && Boolean(card && card.view !== "chords" && (card.family === "melody" || card.family === "reading" || card.family === "ear")),
+    // adaptive live-band turnaround while settling/learning, tightening into continuous groove once locked in
+    breath: wantsBreath,
     countIn: true,
     bass: true,
     guide: !memoryExercise || phase === "listen",
   };
-  // a gap: the band drops out of a scale drill for a couple of bars and comes back; the notes in
+  // a gap: the band drops out of a scale/technique drill for a couple of bars and comes back; the notes in
   // between are still judged. A tune always keeps its band: playing it is playing with them.
-  const gapped = Boolean(card && !spot && card.family === "scales" && (options.gap?.has(card.id) || box >= GAP_BOX));
+  const gapped = Boolean(card && !spot && isDrill && (options.gap?.has(card.id) || box >= GAP_BOX));
   const barBeats = card?.tl.slots[card.from]?.beats ?? 4;
   const gap = gapped ? { on: GAP_BARS * barBeats, off: (box >= 5 ? 2 : 1) * GAP_BARS * barBeats } : null;
   const playback = usePlayback(card?.tl ?? EMPTY, { ...mix, gap }, sessionInput, phase === "time" && listening && !selfGuided && !suspended, !card?.exact, ignore);
@@ -428,7 +458,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
   }, [running, finished, finish, stop]);
 
   // a new card (or the same one again later in the queue): reset and introduce it
-  const estimator = useMemo(() => createEstimator(card?.family === "scales" ? "scale" : "melody"), [cardKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const estimator = useMemo(() => createEstimator(card?.family === "scales" || card?.family === "technique" ? "scale" : "melody"), [cardKey]); // eslint-disable-line react-hooks/exhaustive-deps
   // where this visit goes wrong, kept with its attempt
   const evidence = useMemo<EvidenceLog>(() => createEvidence(), [cardKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const evidenceRef = useRef(evidence);
@@ -441,6 +471,8 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     if (!card) return;
     stop();
     timeStarts.current = 0;
+    passCount.current = 0;
+    climbs.current = 0;
     missRun.current = 0;
     rhythmMisses.current = 0;
     untimed.current = 0;
@@ -461,6 +493,10 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     setTakes({ clean: 0, unclean: 0 });
     setLastTake(null);
     setPasses([]);
+    setPassLog([]);
+    setSettling(false);
+    setLoopLocked(false);
+    setTempoLift(null);
     setSilent(0);
     setSlowed(0);
     setBacked(0);
@@ -696,6 +732,30 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     return () => window.clearTimeout(id);
   }, [phase, inactive, card?.view, follow.done, chords.done]);
 
+  // Gentle ear-memory reinforcement: in own-pace mode on non-ear, non-fresh cards, if the player
+  // misses the same note twice (repeated wrong pitch), quietly sound the target pitch once so
+  // ear, staff symbol and finger position bind together right away instead of waiting 8s in silence.
+  const wrongEarRef = useRef<{ key: string; count: number; sounded: boolean }>({ key: "", count: 0, sounded: false });
+  useEffect(() => {
+    if (phase !== "pace" || !card || inactive || selfGuided || card.view === "chords" || card.family === "ear" || card.fresh) {
+      wrongEarRef.current = { key: "", count: 0, sounded: false };
+      return;
+    }
+    const idx = card.first + follow.index;
+    const slotKey = `${cardKey}:${follow.take}:${idx}`;
+    if (wrongEarRef.current.key !== slotKey) {
+      wrongEarRef.current = { key: slotKey, count: 0, sounded: false };
+    }
+    if (follow.wrong === null || wrongEarRef.current.sounded) return;
+    wrongEarRef.current.count += 1;
+    if (wrongEarRef.current.count < 2) return;
+    const targetMidi = card.tl.targets[idx]?.midi;
+    if (targetMidi === undefined) return;
+    wrongEarRef.current.sounded = true;
+    const id = window.setTimeout(() => hintNote(targetMidi), 360);
+    return () => window.clearTimeout(id);
+  }, [phase, card, cardKey, inactive, selfGuided, follow.index, follow.take, follow.wrong]);
+
   // the harmony under your own-pace playing: a soft chord whenever it changes
   const lastPad = useRef("");
   const paceIndex = card?.view === "chords" ? chords.index : follow.index;
@@ -818,10 +878,10 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
       return;
     }
     setSilent(0);
-    if (card.view === "score" || card.view === "fretboard") evidence.notes(card.tl.targets.map((t) => t.midi), card.steps, p.results, p.wrong, card.first, card.last);
-    evidence.timing(p.at.slice(card.first, card.last + 1));
     const score = p.hit / p.total;
     if (card.run) {
+      if (card.view === "score" || card.view === "fretboard") evidence.notes(card.tl.targets.map((t) => t.midi), card.steps, p.results, p.wrong, card.first, card.last);
+      evidence.timing(p.at.slice(card.first, card.last + 1));
       // a run-through: once, top to bottom, and it is what it was
       const bars = barShares(card, p.results);
       evidence.weak(bars.filter((b) => b.share < WEAK_BAR).map((b) => b.bar));
@@ -834,8 +894,6 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
       conclude(score >= RUN_CLEAN && stableTempo ? "clean" : score >= card.pass ? "ok" : "fail", score, recordingId);
       return;
     }
-    const all = [...passes, score];
-    setPasses(all);
     // A setting changed partway through: the next complete pass establishes the new tempo.
     if (!stableTempo) {
       if (ending) finish();
@@ -845,18 +903,34 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     const beatMs = 60000 / assessedBpm.current;
     const spacing = targets.slice(1).reduce((shortest, t, i) => Math.min(shortest, (t.t - targets[i].t) * beatMs || shortest), beatMs);
     const timing = assessTiming(p.at.slice(card.first, card.last + 1), assessedBpm.current, spacing);
-    estimator.pass(score, timing.fit ? Math.max(timing.fit.spread, Math.abs(timing.fit.drift)) : null, beatMs);
-    feel();
     const onTime = (card.view === "chords" && card.kind !== "comping") || card.kind === "improv" || timing.ready;
     if (ending) {
       if (score >= card.pass && onTime) conclude("ok", score);
       else finish();
       return;
     }
+    // First-run grace (Settle-In Pass): players frequently stumble on Pass 1 while getting their
+    // hands into position. If Pass 1 is clean, award immediate credit; if rough, forgive it without
+    // penalizing `missed`, `missRun`, tempo, or profile evidence, while letting the adaptive shadow wake up.
+    const isFirstSettle = passCount.current === 0 && !(memoryExercise && memoryStage === "hidden");
+    passCount.current++;
+    if (isFirstSettle && !(score >= card.pass && onTime)) {
+      setPassLog((prev) => [...prev, { share: score, settle: true }]);
+      setSettling(true);
+      return;
+    }
+    setSettling(false);
+    if (card.view === "score" || card.view === "fretboard") evidence.notes(card.tl.targets.map((t) => t.midi), card.steps, p.results, p.wrong, card.first, card.last);
+    evidence.timing(p.at.slice(card.first, card.last + 1));
+    const all = [...passes, score];
+    setPasses(all);
+    estimator.pass(score, timing.fit ? Math.max(timing.fit.spread, Math.abs(timing.fit.drift)) : null, beatMs);
+    feel();
     // the right notes with too few attacks caught to time them, or a tune's notes right with the time
     // not yet even: the tempo holds and nothing is held against it. Slowing a tune whose notes are
     // there teaches nothing; its time settles with playing it, and the timing strip shows it.
     if (score >= card.pass && !onTime && (!timing.measured || card.family === "melody")) {
+      setPassLog((prev) => [...prev, { share: score, clean: false }]);
       missRun.current = 0;
       if (++untimed.current >= UNTIMED_PASSES) conclude("ok", score);
       return;
@@ -865,8 +939,10 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     const missed = all.filter((s) => s < card.pass).length + rhythmMisses.current;
     const sp = !spot && spotted < MAX_SPOTS && card.kind !== "improv" ? trouble?.pass(p.results) ?? null : null;
     if (score >= card.pass && onTime) {
+      setPassLog((prev) => [...prev, { share: score, clean: true }]);
+      setLoopLocked(true);
       missRun.current = 0;
-      if (assessedBpm.current >= target) {
+      if (assessedBpm.current >= target || climbs.current >= MAX_CLIMBS) {
         if (memoryExercise && !spot && memoryStage !== "hidden") {
           changeMemoryStage(memoryStage === "page" ? "landmarks" : "hidden");
           return;
@@ -876,9 +952,14 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
       }
       // A steady pass earns the step; a constant phase offset never makes the step larger.
       const far = target - bpm > 12;
-      setBpm(Math.min(target, bpm + (far ? STEP_UP_FAR : STEP_UP)));
+      const nextBpm = Math.min(target, bpm + (far ? STEP_UP_FAR : STEP_UP));
+      climbs.current++;
+      setBpm(nextBpm);
+      setTempoLift({ from: bpm, to: nextBpm, key: Date.now() });
+      lift();
       return;
     }
+    setPassLog((prev) => [...prev, { share: score, clean: false }]);
     missRun.current++;
     if (missed >= MAX_MISSED_PASSES) conclude("fail", Math.max(...all));
     else if (sp) {
@@ -1162,6 +1243,12 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     setTakes({ clean: 0, unclean: 0 });
     setLastTake(null);
     setPasses([]);
+    setPassLog([]);
+    setSettling(false);
+    setLoopLocked(false);
+    setTempoLift(null);
+    passCount.current = 0;
+    climbs.current = 0;
     setSilent(0);
     setSpot(null);
     restartFollow();
@@ -1249,6 +1336,14 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     takes,
     lastTake,
     passes,
+    passLog,
+    settling,
+    loopMode,
+    setLoopMode,
+    loopLocked,
+    tempoLift,
+    breathing: playback.breathing,
+    reentry: playback.reentry,
     slowed,
     backed,
     outcome,

@@ -126,6 +126,10 @@ const RHYTHMS: number[][][] = [
   [[1, 1, 1, 1], [2, 1, 1], [1, 1, 2], [1, 2, 1], [-1, 1, 1, 1]],
   [[1, 0.5, 0.5, 1, 1], [0.5, 0.5, 1, 1, 1], [1, 1, 0.5, 0.5, 1], [1.5, 0.5, 1, 1], [1, 1, 1.5, 0.5], [-1, 1, 0.5, 0.5, 1], [2, 0.5, 0.5, 1]],
   [[0.5, 0.5, 0.5, 0.5, 1, 1], [1, 0.5, 0.5, 0.5, 0.5, 1], [0.5, 1, 0.5, 1, 1], [1.5, 0.5, 0.5, 0.5, 1], [-0.5, 0.5, 1, 0.5, 0.5, 1], [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 1]],
+  // Level 3: syncopated anticipations & off-beat rests
+  [[-0.5, 0.5, 0.5, 1, 0.5, 1], [0.5, 1, 0.5, -0.5, 0.5, 1], [1.5, 0.5, -0.5, 0.5, 0.5, 0.5], [0.5, 0.5, -0.5, 0.5, 1, 1], [-0.5, 1, 0.5, 0.5, 0.5, 1]],
+  // Level 4: denser mixed 8ths, syncopation & chromatic passing tones
+  [[0.5, 0.5, 0.5, 0.5, -0.5, 0.5, 0.5, 0.5], [-0.5, 0.5, 0.5, 0.5, 0.5, 1, 0.5], [0.5, 1, 0.5, 0.5, 0.5, 0.5, 0.5], [1, -0.5, 0.5, 0.5, 0.5, 0.5, 0.5]],
 ];
 
 export interface ReadSpan {
@@ -138,7 +142,7 @@ export interface ReadSpan {
 /**
  * A melody over chord changes, in the position: chord tones where a chord arrives and on the
  * strong beats, steps of the scale in between, the last note long and at home in its chord.
- * `level` 0–2 picks the rhythms: quarters and halves, then 8ths, then off-beats.
+ * `level` 0–4 progresses: quarters/halves → 8ths → off-beats → syncopation/leaps → chromatic approaches.
  */
 export function freshLine(spans: ReadSpan[], w: Window, rand: () => number, level: number): LineNote[] {
   if (!spans.length) return [];
@@ -147,7 +151,9 @@ export function freshLine(spans: ReadSpan[], w: Window, rand: () => number, leve
   const lo = Math.max(w.low, OPEN_MIDI[4] + w.p); // from the A string up: lines sit in the middle of the staff
   const hi = OPEN_MIDI[0] + w.p + 3;
   const spanAt = (t: number) => spans.find((s) => t >= s.t - 1e-6 && t < s.t + s.dur - 1e-6) ?? spans[spans.length - 1];
-  const pool = RHYTHMS[Math.max(0, Math.min(RHYTHMS.length - 1, level))];
+  const clamped = Math.max(0, Math.min(RHYTHMS.length - 1, level));
+  const pool = RHYTHMS[clamped];
+  const leapReach = clamped >= 3 ? 8 : 5;
   const out: LineNote[] = [];
   let prev: number | null = null;
   let dir = rand() < 0.5 ? 1 : -1;
@@ -176,11 +182,18 @@ export function freshLine(spans: ReadSpan[], w: Window, rand: () => number, leve
         const guide = [c.third ?? 4, c.seventh ?? c.fifth].map((iv) => mod(c.root + iv));
         const home = [c.root, mod(c.root + (c.third ?? 4))];
         const tones = notesIn(last ? home : arrives && rand() < 0.7 ? guide : c.pcs, lo, hi).filter((m) => m !== prev);
-        const near = tones.filter((m) => Math.abs(m - ref) <= 5);
+        const near = tones.filter((m) => Math.abs(m - ref) <= leapReach);
         const from = near.length ? near : tones;
         pick = from.length ? from.reduce((a, b) => (Math.abs(b - ref) < Math.abs(a - ref) ? b : a)) : Math.round(ref);
-        if (near.length > 1 && rand() < 0.35) pick = near[Math.floor(rand() * near.length)];
+        if (near.length > 1 && rand() < (clamped >= 3 ? 0.5 : 0.35)) pick = near[Math.floor(rand() * near.length)];
         if (prev !== null && pick !== prev) dir = pick > prev ? 1 : -1;
+      } else if (clamped >= 4 && !onBeat && prev !== null && rand() < 0.25) {
+        // Level 4: chromatic passing/approach tone toward the next strong chord tone
+        const nextSpan = spanAt(t + dur);
+        const goalTones = notesIn(nextSpan.chord.pcs, lo, hi);
+        const target = goalTones.length ? goalTones.reduce((a, b) => (Math.abs(b - prev!) < Math.abs(a - prev!) ? b : a)) : prev;
+        const approach = target > prev ? target - 1 : target + 1;
+        pick = approach >= lo && approach <= hi && approach !== prev ? approach : prev + dir;
       } else {
         // a step of the scale in the direction of travel, turning at the edges and now and then
         if (rand() < 0.22) dir = -dir;

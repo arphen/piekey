@@ -356,6 +356,15 @@ describe("a session with a shape", () => {
     expect(p.why).toBe("Pitch · 12 days");
     expect(p.blocks.find((b) => b.role === "focus")!.cards.every((id) => id.startsWith("mel:"))).toBe(true);
   });
+
+  it("weaves a holistic side-study drill into normal sessions for returning players", () => {
+    const cards = Object.fromEntries([[scale, known(3)], ...melodies.map((id) => [id, known(2)])]);
+    const weak = { cls: "crossing" as const, strength: 0.6, n: 40, cards: [`t::${melodies[0]}`], fact: "String crossings · 45 % missed" };
+    const p = planBlocks(deck, store(cards), day, { minutes: 25, tuneId: "t", profile: profileWith({ weaknesses: [weak] }) });
+    const side = p.blocks.find((b) => b.role === "side");
+    expect(side?.cards).toEqual(["tech:skip:adjacent"]);
+    expect(p.sideWhy).toContain("String crossings");
+  });
 });
 
 describe("arcs", () => {

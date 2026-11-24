@@ -3,6 +3,7 @@ import type { InputApi } from "../listen/useInput";
 import { hush, interlude } from "../song/cues";
 import { FAMILY_LABEL, type Deck, type Family } from "../song/deck";
 import { loadFreePlay } from "../song/freeplay";
+import { isShared } from "../song/ids";
 import { allStores, boxCounts, BOXES, chronologicalAttempts, type CardState, type Result } from "../song/leitner";
 import { familyOf, meanShare, sessionTrend, totals } from "../song/stats";
 import { buildTree } from "../song/tree";
@@ -19,7 +20,7 @@ import { RecordingStatus } from "./RecordingStatus";
 const KEYS = { more: 48, free: 46, settings: 49, tune: 53, shuffle: 54 }; // C · A♯ · C♯ · F · F♯: off the open strings
 const ARM_MS = 2500; // let the last notes ring out before a note can mean something
 const MOVE_MS = 1100; // then the exercises set off for their new boxes
-const FAMILIES: Family[] = ["scales", "melody", "harmony", "chords", "reading", "ear", "fretboard"];
+const FAMILIES: Family[] = ["scales", "technique", "melody", "harmony", "chords", "reading", "ear", "fretboard"];
 const MAX_CARRIED = 4;
 
 interface Row {
@@ -195,7 +196,7 @@ export function SessionSummary({
     for (const { tuneId: id, store } of allStores()) {
       for (const [cid, st] of Object.entries(store.cards)) if (cid.startsWith("scale:") && (!cards[cid] || st.seen >= cards[cid].seen)) cards[cid] = st;
       Object.assign(credit, store.credit);
-      const own = Object.entries(store.cards).filter(([cid]) => !cid.startsWith("scale:"));
+      const own = Object.entries(store.cards).filter(([cid]) => !isShared(cid));
       if (store.meta) tunesIn.push({ id, title: store.meta.title, key: store.meta.key, fill: own.length ? own.reduce((n, [, st]) => n + st.box, 0) / own.length / BOXES : 0 });
     }
     const lit = new Set(s.log.flatMap((o) => (o.result === "skip" ? [] : [o.id, ...o.also.map((a) => a.id)])));

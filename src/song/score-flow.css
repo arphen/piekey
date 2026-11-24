@@ -332,7 +332,7 @@
 }
 
 .flow .ss-glint,
-.flow .ss-ghost-note,
+.flow .ss-ghost-wrap,
 .flow .ss-want-name {
   z-index: 2;
 }

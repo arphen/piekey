@@ -59,6 +59,9 @@ export function axesOf(a: Attempt): Axis[] {
     case "scales":
       out.push("pitch", "tempo");
       break;
+    case "technique":
+      out.push("pitch", "tempo");
+      break;
     case "harmony":
       out.push("pitch", "chords");
       break;

@@ -16,6 +16,7 @@ export interface TutorMode {
 
 export const FAMILY_META: Record<Family, { color: string; glyph: GlyphName }> = {
   scales: { color: "#6de64b", glyph: "scales" },
+  technique: { color: "#58d4b4", glyph: "scales" },
   harmony: { color: "#dfc068", glyph: "harmony" },
   melody: { color: "#8ee6a8", glyph: "melody" },
   chords: { color: "#d69463", glyph: "chords" },
