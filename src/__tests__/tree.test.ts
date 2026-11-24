@@ -3,7 +3,7 @@ import { buildDeck } from "../song/deck";
 import { keyStudySheet } from "../song/keyStudy";
 import { foundationKey, TECHNIQUE_TRACKS } from "../song/technique";
 import { buildTimeline } from "../tunes/order";
-import { homeTreeSpec, MID } from "../overview/homeTree";
+import { homeTreeSpec, KEYSTONES, keystoneId, MID, ORBIT } from "../overview/homeTree";
 import { bearingOf, resolveTree } from "../tree/layout";
 import type { TreeSpec } from "../tree/model";
 
@@ -58,6 +58,21 @@ describe("home tree", () => {
 
   it("moves a song out past the foundations of its key", () => {
     expect(tree.byId.get("tune:s1")!.orbit).toBe(5);
+  });
+
+  it("puts each keystone past the song rim, half a spoke off, on a path from the circle of fifths", () => {
+    const rim = Math.hypot(tree.byId.get("tune:s1")!.x - MID, tree.byId.get("tune:s1")!.y - MID);
+    for (const k of KEYSTONES) {
+      const id = keystoneId(k.focus);
+      const node = tree.byId.get(id)!;
+      expect(node.kind).toBe("keystone");
+      expect(Math.hypot(node.x - MID, node.y - MID)).toBeGreaterThan(rim);
+      expect(k.angle % 30).toBe(15); // between two keys' spokes, clear of their branches
+      // walk the path back to a socket on the major ring
+      let at = id;
+      for (let hops = 0; hops < 3; hops++) at = tree.edges.find((e) => e.to === at && e.kind === "keystone")!.from;
+      expect(tree.byId.get(at)!.orbit).toBe(ORBIT.major);
+    }
   });
 });
 

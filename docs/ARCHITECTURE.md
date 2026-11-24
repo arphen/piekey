@@ -166,6 +166,10 @@ and orbit → arc; otherwise line/curve/S). `overview/homeTree.ts` builds Home's
 (core, petals, minor and major rings, song rim) and one branch group per key holding its four
 exercises and, on the outer orbit, the foundations anchored to that key (spread evenly, linked
 from the nearer branch node and along their `needs` chain); songs move out past foundations.
+Disciplines with their own trainer (Triads, Ear) are `keystone` nodes past the song rim, half a
+spoke between two major keys, reached by `travel` steps from a socket on the major ring; their
+fill comes from the trainers' own stores (`triadsFill`, `earSummary`), and selecting one is the
+same focus as its petal (the card opens at the keystone and launches the trainer).
 `homeView` fits the frame to the nodes and labels. `components/PassiveTree.tsx` is generic: SVG
 layer per node kind plus an HTML layer of real buttons, with `data-kind`, `data-family`,
 `data-link` and `is-*` state classes as the styling surface; `SongMap` supplies Home's skins,

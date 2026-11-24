@@ -32,7 +32,7 @@ export interface NodeSkin<D> {
 export type TreeSkins<D> = Partial<Record<TreeNodeKind, NodeSkin<D>>>;
 
 /** Lower layers first: links under everything, then the small nodes, then the large. */
-const LAYERS: TreeNodeKind[] = ["skill", "notable", "hub", "core", "petal", "song"];
+const LAYERS: TreeNodeKind[] = ["travel", "skill", "notable", "keystone", "hub", "core", "petal", "song"];
 
 const pct = (value: number, from: number, size: number) => `${(((value - from) / size) * 100).toFixed(3)}%`;
 

@@ -103,6 +103,14 @@ function load(): Saved {
   }
 }
 
+/** Where each ear track stands, read from storage (the keystone on Home). */
+export function earSummary(): { tracks: { id: TrackId; label: string; stage: number; stages: number }[]; rounds: number; fill: number } {
+  const saved = load();
+  const tracks = (Object.keys(TRACKS) as TrackId[]).map((id) => ({ id, label: TRACKS[id].label, stage: saved.progress[id]?.stage ?? 0, stages: TRACKS[id].stages.length }));
+  const fill = saved.stats.rounds > 0 ? Math.max(...tracks.map((t) => (t.stage + 1) / t.stages)) : 0;
+  return { tracks, rounds: saved.stats.rounds, fill };
+}
+
 let serial = 0;
 
 function pickWeighted<T>(items: T[], weights: number[], rng: () => number): T {

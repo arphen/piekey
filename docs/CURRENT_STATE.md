@@ -91,7 +91,11 @@ cleanup and late-start cancellation have mounted coverage; physical audio remain
   time, phrasing), chained in unlock order, with a tempo gauge (start → goal, current bpm);
   key exercises show their bpm on hover and in the key card. Selecting a key, song or foundation
   opens its card beside the node; a blend opens the mix card; the core is Guitar mode for the
-  next session or plays the selection. A colour legend sits bottom-left. Code-verified
+  next session or plays the selection. A colour legend sits bottom-left. Triads and Ear training
+  are also PoE-style keystones (brass frame, fill from their own trainers) east and west past the
+  song rim, on a path from the circle of fifths; keystone or petal opens the same card, which
+  launches the trainer. The Ear and Scales petals swapped places so each keystone sits on its
+  petal's side. Code-verified
   (`tree.test.ts`, smoke) and checked in headless Chrome screenshots; not checked on a phone.
   `UnitCard` no longer says "Due" anywhere (a waiting card shows its box).
 - **Foundations in their key** (`song/technique.ts` `hub`, `deck.ts` mechanics): every deck

@@ -7,7 +7,8 @@ import type { NodeProgress, ResolvedTree, TreeGroupSpec, TreeLinkSpec, TreeNodeS
 import type { MapSong, PracticeMap } from "./map";
 
 // Home's passive tree as data. One wheel group holds the core, the discipline petals, the circle of
-// fifths (minors inside majors) and the song rim. Each key has a branch group pinned to its hub and
+// fifths (minors inside majors), the song rim and the keystones: the disciplines with a trainer of
+// their own (Triads, Ear), each at the end of a short path that leaves the circle between two keys. Each key has a branch group pinned to its hub and
 // facing away from the centre (towards it for minors); the key's exercises sit on its orbits, and
 // the foundations hung on that key take the branch's outer orbit, spread evenly, so adding a
 // foundation to the catalogue places it without touching this file.
@@ -16,9 +17,9 @@ import type { MapSong, PracticeMap } from "./map";
 // how far each node has come (it changes after every session).
 
 export const MID = TREE_SIZE / 2;
-/** Wheel orbits: 0 core, 1 petals, 2 minor keys, 3 major keys, 4 songs, 5 songs pushed out. */
-export const WHEEL_ORBITS = [0, 66, 140, 208, 304, 346] as const;
-export const ORBIT = { core: 0, petals: 1, minor: 2, major: 3, songs: 4, songsOut: 5 } as const;
+/** Wheel orbits: 0 core, 1 petals, 2 minor keys, 3 major keys, 4 songs, 5 songs pushed out, 6–7 the steps to a keystone, 8 keystones. */
+export const WHEEL_ORBITS = [0, 66, 140, 208, 304, 346, 282, 356, 430] as const;
+export const ORBIT = { core: 0, petals: 1, minor: 2, major: 3, songs: 4, songsOut: 5, step1: 6, step2: 7, keystone: 8 } as const;
 /** The map's frame in tree space before fitting: the wheel, the song rim and room for the songs' names. */
 export const HOME_VIEW = { x: -176, y: -66, w: TREE_SIZE + 352, h: TREE_SIZE + 128 };
 
@@ -53,18 +54,34 @@ export type HomeNodeData =
   | { type: "hub"; hubId: string; minor: boolean; fullName: string }
   | { type: "skill"; hubId: string; skill: string }
   | { type: "foundation"; track: TechniqueMeta; hubId: string; keyName: string; groupLabel: string }
-  | { type: "song"; songId: string; hubId: string };
+  | { type: "song"; songId: string; hubId: string }
+  | { type: "keystone"; focus: KeystoneFocus; blurb: string }
+  | { type: "travel"; focus: KeystoneFocus };
 
 export type HomeTreeSpec = TreeSpec<HomeNodeData>;
 
+/** Petals with a keystone point at it: Triads east, Ear west. */
 export const PETALS: { focus: TreeFocus; label: string; angle: number; family: string }[] = [
-  { focus: "scales", label: "Scales", angle: 270, family: "scales" },
+  { focus: "ear", label: "Ear", angle: 270, family: "ear" },
   { focus: "technique", label: "Technique", angle: 330, family: "foundations" },
   { focus: "changes", label: "Changes", angle: 30, family: "changes" },
   { focus: "triads", label: "Triads", angle: 90, family: "triads" },
-  { focus: "ear", label: "Ear", angle: 150, family: "ear" },
+  { focus: "scales", label: "Scales", angle: 150, family: "scales" },
   { focus: "reading", label: "Reading", angle: 210, family: "reading" },
 ];
+
+export type KeystoneFocus = Extract<TreeFocus, "ear" | "triads">;
+
+/**
+ * Disciplines with a trainer of their own. Each sits beyond the song rim, between two major keys
+ * (half a spoke off, so no key's branch or songs are in the way), and is reached by a path that
+ * leaves the circle of fifths there: a socket on the major ring, two steps, the keystone.
+ */
+export const KEYSTONES: { focus: KeystoneFocus; label: string; angle: number; family: string; blurb: string }[] = [
+  { focus: "triads", label: "Triads", angle: 75, family: "triads", blurb: "Every triad on the neck, by heart, round the circle of fifths." },
+  { focus: "ear", label: "Ear training", angle: 285, family: "ear", blurb: "Hear the chords behind songs: progressions and their names." },
+];
+export const keystoneId = (focus: KeystoneFocus) => `ks:${focus}`;
 
 /** A key's exercises in the order they open: orbit, angle off the branch axis, what it grows from. */
 export const BRANCH_SKILLS: { skill: string; label: string; orbit: number; angle: number; parent: string | null }[] = [
@@ -142,6 +159,17 @@ export function homeTreeSpec(songs: readonly MapSong[], tracks: readonly Techniq
     });
   }
 
+  // keystones: a socket on the major ring, two steps out, then the keystone itself
+  for (const k of KEYSTONES) {
+    const id = keystoneId(k.focus);
+    const steps = [ORBIT.major, ORBIT.step1, ORBIT.step2];
+    steps.forEach((orbit, i) => {
+      const to = i + 1 < steps.length ? `${id}/${i + 1}` : id;
+      nodes.push({ id: `${id}/${i}`, kind: "travel", group: "wheel", orbit, angle: k.angle, label: "", title: k.label, family: k.family, size: i === 0 ? 3.4 : 2.8, out: [{ to, kind: "keystone" }], data: { type: "travel", focus: k.focus } });
+    });
+    nodes.push({ id, kind: "keystone", group: "wheel", orbit: ORBIT.keystone, angle: k.angle, label: k.label, title: k.label, family: k.family, size: 21, data: { type: "keystone", focus: k.focus, blurb: k.blurb } });
+  }
+
   // songs on the rim: a major key's on its own spoke, a minor key's between that spoke and the next;
   // pushed further out where foundations already hang, and every other one when a key has several
   const byHub = new Map<string, MapSong[]>();
@@ -183,6 +211,7 @@ export function homeTreeProgress(
   map: PracticeMap,
   shared: { cards: Record<string, CardState>; credit: Record<string, number> },
   skillBpm: ReadonlyMap<string, number> = new Map(),
+  keystones: Partial<Record<KeystoneFocus, number>> = {},
 ): Map<string, NodeProgress> {
   const raw = new Map(map.nodes.map((n) => [n.id, n]));
   const fill = (id: string) => raw.get(id)?.fill ?? 0;
@@ -195,6 +224,10 @@ export function homeTreeProgress(
       const bpm = skillBpm.get(n.id);
       out.set(n.id, { fill: fill(n.id), lit: raw.get(n.id)?.lit, box: fill(n.id) >= 0.18 ? Math.min(BOXES, Math.max(1, Math.round(fill(n.id) * BOXES))) : 0, ...(bpm ? { tempo: { bpm, start: bpm, goal: bpm } } : {}), tags: [`rhythm-${rhythmTier(fill, d.hubId)}`] });
     } else if (d.type === "song") out.set(n.id, { fill: fill(n.id) });
+    else if (d.type === "keystone" || d.type === "travel") {
+      const f = Math.max(0, Math.min(1, keystones[d.focus] ?? 0));
+      out.set(n.id, { fill: d.type === "keystone" ? f : f > 0 ? 1 : 0, tags: f >= 0.8 ? ["mastered"] : [] });
+    }
     else if (d.type === "foundation") {
       const t = d.track;
       const st = shared.cards[t.id];

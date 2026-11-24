@@ -210,7 +210,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/components/LeadSheet.tsx` — `LeadSheet:35`, `ChordSymbol:210`
 - `src/components/LearnView.tsx` — `LearnView:33`
 - `src/components/LibraryGrid.tsx` — `LibraryGrid:13`
-- `src/components/OverviewView.tsx` — `OverviewView:89`
+- `src/components/OverviewView.tsx` — `OverviewView:93`
 - `src/components/PassiveTree.tsx` — `TreeView:9`, `NodeSkinProps:16`, `NodeSkin:25`, `TreeSkins:32`, `stagePoint:39`, `progressClasses:44`, `PassiveTree:49`
 - `src/components/PracticeAtmosphere.tsx` — `PracticeAtmosphere:13`, `BeatPulse:127`
 - `src/components/PracticeBriefPanel.tsx` — `PracticeBriefPanel:6`
@@ -226,7 +226,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/components/ShapesView.tsx` — `ShapesView:16`
 - `src/components/SkillTree.tsx` — `SkillTree:18`
 - `src/components/SongCoach.tsx` — `openPractice:216`, `SongCoach:288`, `SongCoachRoom:294`
-- `src/components/SongMap.tsx` — `SongMap:103`
+- `src/components/SongMap.tsx` — `SongMap:115`
 - `src/components/Transport.tsx` — `Transport:18`
 - `src/components/TriadWheel.tsx` — `TriadWheel:48`
 - `src/components/TriadsView.tsx` — `TriadsView:153`
@@ -249,7 +249,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/ear/engine.ts` — `Instrument:6`, `PlayEvent:8`, `Phrase:18`, `buildEvents:30`, `totalDuration:47`, `EarEngine:98`
 - `src/ear/library.ts` — `MySong:9`, `MY_SONGS:21`, `LIBRARY_SIZE:39`, `spotifyUrl:41`, `songsFor:43`, `matchFamous:53`
 - `src/ear/theory.ts` — `Quality:8`, `TrackId:9`, `Mode:10`, `ChordSym:12`, `INTERVALS:25`, `CHORDS:39`, `Stage:72`, `Track:77`, `TRACKS:84`, `vocabulary:116`, `tonicId:120`, `KEY_NAMES:128`, `noteName:133`, `chordName:139`, `pitchClasses:147`, `Rng:154` (+21 more)
-- `src/ear/useEarTrainer.ts` — `EarMode:22`, `TrackProgress:24`, `Settings:33`, `ChordQuestion:57`, `NameQuestion:68`, `Question:77`, `useEarTrainer:117`, `EarTrainer:405`
+- `src/ear/useEarTrainer.ts` — `EarMode:22`, `TrackProgress:24`, `Settings:33`, `ChordQuestion:57`, `NameQuestion:68`, `Question:77`, `earSummary:107`, `useEarTrainer:125`, `EarTrainer:413`
 - `src/follow/follower.ts` — `FollowState:46`, `initFollow:72`, `stepFollow:233`, `takeFrom:268`
 - `src/follow/useFollower.ts` — `useFollower:7`
 - `src/fonts.css`
@@ -264,7 +264,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/nav/useGuitarNav.ts` — `NAV_KEYS:10`, `setNavMuted:26`, `sessionOpen:31`, `pressables:34`, `step:41`, `press:52`, `useGuitarNav:67`
 - `src/overview/focus.css`
 - `src/overview/home.css`
-- `src/overview/homeTree.ts` — `MID:18`, `WHEEL_ORBITS:20`, `ORBIT:21`, `HOME_VIEW:23`, `homeView:30`, `RhythmTier:48`, `HomeNodeData:50`, `HomeTreeSpec:58`, `PETALS:60`, `BRANCH_SKILLS:70`, `foundationSlots:85`, `homeTreeSpec:93`, `homeTreeProgress:181`, `tempoShare:211`
+- `src/overview/homeTree.ts` — `MID:19`, `WHEEL_ORBITS:21`, `ORBIT:22`, `HOME_VIEW:24`, `homeView:31`, `RhythmTier:49`, `HomeNodeData:51`, `HomeTreeSpec:61`, `PETALS:64`, `KeystoneFocus:73`, `KEYSTONES:80`, `keystoneId:84`, `BRANCH_SKILLS:87`, `foundationSlots:102`, `homeTreeSpec:110`, `homeTreeProgress:209` (+1 more)
 - `src/overview/map.ts` — `MapSong:11`, `PracticeMap:18`, `KeySkillSummary:25`, `KeyTuneIdea:35`, `KeyDetail:40`, `keyFromSignature:57`, `songKey:122`, `keyName:130`, `hubIdForKey:137`, `keyDetail:143`, `songFill:176`, `practiceMap:182`
 - `src/overview/modes.ts` — `GlyphName:3`, `TutorTargetTab:4`, `TutorModeId:5`, `TutorMode:7`, `FAMILY_META:17`, `TUTOR_MODES:28`
 - `src/overview/overview.css`
@@ -363,8 +363,8 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/tools/tools.css`
 - `src/tools/useTuner.ts` — `TunerReading:6`, `useTuner:9`
 - `src/tree/layout.ts` — `bearingOf:9`, `polarPoint:14`, `linkPath:21`, `orbitPath:36`, `resolveTree:49`
-- `src/tree/model.ts` — `TreeNodeKind:14`, `Heading:22`, `TreeGroupSpec:24`, `LinkShape:37`, `TreeLinkSpec:39`, `TreeNodeSpec:49`, `TreeSpec:68`, `PlacedNode:76`, `PlacedEdge:85`, `PlacedGroup:95`, `ResolvedTree:103`, `NodeProgress:112`
-- `src/triads/box.ts` — `TOP_BOX:5`, `emptyTriads:5`, `validTriadStore:5`, `TriadState:5`, `TriadStore:5`, `TRIADS_KEY:14`, `TRIAD_BOX_DAYS:15`, `FAST_MS:16`, `loadTriads:20`, `saveTriads:29`, `addDays:37`, `openMap:55`, `openRings:69`, `openCards:76`, `answerTriad:82`, `Drill:100` (+8 more)
+- `src/tree/model.ts` — `TreeNodeKind:14`, `Heading:24`, `TreeGroupSpec:26`, `LinkShape:39`, `TreeLinkSpec:41`, `TreeNodeSpec:51`, `TreeSpec:70`, `PlacedNode:78`, `PlacedEdge:87`, `PlacedGroup:97`, `ResolvedTree:105`, `NodeProgress:114`
+- `src/triads/box.ts` — `TOP_BOX:5`, `emptyTriads:5`, `validTriadStore:5`, `TriadState:5`, `TriadStore:5`, `TRIADS_KEY:14`, `TRIAD_BOX_DAYS:15`, `FAST_MS:16`, `loadTriads:20`, `saveTriads:29`, `addDays:37`, `openMap:55`, `openRings:69`, `openCards:76`, `answerTriad:82`, `Drill:100` (+9 more)
 - `src/triads/model.ts` — `Naming:4`, `TOP_BOX:6`, `TriadState:8`, `TriadStore:16`, `emptyTriads:22`, `validTriadState:27`, `validTriadStore:33`
 - `src/triads/triads.css`
 - `src/triads/triads.ts` — `Quality:14`, `Mode:15`, `Ask:16`, `Inversion:17`, `TriadKey:19`, `TRIAD_KEYS:29`, `MINOR_KEYS:35`, `RINGS:40`, `FIGURE:47`, `LAYERS:50`, `Triad:59`, `TriadCard:67`, `Choice:78`, `pcOf:89`, `invert:105`, `degreeTriad:114` (+15 more)

@@ -39,7 +39,8 @@ exact phrases in `SongCoach`; do not restore an inline Learn flow. Ear (`src/ear
    first: `src/tree/` is a generic Path of Building–style model (groups with orbits, nodes on an
    orbit at an angle, `out` links; same-orbit links draw as arcs) and its layout resolver;
    `src/overview/homeTree.ts` is Home's spec (wheel, one branch group per key, foundations on
-   their key's outer branch orbit, songs on the rim) with progress kept apart; `PassiveTree`
+   their key's outer branch orbit, songs on the rim, Triads and Ear as keystones past the rim on a
+   path from the major ring) with progress kept apart; `PassiveTree`
    renders it with per-kind skins that `SongMap` supplies. Add nodes through the spec, restyle
    through skins and `home.css` (`data-kind`/`data-family`/`data-link`), never by drawing ad hoc.
    Selecting a node opens its card beside it; the core launches the selection or, with nothing

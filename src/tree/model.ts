@@ -17,6 +17,8 @@ export type TreeNodeKind =
   | "hub" // a key on the circle of fifths
   | "skill" // a small exercise growing from a hub
   | "notable" // a larger, named exercise (a foundation) hung on a branch
+  | "keystone" // a whole discipline with its own trainer, at the end of a path
+  | "travel" // a small step on the path to a keystone
   | "song"; // a tune, on the rim
 
 export type Heading = number | "outward" | "inward";

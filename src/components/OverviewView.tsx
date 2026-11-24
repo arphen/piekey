@@ -15,6 +15,10 @@ import type { InputApi } from "../listen/useInput";
 import type { PracticeLaunchOptions } from "./TuneView";
 import { Glyph } from "./Glyph";
 import { SongMap } from "./SongMap";
+import { KEYSTONES, keystoneId, type KeystoneFocus } from "../overview/homeTree";
+import { loadTriads, triadsFill } from "../triads/box";
+import { TRIAD_CARDS } from "../triads/triads";
+import { earSummary } from "../ear/useEarTrainer";
 import "../overview/overview.css";
 import "../overview/home.css";
 
@@ -138,6 +142,16 @@ export function OverviewView({
   const map = useMemo(() => practiceMap(mapSongs), [mapSongs]);
   // the shared box (foundations, scales) is re-read whenever the library refreshes
   const shared = useMemo(() => loadSharedSkills(), [revision, songs]);
+  // the keystones' own trainers keep their own boxes; re-read with the library like the rest
+  const keystoneState = useMemo(() => {
+    const triads = loadTriads();
+    const ear = earSummary();
+    return {
+      triadsKnown: TRIAD_CARDS.filter((c) => (triads.cards[c.id]?.box ?? 0) >= 2).length,
+      ear,
+      fill: { triads: triadsFill(triads), ear: ear.fill } as Partial<Record<KeystoneFocus, number>>,
+    };
+  }, [revision, songs]);
 
   const selectedKeySet = useMemo(() => new Set(selectedKeys), [selectedKeys]);
   const selectedSongSet = useMemo(() => new Set(selectedSongs), [selectedSongs]);
@@ -184,6 +198,8 @@ export function OverviewView({
   const keySongs = useMemo(() => (pickedKey ? songs.filter((song) => songHubs.get(song.tuneId) === pickedKey.hubId) : []), [pickedKey, songs, songHubs]);
   const keyFoundations = useMemo(() => (pickedKey ? TECHNIQUE_TRACKS.filter((t) => t.hub === pickedKey.hubId) : []), [pickedKey]);
   const showMix = !foundation && !pickedSong && !pickedKey && (selectedKeys.length > 0 || selectedSongs.length > 0 || selectedFocus !== null);
+  // Ear or Triads alone: its card opens at the keystone, whichever of keystone and petal was clicked
+  const keystone = !foundation && !selectedKeys.length && !selectedSongs.length ? KEYSTONES.find((k) => k.focus === selectedFocus) : undefined;
 
   const makeLead = (id: string) => {
     if (!session.has(id)) session.add(id);
@@ -343,6 +359,27 @@ export function OverviewView({
           </div>
           <button type="button" className="hm-btn is-primary" onClick={() => playFoundation(track)}>
             <Glyph name="play" size={15} />Play in {key.shortName}
+          </button>
+        </div>
+      ),
+    };
+  } else if (keystone) {
+    const { ear, triadsKnown } = keystoneState;
+    card = {
+      anchor: keystoneId(keystone.focus),
+      content: (
+        <div className="hm-card is-keystone" data-family={keystone.family} role="group" aria-label={keystone.label}>
+          {close}
+          <p className="hm-card-kicker"><i aria-hidden="true" />Keystone</p>
+          <h3>{keystone.label}</h3>
+          <p className="hm-card-detail">{keystone.blurb}</p>
+          <div className="hm-card-meta">
+            {keystone.focus === "triads"
+              ? <span>{triadsKnown} of {TRIAD_CARDS.length} known</span>
+              : ear.tracks.map((t) => <span key={t.id}>{t.label} · {ear.rounds ? `stage ${t.stage + 1} of ${t.stages}` : "new"}</span>)}
+          </div>
+          <button type="button" className="hm-btn is-primary" onClick={() => onOpenMode(keystone.focus)}>
+            <Glyph name="play" size={15} />Open {keystone.label}
           </button>
         </div>
       ),
@@ -565,6 +602,7 @@ export function OverviewView({
           onClearSelection={clearSelection}
           onToggleSession={(id) => session.toggle(id)}
           onAddSong={() => setAdding(true)}
+          keystones={keystoneState.fill}
         />
 
         <ul className="hm-legend" aria-label="Colours" data-nav-skip>

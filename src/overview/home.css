@@ -18,6 +18,9 @@
   --f-time: #6fc3ff;
   --f-phrasing: #ff83be;
   --f-song: #dfc068;
+  --f-triads: #eba45f;
+  --f-ear: #7fd8c4;
+  --brass: #c9a45a;
   display: grid;
   height: calc(100dvh - var(--topbar-h, 48px));
   min-height: 540px;
@@ -28,6 +31,8 @@
 .home [data-family="time"] { --fam: var(--f-time); }
 .home [data-family="phrasing"] { --fam: var(--f-phrasing); }
 .home [data-family="song"] { --fam: var(--f-song); }
+.home [data-family="triads"] { --fam: var(--f-triads); }
+.home [data-family="ear"] { --fam: var(--f-ear); }
 .home [data-family="foundations"] {
   --fam: var(--f-fingers);
   --fam-bg: conic-gradient(var(--f-fingers) 0 25%, var(--f-picking) 0 50%, var(--f-time) 0 75%, var(--f-phrasing) 0);
@@ -359,6 +364,57 @@
 .pt-edge[data-link="foundation"].is-lit,
 .pt-edge[data-link="chain"].is-lit { stroke: var(--fam); stroke-opacity: 0.9; stroke-width: 1.6; }
 .pt-edge.is-locked { opacity: 0.55; }
+.pt-edge[data-link="keystone"] { stroke: var(--brass); stroke-opacity: 0.32; stroke-width: 1.3; }
+.pt-edge[data-link="keystone"].is-on { stroke: var(--fam); stroke-opacity: 0.62; stroke-width: 1.6; }
+.pt-edge[data-link="keystone"].is-lit { stroke: var(--fam); stroke-opacity: 0.95; stroke-width: 2; }
+
+/* ---------- the tree: keystones (a discipline with its own trainer) and the path to them ---------- */
+
+.pt-node[data-kind="travel"] { color: var(--fam); }
+.hm-t-dot { fill: #07100b; stroke: var(--brass); stroke-opacity: 0.6; stroke-width: 1.1; transition: fill 0.25s, stroke 0.25s; }
+.pt-node[data-kind="travel"].is-seen .hm-t-dot { fill: currentColor; fill-opacity: 0.5; stroke: currentColor; stroke-opacity: 0.85; }
+.pt-node[data-kind="travel"].is-focus .hm-t-dot { fill: currentColor; fill-opacity: 0.9; stroke: currentColor; stroke-opacity: 1; }
+
+.pt-node[data-kind="keystone"] { color: var(--fam); }
+.hm-k-aura { fill: currentColor; opacity: 0.05; transition: opacity 0.25s; }
+.pt-node[data-kind="keystone"]:is(.is-hover, .is-selected) .hm-k-aura { opacity: 0.14; }
+.hm-k-halo { fill: none; stroke: currentColor; stroke-opacity: 0; stroke-width: 1; transition: stroke-opacity 0.25s; }
+.pt-node[data-kind="keystone"]:is(.is-hover, .is-selected) .hm-k-halo { stroke-opacity: 0.5; }
+.hm-k-track { fill: none; stroke: var(--brass); stroke-opacity: 0.22; stroke-width: 1.2; }
+.hm-k-gauge { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.hm-k-frame { fill: none; stroke: var(--brass); stroke-width: 2.8; stroke-opacity: 0.88; }
+.hm-k-stud { fill: #1a140b; stroke: var(--brass); stroke-width: 1.1; }
+.hm-k-disc { fill: #07100b; stroke: #3b2f19; stroke-width: 1.2; }
+.hm-k-fill { fill: currentColor; }
+.hm-k-glyph { color: #f3ead6; }
+.hm-k-glyph svg { overflow: visible; }
+.hm-k-triad path { fill: none; stroke: #f3ead6; stroke-opacity: 0.55; stroke-width: 1.1; stroke-linejoin: round; }
+.hm-k-triad circle { fill: #f3ead6; }
+.hm-k-name {
+  fill: var(--brass);
+  font: 600 9px var(--font-mono);
+  letter-spacing: 0.16em;
+  text-anchor: middle;
+  text-transform: uppercase;
+  paint-order: stroke;
+  stroke: #050a08;
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  pointer-events: none;
+  transition: fill 0.2s;
+}
+.pt-node[data-kind="keystone"]:is(.is-hover, .is-selected) .hm-k-name { fill: currentColor; }
+.pt-node[data-kind="keystone"].is-selected .hm-k-frame { stroke: currentColor; }
+.pt-node[data-kind="keystone"].is-mastered .hm-k-frame { stroke-width: 3.4; }
+.hm-k-btn {
+  position: absolute;
+  z-index: 1;
+  width: 54px;
+  height: 54px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+}
+.home .hm-k-btn:focus-visible { outline-color: var(--fam); }
 
 /* ---------- the tree: keys and their exercises ---------- */
 
@@ -751,6 +807,8 @@
   transform: translate(calc(var(--side) + var(--dx, 0px)), calc(-50% + var(--dy, 0px)));
 }
 .hm-pop.is-left { --side: calc(-100% - 30px); }
+.hm-pop.is-inward { --side: 52px; }
+.hm-pop.is-inward.is-left { --side: calc(-100% - 52px); }
 .hm-pop.is-below { --side: -24px; transform: translate(calc(var(--side) + var(--dx, 0px)), calc(30px + var(--dy, 0px))); }
 .hm-pop.is-below.is-left { --side: calc(-100% + 24px); }
 .hm-card {

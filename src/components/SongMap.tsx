@@ -1,5 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { MID, ORBIT, WHEEL_ORBITS, homeTreeProgress, homeTreeSpec, homeView, tempoShare, type HomeNodeData } from "../overview/homeTree";
+import { MID, ORBIT, WHEEL_ORBITS, homeTreeProgress, homeTreeSpec, homeView, tempoShare, type HomeNodeData, type KeystoneFocus } from "../overview/homeTree";
 import type { MapSong, PracticeMap } from "../overview/map";
 import type { CenterPlan, TreeFocus } from "../song/keyStudy";
 import type { CardState } from "../song/leitner";
@@ -62,13 +62,25 @@ function FoundationGlyph({ kind, s }: { kind: TechniqueKind; s: number }) {
   }
 }
 
+/** Three stacked notes: a triad. */
+function TriadGlyph() {
+  return (
+    <g className="hm-k-triad">
+      <path d="M 0 -6.4 L 6 4 L -6 4 Z" />
+      <circle cx={0} cy={-6.4} r={2.3} />
+      <circle cx={6} cy={4} r={2.3} />
+      <circle cx={-6} cy={4} r={2.3} />
+    </g>
+  );
+}
+
 /**
  * The card for a selected node, kept inside the map: beside the node, on its outer side, or hanging
  * below it (songs, whose names sit beside them).
  */
-function Popover({ node, view, below, children }: { node: { x: number; y: number }; view: TreeView; below?: boolean; children: ReactNode }) {
+function Popover({ node, view, below, inward, children }: { node: { x: number; y: number }; view: TreeView; below?: boolean; inward?: boolean; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
-  const toRight = node.x >= MID;
+  const toRight = (node.x >= MID) !== Boolean(inward);
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -94,7 +106,7 @@ function Popover({ node, view, below, children }: { node: { x: number; y: number
     };
   });
   return (
-    <div ref={ref} className={`hm-pop ${toRight ? "is-right" : "is-left"} ${below ? "is-below" : ""}`} style={stagePoint(view, node.x, node.y)} onClick={(event) => event.stopPropagation()}>
+    <div ref={ref} className={`hm-pop ${toRight ? "is-right" : "is-left"} ${below ? "is-below" : ""} ${inward ? "is-inward" : ""}`} style={stagePoint(view, node.x, node.y)} onClick={(event) => event.stopPropagation()}>
       {children}
     </div>
   );
@@ -122,6 +134,7 @@ export function SongMap({
   onClearSelection,
   onToggleSession,
   onAddSong,
+  keystones,
 }: {
   songs: readonly MapSong[];
   map: PracticeMap;
@@ -145,11 +158,13 @@ export function SongMap({
   onClearSelection(): void;
   onToggleSession?(songId: string): void;
   onAddSong?(): void;
+  /** 0..1 per keystone: how far its own trainer has come. */
+  keystones?: Partial<Record<KeystoneFocus, number>>;
 }) {
   const [hovered, setHovered] = useState<Hovered | null>(null);
   const spec = useMemo(() => homeTreeSpec(songs), [songs]);
   const tree = useMemo(() => resolveTree(spec), [spec]);
-  const progress = useMemo(() => homeTreeProgress(spec, map, shared, map.tempo), [spec, map, shared]);
+  const progress = useMemo(() => homeTreeProgress(spec, map, shared, map.tempo, keystones), [spec, map, shared, keystones]);
   const view = useMemo(() => homeView(tree), [tree]);
 
   const activeHubs = useMemo(() => new Set(centerPlan.activeHubIds), [centerPlan.activeHubIds]);
@@ -182,6 +197,8 @@ export function SongMap({
       return [hubFocus(d.hubId) ? "is-focus" : "", fill >= 0.8 ? "is-mastered" : fill >= 0.18 ? "is-growing" : fill > 0 ? "is-kinship" : "", isHover].join(" ");
     }
     if (d.type === "foundation") return [selectedFoundation === n.id ? "is-selected" : "", techniqueLit || hubFocus(d.hubId) ? "is-focus" : "", isHover].join(" ");
+    if (d.type === "keystone") return [selectedFocus === d.focus ? "is-selected" : "", isHover].join(" ");
+    if (d.type === "travel") return selectedFocus === d.focus ? "is-focus" : "";
     return isHover;
   };
 
@@ -199,6 +216,8 @@ export function SongMap({
       out.push((pb?.fill ?? 0) >= 0.18 ? "is-on" : "", ...(progress.get(hubB ?? "")?.tags ?? []).map((t) => `is-${t}`));
     } else if (e.kind === "foundation" || e.kind === "chain") {
       out.push((pb?.box ?? 0) > 0 ? "is-on" : "", pb?.locked ? "is-locked" : "", techniqueLit || selectedFoundation === b.id ? "is-lit" : "");
+    } else if (e.kind === "keystone" && (b.data?.type === "keystone" || b.data?.type === "travel")) {
+      out.push((pb?.fill ?? 0) > 0 ? "is-on" : "", selectedFocus === b.data.focus ? "is-lit" : "");
     } else if (e.kind === "song" && b.data?.type === "song") {
       const id = b.data.songId;
       out.push((pb?.fill ?? 0) > 0 ? "is-on" : "", sessionIds.has(id) ? "is-session" : "", activeSongs.has(id) ? "is-targeted" : "");
@@ -330,6 +349,53 @@ export function SongMap({
           />
         );
       },
+    },
+    keystone: {
+      svg: ({ node: n, progress: p }) => {
+        const d = n.data as Extract<HomeNodeData, { type: "keystone" }>;
+        const s = n.size;
+        const fill = p?.fill ?? 0;
+        return (
+          <>
+            <circle className="hm-k-aura" r={s + 26} />
+            <circle className="hm-k-halo" r={s + 12} />
+            <circle className="hm-k-track" r={s + 7} />
+            {fill > 0 ? <circle className="hm-k-gauge" r={s + 7} pathLength={1} strokeDasharray={`${fill.toFixed(3)} 1`} transform="rotate(-90)" /> : null}
+            <circle className="hm-k-frame" r={s + 2.6} />
+            {[0, 90, 180, 270].map((a) => (
+              <rect key={a} className="hm-k-stud" x={-2.1} y={-(s + 4.7)} width={4.2} height={4.2} transform={`rotate(${a}) rotate(45 0 ${-(s + 2.6)})`} />
+            ))}
+            <circle className="hm-k-disc" r={s} />
+            <circle className="hm-k-fill" r={s - 2.4} style={{ fillOpacity: 0.07 + 0.4 * fill }} />
+            <g className="hm-k-glyph">{d.focus === "triads" ? <TriadGlyph /> : <g transform="translate(-11 -11)"><Glyph name="ear" size={22} /></g>}</g>
+            <text className="hm-k-name" y={s + 22}>{n.label}</text>
+          </>
+        );
+      },
+      html: ({ node: n, progress: p, state, at }) => {
+        const d = n.data as Extract<HomeNodeData, { type: "keystone" }>;
+        const selected = state.includes("is-selected");
+        const pct = Math.round((p?.fill ?? 0) * 100);
+        return (
+          <button
+            type="button"
+            className={`hm-k-btn ${selected ? "is-selected" : ""}`}
+            style={at}
+            data-family={n.family}
+            aria-pressed={selected}
+            aria-label={`${n.label} keystone${pct ? `, ${pct}% grown` : ""}`}
+            onMouseEnter={hover({ id: n.id, hubId: null, title: n.label, detail: [d.blurb, pct ? `${pct}%` : "New"].join(" · ") })}
+            onMouseLeave={unhover(n.id)}
+            onClick={(event) => {
+              event.stopPropagation();
+              onClickFocus(d.focus);
+            }}
+          />
+        );
+      },
+    },
+    travel: {
+      svg: ({ node: n }) => <circle className="hm-t-dot" r={n.size} />,
     },
     petal: {
       html: ({ node: n, at }) => {
@@ -516,7 +582,7 @@ export function SongMap({
         }
         overlay={conduits}
       >
-        {popover && anchor ? <Popover key={popover.anchor} node={anchor} view={view} below={anchorNode?.kind === "song"}>{popover.content}</Popover> : null}
+        {popover && anchor ? <Popover key={popover.anchor} node={anchor} view={view} below={anchorNode?.kind === "song"} inward={anchorNode?.kind === "keystone"}>{popover.content}</Popover> : null}
       </PassiveTree>
     </div>
   );

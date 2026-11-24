@@ -134,6 +134,12 @@ export function boxCounts(store: TriadStore): number[] {
   return out;
 }
 
+/** 0..1: how far up the box every triad card is, open or not (the keystone on Home). */
+export function triadsFill(store: TriadStore): number {
+  if (!TRIAD_CARDS.length) return 0;
+  return TRIAD_CARDS.reduce((sum, c) => sum + (store.cards[c.id]?.box ?? 0), 0) / (TRIAD_CARDS.length * TOP_BOX);
+}
+
 export const triadCardById = (id: string) => TRIAD_BY_ID.get(id);
 
 export interface KeyStat {
