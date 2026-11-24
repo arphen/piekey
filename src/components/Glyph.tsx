@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { GlyphName } from "../overview/modes";
 
-export type UtilityGlyphName = "home" | "play" | "library" | "arrow" | "clock" | "check" | "devices" | "sync" | "close" | "copy" | "plus" | "download" | "progress" | "tools";
+export type UtilityGlyphName = "home" | "play" | "library" | "arrow" | "clock" | "check" | "devices" | "sync" | "close" | "copy" | "plus" | "download" | "progress" | "tools" | "search" | "spark";
 
 const PATHS: Record<GlyphName | UtilityGlyphName, ReactNode> = {
   home: <><path d="m3 11 9-7 9 7" /><path d="M5 10v10h5v-6h4v6h5V10" /></>,
@@ -18,6 +18,8 @@ const PATHS: Record<GlyphName | UtilityGlyphName, ReactNode> = {
   download: <><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5" /></>,
   progress: <><path d="M4 19h16M5 15l4-5 4 2 6-7" /><circle cx="9" cy="10" r="1" /><circle cx="13" cy="12" r="1" /></>,
   tools: <><path d="M6 4v16M12 4v16M18 4v16" /><path d="M3 8h6M9 16h6M15 10h6" /></>,
+  search: <><circle cx="10.5" cy="10.5" r="6.5" /><path d="m15.5 15.5 5 5" /></>,
+  spark: <path d="M12 3l2.4 6.6L21 12l-6.6 2.4L12 21l-2.4-6.6L3 12l6.6-2.4z" />,
   melody: (
     <>
       <path d="M9 18V6l9-2v12" />
