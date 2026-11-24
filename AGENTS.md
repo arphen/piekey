@@ -117,6 +117,8 @@ Run from the repository root. Prefer quiet forms and redirect long output.
 | Preview | `make preview` (port 4173) |
 | Repo map | `make map-update` / `make map-check` |
 | Full gate | `make check` (typecheck + map freshness + tests) |
+| Git hooks | `make hooks` (also run by `make install`): pre-commit = typecheck + map, pre-push = `make check`; tracked in `.githooks/` |
+| Publish | `make publish` (clean tree, `make check`, build, push current non-main branch; `SKIP=1` skips the build) |
 
 `npm run build` runs `tsc` then Vite; `npm run typecheck` is the fast feedback loop. Unit and
 component tests run under jsdom. No CI configuration is committed; `make check` is the local gate.

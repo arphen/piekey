@@ -2,10 +2,11 @@ SHELL := /bin/bash
 NPM_REGISTRY ?= https://registry.npmjs.org
 PORT ?= 5173
 
-.PHONY: install run build preview stop test test-file test-related typecheck quick map-update map-check check
+.PHONY: install run build preview stop test test-file test-related typecheck quick map-update map-check check hooks publish
 
 install:
 	npm install --registry $(NPM_REGISTRY)
+	@$(MAKE) --no-print-directory hooks
 
 node_modules/.package-lock.json: package.json package-lock.json
 	npm install --registry $(NPM_REGISTRY)
@@ -70,3 +71,19 @@ map-check:
 	@node scripts/generate-repo-map.mjs --check
 
 check: typecheck map-check test
+
+# Point git at the tracked hooks: pre-commit (typecheck + map) and pre-push (full check).
+hooks:
+	@git config core.hooksPath .githooks
+	@echo "git hooks installed from .githooks (pre-commit: typecheck + map, pre-push: make check)"
+
+# Publish the current branch: clean tree, full gate, production build, then push (never main, never forced).
+# The pre-push hook repeats the gate; set SKIP=1 only to skip the local build.
+publish:
+	@branch=$$(git rev-parse --abbrev-ref HEAD); \
+	if [ "$$branch" = "main" ]; then echo "Refusing to publish from main; use a branch."; exit 1; fi; \
+	if [ -n "$$(git status --porcelain)" ]; then echo "Working tree is not clean; commit or stash first:"; git status --short; exit 1; fi; \
+	$(MAKE) --no-print-directory check; \
+	if [ -z "$(SKIP)" ]; then npm run --silent build:quiet; fi; \
+	git push -u origin "$$branch"; \
+	echo "Published $$branch to $$(git remote get-url origin)"
