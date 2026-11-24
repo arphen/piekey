@@ -1,16 +1,18 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { Accidental, BarlineType, Beam, Curve, Dot, Formatter, Renderer, Stave, StaveNote, StaveTie, Tuplet, VibratoBracket, Voice } from "vexflow";
 import type { Note } from "vexflow";
 import type { NoteResult, ReadingBar } from "../core/contract";
 import type { Flow } from "../tunes/flow";
+import { registerNoteBoxes, type NoteBox } from "../song/noteBoxes";
 import { drawChord } from "./Score";
 import "../song/score-flow.css";
 
 // The score as a river: the tune as it is played, on one line that flows right to left under a
 // still line where the music is now. Notes are spaced by time, so while the band plays the line
-// glides at the tempo, read from the same output clock as everything heard, and every note
-// reaches the line as it sounds; at the player's own pace it eases on to each note they find.
-// Rendered once per flow; playback only moves it and toggles classes, it never re-lays out.
+// glides smoothly locked to the heard clock (with a light phase-locked velocity filter so audio
+// buffer quantums never jitter the river); at the player's own pace it eases on to each note.
+// Rendered once per flow into small isolated chunks; playback only translates the track and
+// incrementally toggles the 1–2 changed notes — zero per-note reflows, zero layout thrashing.
 
 interface ScoreFlowProps {
   flow: Flow;
@@ -38,11 +40,9 @@ const HEAD = 5.5; // half a notehead: where a note is
 const MIN_GAP = 36; // the closest two of the commonest short notes may sit without crowding accidentals
 const Z_MIN = 0.72;
 const Z_MAX = 2.6;
-const CHUNK = 1400; // the river is drawn in pieces about this wide
-const GLIDE_MS = 3000; // the compositor is handed this much of the river at a time
-const MEASURE_MS = 500; // the heard tempo is measured over at least this long before it is handed on
-const JUMP_BEATS = 0.12; // the music this far from where its tempo said: it jumped, measure again
-const SHOWN_MARGIN = 1600; // river units kept on the page ahead of the view (a quarter of it behind)
+const CHUNK = 640; // small ~2-bar pieces: a note turning green repaints a tiny tile, never a huge wall
+const JUMP_BEATS = 0.32; // a real seek or loop wrap snaps cleanly instead of chasing
+const SHOWN_MARGIN = 1800; // river units kept visible ahead of the view (a quarter behind)
 
 /** Width of a beat: room for the shortest note value the tune uses often, in a calm range. */
 function beatWidth(bars: readonly ReadingBar[]): number {
@@ -67,16 +67,16 @@ interface Chunk {
 interface Layout {
   width: number;
   height: number;
-  chunks: Chunk[]; // the river in pieces of a few bars: a note lighting up repaints only its own piece
+  chunks: Chunk[]; // small isolated SVG pieces of 1–2 bars each
   base: number[]; // x of each bar's first beat, plus one past the end
   starts: number[]; // timeline beat of each bar's start, plus the end
   lead0: number; // the opening clef and key: past this the sticky clef takes over
   keys: string[]; // the key in force in each bar
   notes: SVGElement[];
+  boxes: NoteBox[]; // river-unit notehead coordinates cached once from VexFlow
 }
 
 function render(host: HTMLDivElement, flow: Flow, labels: readonly (string | null)[] | null | undefined): Layout {
-  host.innerHTML = "";
   const css = getComputedStyle(host);
   const ink = css.getPropertyValue("--flow-ink").trim() || "#efe8d8";
   const soft = css.getPropertyValue("--flow-soft").trim() || "#8f8a7c";
@@ -119,7 +119,7 @@ function render(host: HTMLDivElement, flow: Flow, labels: readonly (string | nul
   barline[n] = endLine;
   const width = Math.ceil(endLine + 40);
 
-  // pieces of a few bars, each its own SVG in the same coordinates (its viewBox starts where it does)
+  // Build every piece off-DOM in a fragment so mounting a 100-bar tune commits once.
   const chunkOf: number[] = [];
   const pieces: { from: number; x0: number; x1: number }[] = [];
   bars.forEach((_, j) => {
@@ -129,10 +129,11 @@ function render(host: HTMLDivElement, flow: Flow, labels: readonly (string | nul
     chunkOf.push(pieces.length - 1);
   });
   if (pieces.length) pieces[pieces.length - 1].x1 = width;
+  const frag = document.createDocumentFragment();
   const ctxs = pieces.map((piece) => {
     const el = document.createElement("div");
     el.className = "flow-chunk";
-    host.appendChild(el);
+    frag.appendChild(el);
     const renderer = new Renderer(el, Renderer.Backends.SVG);
     renderer.resize(piece.x1 - piece.x0, height);
     const c = renderer.getContext();
@@ -147,6 +148,7 @@ function render(host: HTMLDivElement, flow: Flow, labels: readonly (string | nul
   key = flow.exercise.keySignature;
   const drawn: { sn: StaveNote; n: ReadingBar["notes"][number]; run: number; bar: number; ctx: typeof ctx }[] = [];
   const els: SVGElement[] = [];
+  const boxes: NoteBox[] = [];
   const sectionAt = new Map(flow.sections.map((s) => [s.from, s]));
   let chordEnd = -Infinity;
   let labelEnd = -Infinity;
@@ -157,7 +159,6 @@ function render(host: HTMLDivElement, flow: Flow, labels: readonly (string | nul
     if (j === n - 1) stave.setEndBarType(BarlineType.END);
     stave.setContext(ctx).draw();
 
-    // a section begins: its name above, a seam down through the staff
     const section = sectionAt.get(j);
     const fb = flow.bars[j];
     const prev = flow.bars[j - 1];
@@ -181,7 +182,6 @@ function render(host: HTMLDivElement, flow: Flow, labels: readonly (string | nul
       }
       ctx.restore();
     }
-    // the printed bar number where a section starts or the music has jumped
     if (section || (prev && prev.run !== fb.run)) {
       ctx.save();
       ctx.setFont("JetBrains Mono, monospace", 9, "normal");
@@ -214,7 +214,6 @@ function render(host: HTMLDivElement, flow: Flow, labels: readonly (string | nul
     const voice = new Voice({ num_beats: 4, beat_value: 4 }).setStrict(false).addTickables(notes);
     const beams = Beam.generateBeams(notes, { maintain_stem_directions: false });
     new Formatter().joinVoices([voice]).format([voice], Math.max(40, barline[j + 1] - stave.getNoteStartX() - 12));
-    // then every note goes where its time is
     const barStart = bar.notes[0]?.startBeat ?? 0;
     const lone = bar.notes.length === 1 && bar.notes[0].rest;
     notes.forEach((sn, ni) => {
@@ -229,7 +228,6 @@ function render(host: HTMLDivElement, flow: Flow, labels: readonly (string | nul
     tuplets.forEach((t) => t.setContext(ctx).draw());
     ctx.closeGroup();
 
-    // chord symbols at their beat, never overlapping
     let chordBeat = 0;
     bar.chordSymbols.forEach((symbol, ci) => {
       chordBeat = bar.chordBeats?.[ci] ?? chordBeat;
@@ -246,7 +244,7 @@ function render(host: HTMLDivElement, flow: Flow, labels: readonly (string | nul
         if (m.rest) return;
         const label = labels[k++];
         const lx = notes[ni].getAbsoluteX() - 2;
-        if (!label || lx < labelEnd + 4) return; // a crowded run keeps the first of its labels
+        if (!label || lx < labelEnd + 4) return;
         ctx.fillText(label, lx, STAFF_BOTTOM + 58);
         labelEnd = lx + label.length * 7;
       });
@@ -255,13 +253,14 @@ function render(host: HTMLDivElement, flow: Flow, labels: readonly (string | nul
 
     bar.notes.forEach((m, ni) => {
       if (m.rest) return;
-      const el = notes[ni].getSVGElement();
-      if (el) els.push(el);
-      drawn.push({ sn: notes[ni], n: m, run: fb.run, bar: j, ctx });
+      const sn = notes[ni];
+      const w = typeof sn.getGlyphWidth === "function" ? sn.getGlyphWidth() || 11 : 11;
+      const ys = sn.getYs();
+      boxes.push({ x: sn.getAbsoluteX(), y: (ys[0] ?? STAFF_TOP + 20) - 5, w, h: 10 });
+      drawn.push({ sn, n: m, run: fb.run, bar: j, ctx });
     });
   });
 
-  // ties, slurs and vibrato lines: one line, so always whole; drawn with the piece they start in
   const openSlurs = new Map<number, (typeof drawn)[number]>();
   let openVibrato: (typeof drawn)[number] | null = null;
   ctxs.forEach(({ c }) => c.openGroup("score-note-links"));
@@ -270,7 +269,6 @@ function render(host: HTMLDivElement, flow: Flow, labels: readonly (string | nul
     if (d.n.tieToNext && next) new StaveTie({ first_note: d.sn, last_note: next.sn, first_indices: [0], last_indices: [0] }).setContext(d.ctx).draw();
     if (d.n.slur?.stop !== undefined) {
       const from = openSlurs.get(d.n.slur.stop);
-      // a slur whose end never came (a reused number) would arch over the whole tune: two bars at most
       if (from && from.run === d.run && d.bar - from.bar <= 2) new Curve(from.sn as Note, d.sn as Note, { cps: [{ x: 0, y: 12 }, { x: 0, y: 12 }] }).setContext(from.ctx).draw();
       openSlurs.delete(d.n.slur.stop);
     }
@@ -283,14 +281,20 @@ function render(host: HTMLDivElement, flow: Flow, labels: readonly (string | nul
     }
   });
   ctxs.forEach(({ c }) => c.closeGroup());
-  els.forEach((el, i) => el.setAttribute("data-note", String(i)));
   const chunks = pieces.map((piece, i) => {
     const { svg: own, el } = ctxs[i];
     own.setAttribute("viewBox", `${piece.x0} 0 ${piece.x1 - piece.x0} ${height}`);
     own.setAttribute("preserveAspectRatio", "xMinYMin meet");
     return { el, x0: piece.x0, width: piece.x1 - piece.x0 };
   });
-  return { width, height, chunks, base, starts: [...flow.bars.map((b) => b.start), flow.end], lead0: lead[0] ?? 0, keys, notes: els };
+  // Commit all chunks once, then resolve VexFlow SVGElements (VexFlow looks them up via document.getElementById).
+  host.replaceChildren(frag);
+  drawn.forEach((d) => {
+    const el = d.sn.getSVGElement();
+    if (el) els.push(el);
+  });
+  els.forEach((el, i) => el.setAttribute("data-note", String(i)));
+  return { width, height, chunks, base, starts: [...flow.bars.map((b) => b.start), flow.end], lead0: lead[0] ?? 0, keys, notes: els, boxes };
 }
 
 /** The bar a timeline beat falls in. */
@@ -306,21 +310,23 @@ function barAt(starts: readonly number[], beat: number): number {
 }
 
 /** A little stave with the clef and the key in force, where the river's left edge is. */
-function StickyClef({ keySpec, z, visible }: { keySpec: string; z: number; visible: boolean }) {
+const StickyClef = memo(function StickyClef({ keySpec, z, visible }: { keySpec: string; z: number; visible: boolean }) {
   const host = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(0);
   useEffect(() => {
     const el = host.current;
     if (!el) return;
-    el.innerHTML = "";
+    const stage = document.createElement("div");
     const probe = new Stave(0, STAVE_Y, 100).addClef("treble").addKeySignature(keySpec);
     const width = Math.ceil(probe.getNoteStartX() + 14);
-    const renderer = new Renderer(el, Renderer.Backends.SVG);
+    const renderer = new Renderer(stage, Renderer.Backends.SVG);
     renderer.resize(width, STAFF_BOTTOM + 20);
     const stave = new Stave(0, STAVE_Y, width).addClef("treble").addKeySignature(keySpec);
     stave.setBegBarType(BarlineType.NONE).setEndBarType(BarlineType.NONE);
     stave.setContext(renderer.getContext()).draw();
-    el.querySelector("svg")?.setAttribute("viewBox", `0 0 ${width} ${STAFF_BOTTOM + 20}`);
+    const svg = stage.querySelector("svg");
+    svg?.setAttribute("viewBox", `0 0 ${width} ${STAFF_BOTTOM + 20}`);
+    if (svg) el.replaceChildren(svg);
     setW(width);
   }, [keySpec]);
   useLayoutEffect(() => {
@@ -330,9 +336,9 @@ function StickyClef({ keySpec, z, visible }: { keySpec: string; z: number; visib
     svg.style.height = `${(STAFF_BOTTOM + 20) * z}px`;
   }, [w, z]);
   return <div className={`flow-clef ${visible ? "is-on" : ""}`} ref={host} aria-hidden="true" />;
-}
+});
 
-export function ScoreFlow({ flow, results, active, clock, heard, follow, hold = false, lookahead, scale = 1, labels = null, pulse = 0, trackRef, children, onZoom }: ScoreFlowProps) {
+export const ScoreFlow = memo(function ScoreFlow({ flow, results, active, clock, heard, follow, hold = false, lookahead, scale = 1, labels = null, pulse = 0, trackRef, children, onZoom }: ScoreFlowProps) {
   const river = useRef<HTMLDivElement>(null);
   const ownTrack = useRef<HTMLDivElement>(null);
   const track = trackRef ?? ownTrack;
@@ -345,6 +351,8 @@ export function ScoreFlow({ flow, results, active, clock, heard, follow, hold = 
   const [keyNow, setKeyNow] = useState(flow.exercise.keySignature);
   const [sticky, setSticky] = useState(false);
   const pos = useRef<number | null>(null);
+  const wakeRef = useRef<() => void>(() => undefined);
+  const applied = useRef<{ active: Set<number>; results: NoteResult[]; hits: number }>({ active: new Set(), results: [], hits: 0 });
 
   useLayoutEffect(() => {
     const el = river.current;
@@ -361,19 +369,21 @@ export function ScoreFlow({ flow, results, active, clock, heard, follow, hold = 
     return () => ro.disconnect();
   }, []);
 
+  const hasWidth = box.w >= 120;
   useEffect(() => {
     const host = svgHost.current;
-    if (!host || box.w < 120) return;
+    if (!host || !hasWidth) return;
     const l = render(host, flow, labels);
+    applied.current = { active: new Set(), results: [], hits: 0 };
     setLayout(l);
     pos.current = null;
-  }, [flow, labels, box.w > 0]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [flow, labels, hasWidth]);
 
   // how close the river is: the beats ahead of the line fill what is in front of it
   const narrow = box.w < 700;
   const anchor = narrow ? 0.2 : 0.28;
   const ppb = useMemo(() => beatWidth(flow.exercise.bars), [flow]);
-  const fit = layout ? (box.h * (narrow ? 0.5 : 0.42)) / layout.height : Z_MAX; // never taller than the stage allows
+  const fit = layout ? (box.h * (narrow ? 0.5 : 0.42)) / layout.height : Z_MAX;
   const z = layout ? Math.max(Z_MIN, Math.min(Z_MAX, fit, Math.max(scale * (narrow ? 0.85 : 1), (box.w * (1 - anchor)) / (lookahead * ppb)))) : 1;
 
   useLayoutEffect(() => {
@@ -385,46 +395,71 @@ export function ScoreFlow({ flow, results, active, clock, heard, follow, hold = 
       svg.style.width = `${chunk.width * z}px`;
       svg.style.height = `${layout.height * z}px`;
     }
-  }, [layout, z]);
+    if (track.current) {
+      const scaled = layout.boxes.map((b) => ({ x: b.x * z, y: b.y * z, w: b.w * z, h: b.h * z }));
+      registerNoteBoxes(track.current, () => scaled);
+    }
+  }, [layout, z, track]);
 
-  // results and the note in play, toggled on the drawn notes; a fresh hit flares the stationary now-line
+  // Incremental note state toggling: O(changed) instead of touching all 400+ SVG notes on every beat.
   const activeKey = active.join(",");
-  const prevHitsRef = useRef(0);
   useEffect(() => {
     if (!layout) return;
-    const on = new Set(active);
-    let hits = 0;
-    layout.notes.forEach((el, i) => {
-      const hit = results[i] === "hit";
-      if (hit) hits++;
-      el.classList.toggle("is-active", on.has(i));
-      el.classList.toggle("is-hit", hit);
-      el.classList.toggle("is-miss", results[i] === "miss");
-    });
-    if (hits > prevHitsRef.current && nowLine.current) {
-      const line = nowLine.current;
-      line.classList.remove("is-struck");
-      void line.offsetWidth;
-      line.classList.add("is-struck");
+    const prev = applied.current;
+    const nextActive = new Set(active);
+    const notes = layout.notes;
+
+    for (const i of prev.active) if (!nextActive.has(i)) notes[i]?.classList.remove("is-active");
+    for (const i of nextActive) if (!prev.active.has(i)) notes[i]?.classList.add("is-active");
+    prev.active = nextActive;
+
+    let hitDelta = 0;
+    const n = notes.length;
+    for (let i = 0; i < n; i++) {
+      const r = results[i] ?? null;
+      const old = prev.results[i] ?? null;
+      if (r === old) continue;
+      const el = notes[i];
+      if (!el) continue;
+      el.classList.toggle("is-hit", r === "hit");
+      el.classList.toggle("is-miss", r === "miss");
+      if (r === "hit" && old !== "hit") hitDelta++;
+      else if (old === "hit" && r !== "hit") hitDelta--;
     }
-    prevHitsRef.current = hits;
+    prev.results = results.slice(0, n);
+    prev.hits += hitDelta;
+
+    // Pure compositor flare on hit via WAAPI: zero offsetWidth reflow, zero box-shadow repaint.
+    if (hitDelta > 0 && nowLine.current && typeof nowLine.current.animate === "function") {
+      if (!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+        nowLine.current.animate(
+          [
+            { opacity: 1, transform: "scaleX(2.1) scaleY(1.05)" },
+            { opacity: 0.86, transform: "scaleX(1) scaleY(1)" },
+          ],
+          { duration: 300, easing: "cubic-bezier(0.16, 0.82, 0.28, 1)" },
+        );
+      }
+    }
   }, [layout, activeKey, results]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const el = nowLine.current;
-    if (!el || !pulse) return;
-    el.classList.remove("is-calling");
-    void el.getBoundingClientRect();
-    el.classList.add("is-calling");
+    if (!el || !pulse || typeof el.animate !== "function") return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    el.animate(
+      [{ opacity: 1, transform: "scaleX(2)" }, { opacity: 0.55, transform: "scaleX(1)" }, { opacity: 1, transform: "scaleX(1.6)" }, { opacity: 0.86, transform: "scaleX(1)" }],
+      { duration: 1400, easing: "ease-out" },
+    );
   }, [pulse]);
 
-  // the river moves: exactly with the heard music, easing when it goes to a note or back to the top.
-  // While the band plays at a steady tempo the motion is handed to the compositor a few seconds at
-  // a time (a linear Web Animation through the bars ahead), so the line glides even while this thread
-  // is busy with a note landing; each frame only checks it still sits where the music is heard, and
-  // hands on the next stretch before this one runs out. Nothing is written to the page meanwhile.
+  // Smooth PLL-driven scrolling loop: stays alive across follow/hold/clock updates without tearing down.
   const live = useRef({ clock, heard, follow, hold });
   live.current = { clock, heard, follow, hold };
+  useEffect(() => {
+    wakeRef.current();
+  }, [clock, heard, follow, hold]);
+
   useEffect(() => {
     const el = track.current;
     if (!el || !layout || !box.w) return;
@@ -439,109 +474,102 @@ export function ScoreFlow({ flow, results, active, clock, heard, follow, hold = 
     const txOf = (x: number) => ax - (x + HEAD) * z;
     const total = Math.max(1e-6, flow.end - flow.start);
     const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-    const canGlide = typeof el.animate === "function";
-    let x = pos.current ?? Number.NaN; // the first frame lands where the music is
-    let shown = "";
+    let x = pos.current ?? Number.NaN;
+    let lastTx = Number.NaN;
     let part = -1;
     let keyShown = "";
     let stickyShown: boolean | null = null;
     let gapShown = false;
     let fillShown = -1;
-    const near = layout.chunks.map(() => true); // pieces of the river kept on the page
+    const near = layout.chunks.map(() => true);
     let last = 0;
     let frame = 0;
-    // the tempo as heard: beats a millisecond, measured from a mark that moves only when the music jumps
-    let mark: { t: number; b: number } | null = null;
-    let rate = 0;
-    let glide: { anim: Animation; t: number; b: number; rate: number } | null = null;
-    let drift = 0; // smoothed px between the glide and the music
-    const land = () => {
-      // the compositor lets go: the page takes over from where the glide is
-      if (!glide) return;
-      glide.anim.cancel();
-      glide = null;
-      shown = "";
-      drift = 0;
+
+    // Phase-locked beat tracker: eliminates CoreAudio buffer staircase jitter without Web Animation
+    // cancel/recreate hitches, gliding seamlessly at 60Hz or 120Hz.
+    let smoothBeat = Number.NaN;
+    let beatVel = 0; // beats per second
+    let lastRawBeat = Number.NaN;
+    let lastRawT = 0;
+
+    const fadeTurn = () => {
+      if (reduced || typeof el.animate !== "function") return;
+      el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 650, easing: "ease-out" });
     };
-    const handOn = (now: number, beat: number) => {
-      land();
-      const until = beat + GLIDE_MS * rate;
-      const at = [beat];
-      for (let j = barAt(starts, beat) + 1; j < starts.length && starts[j] < until; j++) at.push(starts[j]);
-      at.push(until);
-      const frames = at.map((b) => ({ transform: `translate3d(${txOf(xOf(b))}px, 0, 0)`, offset: (b - beat) / (until - beat) }));
-      const anim = el.animate(frames, { duration: GLIDE_MS, easing: "linear", fill: "forwards" });
-      anim.startTime = now; // pinned to this frame, the frame its first beat was read in
-      glide = { anim, t: now, b: beat, rate };
-    };
+
     const step = (now: number) => {
+      frame = 0;
       const { clock: music, heard: sounding, follow: wanted, hold: still } = live.current;
-      const dt = last ? Math.min(0.1, (now - last) / 1000) : 1 / 60;
+      const dt = last ? Math.min(0.05, (now - last) / 1000) : 1 / 60;
       last = now;
-      const beat = music?.() ?? null;
-      // in a gap the time is the player's: the notes keep coming, the line goes dim
-      const silent = beat !== null && sounding !== undefined && sounding() === null;
+      const rawBeat = music?.() ?? null;
+
+      const silent = rawBeat !== null && sounding !== undefined && sounding() === null;
       if (silent !== gapShown) {
         gapShown = silent;
         nowLine.current?.classList.toggle("is-gap", silent);
       }
-      // keep the heard tempo: a jump (round to the top, a new tempo, a pause) starts measuring again
-      if (beat === null) mark = null;
-      else if (!mark || (rate > 0 && Math.abs(beat - (mark.b + (now - mark.t) * rate)) > JUMP_BEATS) || (rate === 0 && (beat < mark.b - 1e-3 || beat - mark.b > (now - mark.t) / 200))) {
-        mark = { t: now, b: beat };
-        rate = 0;
-        land();
-      } else if (now - mark.t >= MEASURE_MS) rate = (beat - mark.b) / (now - mark.t);
-      if (glide && (beat === null || rate <= 0)) {
-        x = xOf(glide.b + (now - glide.t) * glide.rate);
-        land();
+
+      let beatForPos: number | null = null;
+      if (rawBeat !== null) {
+        if (Number.isNaN(smoothBeat) || Math.abs(rawBeat - smoothBeat) > JUMP_BEATS) {
+          smoothBeat = rawBeat;
+          lastRawBeat = rawBeat;
+          lastRawT = now;
+          beatVel = 0;
+        } else {
+          if (rawBeat > lastRawBeat + 1e-5) {
+            const elapsedS = (now - lastRawT) / 1000;
+            if (elapsedS > 0.004 && elapsedS < 0.8) {
+              const inst = (rawBeat - lastRawBeat) / elapsedS;
+              if (inst > 0.25 && inst < 12) {
+                beatVel = beatVel > 0 ? beatVel + (inst - beatVel) * Math.min(1, elapsedS / 0.3) : inst;
+              }
+            }
+            lastRawBeat = rawBeat;
+            lastRawT = now;
+          }
+          smoothBeat += beatVel * dt;
+          smoothBeat += (rawBeat - smoothBeat) * (1 - Math.exp(-dt / 0.12));
+        }
+        beatForPos = smoothBeat;
+      } else {
+        smoothBeat = Number.NaN;
+        lastRawBeat = Number.NaN;
+        beatVel = 0;
       }
 
-      const target = beat !== null ? xOf(beat) : still ? x : wanted !== null ? xOf(wanted) : xOf(flow.start);
-      if (glide) {
-        // gliding: where the compositor has it now, against where the music is
-        x = xOf(glide.b + (now - glide.t) * glide.rate);
-        const off = (target - x) * z;
-        drift += (off - drift) * 0.2;
-        if (Math.abs(drift) > 1.5 || Math.abs(off) > 6 || now - glide.t > GLIDE_MS - 700) {
-          x = target;
-          handOn(now, beat!);
-        }
+      const target = beatForPos !== null ? xOf(beatForPos) : still ? x : wanted !== null ? xOf(wanted) : xOf(flow.start);
+      const gap = target - x;
+      const far = !Number.isNaN(x) && Math.abs(gap) * z > box.w * 1.2;
+      if (far) fadeTurn();
+
+      if (far || Number.isNaN(x) || reduced || (beatForPos !== null && Math.abs(gap) < 36 / z)) {
+        x = target;
       } else {
-        const gap = target - x;
-        const far = !Number.isNaN(x) && Math.abs(gap) * z > box.w * 1.2;
-        if (far && !reduced) {
-          // a long way (back to the top for the next pass): fade there instead of rushing past
-          el.classList.remove("is-turning");
-          void el.offsetWidth;
-          el.classList.add("is-turning");
-        }
-        if (far || Number.isNaN(x) || reduced || (beat !== null && Math.abs(gap) < 24 / z)) x = target;
-        else x += gap * (1 - Math.exp(-dt / (beat !== null ? 0.16 : 0.24)));
-        if (canGlide && beat !== null && rate > 0 && x === target) handOn(now, beat);
-        else {
-          const key = `${txOf(x).toFixed(1)}`;
-          if (key !== shown) {
-            el.style.transform = `translate3d(${txOf(x)}px, 0, 0)`;
-            shown = key;
-          }
-        }
+        x += gap * (1 - Math.exp(-dt / (beatForPos !== null ? 0.12 : 0.2)));
+      }
+
+      const tx = txOf(x);
+      if (Number.isNaN(lastTx) || Math.abs(tx - lastTx) > 0.05) {
+        el.style.transform = `translate3d(${tx.toFixed(2)}px, 0, 0)`;
+        lastTx = tx;
       }
       pos.current = x;
-      const tx = txOf(x);
-      // only the pieces of the river near the view are on the page: a moving layer is painted whole,
-      // and the whole of a long tune would then be painted, and sorted into layers, on every frame
-      const from = -tx / z - SHOWN_MARGIN / 4; // what has been played leaves on the left, for good
-      const to = (box.w - tx) / z + SHOWN_MARGIN; // what is coming is there before it is in view
-      layout.chunks.forEach((c, i) => {
+
+      // Cull off-screen chunks with visibility:hidden (never display:none, which triggers layout/rebuild spikes).
+      const from = -tx / z - SHOWN_MARGIN / 4;
+      const to = (box.w - tx) / z + SHOWN_MARGIN;
+      for (let i = 0; i < layout.chunks.length; i++) {
+        const c = layout.chunks[i];
         const on = c.x0 + c.width >= from && c.x0 <= to;
-        if (on === near[i]) return;
+        if (on === near[i]) continue;
         near[i] = on;
-        c.el.style.display = on ? "" : "none";
-      });
-      // where in the form: the strip's light and its current part
-      const at = beat ?? (still ? null : wanted) ?? flow.start;
-      const shownBeat = beat !== null ? beat : Math.max(flow.start, Math.min(flow.end, at));
+        c.el.style.visibility = on ? "" : "hidden";
+      }
+
+      const at = rawBeat ?? (still ? null : wanted) ?? flow.start;
+      const shownBeat = rawBeat !== null ? rawBeat : Math.max(flow.start, Math.min(flow.end, at));
       const fill = Math.max(0, Math.min(1, (shownBeat - flow.start) / total));
       if (formFill.current && Math.abs(fill - fillShown) > 0.002) {
         formFill.current.style.transform = `scaleX(${fill})`;
@@ -565,19 +593,25 @@ export function ScoreFlow({ flow, results, active, clock, heard, follow, hold = 
         stickyShown = stick;
         setSticky(stick);
       }
-      const settled = beat === null && Math.abs(target - x) < 0.05;
-      frame = settled && !music ? 0 : requestAnimationFrame(step);
+
+      const settled = rawBeat === null && Math.abs(target - x) < 0.05;
+      if (!settled || music) frame = requestAnimationFrame(step);
     };
-    frame = requestAnimationFrame(step);
-    return () => {
-      cancelAnimationFrame(frame);
-      if (glide) {
-        // a new layout or zoom takes over from here: leave the page where the glide was
-        el.style.transform = `translate3d(${txOf(x)}px, 0, 0)`;
-        land();
+
+    const wake = () => {
+      if (!frame) {
+        last = 0;
+        frame = requestAnimationFrame(step);
       }
     };
-  }, [layout, box.w, z, anchor, flow, clock, heard, follow, hold, track]);
+    wakeRef.current = wake;
+    wake();
+    return () => {
+      wakeRef.current = () => undefined;
+      cancelAnimationFrame(frame);
+      frame = 0;
+    };
+  }, [layout, box.w, z, anchor, flow, track]);
 
   // zoom by hand: pinch on a trackpad (ctrl/⌘ + wheel) or two fingers on a screen
   const zoomRef = useRef(onZoom);
@@ -660,4 +694,4 @@ export function ScoreFlow({ flow, results, active, clock, heard, follow, hold = 
       ) : null}
     </div>
   );
-}
+});

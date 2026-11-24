@@ -85,6 +85,16 @@ describe("pool groove", () => {
     expect(on.state.steadiness).toBeGreaterThan(off.state.steadiness);
   });
 
+  it("wakes slowly like a cold engine in the first seconds before swelling into the zone", () => {
+    const g = createGroove();
+    perform(g, 0, 5000, steady(0, 5000, 300));
+    expect(g.state.groove).toBeLessThan(0.12);
+    expect(poolParams(g.state.groove).emission).toBeLessThan(0.02);
+    // Mid-zone holds back peak radiance so the full algae embrace is earned at the top.
+    expect(poolParams(0.5).emission).toBeLessThan(0.2);
+    expect(poolParams(1).emission).toBe(1);
+  });
+
   it("is deterministic", () => {
     const a = createGroove();
     const b = createGroove();

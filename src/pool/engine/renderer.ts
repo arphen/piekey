@@ -8,10 +8,10 @@ import { mulberry32 } from "../golden";
 
 export interface Tier { sim: number; jacobi: number; marble: number; waves: number; bloom: number; floaters: number; fps: number }
 export const TIERS: readonly Tier[] = [
-  { sim: 96, jacobi: 8, marble: 384, waves: 192, bloom: 0, floaters: 0, fps: 30 },
-  { sim: 128, jacobi: 12, marble: 512, waves: 256, bloom: 0.5, floaters: 21, fps: 30 },
-  { sim: 192, jacobi: 18, marble: 768, waves: 384, bloom: 1, floaters: 34, fps: 60 },
-  { sim: 256, jacobi: 24, marble: 1024, waves: 512, bloom: 1, floaters: 34, fps: 60 },
+  { sim: 80, jacobi: 6, marble: 320, waves: 160, bloom: 0, floaters: 0, fps: 24 },
+  { sim: 112, jacobi: 8, marble: 448, waves: 224, bloom: 0.5, floaters: 16, fps: 30 },
+  { sim: 144, jacobi: 10, marble: 576, waves: 288, bloom: 1, floaters: 26, fps: 30 },
+  { sim: 192, jacobi: 14, marble: 768, waves: 360, bloom: 1, floaters: 34, fps: 45 },
 ];
 
 export type Vec2 = readonly [number, number];
@@ -87,7 +87,7 @@ export class Renderer {
   private bloomA: Target | null = null;
   private bloomB: Target | null = null;
   private floaterLayer: Target | null = null;
-  private heatIdle = 0;
+  private heatIdle = 20; // skip heat passes completely until lava actually wakes in deep flow
   private flowPhase = 0.25; // both flow fields start part-way, so neither restarts at once
   private flowMix = 0.5;
   private readonly arrays = { rects: new Float32Array(64), meta: new Float32Array(64), a8: new Float32Array(32), b8: new Float32Array(32), c4: new Float32Array(16), t8: new Float32Array(24), r8: new Float32Array(8), f2: new Float32Array(8), sprites: new Float32Array(SPRITES.flat()) };
@@ -275,7 +275,7 @@ export class Renderer {
       gl.uniform4fv(this.uniform(u, "uVortex"), b8);
       gl.uniform1i(this.uniform(u, "uVortexCount"), nv);
       const ns = Math.min(8, s.stones.length);
-      s.stones.slice(0, ns).forEach((st, i) => a8.set([st.x, st.y, st.radius * 2.5, st.amp * 0.035], i * 4));
+      s.stones.slice(0, ns).forEach((st, i) => a8.set([st.x, st.y, st.radius * 2.8, st.amp * 0.022], i * 4));
       gl.uniform4fv(this.uniform(u, "uStone"), a8);
       gl.uniform1i(this.uniform(u, "uStoneCount"), ns);
       const nw = Math.min(4, s.swirls.length);
@@ -348,17 +348,17 @@ export class Renderer {
     });
     marble.swap();
 
-    // ripples: sub-stepped so a ring crosses the screen at the same speed on every tier
-    const steps = Math.max(1, Math.min(6, Math.round((dt * 0.26 * waves.read.height) / 0.67)));
+    // slow, deep-water swells: capped at 3 sub-steps so ripples stay dreamy and light on GPU
+    const steps = Math.max(1, Math.min(3, Math.round((dt * 0.19 * waves.read.height) / 0.67)));
     const damp = Math.exp((-LN2 * dt) / steps / Math.max(0.1, params.rippleHalfLife));
     for (let i = 0; i < steps; i++) {
       this.run(P.waves, waves.write, (u) => {
         this.f2(u, "uTexel", 1 / waves.read.width, 1 / waves.read.height);
         this.f1(u, "uAspect", this.aspect);
         this.bind(u, "uWaves", waves.read.texture, 0);
-        this.f1(u, "uK", 0.45);
+        this.f1(u, "uK", 0.42);
         this.f1(u, "uDamp", damp);
-        this.stones(u, i === 0 ? s.stones : [], (st) => st.amp * 0.035, (st) => st.radius, false, true);
+        this.stones(u, i === 0 ? s.stones : [], (st) => st.amp * 0.026, (st) => st.radius, false, true);
         this.rects(u, s.rects);
       });
       waves.swap();
@@ -369,8 +369,8 @@ export class Renderer {
       this.bind(u, "uSource", dye.read.texture, 1);
       this.f1(u, "uDt", dt);
       this.f1(u, "uAspect", this.aspect);
-      this.f1(u, "uDecay", Math.exp((-LN2 * dt) / 2.6));
-      this.stones(u, s.stones, (st) => st.amp * 0.5, (st) => st.radius * 1.4, true);
+      this.f1(u, "uDecay", Math.exp((-LN2 * dt) / 3.4));
+      this.stones(u, s.stones, (st) => st.amp * 0.38, (st) => st.radius * 1.6, true);
     });
     dye.swap();
 
@@ -439,7 +439,7 @@ export class Renderer {
       this.f1(u, "uKick", s.kick);
       this.f1(u, "uLava", Math.min(1, params.lava * 1.5));
       this.f1(u, "uRefract", 0.05);
-      this.f1(u, "uDyeGain", 0.12 + params.emission * 0.25);
+      this.f1(u, "uDyeGain", 0.04 + params.emission * 0.28);
       this.f1(u, "uCalmDepth", Math.min(1, params.spread * 1.4));
       gl.uniform3f(this.uniform(u, "uTint"), s.tint[0], s.tint[1], s.tint[2]);
       this.f2(u, "uWaveTexel", 1 / waves.read.width, 1 / waves.read.height);

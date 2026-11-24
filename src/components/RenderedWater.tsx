@@ -7,34 +7,36 @@ import waterUrl from "../assets/water-texture.webp";
 import type { BeatSignal } from "../song/pulse";
 
 const PONDS = [swirlUrl, marbleUrl, neonUrl, bandsUrl, waterUrl];
-const POND_STAY = 18; // seconds resting on one pond photograph before morphing into the next
-const POND_TURN = 16; // seconds for the spiral algae morph to complete
+const POND_STAY = 24; // seconds resting on one pond photograph before morphing into the next
+const POND_TURN = 20; // seconds for the slow algae morph to complete
 
 const VERTEX = `
 attribute vec2 position;
 void main() { gl_Position = vec4(position, 0.0, 1.0); }
 `;
 
-// Direct photographic algae morphing: no artificial water surface. Two of the owner's
-// Tempelhofer Hafenbecken pond photographs are domain-warped by counter-rotating spiral eddies
-// and height-blended by algae thickness so poison-green swirls organically morph into one another
-// over dark abyssal water, brightening with bioluminescent chlorophyll as the player hits notes.
+// Photographic algae shader with deep marine inertia: rests as dark, almost-still harbor water
+// with algae hovering at the far rim. As the player locks in over tens of seconds, an old-engine
+// flywheel spins up; notes send delayed, far-away propeller swells gliding through the water,
+// ebbing gently if they falter, and opening into a lush bioluminescent algae embrace only at
+// sustained peak performance.
 const FRAGMENT = `
 precision highp float;
 uniform vec2 resolution;
 uniform float time;
 uniform float energy;
 uniform float bloom;
-uniform float hit;
-uniform float strike;
+uniform float zone;
+uniform float sway;
 uniform float downbeat;
 uniform float morph;
 uniform float hasTexA;
 uniform float hasTexB;
 uniform vec2 morphSeed;
 uniform vec2 notePos;
-uniform float notePulse;
+uniform float noteWarmth;
 uniform float noteHue;
+uniform vec4 swells[3]; // xy origin, z age (s), w strength
 uniform sampler2D texA;
 uniform sampler2D texB;
 
@@ -67,7 +69,6 @@ float fbm(vec2 p) {
   return v;
 }
 
-// Spiral vortex displacement centered at c: twists the real algae photograph in fluid eddies.
 vec2 spiralEddy(vec2 p, vec2 c, float radius, float spin) {
   vec2 d = p - c;
   float r2 = dot(d, d);
@@ -79,7 +80,6 @@ vec2 spiralEddy(vec2 p, vec2 c, float radius, float spin) {
 }
 
 vec2 photoUv(vec2 p) {
-  // Generous scale keeps the real photograph's interior framed across widescreen viewports without visible seams.
   vec2 q = p * vec2(0.36, 0.48) + vec2(0.5, 0.5);
   return abs(mod(q + 1.0, 2.0) - 1.0);
 }
@@ -94,84 +94,98 @@ void main() {
   float aspect = resolution.x / max(resolution.y, 1.0);
   vec2 p = (uv - 0.5) * vec2(aspect, 1.0);
 
-  // Slow harbor drift plus three counter-rotating spiral eddies that accelerate as you play.
+  // Nearly still dark water at rest; slow, hypnotic currents wake gradually with bloom and zone.
   float t = time;
-  float vigor = 1.0 + bloom * 0.95 + hit * 0.75 + energy * 0.45;
-  vec2 drift = vec2(sin(t * 0.037) * 0.14 + t * 0.008, cos(t * 0.029) * 0.11 - t * 0.005);
+  float vigor = 0.18 + bloom * 0.58 + zone * 0.52 + energy * 0.14;
+  vec2 drift = vec2(sin(t * 0.022) * 0.12 + t * 0.004, cos(t * 0.017) * 0.09 - t * 0.003);
 
-  vec2 c1 = vec2(sin(t * 0.08) * 0.42, cos(t * 0.065) * 0.28);
-  vec2 c2 = vec2(cos(t * 0.06 + 2.1) * 0.48, sin(t * 0.075 + 1.3) * 0.32);
-  vec2 c3 = vec2(sin(t * 0.05 + 4.2) * 0.30, cos(t * 0.09 + 3.4) * 0.26);
+  vec2 c1 = vec2(sin(t * 0.045) * 0.44, cos(t * 0.038) * 0.28);
+  vec2 c2 = vec2(cos(t * 0.036 + 2.1) * 0.48, sin(t * 0.042 + 1.3) * 0.32);
+  vec2 c3 = vec2(sin(t * 0.03 + 4.2) * 0.32, cos(t * 0.05 + 3.4) * 0.26);
 
-  float beatTwist = strike * (0.09 + 0.14 * bloom) * (downbeat > 0.5 ? 1.35 : -0.85);
+  // Gentle underwater tide sway once warm — never a sharp snap.
+  float tide = sway * (0.04 + 0.1 * zone) * (downbeat > 0.5 ? 1.15 : -0.75);
   vec2 swirl = vec2(0.0);
-  swirl += spiralEddy(p, c1, 0.58, (0.42 + 0.35 * sin(t * 0.11)) * vigor + beatTwist);
-  swirl += spiralEddy(p, c2, 0.52, (-0.38 + 0.28 * cos(t * 0.09)) * vigor - beatTwist * 0.7);
-  swirl += spiralEddy(p, c3, 0.42, (0.32 * sin(t * 0.13 + 1.2)) * vigor);
-  // Live guitar pitch vortex: every note spins up a localized spiral right in the real algae photo
-  swirl += spiralEddy(p, notePos, 0.34, (noteHue > 0.5 ? 1.0 : -1.0) * notePulse * (0.95 + 0.5 * bloom));
+  swirl += spiralEddy(p, c1, 0.64, (0.28 + 0.22 * sin(t * 0.07)) * vigor + tide);
+  swirl += spiralEddy(p, c2, 0.58, (-0.25 + 0.18 * cos(t * 0.06)) * vigor - tide * 0.7);
+  swirl += spiralEddy(p, c3, 0.48, (0.2 * sin(t * 0.08 + 1.2)) * vigor);
+  // Softly drifting harmonic eddy that only opens up once warmed.
+  swirl += spiralEddy(p, notePos, 0.46, (noteHue > 0.5 ? 1.0 : -1.0) * noteWarmth * (0.14 + 0.34 * bloom));
 
-  // Curl of low-frequency noise adds organic filament stretching between spirals.
-  vec2 q = p * 1.45 + drift * 0.6;
-  float f0 = fbm(q + vec2(t * 0.025, -t * 0.018));
-  float fx = fbm(q + vec2(0.06 + t * 0.025, -t * 0.018));
-  float fy = fbm(q + vec2(t * 0.025, 0.06 - t * 0.018));
-  vec2 curl = vec2(fy - f0, -(fx - f0)) * (0.45 + 0.45 * bloom + 0.25 * hit);
+  // Delayed far-away propeller swells gliding across the pond.
+  vec2 waveShift = vec2(0.0);
+  float swellLight = 0.0;
+  for (int i = 0; i < 3; i++) {
+    vec4 sw = swells[i];
+    if (sw.w <= 0.001) continue;
+    vec2 d = p - sw.xy;
+    float dist = length(d) + 1e-4;
+    float radius = sw.z * 0.24; // slow deep-water propagation
+    float band = dist - radius;
+    float env = exp(-band * band / 0.022) * exp(-sw.z * 0.42) * sw.w;
+    float wave = sin(band * 24.0) * env;
+    waveShift += (d / dist) * wave * 0.028;
+    swellLight += env * (0.5 + 0.5 * cos(band * 18.0));
+  }
 
-  vec2 coord = p + drift + swirl * 0.48 + curl * 0.16;
+  vec2 q = p * 1.35 + drift * 0.5;
+  float f0 = fbm(q + vec2(t * 0.014, -t * 0.01));
+  float fx = fbm(q + vec2(0.06 + t * 0.014, -t * 0.01));
+  float fy = fbm(q + vec2(t * 0.014, 0.06 - t * 0.01));
+  vec2 curl = vec2(fy - f0, -(fx - f0)) * (0.22 + 0.36 * bloom + 0.25 * zone);
 
-  vec3 abyss = vec3(0.018, 0.036, 0.027);
+  vec2 coord = p + drift + swirl * 0.42 + curl * 0.14 + waveShift;
+
+  vec3 abyss = vec3(0.016, 0.032, 0.024);
   vec3 raw = abyss;
 
   if (hasTexA > 0.5) {
-    float front = clamp(morph * 1.65 - fbm(p * 1.5 + morphSeed * 13.0) * 0.65, 0.0, 1.0);
-    vec2 mCurl = curl * 0.22;
-    vec3 colA = texture2D(texA, photoUv(coord + mCurl * front)).rgb;
     if (hasTexB > 0.5 && morph > 0.001) {
+      float front = clamp(morph * 1.65 - fbm(p * 1.5 + morphSeed * 13.0) * 0.65, 0.0, 1.0);
+      vec2 mCurl = curl * 0.22;
+      vec3 colA = texture2D(texA, photoUv(coord + mCurl * front)).rgb;
       vec3 colB = texture2D(texB, photoUv(coord - mCurl * (1.0 - front))).rgb;
       float k = (2.0 * front - 1.0) * 1.35 + (algaeHeight(colB) - algaeHeight(colA)) * 1.05 * 4.0 * front * (1.0 - front);
       raw = mix(colA, colB, smoothstep(-0.16, 0.16, k));
     } else {
-      raw = colA;
+      raw = texture2D(texA, photoUv(coord)).rgb;
     }
   } else {
-    // Immediate abyssal fallback for the brief moment before the first WebP decodes.
-    float w = smoothstep(0.32, 0.78, f0);
-    raw = mix(abyss, vec3(0.11, 0.34, 0.14), w * 0.55);
+    float w = smoothstep(0.35, 0.8, f0);
+    raw = mix(abyss, vec3(0.08, 0.26, 0.11), w * 0.45);
   }
 
-  // Abyssal harbor grading: keep dark water voids ink-black, let poison-green algae glow.
   float luma = dot(raw, vec3(0.2126, 0.7152, 0.0722));
   float greenness = max(0.0, raw.g - max(raw.r * 0.92, raw.b));
-  float algaeMask = smoothstep(0.035, 0.22, greenness) * smoothstep(0.14, 0.58, luma);
+  float algaeMask = smoothstep(0.035, 0.22, greenness) * smoothstep(0.16, 0.58, luma);
 
-  // Deepen shadows so the center stays abyssal while algae ridges pop with toxic clarity.
-  vec3 graded = mix(vec3(luma), raw, 1.18 + bloom * 0.52 + hit * 0.38);
-  graded = pow(max(graded, 0.0), vec3(1.58 - bloom * 0.22));
+  // Restrained, dark and inviting at rest; rich, saturated and luminous as you earn the zone.
+  vec3 graded = mix(vec3(luma), raw, 0.82 + bloom * 0.48 + zone * 0.56);
+  graded = pow(max(graded, 0.0), vec3(1.68 - bloom * 0.14 - zone * 0.18));
 
-  // Center calm lens so score notation and text remain effortlessly legible.
-  float centerDist = length((uv - vec2(0.5, 0.48)) * vec2(1.12, 1.0));
-  float rimPresence = smoothstep(0.14, 0.78, centerDist);
-  float visibility = mix(0.26 + bloom * 0.20 + hit * 0.14, 0.72 + bloom * 0.26 + hit * 0.16, rimPresence);
+  // At rest the algae hover at the distant perimeter; as you enter the zone they creep in and embrace the room.
+  float centerDist = length((uv - vec2(0.5, 0.48)) * vec2(1.08, 1.0));
+  float innerRim = mix(0.32, 0.10, zone);
+  float rimPresence = smoothstep(innerRim, 0.84, centerDist);
+  float visibility = mix(0.12 + bloom * 0.18 + zone * 0.24, 0.36 + bloom * 0.32 + zone * 0.30, rimPresence);
 
   vec3 color = mix(abyss, graded, clamp(visibility, 0.0, 0.96));
 
-  // Poison-green bioluminescent bloom: shifts subtly from deep emerald (low notes) to chartreuse-gold (high notes)
-  vec3 poisonNeon = mix(vec3(0.24, 0.94, 0.36), vec3(0.56, 1.0, 0.22), noteHue);
+  // Bioluminescence: barely a distant whisper early on, blossoming into intoxicating emerald-gold radiance in the zone.
+  vec3 poisonNeon = mix(vec3(0.22, 0.92, 0.38), vec3(0.56, 1.0, 0.22), noteHue);
   vec3 birchGold = vec3(0.88, 0.75, 0.38);
-  float noteNear = exp(-dot(p - notePos, p - notePos) / 0.14) * notePulse;
-  float glowStrength = 0.06 + bloom * 0.62 + hit * 0.58 + energy * 0.16 + noteNear * 0.65;
-  color += poisonNeon * algaeMask * raw.g * glowStrength * (0.45 + 0.75 * rimPresence);
+  float noteNear = exp(-dot(p - notePos, p - notePos) / 0.24) * noteWarmth;
+  float glowStrength = 0.015 + bloom * 0.18 + zone * 0.92 + swellLight * (0.14 + 0.34 * bloom) + noteNear * (0.08 + 0.26 * zone);
+  color += poisonNeon * algaeMask * raw.g * glowStrength * (0.35 + 0.85 * rimPresence);
 
-  // Subtle golden pulse on downbeats, cool toxic-emerald surge on beats.
-  vec3 beatColor = mix(poisonNeon, birchGold, downbeat * 0.78);
-  color += beatColor * algaeMask * strike * (0.14 + 0.22 * bloom) * (0.35 + 0.65 * rimPresence);
+  // Subtle golden warmth breathing softly in the deep zone on downbeats.
+  vec3 tideColor = mix(poisonNeon, birchGold, downbeat * 0.65);
+  color += tideColor * algaeMask * sway * zone * 0.24 * (0.35 + 0.65 * rimPresence);
 
-  // Soft filmic knee so bright poison highlights never clip harsh white.
+  // Soft filmic knee so peak bioluminescence glows richly without clipping harsh white.
   vec3 over = max(color - 0.58, 0.0);
-  color = min(color, 0.58) + over / (1.0 + over / 0.36);
+  color = min(color, 0.58) + over / (1.0 + over / 0.38);
 
-  // Subtle dither against dark-water banding.
   float dither = (hash12(gl_FragCoord.xy) - 0.5) / 255.0;
   gl_FragColor = vec4(max(color + dither, 0.0), 1.0);
 }
@@ -208,7 +222,9 @@ function loadImg(url: string): Promise<HTMLImageElement> {
   });
 }
 
-/** Bounded single-pass GPU algae-morphing layer. The score and musical clock never depend on it. */
+const unit = (n: number) => Math.max(0, Math.min(1, n));
+
+/** Bounded single-pass GPU algae shader. Slow engine warm-up, delayed swells, earned peak embrace. */
 export function RenderedWater({ playing, warmth, flow, hitSerial = 0, beat, level }: RenderedWaterProps) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const latest = useRef({ playing, warmth, flow, hitSerial, beat });
@@ -232,12 +248,23 @@ export function RenderedWater({ playing, warmth, flow, hitSerial = 0, beat, leve
     let elapsed = 0;
     let serial = -1;
     let lastHitSerial = latest.current.hitSerial;
-    let struck = -Infinity;
     let smoothEnergy = 0;
+    let engineMs = 0; // accumulated real playing time spinning up the flywheel
     let bloom = 0;
-    let hitPulse = 0;
+    let beatSway = 0;
+    let beatTarget = 0;
+    let smoothNoteX = 0;
+    let smoothNoteY = 0;
+    let smoothNoteHue = 0.5;
+    let smoothNoteWarmth = 0;
+    let swellCounter = 0;
     let changedSize = true;
     let painted = false;
+
+    // Delayed far-away propeller swells: queued on landed hits, gliding across the pond once they arrive.
+    const pendingSwells: { due: number; x: number; y: number; strength: number }[] = [];
+    const activeSwells: { x: number; y: number; age: number; strength: number }[] = [];
+    const swellBuf = new Float32Array(12);
 
     // Pond photograph morph state: continuously turns from one real photograph into the next.
     let pondIndex = 0;
@@ -284,7 +311,7 @@ export function RenderedWater({ playing, warmth, flow, hitSerial = 0, beat, leve
     gpu.enableVertexAttribArray(position);
     gpu.vertexAttribPointer(position, 2, gpu.FLOAT, false, 0, 0);
     const u = Object.fromEntries(
-      ["resolution", "time", "energy", "bloom", "hit", "strike", "downbeat", "morph", "hasTexA", "hasTexB", "morphSeed", "notePos", "notePulse", "noteHue", "texA", "texB"].map((key) => [key, gpu.getUniformLocation(program, key)]),
+      ["resolution", "time", "energy", "bloom", "zone", "sway", "downbeat", "morph", "hasTexA", "hasTexB", "morphSeed", "notePos", "noteWarmth", "noteHue", "swells", "texA", "texB"].map((key) => [key, gpu.getUniformLocation(program, key)]),
     );
     gpu.uniform1i(u.texA, 0);
     gpu.uniform1i(u.texB, 1);
@@ -314,42 +341,70 @@ export function RenderedWater({ playing, warmth, flow, hitSerial = 0, beat, leve
       if (disposed || failed || document.hidden || gpu.isContextLost()) return;
       const s = latest.current;
       const moving = !motion?.matches;
-      const active = (s.playing && now - level.current.heard < 1200) || Boolean(s.beat?.active) || hitPulse > 0.02 || bloom > 0.02;
-      const targetFps = active ? 30 : 18;
+      const active = (s.playing && now - level.current.heard < 1800) || bloom > 0.02 || activeSwells.length > 0 || pendingSwells.length > 0;
+      const targetFps = active ? 30 : 15;
       if (moving && previous && now - previous < 1000 / targetFps) { frame = requestAnimationFrame(paint); return; }
       const dtMs = previous ? Math.min(100, now - previous) : 33;
       const dt = dtMs / 1000;
       previous = now;
       if (moving) elapsed += dt;
 
-      if (s.beat?.active && s.beat.serial !== serial) { serial = s.beat.serial; struck = now; }
+      if (s.beat?.active && s.beat.serial !== serial) {
+        serial = s.beat.serial;
+        beatTarget = s.beat.index === 0 ? 1 : 0.55;
+      }
+      beatTarget *= Math.exp(-dt / 0.65);
+      beatSway += (beatTarget - beatSway) * (1 - Math.exp(-dt / 0.26));
+
+      // Queue a delayed far-away swell when a note lands cleanly (never an instant violent flash).
       if (s.hitSerial !== lastHitSerial) {
         lastHitSerial = s.hitSerial;
-        hitPulse = Math.min(1, hitPulse + 0.55);
+        const delayMs = 950 - 650 * bloom;
+        const angle = (++swellCounter * 2.39996) % (Math.PI * 2);
+        const dist = 0.52 - 0.22 * bloom; // arrives from farther out when cold, closer as you warm up
+        pendingSwells.push({
+          due: now + delayMs,
+          x: Math.cos(angle) * dist,
+          y: Math.sin(angle) * dist * 0.65,
+          strength: 0.24 + 0.76 * bloom,
+        });
+        if (pendingSwells.length > 6) pendingSwells.shift();
       }
-      hitPulse *= Math.exp(-dt / 1.4);
+      while (pendingSwells.length && pendingSwells[0].due <= now) {
+        const next = pendingSwells.shift()!;
+        activeSwells.push({ x: next.x, y: next.y, age: 0, strength: next.strength });
+        if (activeSwells.length > 3) activeSwells.shift();
+      }
+      for (let i = activeSwells.length - 1; i >= 0; i--) {
+        activeSwells[i].age += dt;
+        if (activeSwells[i].age > 6.5) activeSwells.splice(i, 1);
+      }
 
       if (changedSize) {
         const rect = el.getBoundingClientRect();
-        const scale = Math.min(0.7, 1000 / Math.max(rect.width, rect.height, 1));
+        const scale = Math.min(0.65, 960 / Math.max(rect.width, rect.height, 1));
         el.width = Math.max(1, Math.round(rect.width * scale));
         el.height = Math.max(1, Math.round(rect.height * scale));
         gpu.viewport(0, 0, el.width, el.height);
         changedSize = false;
       }
 
-      const heard = s.playing && now - level.current.heard < 1400;
-      smoothEnergy += ((heard ? level.current.level : 0) - smoothEnergy) * (1 - Math.exp(-dtMs / 280));
-      // Immediate positive reinforcement: flow and active playing visibly awaken the algae within seconds.
-      const engaged = s.playing ? Math.max(0.25, Math.min(1, s.warmth * 1.4 + level.current.played / 18000)) : 0;
-      const flowBoost = s.playing ? Math.max(0, Math.min(1, (s.flow - 0.25) / 0.65)) : 0;
-      const targetBloom = heard ? Math.min(1, engaged * (0.45 + 0.55 * flowBoost) + hitPulse * 0.35) : hitPulse * 0.4;
-      bloom += (targetBloom - bloom) * (1 - Math.exp(-dtMs / (targetBloom > bloom ? 1800 : 5200)));
+      // Heavy old-engine flywheel: spins up slowly with sustained clean playing, ebbs gracefully on silence or mistakes.
+      const heard = s.playing && now - level.current.heard < 2200;
+      if (heard) engineMs = Math.min(45000, engineMs + dtMs);
+      else engineMs = Math.max(0, engineMs - dtMs * 0.28);
 
-      // Advance organic photo-to-photo spiral morph.
+      smoothEnergy += ((heard ? level.current.level : 0) - smoothEnergy) * (1 - Math.exp(-dtMs / 650));
+      const spunUp = Math.pow(unit(engineMs / 36000), 1.65); // convex: whisper-quiet first 6s, strong after 30-36s
+      const quality = 0.28 + 0.72 * unit((s.flow - 0.35) / 0.58);
+      const targetBloom = heard ? unit(spunUp * quality) : 0;
+      bloom += (targetBloom - bloom) * (1 - Math.exp(-dtMs / (targetBloom > bloom ? 6800 : 11500)));
+      // Transcendent algae embrace opens non-linearly only in the upper zone.
+      const zone = Math.pow(unit(bloom), 2.15);
+
       let morphAmount = 0;
       if (moving && hasTexA) {
-        const pace = 1 + bloom * 1.35 + hitPulse * 0.6;
+        const pace = 0.65 + bloom * 0.75 + zone * 0.65;
         if (!turning) {
           pondPhase += (dt * pace) / POND_STAY;
           if (pondPhase > 0.35 && !nextImg && !loadingNext) {
@@ -382,14 +437,23 @@ export function RenderedWater({ playing, warmth, flow, hitSerial = 0, beat, leve
         }
       }
 
-      let smoothNoteX = 0;
-      let smoothNoteY = 0;
-      let smoothNoteHue = 0.5;
-      if (level.current.noteX !== undefined) smoothNoteX = level.current.noteX;
-      if (level.current.noteY !== undefined) smoothNoteY = level.current.noteY;
-      if (level.current.noteHue !== undefined) smoothNoteHue = level.current.noteHue;
+      // Smoothly drift harmonic centre instead of snapping on every note.
+      const noteEase = 1 - Math.exp(-dtMs / 1600);
+      if (level.current.noteX !== undefined) smoothNoteX += (level.current.noteX - smoothNoteX) * noteEase;
+      if (level.current.noteY !== undefined) smoothNoteY += (level.current.noteY - smoothNoteY) * noteEase;
+      if (level.current.noteHue !== undefined) smoothNoteHue += (level.current.noteHue - smoothNoteHue) * noteEase;
       const noteAge = level.current.noteAt !== undefined ? Math.max(0, (now - level.current.noteAt) / 1000) : 99;
-      const notePulse = motion?.matches ? 0 : Math.exp(-noteAge / 0.85) * Math.max(0.25, smoothEnergy);
+      const wantWarmth = motion?.matches || !heard ? 0 : Math.exp(-noteAge / 2.6) * (0.2 + 0.8 * bloom);
+      smoothNoteWarmth += (wantWarmth - smoothNoteWarmth) * (1 - Math.exp(-dtMs / 700));
+
+      swellBuf.fill(0);
+      for (let i = 0; i < 3 && i < activeSwells.length; i++) {
+        const sw = activeSwells[i];
+        swellBuf[i * 4] = sw.x;
+        swellBuf[i * 4 + 1] = sw.y;
+        swellBuf[i * 4 + 2] = sw.age;
+        swellBuf[i * 4 + 3] = motion?.matches ? 0 : sw.strength;
+      }
 
       gpu.activeTexture(gpu.TEXTURE0);
       gpu.bindTexture(gpu.TEXTURE_2D, texA);
@@ -399,16 +463,17 @@ export function RenderedWater({ playing, warmth, flow, hitSerial = 0, beat, leve
       gpu.uniform1f(u.time, elapsed);
       gpu.uniform1f(u.energy, motion?.matches ? 0 : smoothEnergy);
       gpu.uniform1f(u.bloom, bloom);
-      gpu.uniform1f(u.hit, motion?.matches ? 0 : hitPulse);
-      gpu.uniform1f(u.strike, motion?.matches || !s.beat?.active ? 0 : Math.exp(-(now - struck) / 340));
+      gpu.uniform1f(u.zone, zone);
+      gpu.uniform1f(u.sway, motion?.matches || !s.beat?.active ? 0 : beatSway * bloom);
       gpu.uniform1f(u.downbeat, s.beat?.index === 0 ? 1 : 0);
       gpu.uniform1f(u.morph, morphAmount);
       gpu.uniform1f(u.hasTexA, hasTexA ? 1 : 0);
       gpu.uniform1f(u.hasTexB, hasTexB ? 1 : 0);
       gpu.uniform2f(u.morphSeed, morphSeed[0], morphSeed[1]);
       gpu.uniform2f(u.notePos, smoothNoteX, smoothNoteY);
-      gpu.uniform1f(u.notePulse, notePulse);
+      gpu.uniform1f(u.noteWarmth, smoothNoteWarmth);
       gpu.uniform1f(u.noteHue, smoothNoteHue);
+      gpu.uniform4fv(u.swells, swellBuf);
       gpu.drawArrays(gpu.TRIANGLES, 0, 6);
       painted = true;
       el.dataset.renderer = "ready";

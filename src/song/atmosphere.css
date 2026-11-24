@@ -78,19 +78,19 @@
    compositor, and the page would be sorted into layers again on every frame of every beat */
 .pa-beat-resonance > b {
   position: absolute; inset: 0;
-  background: radial-gradient(ellipse at 50% 112%, color-mix(in srgb, var(--beat-wash) 22%, transparent), transparent 68%);
-  box-shadow: inset 0 0 14vmin 1vmin color-mix(in srgb, var(--beat-ink) 20%, transparent);
+  background: radial-gradient(ellipse at 50% 112%, color-mix(in srgb, var(--beat-wash) 11%, transparent), transparent 68%);
+  box-shadow: inset 0 0 12vmin 0.5vmin color-mix(in srgb, var(--beat-ink) 9%, transparent);
   will-change: opacity;
   animation: room-resonance var(--beat-decay) cubic-bezier(.2, .7, .3, 1) both;
 }
 .pa-beat-resonance.is-downbeat > b {
-  background: radial-gradient(ellipse at 50% 108%, color-mix(in srgb, var(--beat-wash) 32%, transparent), transparent 76%);
-  box-shadow: inset 0 0 18vmin 2vmin color-mix(in srgb, var(--beat-ink) 30%, transparent);
+  background: radial-gradient(ellipse at 50% 108%, color-mix(in srgb, var(--beat-wash) 16%, transparent), transparent 74%);
+  box-shadow: inset 0 0 14vmin 1vmin color-mix(in srgb, var(--beat-ink) 14%, transparent);
 }
-.pa-beat-resonance > i { position: absolute; width: 130%; height: 80%; left: -15%; bottom: -74%; border: 1.5px solid color-mix(in srgb, var(--beat-ink) 45%, transparent); border-radius: 50%; animation: room-ripple var(--beat-decay) ease-out both; }
-.pa-beat-resonance > i + i { width: 160%; left: -30%; bottom: -76%; opacity: .5; }
-@keyframes room-resonance { from { opacity: 1; } to { opacity: 0; } }
-@keyframes room-ripple { from { transform: translateY(0) scale(.96); opacity: .7; } to { transform: translateY(-7%) scale(1.08); opacity: 0; } }
+.pa-beat-resonance > i { position: absolute; width: 130%; height: 80%; left: -15%; bottom: -74%; border: 1px solid color-mix(in srgb, var(--beat-ink) 22%, transparent); border-radius: 50%; animation: room-ripple var(--beat-decay) ease-out both; }
+.pa-beat-resonance > i + i { width: 160%; left: -30%; bottom: -76%; opacity: .35; }
+@keyframes room-resonance { from { opacity: .45; } to { opacity: 0; } }
+@keyframes room-ripple { from { transform: translateY(0) scale(.97); opacity: .36; } to { transform: translateY(-5%) scale(1.06); opacity: 0; } }
 
 /* A clocked instrument: engraved index, weighted sweep, one resonance for each heard tick. */
 .beat-pulse { --pulse-ink: #bac9ab; --pulse-accent: #d9c295; display: grid; justify-items: center; gap: 14px; color: #e8e9d9; font-variant-numeric: tabular-nums; }

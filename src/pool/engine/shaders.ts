@@ -508,11 +508,11 @@ void scene(vec2 uv, out vec3 colour, out vec3 glow, out float lens) {
   calm *= uCalmDepth;
   lens = calm;
 
-  // the unnaturally green algae become their own light
+  // the algae rest dark until earned, then awaken into a lush bioluminescent embrace in the zone
   float luma = dot(raw, vec3(0.2126, 0.7152, 0.0722));
   float algae = smoothstep(0.04, 0.22, raw.g - max(raw.r * 0.92, raw.b)) * smoothstep(0.18, 0.56, luma);
-  vec3 neon = mix(vec3(0.36, 1.0, 0.2), uTint, 0.22);
-  glow = algae * neon * raw.g * (0.06 + uEmission * 1.15) * (1.0 + uKick) * mask * quiet;
+  vec3 neon = mix(vec3(0.34, 1.0, 0.22), uTint, 0.24);
+  glow = algae * neon * raw.g * (0.015 + uEmission * 1.32) * (1.0 + uKick * 0.55) * mask * quiet;
 
   // ripples catch the light: a silver ring even on the quiet pool, a glint where they tilt to the sky
   vec3 n = normalize(vec3(-grad, 1.0));

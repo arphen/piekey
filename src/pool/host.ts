@@ -77,15 +77,17 @@ export class PoolHost {
   private override: number | null = null;
   private phrase = { n: 0, at: -Infinity, centre: { x: 0.9, y: 0.5 }, count: 0 };
   private stones: Stone[] = [];
+  private pendingStones: { due: number; stone: Stone }[] = []; // delayed far-away propeller swells arriving through the water
   private swirls: Swirl[] = [];
   private rings: Ring[] = [];
   private flashes: (Flash & { age: number; strength: number })[] = [];
   private push: [number, number] = [0, 0];
   private beatSerial = -1;
   private beatAt: number | undefined;
-  private beatKick = 0; // a heard beat lurches the whole pool, decaying within a fraction of a beat
-  private beatSway = 0; // which way the eddies were last thrown: they swing back on the next beat
-  private beatDance = 0; // a beat waiting to throw the eddies, at its strength
+  private beatKick = 0; // gentle groove-gated tide breath from heard beats
+  private beatSway = 0; // slow pendulum direction for deep-water eddies
+  private beatDance = 0; // pending gentle sway impulse
+  private breath = 0; // heavily smoothed visual breathing modulation (never strobes)
   private tune: Tune = { cents: null, frequency: null, at: -Infinity };
   private tunerPhase = 0;
   private tunerAmount = 0;
@@ -313,8 +315,9 @@ export class PoolHost {
     this.mutations?.disconnect();
     this.anchorsDue = true;
     if (!this.root || typeof MutationObserver === "undefined") return;
+    // Watch only pool/visibility attributes (never childList on the whole session tree, which fires on every note glint & beat).
     this.mutations = new MutationObserver(() => { this.anchorsDue = true; });
-    this.mutations.observe(this.root, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-pool", "hidden"] });
+    this.mutations.observe(this.root, { subtree: true, attributes: true, attributeFilter: ["data-pool", "hidden"] });
   }
 
   private readonly layout = () => { this.anchorsDue = true; };
@@ -322,17 +325,17 @@ export class PoolHost {
   private sizeCanvas(): void {
     const rect = this.canvas.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
-    // At most 0.75 × device pixels and 1,600 pixels on the long edge.
-    const scale = Math.min(0.75 * (window.devicePixelRatio || 1), 1600 / Math.max(rect.width, rect.height));
+    // Soft fluid photography needs at most 0.65 × DPR and 1,280 px on the long edge, leaving GPU headroom for the 60fps score.
+    const scale = Math.min(0.65 * (window.devicePixelRatio || 1), 1280 / Math.max(rect.width, rect.height));
     this.canvas.width = Math.max(1, Math.round(rect.width * scale));
     this.canvas.height = Math.max(1, Math.round(rect.height * scale));
     this.renderer?.resize(this.canvas.width, this.canvas.height);
     this.changedSize = false;
   }
 
-  /** Rocks, calm lenses and glass from [data-pool] elements of the room, at most 4 times a second. */
+  /** Rocks, calm lenses and glass from [data-pool] elements of the room, refreshed calmly so playback never stalls. */
   private collect(now: number): void {
-    if (!this.root || (!this.anchorsDue && now - this.anchorsAt < 1000) || now - this.anchorsAt < 250) return;
+    if (!this.root || (!this.anchorsDue && now - this.anchorsAt < 2500) || now - this.anchorsAt < 500) return;
     this.anchorsDue = false;
     this.anchorsAt = now;
     const c = this.canvas.getBoundingClientRect();
@@ -389,7 +392,7 @@ export class PoolHost {
     return this.rects.some((r) => r.flags & (CALM | ROCK) && Math.abs(x - r.x) < r.hx + 0.02 && Math.abs(y - r.y) < r.hy + 0.02);
   }
 
-  /** A note drops a stone on the n-th seed of the phrase's sunflower. */
+  /** A note queues a soft, broad swell that arrives from afar — longer delay when cold, closer and richer in the zone. */
   private note(midi: number, velocity: number, now: number): void {
     const aspect = this.aspect();
     const p = this.phrase;
@@ -411,52 +414,67 @@ export class PoolHost {
     }
     const g = this.level();
     const state = this.groove.state;
-    this.stones.push({
+    // Far-away propeller feel: cold notes arrive ~1s later as a faint wide swell; in the zone they arrive sooner and deeper.
+    const delayMs = 1050 - 780 * g;
+    const swell: Stone = {
       x: point.x, y: point.y,
-      radius: Math.max(0.008, 0.035 * Math.pow(2, -(midi - 40) / 24)),
-      amp: velocity * (0.6 + 0.4 * g) * (0.7 + 0.3 * state.energy),
+      radius: Math.max(0.016, 0.05 * Math.pow(2, -(midi - 40) / 28)),
+      amp: velocity * (0.14 + 0.68 * g * g) * (0.65 + 0.35 * state.energy),
       tint: tintFor(state.tonic, state.mode),
-    });
+    };
+    this.pendingStones.push({ due: now + delayMs, stone: swell });
+    if (this.pendingStones.length > 16) this.pendingStones.shift();
     this.lastEvent = now;
   }
 
   private level(): number { return this.override ?? this.groove.state.groove; }
 
   private flash(at: Anchor, strength: number): void {
-    this.flashes.push({ x: at.x, y: at.y, radius: at.r * 0.92, amount: strength * 0.35, age: 0, strength });
+    this.flashes.push({ x: at.x, y: at.y, radius: at.r * 0.92, amount: strength * 0.16, age: 0, strength });
     if (this.flashes.length > 2) this.flashes.shift();
   }
 
   private events(now: number): void {
     const aspect = this.aspect();
+    const g = this.level();
+    // Release delayed propeller swells whose ripples have now reached the surface.
+    if (this.pendingStones.length) {
+      const keep: { due: number; stone: Stone }[] = [];
+      for (const item of this.pendingStones) {
+        if (item.due <= now) this.stones.push(item.stone);
+        else keep.push(item);
+      }
+      this.pendingStones = keep;
+    }
     for (const event of this.bus.drain()) {
       if (event.kind === "tune") this.tune = { cents: event.cents, frequency: event.frequency, at: now };
       else if (event.kind === "bloom") {
         const at = this.anchors.get(event.at ?? "focus") ?? this.anchors.get("cursor") ?? { x: aspect / 2, y: 0.5, r: 0 };
-        this.rings.push({ x: at.x, y: at.y, age: 0, strength: event.strength });
+        this.rings.push({ x: at.x, y: at.y, age: 0, strength: event.strength * (0.25 + 0.75 * g) });
         if (this.rings.length > 4) this.rings.shift();
         this.lastEvent = now;
       } else if (event.kind === "sweep") {
-        this.push = [event.direction * 0.07, 0.012];
+        this.push = [event.direction * 0.032, 0.006];
         this.lastEvent = now;
       }
     }
-    // A heard beat, never a timer: a stone at the dial, and the pool sloshes with the pendulum.
+    // A heard beat, never a timer: a quiet ripple at the dial, and a soft tide breath that only deepens as you warm up.
     const beat = this.bus.top()?.props.beat;
     if (beat?.active && beat.index >= 0 && beat.serial !== this.beatSerial) {
       this.beatSerial = beat.serial;
       const dial = this.anchors.get("metronome");
-      const amp = beat.counting ? 0.35 : beat.index === 0 ? 1 : 0.55;
+      const amp = beat.counting ? 0.25 : beat.index === 0 ? 0.75 : 0.4;
       const tint: Vec3 = beat.counting ? [0.45, 0.7, 0.75] : beat.index === 0 ? [0.95, 0.78, 0.45] : [0.7, 0.82, 0.62];
+      const warmth = 0.14 + 0.5 * g;
       if (dial) {
-        // the ring is already at the rim on the beat's own frame, and the rim lights at once
-        this.stones.push({ x: dial.x, y: dial.y, radius: 0.014, amp: amp * 0.5, tint, ring: dial.r * 0.92 });
-        this.flash(dial, amp);
-        this.swirls.push({ x: dial.x, y: dial.y, impulse: (beat.serial % 2 ? 1 : -1) * 0.025 * amp, radius: dial.r * 1.6 });
-      } else this.stones.push({ x: aspect / 2, y: 0.02, radius: 0.06, amp: amp * 0.35, tint });
-      // and the whole pool dances to it, more as the playing earns it
-      if (!beat.counting) {
-        this.beatKick = Math.max(this.beatKick, amp);
+        this.stones.push({ x: dial.x, y: dial.y, radius: 0.018, amp: amp * warmth * 0.45, tint, ring: dial.r * 0.92 });
+        this.flash(dial, amp * (0.25 + 0.5 * g));
+        if (g > 0.15) this.swirls.push({ x: dial.x, y: dial.y, impulse: (beat.serial % 2 ? 1 : -1) * 0.01 * amp * g, radius: dial.r * 1.8 });
+      } else if (g > 0.1) {
+        this.stones.push({ x: aspect / 2, y: 0.02, radius: 0.08, amp: amp * warmth * 0.25, tint });
+      }
+      if (!beat.counting && g > 0.12) {
+        this.beatKick = Math.max(this.beatKick, amp * g);
         this.beatDance = amp;
         this.beatSway = beat.serial % 2 ? 1 : -1;
       }
@@ -532,10 +550,12 @@ export class PoolHost {
     this.glassy += ((inTune ? 1 : 0) - this.glassy) * (1 - Math.exp(-dt / 0.8));
     const still = Math.max(this.calm, this.glassy * 0.8);
 
-    // ambient vortices on a slowly turning golden spiral; onsets spin them up, heard beats throw them
-    this.beatKick *= Math.exp(-dt / 0.22);
-    const kick = Math.min(1.8, state.kick + this.beatKick * (0.25 + 0.75 * g) * (1 - this.calm));
-    this.turn += params.orbit * (1 + kick) * dt;
+    // Ambient vortices on a slowly turning golden spiral: heavily damped inertia so the water swells smoothly, never snaps.
+    this.beatKick *= Math.exp(-dt / 0.58);
+    const rawBreath = Math.min(0.6, state.kick * 0.45 + this.beatKick * 0.35) * g * (1 - this.calm);
+    this.breath += (rawBreath - this.breath) * (1 - Math.exp(-dt / 0.65));
+    const kick = this.breath;
+    this.turn += params.orbit * (1 + kick * 0.6) * dt;
     const count = params.vortices * (1 - still);
     const vortices: Vortex[] = [];
     for (let i = 0; i < Math.ceil(count) && i < 8; i++) {
@@ -551,12 +571,15 @@ export class PoolHost {
         const oy = r.hy + 0.04 - Math.abs(dy);
         if (ox > 0 && oy > 0) { if (ox < oy) x += Math.sign(dx || 1) * ox; else y += Math.sign(dy || 1) * oy; }
       }
-      vortices.push({ x, y, spin: (i % 2 ? -1 : 1) * weight * (0.35 + 0.45 * g) * (1 + kick * 0.8), radius: 0.11 + 0.025 * i });
+      vortices.push({ x, y, spin: (i % 2 ? -1 : 1) * weight * (0.14 + 0.52 * g) * (1 + kick * 0.45), radius: 0.12 + 0.025 * i });
     }
-    // a beat throws the eddies one way, the next swings them back: the algae sway on the pulse
+    // Deep in the groove, heard beats sway the currents gently like an underwater tide.
     if (this.beatDance > 0) {
-      const strength = this.beatDance * (0.2 + 0.8 * g) * (1 - still);
-      vortices.slice(0, 3).forEach((v, i) => this.swirls.push({ x: v.x, y: v.y, impulse: this.beatSway * (i % 2 ? -1 : 1) * 0.03 * strength, radius: v.radius * 1.4 }));
+      const swayGate = Math.max(0, (g - 0.18) / 0.82);
+      const strength = this.beatDance * swayGate * swayGate * (1 - still);
+      if (strength > 0.01) {
+        vortices.slice(0, 3).forEach((v, i) => this.swirls.push({ x: v.x, y: v.y, impulse: this.beatSway * (i % 2 ? -1 : 1) * 0.012 * strength, radius: v.radius * 1.6 }));
+      }
       this.beatDance = 0;
     }
 
@@ -566,18 +589,18 @@ export class PoolHost {
     this.driftVelocity = [Math.cos(heading) * speed, Math.sin(heading) * speed * 0.6];
     this.drift = [this.drift[0] + this.driftVelocity[0] * dt, this.drift[1] + this.driftVelocity[1] * dt];
 
-    const heat = Math.max(0, g - 0.35) * (0.4 + state.energy) * params.lava;
-    const emitters = heat > 0.001 ? Array.from({ length: 5 }, (_, k) => ({ x: aspect * goldenSpread(k + 1), y: 0.015, rate: heat * 1.6 * (0.6 + 0.4 * wander(t, 23 * (k + 1) * 0.37, k)), radius: 0.045 })) : [];
-    this.rings = this.rings.map((r) => ({ ...r, age: r.age + dt })).filter((r) => r.age < 6);
-    // a beat's light is brightest on its own frame and gone within a fraction of a beat
-    const flashes = this.flashes.map((f) => ({ ...f, amount: f.strength * 0.35 * Math.exp(-f.age / 0.09) }));
-    this.flashes = this.flashes.map((f) => ({ ...f, age: f.age + dt })).filter((f) => f.age < 0.5);
+    const heat = Math.max(0, g - 0.42) * (0.45 + state.energy) * params.lava;
+    const emitters = heat > 0.001 ? Array.from({ length: 5 }, (_, k) => ({ x: aspect * goldenSpread(k + 1), y: 0.015, rate: heat * 1.5 * (0.6 + 0.4 * wander(t, 23 * (k + 1) * 0.37, k)), radius: 0.05 })) : [];
+    this.rings = this.rings.map((r) => ({ ...r, age: r.age + dt })).filter((r) => r.age < 7);
+    // Soft dial glow on the beat (no sharp strobe).
+    const flashes = this.flashes.map((f) => ({ ...f, amount: f.strength * 0.16 * Math.exp(-f.age / 0.24) }));
+    this.flashes = this.flashes.map((f) => ({ ...f, age: f.age + dt })).filter((f) => f.age < 0.8);
 
     return {
       morph: this.turnPond(dt, g),
-      dt, params, velocityHalfLife: params.velocityHalfLife * (1 - 0.7 * still), kick: kick * 0.6, tint,
-      dawn: 0.1 + 0.5 * g, drift: [this.drift[0] - aspect * 0.62, this.drift[1] - 0.5], driftVelocity: this.driftVelocity,
-      vortices, stones: this.stones, swirls: this.swirls, push: this.push, emitters, buoyancy: 0.03, rings: this.rings, flashes, rects: this.rects,
+      dt, params, velocityHalfLife: params.velocityHalfLife * (1 - 0.7 * still), kick: kick * 0.5, tint,
+      dawn: 0.06 + 0.48 * g, drift: [this.drift[0] - aspect * 0.62, this.drift[1] - 0.5], driftVelocity: this.driftVelocity,
+      vortices, stones: this.stones, swirls: this.swirls, push: this.push, emitters, buoyancy: 0.026, rings: this.rings, flashes, rects: this.rects,
       tuner: tuner && this.tunerAmount > 0.01 ? { x: tuner.x, y: tuner.y, radius: Math.max(0.12, tuner.r * 4), amount: this.tunerAmount, phase: this.tunerPhase, ratio: inTune ? 1 : 1 + 0.004 * cents } : null,
     };
   }

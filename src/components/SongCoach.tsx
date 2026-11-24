@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { flushSync } from "react-dom";
 import * as Tone from "tone";
 import { ensureAudio } from "../audio/context";
@@ -39,6 +39,7 @@ import { FreePlay } from "./FreePlay";
 import { drawerToneKeys, GuitarPad, NoteTag, noteName as keyName, SummonVisual, ToneTag, toneKeysFor, useNoteKeys, useSummon, useToneKeys, type PadRow } from "./GuitarPad";
 import { Fretboard, type FretGhost, type FretPulse, type LabelMode } from "./Fretboard";
 import { BeatPulse, PracticeAtmosphere } from "./PracticeAtmosphere";
+import { readNoteBoxes } from "../song/noteBoxes";
 import { Score } from "./Score";
 import { ScoreFlow } from "./ScoreFlow";
 import { SessionSummary } from "./SessionSummary";
@@ -393,32 +394,43 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
   const switchStopped = useRef(false);
   const themeSources = useMemo(() => [{ id: sheet.id, title: sheet.title, tl }, ...others.map((other) => ({ id: other.sheet.id, title: other.sheet.title, tl: other.tl }))], [sheet.id, sheet.title, tl, others]);
   const session = useSession(deck, tuneIds, input, { gap: gapIds, arrangementFingerprint, arrangementFingerprints, tempoBounds: activeGoal?.tempo, suspended: parked || choosingTune || Boolean(tools) || free || menu || pad !== null || calib, initialQueue: direct?.ids });
-  // Decoration only: the pool hears landed notes, clean passes and exercise moves; nothing comes back.
+  // Decoration only: the pool hears clean passes, streaks and exercise moves; nothing comes back.
+  // Tracked synchronously via ref so landing a note never triggers a second full room re-render.
   usePoolCalm(menu || calib);
   const emitPool = usePoolEmit();
-  const [hitSerial, setHitSerial] = useState(0);
-  const pooled = useRef<{ outcome: unknown; pos: number | null; hits: number; run: number }>({ outcome: session.outcome, pos: null, hits: 0, run: 0 });
+  const pooled = useRef<{ outcome: unknown; pos: number | null; hits: number; run: number; serial: number; notifiedOutcome: unknown; notifiedRun: number }>({
+    outcome: session.outcome,
+    pos: null,
+    hits: 0,
+    run: 0,
+    serial: 0,
+    notifiedOutcome: session.outcome,
+    notifiedRun: 0,
+  });
   const currentHits = useMemo(
     () => (session.results ?? []).filter((r) => r === "hit").length,
     [session.results],
   );
-  useEffect(() => {
-    if (currentHits > pooled.current.hits) {
-      setHitSerial((n) => n + 1);
-      if (currentHits % 3 === 0) emitPool({ kind: "bloom", strength: 0.45, at: "focus" });
-    }
-    pooled.current.hits = currentHits;
-  }, [currentHits, emitPool]);
-  useEffect(() => {
-    if (session.run > pooled.current.run) setHitSerial((n) => n + 1);
-    pooled.current.run = session.run;
-  }, [session.run]);
-  useEffect(() => {
-    if (session.outcome === pooled.current.outcome) return;
+  if (currentHits > pooled.current.hits) pooled.current.serial++;
+  pooled.current.hits = currentHits;
+  if (session.run > pooled.current.run) pooled.current.serial++;
+  pooled.current.run = session.run;
+  if (session.outcome !== pooled.current.outcome) {
     pooled.current.outcome = session.outcome;
+    if (session.outcome?.result === "clean") pooled.current.serial++;
+  }
+  const hitSerial = pooled.current.serial;
+  useEffect(() => {
+    if (session.run > pooled.current.notifiedRun && session.run >= 12 && session.run % 12 === 0) {
+      emitPool({ kind: "bloom", strength: 0.35, at: "focus" });
+    }
+    pooled.current.notifiedRun = session.run;
+  }, [session.run, emitPool]);
+  useEffect(() => {
+    if (session.outcome === pooled.current.notifiedOutcome) return;
+    pooled.current.notifiedOutcome = session.outcome;
     if (session.outcome?.result === "clean") {
-      setHitSerial((n) => n + 1);
-      emitPool({ kind: "bloom", strength: 1, at: "focus" });
+      emitPool({ kind: "bloom", strength: 0.85, at: "focus" });
     }
   }, [session.outcome, emitPool]);
   useEffect(() => {
@@ -1681,7 +1693,7 @@ function StageBeatRail({
  * was played, WITH real ledger lines, staff-line/space helper ticks, and upright accidental glyphs
  * so mistakes actually reinforce sight-reading memory.
  */
-function ScoreShadows({ host, wrong, keySignature }: { host: RefObject<HTMLDivElement>; wrong: WrongNote[]; keySignature: string }) {
+const ScoreShadows = memo(function ScoreShadows({ host, wrong, keySignature }: { host: RefObject<HTMLDivElement>; wrong: WrongNote[]; keySignature: string }) {
   const key = wrong.map((w) => `${w.n}:${w.midi}`).join(",");
   const [ghosts, setGhosts] = useState<Ghost[]>([]);
   useEffect(() => {
@@ -1690,27 +1702,42 @@ function ScoreShadows({ host, wrong, keySignature }: { host: RefObject<HTMLDivEl
       setGhosts([]);
       return;
     }
-    const h = el.getBoundingClientRect();
+    const cached = readNoteBoxes(el);
+    let hostRect: DOMRect | null = null;
     setGhosts(
       wrong.flatMap((w) => {
-        const head = el.querySelector(`[data-note="${w.n}"] .vf-notehead`)?.getBoundingClientRect();
-        if (!head) return [];
+        let left: number;
+        let top: number;
+        let width: number;
+        let height: number;
+        const box = cached?.[w.n];
+        if (box) {
+          left = box.x;
+          top = box.y;
+          width = box.w;
+          height = box.h;
+        } else {
+          hostRect ??= el.getBoundingClientRect();
+          const head = el.querySelector(`[data-note="${w.n}"] .vf-notehead`)?.getBoundingClientRect();
+          if (!head) return [];
+          left = head.left - hostRect.left + el.scrollLeft;
+          top = head.top - hostRect.top + el.scrollTop;
+          width = head.width;
+          height = head.height;
+        }
         const info = analyzeWrongNote(w.midi, w.want, w.vexKey, keySignature);
-        const left = head.left - h.left + el.scrollLeft;
-        const top = head.top - h.top + el.scrollTop;
-        // a notehead is one staff space tall: half of it is one diatonic staff step
         return [
           {
             key: `${w.n}:${w.midi}`,
-            x: left + head.width * 1.9,
-            y: top - (info.steps * head.height) / 2,
-            w: head.width,
-            h: head.height,
+            x: left + width * 1.9,
+            y: top - (info.steps * height) / 2,
+            w: width,
+            h: height,
             info,
             name: w.name,
             wantName: w.wantName,
-            wx: left + head.width / 2,
-            wy: top + head.height,
+            wx: left + width / 2,
+            wy: top + height,
           },
         ];
       }),
@@ -1756,7 +1783,7 @@ function ScoreShadows({ host, wrong, keySignature }: { host: RefObject<HTMLDivEl
       ))}
     </>
   );
-}
+});
 
 /**
  * Quiet visual-mechanical mistake comparison directly beneath the score: renders a real 5-line
@@ -1824,11 +1851,11 @@ function MistakeFlash({ wrong, keySignature }: { wrong: WrongNote[]; keySignatur
   );
 }
 
-const GLINT_MS = 900;
-const SPARKS = [0, 45, 90, 135, 180, 225, 270, 315];
+const GLINT_MS = 680;
+const SPARKS = [24, 114, 204, 294];
 
-/** A note as it lands: a glimmer of sparks when it is right, a dimming ember when it is not. */
-function ScoreGlints({ host, results, reset }: { host: RefObject<HTMLDivElement>; results: readonly NoteResult[]; reset: string }) {
+/** A note as it lands: a lightweight GPU-composited glimmer using cached notehead coordinates (zero reflows). */
+const ScoreGlints = memo(function ScoreGlints({ host, results, reset }: { host: RefObject<HTMLDivElement>; results: readonly NoteResult[]; reset: string }) {
   const [bursts, setBursts] = useState<{ key: string; x: number; y: number; kind: "hit" | "miss" }[]>([]);
   const before = useRef<{ reset: string; results: readonly NoteResult[] }>({ reset, results });
   const serial = useRef(0);
@@ -1837,19 +1864,30 @@ function ScoreGlints({ host, results, reset }: { host: RefObject<HTMLDivElement>
     const prev = before.current;
     before.current = { reset, results };
     const el = host.current;
-    if (!el || prev.reset !== reset) return; // a new exercise or way of working: nothing has just landed
-    const h = el.getBoundingClientRect();
-    const fresh = results.flatMap((r, n) => {
-      if (!r || prev.results[n] === r) return [];
-      const head = el.querySelector(`[data-note="${n}"] .vf-notehead`)?.getBoundingClientRect();
-      if (!head) return [];
-      return [{ key: `${serial.current++}`, x: head.left - h.left + el.scrollLeft + head.width / 2, y: head.top - h.top + el.scrollTop + head.height / 2, kind: r }];
-    });
+    if (!el || prev.reset !== reset) return;
+    const cached = readNoteBoxes(el);
+    let hostRect: DOMRect | null = null;
+    const fresh: { key: string; x: number; y: number; kind: "hit" | "miss" }[] = [];
+    for (let n = 0; n < results.length; n++) {
+      const r = results[n];
+      if (!r || prev.results[n] === r) continue;
+      const box = cached?.[n];
+      if (box) {
+        fresh.push({ key: `${serial.current++}`, x: box.x + box.w / 2, y: box.y + box.h / 2, kind: r });
+      } else {
+        hostRect ??= el.getBoundingClientRect();
+        const head = el.querySelector(`[data-note="${n}"] .vf-notehead`)?.getBoundingClientRect();
+        if (head) fresh.push({ key: `${serial.current++}`, x: head.left - hostRect.left + el.scrollLeft + head.width / 2, y: head.top - hostRect.top + el.scrollTop + head.height / 2, kind: r });
+      }
+    }
     if (!fresh.length) return;
-    setBursts((now) => [...now.slice(-24), ...fresh]);
+    setBursts((now) => [...now.slice(-12), ...fresh]);
     const keys = new Set(fresh.map((b) => b.key));
-    // each burst goes by itself, whatever lands meanwhile
-    timers.current.add(window.setTimeout(() => setBursts((now) => now.filter((b) => !keys.has(b.key))), GLINT_MS));
+    const id = window.setTimeout(() => {
+      timers.current.delete(id);
+      setBursts((now) => now.filter((b) => !keys.has(b.key)));
+    }, GLINT_MS);
+    timers.current.add(id);
   }, [results, reset]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => timers.current.forEach((id) => window.clearTimeout(id)), []);
   return (
@@ -1857,13 +1895,12 @@ function ScoreGlints({ host, results, reset }: { host: RefObject<HTMLDivElement>
       {bursts.map((b) => (
         <span key={b.key} className={`ss-glint is-${b.kind}`} style={{ left: b.x, top: b.y }} aria-hidden="true">
           <b />
-          {b.kind === "hit" ? <u /> : null}
-          {(b.kind === "hit" ? SPARKS : SPARKS.slice(0, 4)).map((a, i) => <i key={a} style={{ "--a": `${a + (i % 2 ? 12 : 0)}deg`, "--d": `${b.kind === "hit" ? 18 + (i % 3) * 7 : 10}px` } as CSSProperties} />)}
+          {SPARKS.map((a, i) => <i key={a} style={{ "--a": `${a + (i % 2 ? 14 : 0)}deg`, "--d": `${b.kind === "hit" ? 18 + (i % 2) * 6 : 10}px` } as CSSProperties} />)}
         </span>
       ))}
     </>
   );
-}
+});
 
 /** Scales, arpeggios and lines: read off the staff. The neck below shows where the hands are, and where they went wrong. */
 function LineStage({ card, session: s, sheet, labels }: { card: Card; session: SessionApi; sheet: LeadSheet; labels: LabelMode }) {
@@ -1973,6 +2010,7 @@ function LineStage({ card, session: s, sheet, labels }: { card: Card; session: S
     (): FretPulse | null => (landedOn && landedAs ? { key: `${s.follow.take}:${landed}`, string: landedOn.string, fret: landedOn.fret, kind: landedAs } : null),
     [landedOn, landedAs, landed, s.follow.take],
   );
+  const lineHideBars = useMemo(() => (card.memory ? written.bars.map((_, i) => i) : null), [card.memory, written]);
   return (
     <div className="ss-line">
       {card.family === "scales" || card.kind === "spider" ? null : <Harm ctx={ctx} scale />}
@@ -1984,7 +2022,7 @@ function LineStage({ card, session: s, sheet, labels }: { card: Card; session: S
           showFingering={false}
           autoScroll
           playingBar={playingBar}
-          hideBars={card.memory ? written.bars.map((_, i) => i) : null}
+          hideBars={lineHideBars}
           noteLabels={degrees}
           cursor
           cursorPulse={s.nudge}
@@ -2091,6 +2129,8 @@ function flows(card: Card): boolean {
   return card.view === "score" && card.family === "melody" && !card.memory && !card.spot && (Boolean(card.run) || card.step?.kind === "tune" || card.to - card.from + 1 > FLOW_BARS);
 }
 
+const EMPTY_NUMS: readonly number[] = [];
+
 function FlowStage({ card, session: s, sheet: source }: { card: Card; session: SessionApi; sheet: LeadSheet }) {
   const sheet = useMemo(() => card.rhythmPitch !== undefined ? rhythmSheet(source, card.rhythmPitch) : source, [source, card.rhythmPitch]);
   const flow = useMemo(() => flowOf(sheet, card.tl, card.from, card.to, card.first, card.last), [sheet, card]);
@@ -2105,7 +2145,7 @@ function FlowStage({ card, session: s, sheet: source }: { card: Card; session: S
     });
     return out;
   }, [flow, s.results, card.first]);
-  const active = s.active >= card.first ? flow.notesOf[s.active - card.first] ?? [] : [];
+  const active = s.active >= card.first ? flow.notesOf[s.active - card.first] ?? EMPTY_NUMS : EMPTY_NUMS;
   const ctx = card.context[Math.max(card.first, Math.min(card.last, s.active))];
   const track = useRef<HTMLDivElement>(null);
   const heads = useMemo(() => flow.exercise.bars.flatMap((b) => b.notes.filter((n) => !n.rest)), [flow]);
@@ -2172,7 +2212,10 @@ function MelodyStage({ card, session: s, sheet: source }: { card: Card; session:
   const cursor = Math.max(card.first, s.active);
   const printed = useMemo(() => printedResults(card.tl, s.results, cursor), [card, s.results, cursor]);
   const results = useMemo(() => Array.from({ length: cut.count }, (_, k) => printed[cut.offset + k] ?? null), [printed, cut]);
-  const activeNotes = (s.active >= 0 ? card.tl.targets[s.active]?.notes ?? [] : []).map((n) => n - cut.offset);
+  const activeNotes = useMemo(
+    () => (s.active >= 0 ? card.tl.targets[s.active]?.notes ?? [] : []).map((n) => n - cut.offset),
+    [s.active, card, cut.offset],
+  );
   const playingBar = s.playback.playing ? (card.tl.slots[s.playback.activeSlot]?.bar ?? -1) - cut.from : -1;
   const ctx = card.context[Math.max(card.first, Math.min(card.last, s.active))];
   const host = useRef<HTMLDivElement>(null);

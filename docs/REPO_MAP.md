@@ -214,21 +214,21 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/components/LibraryGrid.tsx` — `LibraryGrid:21`
 - `src/components/OverviewView.tsx` — `OverviewView:73`
 - `src/components/PassiveTree.tsx` — `TreeView:9`, `NodeSkinProps:16`, `NodeSkin:25`, `TreeSkins:32`, `stagePoint:39`, `progressClasses:44`, `PassiveTree:49`
-- `src/components/PracticeAtmosphere.tsx` — `PracticeAtmosphere:13`, `BeatPulse:127`
+- `src/components/PracticeAtmosphere.tsx` — `PracticeAtmosphere:13`, `BeatPulse:130`
 - `src/components/PracticeBriefPanel.tsx` — `PracticeBriefPanel:6`
 - `src/components/PracticeHistory.tsx` — `PracticeHistory:59`
 - `src/components/PracticeRoom.tsx` — `RoomLaunch:19`, `sessionLead:26`, `PracticeRoom:36`
 - `src/components/ProgressView.tsx` — `ProgressView:598`
 - `src/components/RecordingStatus.tsx` — `RecordingStatus:13`, `downloadTake:21`, `RecordingRecovery:32`
-- `src/components/RenderedWater.tsx` — `RenderedWaterProps:180`, `RenderedWater:212`
+- `src/components/RenderedWater.tsx` — `RenderedWaterProps:194`, `RenderedWater:228`
 - `src/components/SaveNotice.tsx` — `SaveNotice:7`
 - `src/components/ScalesView.tsx` — `ScalesView:12`
-- `src/components/Score.tsx` — `drawChord:84`, `Score:197`
-- `src/components/ScoreFlow.tsx` — `ScoreFlow:335`
+- `src/components/Score.tsx` — `drawChord:98`, `Score:212`
+- `src/components/ScoreFlow.tsx` — `ScoreFlow:341`
 - `src/components/SessionSummary.tsx` — `SessionSummary:86`
 - `src/components/ShapesView.tsx` — `ShapesView:16`
 - `src/components/SkillTree.tsx` — `SkillTree:18`
-- `src/components/SongCoach.tsx` — `RoomRequest:88`, `RoomHandle:93`, `openPractice:247`, `SongCoach:317`, `SongCoachRoom:325`
+- `src/components/SongCoach.tsx` — `RoomRequest:89`, `RoomHandle:94`, `openPractice:248`, `SongCoach:318`, `SongCoachRoom:326`
 - `src/components/SongMap.tsx` — `SongMap:138`
 - `src/components/Transport.tsx` — `Transport:18`
 - `src/components/TriadWheel.tsx` — `TriadWheel:48`
@@ -290,10 +290,10 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/pool/engine/renderer.ts` — `Tier:9`, `TIERS:10`, `Vec2:17`, `Vec3:18`, `Stone:19`, `Flash:20`, `Vortex:21`, `Swirl:22`, `Emitter:23`, `Ring:24`, `PoolRect:25`, `ROCK:26`, `CALM:27`, `GLASS:28`, `FrameState:31`, `PHOTO_SCALE:58` (+1 more)
 - `src/pool/engine/shaders.ts` — `VERTEX:14`, `CURL:58`, `FORCES:71`, `DIVERGENCE:131`, `PRESSURE:144`, `GRADIENT:160`, `ADVECT:176`, `HEAT:189`, `MARBLE:214`, `WAVES:228`, `DYE:255`, `PARTICLES:279`, `FLOATER_VERTEX:302`, `FLOATER_FRAGMENT:332`, `BRIGHT:557`, `BLUR:565` (+2 more)
 - `src/pool/golden.ts` — `PHI:3`, `GOLDEN_ANGLE:4`, `FIBONACCI:5`, `PHRASE_WRAP:6`, `phyllotaxis:11`, `spiral:19`, `goldenSpread:26`, `wander:29`, `mulberry32:36`
-- `src/pool/groove.ts` — `GrooveFrame:7`, `GrooveContext:8`, `GrooveOnset:13`, `GrooveState:15`, `createGroove:58`
+- `src/pool/groove.ts` — `GrooveFrame:11`, `GrooveContext:12`, `GrooveOnset:17`, `GrooveState:19`, `createGroove:62`
 - `src/pool/host.ts` — `createHost:51`, `PoolHost:55`
 - `src/pool/mode.ts` — `RoomMode:6`, `RoomEffective:7`, `ROOM_MODES:8`, `parseRoomMode:27`, `nextRoomMode:32`, `setRoomMode:46`, `cycleRoomMode:52`, `probeLiving:55`, `markLivingDegraded:70`, `RoomInputs:81`, `RoomResolution:82`, `resolveRoom:84`, `useRoomRender:106`, `resetRoomForTests:117`
-- `src/pool/params.ts` — `GROOVE_ANCHORS:4`, `ANCHORS:6`, `PoolParams:25`, `at:31`, `poolParams:37`, `tintFor:51`
+- `src/pool/params.ts` — `GROOVE_ANCHORS:5`, `ANCHORS:7`, `PoolParams:26`, `at:32`, `poolParams:38`, `tintFor:52`
 - `src/pool/pool.css`
 - `src/pool/power.ts` — `PowerSource:5`, `readPower:32`, `subscribePower:34`, `usePowerSource:40`, `resetPowerForTests:45`
 - `src/practice.css`
@@ -323,6 +323,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/song/leitner.ts` — `Result:18`, `CardState:20`, `LoopMode:30`, `Settings:32`, `AttemptConditions:44`, `Attempt:55`, `SessionEntry:73`, `Store:82`, `BOX_DAYS:92`, `BOXES:93`, `loadSharedSkills:121`, `loadStore:143`, `saveStore:162`, `loadStores:184`, `chronologicalAttempts:201`, `saveStores:214` (+12 more)
 - `src/song/lines.ts` — `LineNote:10`, `Span:16`, `ScaleDrill:22`, `scaleLine:42`, `arpLine:84`, `guideLine:97`, `chainLine:127`
 - `src/song/notation.ts` — `KEY_FIFTHS:8`, `signatureOf:21`, `lineSheet:48`, `signatureFor:104`, `playedSheet:110`
+- `src/song/noteBoxes.ts` — `NoteBox:1`, `registerNoteBoxes:11`, `readNoteBoxes:16`
 - `src/song/notekeys.ts` — `OPEN_STRINGS:10`, `SUMMON_NOTE:13`, `KEY_HOMES:19`, `usedMidis:27`, `commandMidis:48`, `assignNoteKeys:74`, `spotOf:92`
 - `src/song/planner.ts` — `Length:15`, `LENGTHS:16`, `LENGTH_MINUTES:17`, `Role:19`, `ROLE_LABEL:20`, `Block:28`, `Arc:34`, `SessionPlan:40`, `cardSeconds:79`, `nextArc:96`, `loadArc:106`, `saveArc:114`, `newCards:127`, `PlanOptions:135`, `planBlocks:144`
 - `src/song/practiceHistory.ts` — `PracticeTempoPoint:6`, `ExerciseHistory:17`, `PracticeStoreProjection:29`, `PracticeHistoryResult:31`, `projectPracticeStore:58`, `groupPracticeHistory:106`, `projectPracticeHistory:138`

@@ -3,6 +3,10 @@ import { createOnsets, guessKey, readGrid, steadyGap } from "../song/freeplay";
 // The pool's mood, read from the player's own pitched playing. Pure and deterministic: no DOM, no
 // randomness and no clock except the frames' own `now`. It never feeds practice logic, and a
 // steadiness reading is only a feature: no beat is predicted or pulsed from the player's notes.
+//
+// Warm-up curve: behaves like a heavy engine spinning up from cold water. The first few notes
+// barely stir a distant calling; sustained, steady, clean playing builds momentum gradually,
+// ebbing gently when the player falters and rising again when they lock back in.
 
 export interface GrooveFrame { now: number; rms: number; midi: number | null; clarity: number; playing: boolean }
 export interface GrooveContext {
@@ -13,9 +17,9 @@ export interface GrooveContext {
 export interface GrooveOnset { midi: number; velocity: number; at: number }
 
 export interface GrooveState {
-  groove: number; // 0..1, slow
-  energy: number; // loudness, fast
-  kick: number; // a decaying impulse from each onset
+  groove: number; // 0..1, slow flywheel
+  energy: number; // loudness, smoothed
+  kick: number; // gentle decaying breath from onsets, scaled by groove
   density: number; // onsets per second over the last few seconds
   steadiness: number;
   tonal: number;
@@ -32,10 +36,10 @@ const SOUND_RMS = 0.008;
 const VOICED_MS = 900; // a pitched note keeps the room voiced this long while it rings
 const BIN_MS = 250;
 const BINS = 24; // 6 s of continuity: a breath between passes or a count-in does not undo it
-const EARN_MS = 30000; // about half a minute of real playing reaches full intensity
-const RISE_MS = 5000;
-const FALL_MS = 10000;
-const QUIET_FALL_MS = 8000;
+const EARN_MS = 29000; // half a minute of real playing spins the engine up; convex start keeps early seconds quiet
+const RISE_MS = 7200; // heavy flywheel inertia: rises smoothly, never snaps
+const FALL_MS = 11000; // ebbs gracefully when you slip out of the pocket
+const QUIET_FALL_MS = 8500; // halves within ~9.5 s after silence settles
 const QUIET_MS = 4000;
 const RATIOS = [0.5, 1, 1.5, 2, 3];
 
@@ -80,7 +84,6 @@ export function createGroove() {
       const changed = tonics.slice(-3).some((t) => t !== key.tonic);
       tonics.push(key.tonic);
       if (tonics.length > 3) tonics.shift();
-      // A diatonic run correlates about 0.65 with its key profile, and neighbouring keys trade places.
       state.tonal = unit((key.fit - 0.45) / 0.3) * (changed ? 0.85 : 1);
       state.tonic = key.tonic;
       state.mode = key.mode;
@@ -88,13 +91,14 @@ export function createGroove() {
     const heard = onsets.slice(-12);
     state.clean = context.flow ?? (heard.length ? heard.reduce((s, o) => s + o.clarity, 0) / heard.length : 0);
     state.density = recent.length / 6;
-    // Clean playing scales the mood rather than adding to it, so clear but random notes stay low.
-    const raw = Math.pow(state.continuity, 0.7) * (0.55 * state.steadiness + 0.45 * state.tonal) * (0.6 + 0.4 * state.clean);
-    const earned = Math.pow(unit(state.activeMs / EARN_MS), 0.7);
+    // Clean, steady, tonal playing earns the peak; sloppy or sparse playing ebbs back toward the dark water.
+    const raw = Math.pow(state.continuity, 0.85) * (0.55 * state.steadiness + 0.45 * state.tonal) * (0.35 + 0.65 * state.clean);
+    // Convex warm-up curve: the first seconds barely whisper before the flywheel gathers speed.
+    const earned = Math.pow(unit(state.activeMs / EARN_MS), 1.65);
     target = playing && now - lastVoiced <= QUIET_MS ? Math.min(raw, earned) : 0;
   };
 
-  /** One input frame. Returns a note onset heard during the player's turn, for the pool to drop a stone. */
+  /** One input frame. Returns a note onset heard during the player's turn, for the pool to queue a distant swell. */
   const step = (frame: GrooveFrame, context: GrooveContext = {}): GrooveOnset | null => {
     const dt = last === null ? 0 : Math.max(0, Math.min(250, frame.now - last));
     last = frame.now;
@@ -107,9 +111,9 @@ export function createGroove() {
       onsets.push({ ...onset, clarity: frame.clarity });
       while (onsets.length > 64 || (onsets.length && frame.now - onsets[0].at > 20000)) onsets.shift();
       state.onsetSerial++;
-      state.kick += onset.velocity * (0.3 + 0.7 * state.groove);
+      // Gentle impulse gated by groove^2 so cold playing never punches the background.
+      state.kick = Math.min(1.2, state.kick + onset.velocity * (0.04 + 0.48 * state.groove * state.groove));
     }
-    // Only pitched sound keeps the room voiced: a click or a knock on the body earns nothing.
     if (midi !== null && frame.rms > SOUND_RMS) lastVoiced = frame.now;
     const voiced = frame.now - lastVoiced < VOICED_MS && frame.rms > SOUND_RMS * 0.5;
     if (frame.playing && voiced) state.activeMs += dt;
@@ -126,8 +130,8 @@ export function createGroove() {
     if (frame.now - lastFeature >= BIN_MS) { lastFeature = frame.now; features(frame.now, context, frame.playing); }
 
     const loud = frame.playing ? unit(Math.sqrt(frame.rms) * 2.5) : 0;
-    state.energy += (loud - state.energy) * ease(dt, loud > state.energy ? 250 : 900);
-    state.kick *= Math.exp(-dt / 600);
+    state.energy += (loud - state.energy) * ease(dt, loud > state.energy ? 450 : 1200);
+    state.kick *= Math.exp(-dt / 1100);
     const quiet = frame.now - lastVoiced > QUIET_MS;
     state.groove += (target - state.groove) * ease(dt, target > state.groove ? RISE_MS : quiet ? QUIET_FALL_MS : FALL_MS);
     return onset;

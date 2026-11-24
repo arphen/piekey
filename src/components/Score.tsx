@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   Accidental,
   BarlineType,
@@ -19,6 +19,7 @@ import {
 } from "vexflow";
 import type { Note } from "vexflow";
 import type { NoteResult, ReadingBar, ReadingExercise } from "../core/contract";
+import { registerNoteBoxes, type NoteBox } from "../song/noteBoxes";
 
 interface ScoreProps {
   exercise: Pick<ReadingExercise, "bars" | "keySignature" | "timeSignature">;
@@ -68,16 +69,29 @@ const GLYPHS: Record<string, { code: string; point: number; dx: number; dy: numb
   "Δ": { code: "csymMajorSeventh", point: 30, dx: -3, dy: -1 },
 };
 
-/** Right edge of the text element just drawn, from its rendered box (estimates misjudge fallback glyphs such as Δ). */
-function drawnRight(ctx: ReturnType<Renderer["getContext"]>, text: string, x: number): number {
-  const el = (ctx as unknown as { parent?: Element }).parent?.lastElementChild as SVGTextElement | null | undefined;
-  try {
-    const box = el?.getBBox?.();
-    if (box && box.width > 0 && box.x >= x - 2) return box.x + box.width;
-  } catch {
-    // not laid out (tests)
+let chordMeasureCtx: CanvasRenderingContext2D | null | undefined;
+const chordWidthCache = new Map<string, number>();
+
+/** Measure chord text off-DOM via 2D canvas so drawChord never forces synchronous SVG getBBox() layout flushes. */
+function measureChordText(ctx: ReturnType<Renderer["getContext"]>, text: string): number {
+  const cached = chordWidthCache.get(text);
+  if (cached !== undefined) return cached;
+  if (chordMeasureCtx === undefined) {
+    if (typeof navigator !== "undefined" && /jsdom/i.test(navigator.userAgent)) {
+      chordMeasureCtx = null;
+    } else {
+      try {
+        const c = document.createElement("canvas");
+        chordMeasureCtx = c.getContext("2d");
+        if (chordMeasureCtx) chordMeasureCtx.font = `italic bold ${CHORD_SIZE}px Fraunces, Georgia, serif`;
+      } catch {
+        chordMeasureCtx = null;
+      }
+    }
   }
-  return x + ctx.measureText(text).width;
+  const w = chordMeasureCtx ? chordMeasureCtx.measureText(text).width : ctx.measureText(text).width;
+  if (chordWidthCache.size < 512) chordWidthCache.set(text, w);
+  return w;
 }
 
 /** Draws a chord symbol, ♭ ♯ Δ as music-font glyphs (text fonts set them loosely); returns its right edge. */
@@ -94,7 +108,7 @@ export function drawChord(ctx: ReturnType<Renderer["getContext"]>, symbol: strin
     } else {
       ctx.setFont("Fraunces, Georgia, serif", CHORD_SIZE, "bold", "italic");
       ctx.fillText(part, cx, y);
-      cx = drawnRight(ctx, part, cx);
+      cx += measureChordText(ctx, part);
     }
   }
   ctx.restore();
@@ -193,8 +207,9 @@ function layout(bars: ReadingBar[], perLine: number, minWidths: number[], firstE
 }
 
 // Renders the exercise once per (exercise, width, fingering); playback state is applied
-// afterwards by toggling classes on the note groups, so the score never re-lays out while playing.
-export function Score({
+// incrementally on the few changed notes, while the cursor and playhead live on GPU-composited
+// HTML layers outside the SVG so the score never repaints at 60fps while playing.
+export const Score = memo(function Score({
   exercise,
   activeStep,
   activeNotes,
@@ -214,30 +229,62 @@ export function Score({
   barsPerLine,
   playhead,
 }: ScoreProps) {
+  const wrapRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const noteEls = useRef<SVGElement[]>([]);
   const noteBars = useRef<number[]>([]);
+  const firstInBarRef = useRef<Map<number, number>>(new Map());
   const barEls = useRef<SVGRectElement[]>([]);
-  const noteSpans = useRef<{ top: number; height: number }[]>([]); // the staff each note sits on
-  const cursorEl = useRef<SVGRectElement | null>(null);
-  const playheadEl = useRef<SVGRectElement | null>(null);
+  const barEnds = useRef<number[]>([]);
+  const noteBoxes = useRef<NoteBox[]>([]);
+  const noteSpans = useRef<{ top: number; height: number; line: number }[]>([]);
+  const svgScale = useRef(1);
+  const linkGroups = useRef<Element[]>([]);
+  const cursorEl = useRef<HTMLDivElement | null>(null);
+  const playheadEl = useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(0);
   const hasPlayhead = Boolean(playhead);
 
+  // Incremental state tracking so note class updates are O(changed) instead of O(all notes).
+  const applied = useRef<{
+    active: Set<number>;
+    results: NoteResult[];
+    reentry: boolean;
+    focusKey: string;
+    hideKey: string;
+    vis: string;
+    linksHidden: boolean | null;
+    playingBar: number;
+    markedStart: number;
+    markedEnd: number;
+  }>({
+    active: new Set(),
+    results: [],
+    reentry: false,
+    focusKey: "",
+    hideKey: "",
+    vis: "",
+    linksHidden: null,
+    playingBar: -1,
+    markedStart: -1,
+    markedEnd: -1,
+  });
+  const lastScrolledLine = useRef(-1);
+
   useLayoutEffect(() => {
-    const host = hostRef.current;
-    if (!host) return;
+    const wrap = wrapRef.current;
+    if (!wrap) return;
     const ro = new ResizeObserver(([entry]) => setWidth(Math.floor(entry.contentRect.width)));
-    ro.observe(host);
+    ro.observe(wrap);
     return () => ro.disconnect();
   }, []);
 
   useEffect(() => {
     const host = hostRef.current;
-    if (!host || width < 200) return;
-    host.innerHTML = "";
+    const wrap = wrapRef.current;
+    if (!host || !wrap || width < 200) return;
 
-    const css = getComputedStyle(host);
+    const css = getComputedStyle(wrap);
     const ink = css.getPropertyValue("--ink").trim() || "#edf4ea";
     const soft = css.getPropertyValue("--ink-faint").trim() || "#6f8574";
     const chordInk = css.getPropertyValue("--brass").trim() || "#dfc068";
@@ -245,15 +292,12 @@ export function Score({
     const maxPerLine = barsPerLine ?? (width < 640 ? BARS_PER_LINE_NARROW : BARS_PER_LINE_WIDE);
     const usable = width - 8;
 
-    // Pre-build each bar's voice so we know exact note + accidental widths before placing staves.
     const built = exercise.bars.map((bar) => buildBarVoice(bar));
     const minNoteWidths = built.map((b) => Math.ceil(b.minNoteWidth) + 14);
     const firstMod = modifierWidth(true, exercise.keySignature, exercise.keySignature, exercise.bars[0] ?? ({ notes: [], chordSymbols: [], barIndex: 0 } as ReadingBar), true, exercise.timeSignature);
     const places = layout(exercise.bars, maxPerLine, minNoteWidths, firstMod, usable);
     const lines = (places[places.length - 1]?.line ?? 0) + 1;
 
-    // Compute exact per-line bar widths weighted by each bar's note density + actual clef/key/time modifiers,
-    // so dense 8th/16th bars with accidentals get the space they need and NEVER spill past barlines.
     const lineGroups: number[][] = Array.from({ length: lines }, () => []);
     places.forEach((p, idx) => lineGroups[p.line].push(idx));
 
@@ -267,8 +311,6 @@ export function Score({
       return modifierWidth(places[i].col === 0, trackKey, prev, bar, i === 0, trackTime);
     });
 
-    // If a line's total minimum required width still exceeds `usable` (very narrow viewport + dense bar),
-    // render into a slightly wider viewBox and scale smoothly into `width` so zero clipping occurs.
     let renderWidth = usable;
     for (const indices of lineGroups) {
       const needed = indices.reduce((sum, idx) => sum + barMods[idx] + minNoteWidths[idx], 0);
@@ -300,20 +342,24 @@ export function Score({
     const labelRoom = noteLabels ? 22 : 0;
     const lineHeight = LINE_HEIGHT + fingerRoom + labelRoom + markRoom;
     const totalHeight = lines * lineHeight + BOTTOM_PAD;
+    const svgWidth = renderWidth + 8;
 
-    const renderer = new Renderer(host, Renderer.Backends.SVG);
-    renderer.resize(renderWidth + 8, totalHeight);
+    // Build the entire SVG off-DOM so VexFlow never triggers intermediate layout passes.
+    const stage = document.createElement("div");
+    const renderer = new Renderer(stage, Renderer.Backends.SVG);
+    renderer.resize(svgWidth, totalHeight);
     const ctx = renderer.getContext();
     ctx.setFillStyle(ink);
     ctx.setStrokeStyle(ink);
-    const svg = host.querySelector("svg")!;
-    svg.setAttribute("viewBox", `0 0 ${renderWidth + 8} ${totalHeight}`);
+    const svg = stage.querySelector("svg")!;
+    svg.setAttribute("viewBox", `0 0 ${svgWidth} ${totalHeight}`);
     svg.setAttribute("preserveAspectRatio", "xMidYMin meet");
     svg.style.width = "100%";
     svg.style.height = "auto";
 
     const els: SVGElement[] = [];
     const rects: SVGRectElement[] = [];
+    const ends: number[] = [];
     const drawn: { sn: StaveNote; line: number; bar: number; n: ReadingBar["notes"][number]; top: number; height: number }[] = [];
     let key = exercise.keySignature;
     let time = exercise.timeSignature;
@@ -346,21 +392,22 @@ export function Score({
       for (const j of bar.jumps ?? []) stave.setRepetitionType(repetitionFor(j.kind, j.text), -6);
       stave.setContext(ctx).draw();
 
-      // highlight band behind the bar (loop, playhead); clicks are mapped to bars by position
       const top = stave.getYForLine(0) - 16;
       const bottom = stave.getYForLine(4) + 18;
+      const rectX = stave.getNoteStartX() - 6;
+      const rectW = Math.max(10, x + w - stave.getNoteStartX() + 2);
       const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-      rect.setAttribute("x", String(stave.getNoteStartX() - 6));
+      rect.setAttribute("x", String(rectX));
       rect.setAttribute("y", String(top));
-      rect.setAttribute("width", String(Math.max(10, x + w - stave.getNoteStartX() + 2)));
+      rect.setAttribute("width", String(rectW));
       rect.setAttribute("height", String(bottom - top));
       rect.setAttribute("rx", "8");
       rect.setAttribute("class", "score-bar");
       rect.dataset.bar = String(i);
       svg.insertBefore(rect, svg.firstChild);
       rects.push(rect);
+      ends.push(rectX + rectW);
 
-      // rehearsal mark and tempo, above everything else
       if (bar.section || bar.tempo) {
         let tx = x + (first ? 2 : 4);
         const ty = y - markRoom + 10;
@@ -394,7 +441,6 @@ export function Score({
       tuplets.forEach((t) => t.setContext(ctx).draw());
       ctx.closeGroup();
 
-      // Chord symbols above the staff, at their beat: never overlapping.
       const barStartBeat = bar.notes[0]?.startBeat ?? 0;
       const barBeats = bar.beats ?? bar.notes.reduce((a, n) => a + n.durationBeats, 0);
       const points = [
@@ -415,7 +461,6 @@ export function Score({
         chordBeat += 4 / bar.chordSymbols.length;
       });
 
-      // Optional fingering hint under each note: circled string number + fret.
       if (showFingering) {
         ctx.save();
         ctx.setFont("JetBrains Mono, monospace", 10, "normal");
@@ -428,7 +473,6 @@ export function Score({
         ctx.restore();
       }
 
-      // Optional label under each note (its degree over the chord), below any fingering and low ledger lines.
       if (noteLabels) {
         ctx.save();
         ctx.setFont("JetBrains Mono, monospace", 11, "bold");
@@ -444,13 +488,10 @@ export function Score({
 
       bar.notes.forEach((n, ni) => {
         if (n.rest) return;
-        const el = notes[ni].getSVGElement();
-        if (el) els.push(el);
         drawn.push({ sn: notes[ni], line, bar: i, n, top: top - 4, height: bottom - top + 12 });
       });
     });
 
-    // Ties, slurs and vibrato lines; one that crosses a line break is drawn as two halves.
     const span = (a: (typeof drawn)[number], b: (typeof drawn)[number], make: (from: StaveNote | null, to: StaveNote | null) => { setContext(c: typeof ctx): { draw(): void } }) => {
       const parts = a.line === b.line ? [make(a.sn, b.sn)] : [make(a.sn, null), make(null, b.sn)];
       parts.forEach((p) => p.setContext(ctx).draw());
@@ -478,136 +519,279 @@ export function Score({
     });
     ctx.closeGroup();
 
-    els.forEach((el, i) => el.setAttribute("data-note", String(i))); // for overlays drawn by the host
+    // Commit once to the live DOM, then resolve VexFlow SVGElements (VexFlow looks them up via document.getElementById).
+    host.replaceChildren(svg);
+    drawn.forEach((d) => {
+      const el = d.sn.getSVGElement();
+      if (el) els.push(el);
+    });
+    els.forEach((el, i) => el.setAttribute("data-note", String(i)));
+
+    const scale = width / svgWidth;
+    svgScale.current = scale;
+
+    // Cache every notehead's SVG coordinates directly from VexFlow (zero per-note getBBox reflows).
+    const boxes: NoteBox[] = drawn.map((d) => {
+      const w = typeof d.sn.getGlyphWidth === "function" ? d.sn.getGlyphWidth() || 11 : 11;
+      const ys = d.sn.getYs();
+      const cy = ys[0] ?? d.top + d.height / 2;
+      return { x: d.sn.getAbsoluteX(), y: cy - 5, w, h: 10 };
+    });
+
+    const firstInBar = new Map<number, number>();
+    drawn.forEach((d, i) => {
+      if (!firstInBar.has(d.bar)) firstInBar.set(d.bar, i);
+    });
+
     noteEls.current = els;
     noteBars.current = drawn.map((d) => d.bar);
+    firstInBarRef.current = firstInBar;
     barEls.current = rects;
-    noteSpans.current = drawn.map((d) => ({ top: d.top, height: d.height }));
-    cursorEl.current = null;
-    playheadEl.current = null;
-    if (hasPlayhead) {
-      const g = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-      g.setAttribute("class", "score-playhead");
-      g.setAttribute("width", String(PLAYHEAD_WIDTH));
-      g.setAttribute("rx", "1.5");
-      svg.insertBefore(g, svg.firstChild);
-      playheadEl.current = g;
-    }
-    if (cursor) {
-      const c = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-      c.setAttribute("class", "score-cursor");
-      c.setAttribute("width", String(CURSOR_WIDTH));
-      c.setAttribute("rx", "10");
-      svg.insertBefore(c, svg.firstChild);
-      cursorEl.current = c;
-    }
-  }, [exercise, width, barsPerLine, showFingering, noteLabels, cursor, hasPlayhead]);
+    barEnds.current = ends;
+    noteBoxes.current = boxes;
+    noteSpans.current = drawn.map((d) => ({ top: d.top, height: d.height, line: d.line }));
+    linkGroups.current = [...svg.querySelectorAll(".vf-score-note-links")];
 
-  // The ghost playhead: read on every frame from the heard music, moved, never redrawn.
+    // Reset incremental diff state for the freshly rendered SVG.
+    applied.current = {
+      active: new Set(),
+      results: [],
+      reentry: false,
+      focusKey: "",
+      hideKey: "",
+      vis: "",
+      linksHidden: null,
+      playingBar: -1,
+      markedStart: -1,
+      markedEnd: -1,
+    };
+    lastScrolledLine.current = -1;
+
+    // Register host-local pixel boxes on the score wrapper AND its parent (.ss-score) so overlays
+    // (ScoreGlints, ScoreShadows) read exact note coordinates without touching getBoundingClientRect().
+    const scaledFor = (container: HTMLElement) => {
+      let cached: NoteBox[] | null = null;
+      return () => {
+        if (cached) return cached;
+        const ox = container === wrap ? 0 : wrap.offsetLeft;
+        const oy = container === wrap ? 0 : wrap.offsetTop;
+        cached = boxes.map((b) => ({ x: ox + b.x * scale, y: oy + b.y * scale, w: b.w * scale, h: b.h * scale }));
+        return cached;
+      };
+    };
+    registerNoteBoxes(wrap, scaledFor(wrap));
+    if (wrap.parentElement) registerNoteBoxes(wrap.parentElement, scaledFor(wrap.parentElement));
+  }, [exercise, width, barsPerLine, showFingering, noteLabels]);
+
+  // GPU-composited ghost playhead: reads the heard clock, smooths CoreAudio staircase jitter with
+  // a light velocity filter, and moves an HTML overlay layer via translate3d — zero SVG repaints.
   useEffect(() => {
     const el = playheadEl.current;
-    if (!el || !playhead) return;
-    const heads: (number | null)[] = noteEls.current.map((note) => {
-      try {
-        const b = note.querySelector<SVGGraphicsElement>(".vf-notehead")?.getBBox?.();
-        return b ? b.x + b.width / 2 : null;
-      } catch {
-        return null;
-      }
-    });
-    const barEnd = (bar: number) => {
-      const r = barEls.current.find((x) => x.dataset.bar === String(bar));
-      return r ? Number(r.getAttribute("x")) + Number(r.getAttribute("width")) : null;
-    };
+    if (!el || !playhead || !width) return;
+    const boxes = noteBoxes.current;
+    const spans = noteSpans.current;
+    const bars = noteBars.current;
+    const ends = barEnds.current;
+    const scale = svgScale.current;
     let frame = 0;
-    let shown = "";
-    const draw = () => {
+    let shownOn = false;
+    let lastX = -1e9;
+    let lastY = -1e9;
+    let lastH = -1;
+    let lastNow = 0;
+    let smoothAt = Number.NaN;
+    let vel = 0;
+    let lastRawAt = Number.NaN;
+    let lastRawT = 0;
+
+    const draw = (now: number) => {
       frame = requestAnimationFrame(draw);
-      const at = playhead();
-      const k = at === null ? -1 : Math.max(0, Math.min(heads.length - 1, Math.floor(at)));
-      const from = k >= 0 ? heads[k] : null;
-      const span = noteSpans.current[k];
-      if (at === null || from === null || !span) {
-        if (shown !== "off") el.classList.remove("is-on");
-        shown = "off";
+      const dt = lastNow ? Math.min(0.05, (now - lastNow) / 1000) : 1 / 60;
+      lastNow = now;
+      const raw = playhead();
+      if (raw === null || !boxes.length) {
+        if (shownOn) {
+          el.classList.remove("is-on");
+          shownOn = false;
+        }
+        smoothAt = Number.NaN;
+        lastRawAt = Number.NaN;
+        vel = 0;
         return;
       }
-      const next = noteSpans.current[k + 1]?.top === span.top ? heads[k + 1] : barEnd(noteBars.current[k]);
-      const x = from + ((next ?? from) - from) * Math.max(0, Math.min(1, at - k)) - PLAYHEAD_WIDTH / 2;
-      const key = `${x.toFixed(1)}:${span.top}`;
-      if (key === shown) return;
-      if (shown === "off" || shown === "") el.classList.add("is-on");
-      shown = key;
-      el.setAttribute("height", String(span.height));
-      el.style.transform = `translate(${x}px, ${span.top}px)`;
+
+      if (Number.isNaN(smoothAt) || Math.abs(raw - smoothAt) > 0.65) {
+        smoothAt = raw;
+        lastRawAt = raw;
+        lastRawT = now;
+        vel = 0;
+      } else {
+        if (raw > lastRawAt + 1e-5) {
+          const spanS = (now - lastRawT) / 1000;
+          if (spanS > 0.004 && spanS < 0.6) {
+            const inst = (raw - lastRawAt) / spanS;
+            if (inst > 0 && inst < 40) vel = vel > 0 ? vel + (inst - vel) * Math.min(1, spanS / 0.25) : inst;
+          }
+          lastRawAt = raw;
+          lastRawT = now;
+        }
+        smoothAt += vel * dt;
+        smoothAt += (raw - smoothAt) * (1 - Math.exp(-dt / 0.08));
+      }
+
+      const k = Math.max(0, Math.min(boxes.length - 1, Math.floor(smoothAt)));
+      const box = boxes[k];
+      const span = spans[k];
+      if (!box || !span) return;
+      const from = box.x + box.w / 2;
+      const next = spans[k + 1]?.top === span.top ? boxes[k + 1].x + boxes[k + 1].w / 2 : ends[bars[k]];
+      const frac = Math.max(0, Math.min(1, smoothAt - k));
+      const sx = (from + ((next ?? from) - from) * frac) * scale - PLAYHEAD_WIDTH / 2;
+      const sy = span.top * scale;
+      const sh = span.height * scale;
+
+      if (!shownOn) {
+        el.classList.add("is-on");
+        shownOn = true;
+      }
+      if (Math.abs(sh - lastH) > 0.5) {
+        el.style.height = `${sh.toFixed(1)}px`;
+        lastH = sh;
+      }
+      if (Math.abs(sx - lastX) > 0.15 || Math.abs(sy - lastY) > 0.5) {
+        el.style.transform = `translate3d(${sx.toFixed(1)}px, ${sy.toFixed(1)}px, 0)`;
+        lastX = sx;
+        lastY = sy;
+      }
     };
     frame = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(frame);
   }, [playhead, exercise, width, barsPerLine, showFingering, noteLabels]);
 
-  // Playback cursor + mic results, applied without re-rendering.
+  // Incremental note class updates: O(changed) instead of touching every SVG note on every step.
   const activeKey = (activeNotes ?? [activeStep]).join(",");
   const focusKey = focusBars?.join(",") ?? "";
   const hideKey = hideBars?.join(",") ?? "";
   useEffect(() => {
-    const active = new Set(activeKey.split(",").map(Number));
-    const focus = focusKey ? new Set(focusKey.split(",").map(Number)) : null;
+    const els = noteEls.current;
+    if (!els.length) return;
+    const prev = applied.current;
+    const nextActive = new Set(activeKey ? activeKey.split(",").map(Number) : []);
+    const focusChanged = focusKey !== prev.focusKey;
+    const hideChanged = hideKey !== prev.hideKey || noteVisibility !== prev.vis;
     const hide = hideKey ? new Set(hideKey.split(",").map(Number)) : null;
-    const firstInBar = new Map<number, number>();
-    noteBars.current.forEach((bar, i) => { if (!firstInBar.has(bar)) firstInBar.set(bar, i); });
-    noteEls.current.forEach((el, i) => {
-      const bar = noteBars.current[i];
-      el.classList.toggle("is-active", active.has(i));
-      el.classList.toggle("is-reentry", Boolean(reentryCue && i === 0));
-      el.classList.toggle("is-hit", results[i] === "hit");
-      el.classList.toggle("is-miss", results[i] === "miss");
-      el.classList.toggle("is-dim", focus !== null && !focus.has(bar));
-      const concealed = noteVisibility === "played" ? !results[i] : noteVisibility === "hidden" || firstInBar.get(bar) !== i;
-      el.classList.toggle("is-hidden", hide !== null && hide.has(bar) && concealed);
-    });
-    hostRef.current?.querySelectorAll(".vf-score-note-links").forEach((el) => el.setAttribute("opacity", hide !== null && noteVisibility !== "played" ? "0" : "1"));
+    const firstInBar = firstInBarRef.current;
+
+    // 1. Active diff
+    for (const i of prev.active) if (!nextActive.has(i)) els[i]?.classList.remove("is-active");
+    for (const i of nextActive) if (!prev.active.has(i)) els[i]?.classList.add("is-active");
+    prev.active = nextActive;
+
+    // 2. Re-entry cue (note 0 only)
+    if (reentryCue !== prev.reentry) {
+      els[0]?.classList.toggle("is-reentry", reentryCue);
+      prev.reentry = reentryCue;
+    }
+
+    // 3. Results diff (plus concealed update for notes whose result changed when hiding)
+    const maxN = Math.max(els.length, prev.results.length);
+    for (let i = 0; i < maxN; i++) {
+      const r = results[i] ?? null;
+      const old = prev.results[i] ?? null;
+      if (r === old) continue;
+      const el = els[i];
+      if (!el) continue;
+      el.classList.toggle("is-hit", r === "hit");
+      el.classList.toggle("is-miss", r === "miss");
+      if (hide && !hideChanged) {
+        const bar = noteBars.current[i];
+        const concealed = noteVisibility === "played" ? !r : noteVisibility === "hidden" || firstInBar.get(bar) !== i;
+        el.classList.toggle("is-hidden", hide.has(bar) && concealed);
+      }
+    }
+    prev.results = results.slice(0, els.length);
+
+    // 4. Focus / hide sweeps (only when those props actually change)
+    if (focusChanged) {
+      const focus = focusKey ? new Set(focusKey.split(",").map(Number)) : null;
+      els.forEach((el, i) => el.classList.toggle("is-dim", focus !== null && !focus.has(noteBars.current[i])));
+      prev.focusKey = focusKey;
+    }
+    if (hideChanged) {
+      els.forEach((el, i) => {
+        const bar = noteBars.current[i];
+        const concealed = noteVisibility === "played" ? !results[i] : noteVisibility === "hidden" || firstInBar.get(bar) !== i;
+        el.classList.toggle("is-hidden", hide !== null && hide.has(bar) && concealed);
+      });
+      const linksHidden = hide !== null && noteVisibility !== "played";
+      if (linksHidden !== prev.linksHidden) {
+        linkGroups.current.forEach((el) => el.setAttribute("opacity", linksHidden ? "0" : "1"));
+        prev.linksHidden = linksHidden;
+      }
+      prev.hideKey = hideKey;
+      prev.vis = noteVisibility;
+    }
   }, [activeKey, focusKey, hideKey, noteVisibility, results, reentryCue, exercise, width, barsPerLine, showFingering, noteLabels]);
 
-  // The cursor slides to the active note; it is moved, never redrawn.
+  // GPU-composited HTML cursor slides behind the active note using cached coordinates — zero getBBox(), zero SVG repaints.
   useEffect(() => {
     const c = cursorEl.current;
     if (!c) return;
     const span = noteSpans.current[activeStep];
-    let x: number | null = null;
-    try {
-      const head = noteEls.current[activeStep]?.querySelector<SVGGraphicsElement>(".vf-notehead")?.getBBox?.();
-      if (head) x = head.x + head.width / 2 - CURSOR_WIDTH / 2;
-    } catch {
-      // not laid out (tests)
+    const box = noteBoxes.current[activeStep];
+    const scale = svgScale.current;
+    if (span && box) {
+      const x = (box.x + box.w / 2 - CURSOR_WIDTH / 2) * scale;
+      const y = span.top * scale;
+      c.style.width = `${(CURSOR_WIDTH * scale).toFixed(1)}px`;
+      c.style.height = `${(span.height * scale).toFixed(1)}px`;
+      c.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`;
     }
-    if (span && x !== null) {
-      c.setAttribute("height", String(span.height));
-      c.style.transform = `translate(${x}px, ${span.top}px)`;
-    }
-    c.classList.toggle("is-on", Boolean(span) && x !== null);
+    c.classList.toggle("is-on", Boolean(span && box));
   }, [activeStep, exercise, width, barsPerLine, showFingering, noteLabels, cursor]);
 
+  // Call-for-attention pulse via WAAPI (no forced getBoundingClientRect reflow).
   useEffect(() => {
     const c = cursorEl.current;
-    if (!c || !cursorPulse) return;
-    c.classList.remove("is-calling");
-    void c.getBoundingClientRect();
-    c.classList.add("is-calling");
+    if (!c || !cursorPulse || typeof c.animate !== "function") return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    c.animate(
+      [{ opacity: 1 }, { opacity: 0.45 }, { opacity: 1 }],
+      { duration: 900, iterations: 2, easing: "ease-out" },
+    );
   }, [cursorPulse]);
 
+  // Incremental bar highlight updates.
+  const markedStart = marked?.start ?? -1;
+  const markedEnd = marked?.end ?? -1;
   useEffect(() => {
-    barEls.current.forEach((el, i) => {
-      el.classList.toggle("is-marked", marked !== null && i >= marked.start && i <= marked.end);
-      el.classList.toggle("is-playing", i === playingBar);
-    });
-  }, [marked, playingBar, exercise, width, barsPerLine, showFingering]);
+    const bars = barEls.current;
+    if (!bars.length) return;
+    const prev = applied.current;
+    if (prev.playingBar !== playingBar) {
+      if (prev.playingBar >= 0) bars[prev.playingBar]?.classList.remove("is-playing");
+      if (playingBar >= 0) bars[playingBar]?.classList.add("is-playing");
+      prev.playingBar = playingBar;
+    }
+    if (prev.markedStart !== markedStart || prev.markedEnd !== markedEnd) {
+      bars.forEach((el, i) => {
+        el.classList.toggle("is-marked", markedStart >= 0 && i >= markedStart && i <= markedEnd);
+      });
+      prev.markedStart = markedStart;
+      prev.markedEnd = markedEnd;
+    }
+  }, [markedStart, markedEnd, playingBar, exercise, width, barsPerLine, showFingering]);
 
-  // Keep the cursor's line in view.
+  // Only check scroll when the active note moves to a different staff line (avoids per-note layout reads).
   useEffect(() => {
+    if (!autoScroll || activeStep < 0) return;
+    const span = noteSpans.current[activeStep];
+    if (!span || span.line === lastScrolledLine.current) return;
+    lastScrolledLine.current = span.line;
     const el = noteEls.current[activeStep];
-    if (!autoScroll || !el) return;
+    if (!el) return;
     const r = el.getBoundingClientRect();
-    const host = hostRef.current?.closest<HTMLElement>("[data-scroll-host]");
+    const host = wrapRef.current?.closest<HTMLElement>("[data-scroll-host]");
     if (host) {
       const h = host.getBoundingClientRect();
       if (r.top < h.top + 20 || r.bottom > h.bottom - 20) host.scrollBy({ top: r.top - h.top - h.height * 0.3, behavior: "smooth" });
@@ -630,9 +814,13 @@ export function Score({
   return (
     <div
       className={`score ${onBarClick ? "is-clickable" : ""}`}
-      ref={hostRef}
+      ref={wrapRef}
       aria-label="sight reading score"
       onClick={onClick}
-    />
+    >
+      {cursor ? <div className="score-cursor" ref={cursorEl} aria-hidden="true" /> : null}
+      <div className="score-svg" ref={hostRef} />
+      {hasPlayhead ? <div className="score-playhead" ref={playheadEl} aria-hidden="true" /> : null}
+    </div>
   );
-}
+});

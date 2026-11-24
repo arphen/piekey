@@ -105,16 +105,16 @@
   touch-action: pan-y;
 }
 
-/* a luminous abyssal canal under the river, deepest at the anchor line, breathing with the player's flow */
+/* a quiet abyssal canal under the river, painted once and cached (no per-flow gradient repaints) */
 .flow-river::before {
   content: "";
   position: absolute;
   inset: -14% -2%;
-  border-top: 1px solid rgba(154, 214, 146, calc(0.08 + var(--flow, 0.5) * 0.14));
-  border-bottom: 1px solid rgba(154, 214, 146, calc(0.08 + var(--flow, 0.5) * 0.14));
+  border-top: 1px solid rgba(154, 214, 146, 0.14);
+  border-bottom: 1px solid rgba(154, 214, 146, 0.14);
   background:
-    radial-gradient(60% 80% at var(--anchor) 50%, rgba(109, 230, 75, calc(0.05 + var(--flow, 0.5) * 0.08)), transparent 62%),
-    radial-gradient(84% 78% at var(--anchor) 52%, rgba(var(--flow-water), 0.84), rgba(var(--flow-water), 0.62) 48%, rgba(var(--flow-water), 0.26) 100%);
+    radial-gradient(60% 80% at var(--anchor) 50%, rgba(109, 230, 75, 0.08), transparent 62%),
+    radial-gradient(84% 78% at var(--anchor) 52%, rgba(var(--flow-water), 0.86), rgba(var(--flow-water), 0.64) 48%, rgba(var(--flow-water), 0.26) 100%);
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent), linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent);
   -webkit-mask-composite: source-in;
   mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent), linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent);
@@ -138,9 +138,14 @@
   will-change: transform;
 }
 
+.flow-paper {
+  position: relative;
+}
+
 .flow-chunk {
   position: absolute;
   top: 0;
+  contain: layout style paint;
 }
 
 .flow-paper svg {
@@ -190,9 +195,9 @@
   stroke: var(--flow-miss);
 }
 
-/* the glint of a note played right is vivid bioluminescent emerald */
-.flow .ss-glint.is-hit > b { border-color: #9cff63; box-shadow: 0 0 18px rgba(124, 242, 88, 0.7), inset 0 0 10px rgba(156, 255, 99, 0.35); }
-.flow .ss-glint.is-hit > i { background: #ecffcf; box-shadow: 0 0 8px 2px rgba(124, 242, 88, 0.88); }
+/* the glint of a note played right is vivid bioluminescent emerald (no heavy box-shadow blur) */
+.flow .ss-glint.is-hit > b { border-color: #9cff63; }
+.flow .ss-glint.is-hit > i { background: #ecffcf; }
 
 .flow .flow-seam {
   fill: color-mix(in srgb, var(--flow-leaf) 44%, transparent);
@@ -209,8 +214,9 @@
   margin-left: -1.25px;
   border-radius: 2px;
   background: linear-gradient(180deg, rgba(142, 255, 88, 0), var(--flow-now) 18%, #f3ffdc 50%, var(--flow-now) 82%, rgba(142, 255, 88, 0));
-  box-shadow: 0 0 12px 1.5px rgba(142, 255, 88, 0.56), 0 0 42px 8px rgba(109, 230, 75, 0.18);
+  box-shadow: 0 0 12px 1.5px rgba(142, 255, 88, 0.52), 0 0 34px 6px rgba(109, 230, 75, 0.16);
   opacity: 0.86;
+  will-change: transform, opacity;
   pointer-events: none;
   transition: opacity 0.45s;
 }

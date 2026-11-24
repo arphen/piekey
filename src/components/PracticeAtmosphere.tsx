@@ -25,7 +25,7 @@ export function PracticeAtmosphere({ input, warmth, flow, playing, hitSerial = 0
   useEffect(() => {
     if (hitSerial !== energy.current.lastHit) {
       energy.current.lastHit = hitSerial;
-      energy.current.hit = Math.min(1, energy.current.hit + 0.55);
+      energy.current.hit = Math.min(1, energy.current.hit + 0.14);
       energy.current.wake?.();
     }
   }, [hitSerial]);
@@ -71,20 +71,23 @@ export function PracticeAtmosphere({ input, warmth, flow, playing, hitSerial = 0
       const dt = Math.min(150, now - last);
       last = now;
       const s = state.current;
-      const heard = s.playing && now - energy.current.heard < 1400;
-      if (heard) energy.current.played += dt;
-      energy.current.hit *= Math.exp(-dt / 1400);
-      // Listening to a demo and leaving the room open cannot warm it up.
-      const warm = Math.max(0.25, Math.min(1, unit(s.warmth * 1.4) + unit(energy.current.played / 18000)));
-      const target = heard ? Math.min(1, warm * (0.45 + 0.55 * unit((s.flow - 0.25) / 0.65)) + energy.current.hit * 0.35) : energy.current.hit * 0.35;
-      bloom += (target - bloom) * (1 - Math.exp(-dt / (target > bloom ? 1800 : 5200)));
-      breath += ((heard ? energy.current.level : 0) - breath) * (1 - Math.exp(-dt / 420));
-      if (!media?.matches) drift += (dt / 1000) * (s.playing ? 1 + bloom * 0.8 : 0.45);
-      el.style.setProperty("--bloom", bloom.toFixed(3));
-      el.style.setProperty("--breath", (media?.matches ? 0 : breath).toFixed(3));
-      el.style.setProperty("--hit", (media?.matches ? 0 : energy.current.hit).toFixed(3));
-      el.style.setProperty("--drift-x", `${(Math.sin(drift / 18) * 2.6).toFixed(3)}%`);
-      el.style.setProperty("--drift-y", `${(Math.cos(drift / 23) * 2.0).toFixed(3)}%`);
+      const heard = s.playing && now - energy.current.heard < 2000;
+      if (heard) energy.current.played = Math.min(45000, energy.current.played + dt);
+      else energy.current.played = Math.max(0, energy.current.played - dt * 0.25);
+      energy.current.hit *= Math.exp(-dt / 2400);
+      // Slow old-engine warm-up: convex start, rising into the zone only with sustained clean playing.
+      const warm = Math.pow(unit(energy.current.played / 36000), 1.65);
+      const quality = 0.28 + 0.72 * unit((s.flow - 0.35) / 0.58);
+      const target = heard ? Math.min(1, warm * quality) : 0;
+      bloom += (target - bloom) * (1 - Math.exp(-dt / (target > bloom ? 6800 : 11500)));
+      breath += ((heard ? energy.current.level : 0) - breath) * (1 - Math.exp(-dt / 750));
+      if (!media?.matches) drift += (dt / 1000) * (s.playing ? 0.4 + bloom * 0.9 : 0.25);
+      const zone = Math.pow(unit(bloom), 1.9);
+      el.style.setProperty("--bloom", zone.toFixed(3));
+      el.style.setProperty("--breath", (media?.matches ? 0 : breath * (0.25 + 0.75 * bloom)).toFixed(3));
+      el.style.setProperty("--hit", (media?.matches ? 0 : energy.current.hit * bloom).toFixed(3));
+      el.style.setProperty("--drift-x", `${(Math.sin(drift / 22) * 2.2).toFixed(3)}%`);
+      el.style.setProperty("--drift-y", `${(Math.cos(drift / 27) * 1.8).toFixed(3)}%`);
     };
     frame = requestAnimationFrame(paint);
     return () => cancelAnimationFrame(frame);
