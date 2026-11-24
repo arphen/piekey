@@ -9,6 +9,7 @@ import { analyze, makeScale, parseChord } from "../song/harmony";
 import { applyResult, planSession, type Store } from "../song/leitner";
 import { seeded } from "../song/rand";
 import { isolateRhythm, rhythmSheet } from "../song/rhythm";
+import { entrySubdivision } from "../tunes/usePlayback";
 import { parsePassageId, passageId, passageLabel, passageOccurrences, passageTimeline } from "../tunes/passage";
 
 const note = (midi: number, startBeat: number): ReadingNote => ({
@@ -123,7 +124,7 @@ describe("a tune's harmony", () => {
   it("builds playable cards inside the position", () => {
     const deck = buildDeck(s, tl);
     expect(new Set(deck.cards.map((c) => c.id)).size).toBe(deck.cards.length);
-    expect(deck.intro).toHaveLength(deck.cards.length);
+    expect(deck.intro).toHaveLength(deck.cards.filter((c) => !c.once).length);
     for (const c of deck.cards) {
       expect(c.last).toBeGreaterThanOrEqual(c.first);
       for (const st of c.steps) if (st) expect(st.fret).toBeLessThanOrEqual(MAX_FRET);
@@ -168,8 +169,12 @@ describe("the card box", () => {
     }
   });
 
-  it("plans due cards first, a few new ones, a scale card to warm up", () => {
+  it("plans opening melody chunks first, then due cards, new ones, and a scale card to warm up", () => {
     const store: Store = { v: 1, cards: {}, sessions: [], settings: { newPerSession: 3, guide: false, voice: false, window: null } };
+    const opening = planSession(deck, store, "2026-11-13");
+    expect(opening.every((id) => deck.cards.find((c) => c.id === id)?.family === "melody")).toBe(true);
+    const gate = deck.cards.find((c) => c.after)?.after;
+    if (gate) store.cards[gate] = { box: 2, due: "2026-11-20", bpm: 72, seen: 1, clean: 1, last: "clean" };
     const first = planSession(deck, store, "2026-11-13");
     expect(first).toHaveLength(3);
     expect(deck.cards.find((c) => c.id === first[0])?.family).toBe("scales");
@@ -178,6 +183,16 @@ describe("the card box", () => {
     const next = planSession(deck, store, "2026-11-13");
     expect(next).toContain(deck.intro[5]);
     expect(next).not.toContain(deck.intro[6]);
+  });
+
+  it("picks matching count-in subdivision for off-beat phrase entries", () => {
+    expect(entrySubdivision(0)).toBe(1);
+    expect(entrySubdivision(1)).toBe(1);
+    expect(entrySubdivision(0.5)).toBe(2);
+    expect(entrySubdivision(1.5)).toBe(2);
+    expect(entrySubdivision(0.25)).toBe(4);
+    expect(entrySubdivision(0.75)).toBe(4);
+    expect(entrySubdivision(1 / 3)).toBe(3);
   });
 });
 

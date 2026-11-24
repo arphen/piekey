@@ -94,7 +94,7 @@ describe("explainScheduling", () => {
   const sheet = parseTuneEntry(STARTER_ENTRY);
   const tl = buildTimeline(sheet);
   const deck = buildDeck(sheet, tl, {});
-  const firstMelody = deck.cards.find((c) => c.family === "melody" && !c.run && c.step?.kind !== "tune")!;
+  const firstMelody = deck.cards.find((c) => c.family === "melody" && !c.run && !c.once && c.step?.kind !== "tune")!;
 
   it("explains consolidating vs cruising pacing zones from recent attempts", () => {
     const day = "2026-11-24";
@@ -120,6 +120,8 @@ describe("explainScheduling", () => {
   it("surfaces detected weaknesses, active focus arc day, and playable drill cards", () => {
     const day = "2026-11-24";
     const store = emptyStore();
+    const opening = deck.cards.find((c) => c.after)?.after;
+    if (opening) store.cards[opening] = { box: 2, due: addDays(day, 3), seen: 2, clean: 2, last: "clean", bpm: 72 };
     store.cards[firstMelody.id] = { box: 2, due: day, seen: 5, clean: 2, last: "ok", bpm: 72 };
     // Create strong leap-miss evidence (>20 leap notes, high miss rate compared to base)
     store.history = Array.from({ length: 6 }, (_, i) =>

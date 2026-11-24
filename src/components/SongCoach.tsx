@@ -52,6 +52,7 @@ import { chooseShape, keepOwnShape, useShapeBook } from "../song/shapeBook";
 import { knownLine, placeOwn, shapeFrets, shapeLine, shapeOptions, variantId, type ShapeBook, type ShapeOption } from "../song/scaleShapes";
 import { useHeardPass } from "../song/useHeardPass";
 import { GuitarToolsRoom } from "../tools/GuitarTools";
+import { TuneCheck, isTuned } from "../tools/TuneCheck";
 import { PoolRoom, usePoolCalm, usePoolEmit } from "../pool/PoolRoom";
 import { ROOM_MODES, useRoomRender, type RoomMode } from "../pool/mode";
 import { Glyph } from "./Glyph";
@@ -91,7 +92,7 @@ interface SongCoachProps {
 
 export interface RoomRequest {
   serial: number;
-  kind: "tuner" | "metronome" | "free";
+  kind: "tuner" | "metronome" | "free" | "settings";
 }
 
 export interface RoomHandle {
@@ -384,6 +385,7 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
   const [menu, setMenu] = useState(false);
   const [free, setFree] = useState(false); // free play: nothing asked, a click that follows the player
   const [freeInstruments, setFreeInstruments] = useState(false);
+  const [tuned, setTuned] = useState(isTuned);
   const [choosingTune, setChoosingTune] = useState(false);
   const [tools, setTools] = useState<RoomTool | null>(null);
   const [full, setFull] = useState(() => Boolean(document.fullscreenElement));
@@ -505,7 +507,7 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
     onClose();
   };
   const beginNow = (self = false) => {
-    if (calib || menu || free || choosingTune || tools || !plan.length) return;
+    if (calib || menu || free || choosingTune || tools || !plan.length || input.status === "listening" && !tuned) return;
     saveArc(shaped.arc);
     const onTime = shaped.arc && ["rushing", "dragging", "unsteady"].includes(shaped.arc.cls);
     setGapIds(new Set(onTime ? shaped.blocks.find((b) => b.role === "focus")?.cards ?? [] : []));
@@ -813,7 +815,7 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
   ];
 
   // keys: all optional. Space pauses, arrows (or a page-turner pedal) skip and go again, −/+ tempo, S settings
-  const act = { session, menu, pad, calib, free, freeInstruments, choosingTune, tools, endCalib, close, beginNow, openMenu, closeMenu, openPad, closePad, openFree, closeFree, openTools, inExercise, barAlone, flowing, scoreZoom, parked, running, finished };
+  const act = { session, menu, pad, calib, free, freeInstruments, choosingTune, tools, endCalib, close, beginNow, openMenu, closeMenu, openPad, closePad, openFree, closeFree, openTools, closeTools, inExercise, barAlone, flowing, scoreZoom, parked, running, finished };
   const actRef = useRef(act);
   actRef.current = act;
 
@@ -851,7 +853,8 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
     if (!request || parked || served.current === request.serial) return;
     served.current = request.serial;
     const a = actRef.current;
-    if (request.kind === "free") { if (!a.free) a.openFree(); }
+    if (request.kind === "settings") { if (a.tools) { a.closeTools(); window.setTimeout(() => { if (!actRef.current.menu) actRef.current.openMenu(); }, 0); } else if (!a.menu) a.openMenu(); }
+    else if (request.kind === "free") { if (!a.free) a.openFree(); }
     else if (a.tools !== request.kind) a.openTools(request.kind);
   }, [request, parked, served]);
   useEffect(() => () => onLive?.(false), [onLive]);
@@ -956,6 +959,8 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
           onChooseTune={onTune ? openTunePicker : undefined}
           onTools={openTools}
           keysOn={between}
+          tuned={tuned}
+          onTuned={() => setTuned(true)}
           guests={mixable.map((o) => o.sheet.title)}
           mix={mix}
           focus={focus}
@@ -1036,8 +1041,8 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
 
 function RoomInstruments({ onOpen, ready = false, held = null, disabled = false }: { onOpen(tool: RoomTool): void; ready?: boolean; held?: number | null; disabled?: boolean }) {
   return <nav className={`ss-instruments ${ready ? "ss-instruments--ready" : "ss-instruments--running"}`} aria-label="Practice instruments">
-    <button type="button" onClick={() => onOpen("tuner")} disabled={disabled} title={ready ? "Hold C in any octave" : "Guitar menu · Tune & session · G♯"}><Glyph name="tools" size={17} /><span>Tuner</span>{ready ? <NoteTag midi={READY_KEYS[6]} held={held === 6} octave={false} /> : null}</button>
-    <button type="button" onClick={() => onOpen("metronome")} disabled={disabled} title={ready ? "Hold C for the instruments, then switch with the guitar menu" : "Guitar menu · Tune & session · C"}><Glyph name="free" size={18} /><span>Metronome</span></button>
+    <button type="button" onClick={() => onOpen("tuner")} disabled={disabled} title={ready ? "Hold C in any octave" : "Tuner · Guitar menu → Tune & session"}><Glyph name="tools" size={ready ? 17 : 14} /><span>Tuner</span>{ready ? <NoteTag midi={READY_KEYS[6]} held={held === 6} octave={false} /> : null}</button>
+    <button type="button" onClick={() => onOpen("metronome")} disabled={disabled} title={ready ? "Hold C for the instruments, then switch with the guitar menu" : "Metronome · Guitar menu → Tune & session"}><Glyph name="free" size={ready ? 18 : 15} /><span>Metronome</span></button>
   </nav>;
 }
 
@@ -1059,6 +1064,8 @@ function Ready({
   onChooseTune,
   onTools,
   keysOn,
+  tuned,
+  onTuned,
   guests,
   mix,
   onMix,
@@ -1082,6 +1089,8 @@ function Ready({
   onChooseTune?(): void;
   onTools(tool: RoomTool): void;
   keysOn: boolean;
+  tuned: boolean;
+  onTuned(): void;
   guests: string[]; // the library's other tunes
   mix: boolean;
   onMix(): void;
@@ -1090,7 +1099,7 @@ function Ready({
 }) {
   const byId = useMemo(() => new Map(deck.cards.map((c) => [c.id, c])), [deck]);
   // a short 3-note fretted phrase begins, leaving single held option keys and open strings free
-  const { ring, notes: phraseNotes } = useStartPhrase(input, plan.length > 0 && keysOn, onBegin);
+  const { ring, notes: phraseNotes } = useStartPhrase(input, plan.length > 0 && keysOn && tuned, onBegin);
   const held = useNoteKeys(input, keysOn, [READY_KEYS[0], READY_KEYS[1], guests.length ? READY_KEYS[2] : null, READY_KEYS[3], READY_KEYS[4], onChooseTune ? READY_KEYS[5] : null, READY_KEYS[6]], (k) => (k === 0 ? onFree() : k === 1 ? onSettings() : k === 2 ? onMix() : k === 3 ? onLength() : k === 4 ? onSelfBegin() : k === 5 ? onChooseTune?.() : onTools("tuner")), true);
   const from = new Set(plan.map((id) => byId.get(id)?.tune).filter(Boolean));
   const listening = input.status === "listening" && !input.paused;
@@ -1099,7 +1108,7 @@ function Ready({
   const say = unavailablePassage ? "Choose this passage again in Songs" : !plan.length
     ? deck.cards.length ? "A little more time for this one" : "No exercise in this score yet"
     : listening
-      ? "Ready when you are"
+      ? tuned ? "Ready when you are" : "Tune up first"
       : input.status === "starting"
         ? "Connecting your guitar…"
         : input.paused
@@ -1182,16 +1191,17 @@ function Ready({
           </ol>
         ) : null}
         <p className="ss-say" aria-live="polite">{say}</p>
+        {listening && plan.length > 0 && !tuned ? <TuneCheck input={input} onDone={onTuned} onSkip={onTuned} /> : null}
         <p className="ss-ready-instruction">
           {unavailablePassage ? "Return to Songs to choose a passage with melody notes in this arrangement." : !plan.length
             ? deck.cards.length ? "Hold F below for more time, or open free play." : "Free play is always available."
-            : listening ? "Play 3 fretted notes to begin · open strings stay free" : input.paused ? "Tap to wake audio, then play to begin." : "Connect an interface or allow the microphone."}
+            : listening ? tuned ? "Play 3 fretted notes to begin · open strings stay free" : "Tune every string, then we listen once more" : input.paused ? "Tap to wake audio, then play to begin." : "Connect an interface or allow the microphone."}
         </p>
         {input.error ? <p className="ss-input-detail" role="status">{input.error}</p> : null}
         <button
           type="button"
           className="ss-begin"
-          disabled={!keysOn || unavailablePassage || input.status === "starting" || (listening && !plan.length)}
+          disabled={!keysOn || unavailablePassage || input.status === "starting" || (listening && (!plan.length || !tuned))}
           onClick={listening ? onBegin : () => void input.start()}
         >
           {startLabel}<span aria-hidden="true">↗</span>
@@ -1378,9 +1388,6 @@ function Running({
   const say = coachLine(card, s, s.passes[s.passes.length - 1]);
   const curRole = roleByPos[s.pos] ?? null;
   const roleContext = curRole === "focus" && focusWhy ? focusWhy : curRole === "side" && sideWhy ? sideWhy : "";
-  const marginInsight = card.insight ?? card.why;
-  const hasTempoGoal = card.goalBpm > card.bpm && card.family !== "ear" && card.family !== "fretboard";
-  const tempoPct = hasTempoGoal ? Math.max(0, Math.min(1, (s.bpm - card.bpm) / Math.max(1, card.goalBpm - card.bpm))) : 1;
   const aidLevel = s.phase === "time" ? s.shadow?.level() ?? 0 : 0;
 
   // the three ways to work on it: each one a note away
@@ -1415,10 +1422,13 @@ function Running({
     result: "Pass complete",
   }[s.phase];
   const phase = s.paused ? s.away ? "Resting" : s.listeningOff ? "Input paused" : "Paused" : turnaround ? "Turnaround" : initialCount ? "Count-in" : phaseName;
+  const showMeter = s.phase !== "intro" && s.phase !== "listen" && s.phase !== "result";
+  const hasMeter = showMeter && (s.run >= 4 || (s.phase === "time" && (s.passLog.length > 0 || Boolean(s.playback.lastPass))));
+  const hasCoach = Boolean(say.text || pips || hasMeter);
+  const showBeatRail = (s.phase === "time" || s.phase === "listen") && !s.paused;
 
   return (
     <div className={`ss-run phase-${s.phase} ${s.paused ? "is-paused" : ""} ${turnaround ? "is-turnaround" : ""}`}>
-      <RoomInstruments onOpen={onTools} />
       <ol className="ss-progress" aria-label={`exercise ${s.pos + 1} of ${s.queue.length}`}>
         {s.queue.map((id, i) => {
           const o = s.log.find((x) => x.at === i);
@@ -1429,46 +1439,27 @@ function Running({
       </ol>
 
       <header className="ss-head" key={`${s.pos}:${card.id}`} data-pool="calm">
-        <div className="ss-phasebar">
-          <span className="ss-exercise-count">{String(s.pos + 1).padStart(2, "0")} <em>/ {String(s.queue.length).padStart(2, "0")}</em></span>
-          {curRole ? <span className={`ss-role-pill is-${curRole}`}>{ROLE_LABEL[curRole]}{roleContext ? ` · ${roleContext}` : ""}</span> : null}
-          <span className="ss-phase-name" aria-live="polite"><i />{phase}</span>
-          {hasTempoGoal ? (
-            <span className="ss-tempo-goal" title={`Current tempo ${s.bpm} bpm toward ${card.goalBpm} bpm goal`}>
-              <span>♩ {s.bpm}<em>/{card.goalBpm}</em></span>
-              <i aria-hidden="true"><b style={{ width: `${Math.round(tempoPct * 100)}%` }} /></i>
-            </span>
-          ) : null}
-          <span className={`ss-connection ${listening ? "is-live" : ""}`}><i />{s.selfGuided ? "Self-guided · unscored" : listening ? "Input live" : "Input off"}</span>
+        <div className="ss-topbar">
+          <RoomInstruments onOpen={onTools} />
+          <div className="ss-status">
+            <span className="ss-exercise-count">{String(s.pos + 1).padStart(2, "0")}<em>/{String(s.queue.length).padStart(2, "0")}</em></span>
+            <span className="ss-phase-name" aria-live="polite"><i />{phase}</span>
+            {curRole ? <span className={`ss-role-pill is-${curRole}`} title={roleContext || undefined}>{ROLE_LABEL[curRole]}</span> : null}
+            {s.selfGuided || !listening ? <span className="ss-connection"><i />{s.selfGuided ? "Unscored" : "Input off"}</span> : null}
+          </div>
+          <span className="ss-topbar-end" aria-hidden="true" />
         </div>
-        <div className="ss-played-controls">
-          <span className="ss-section-label">{free || wholeTune ? "Every note is music · use the guitar menu for controls" : "Hold a shown note · exact octave"}</span>
-          {!free ? (
-            <ol className="ss-trail">
-              {trail.map((r, i) => (
-                <li key={r.id} className={stateOf(r.id)}>
-                  <button type="button" onClick={r.fire} disabled={s.paused || s.phase === "result"} aria-label={`${r.label}${playedShortcuts && r.key !== null ? ` · hold ${keyName(r.key)}` : ""}`} aria-current={s.phase === r.id ? "step" : undefined}>
-                    <NoteTag midi={playedShortcuts ? r.key : null} held={held === i} />
-                    <span>{r.label}</span>
-                  </button>
-                </li>
-              ))}
-              <li className="ss-trail-next">
-                <button type="button" onClick={s.next} disabled={s.paused} aria-label={`${s.selfGuided ? "Done practising" : "Next exercise"}${playedShortcuts && s.keys.next !== null ? ` · hold ${keyName(s.keys.next)}` : ""}`}>
-                  <NoteTag midi={playedShortcuts ? s.keys.next : null} held={held === 3} />
-                  <span>{s.selfGuided ? "Done practising" : "Next exercise"}</span>
-                </button>
-              </li>
-            </ol>
-          ) : null}
+
+        <div className="ss-titlebar">
+          <p className="ss-kicker">
+            <span className="ss-fam">{FAMILY_LABEL[card.family]}</span>
+            {mixed ? ` · ${card.tune}` : ""}
+            {s.box === 0 ? " · new" : ""}
+          </p>
+          <h1 className="ss-title">{card.title}</h1>
+          {shapes.length > 1 && !s.spot ? <ShapePicker card={card} shapes={shapes} onShape={onShape} /> : null}
         </div>
-        <p className="ss-kicker">
-          <span className="ss-fam">{FAMILY_LABEL[card.family]}</span>
-          {mixed ? ` · ${card.tune}` : ""}
-          {s.box === 0 ? " · new" : ""}
-        </p>
-        <h1 className="ss-title">{card.title}</h1>
-        {shapes.length > 1 && !s.spot ? <ShapePicker card={card} shapes={shapes} onShape={onShape} /> : null}
+
         {offer ? (
           <div className="ss-shape-offer" role="status">
             <span>Heard <b>{passName(offer)}</b> · {offer.length} notes</span>
@@ -1479,6 +1470,7 @@ function Running({
             <button type="button" className="ss-shape-offer-x" onClick={onDismiss} aria-label="Not this one">×</button>
           </div>
         ) : null}
+
         {s.spot ? (
           <p className="ss-why ss-spotline" key="spot">
             <b>{barsOf(card, sheet)}</b>
@@ -1486,32 +1478,32 @@ function Running({
             {card.to > card.from ? "themselves" : "itself"}
           </p>
         ) : (
-          <>
-            <p className="ss-why">
-              {card.detail} {card.why}
-            </p>
-            {marginInsight && s.phase !== "intro" && s.phase !== "result" ? (
-              <p className="ss-insight" aria-live="off">{marginInsight}</p>
-            ) : null}
-          </>
+          <p className="ss-why">
+            {card.detail} {card.why}
+          </p>
         )}
+
         {s.memoryStage ? (
           <div className="ss-memory-aid">
-            <span aria-live="polite">{s.memoryReview ? "Later review" : "Memory practice"} · {s.memoryStage === "page" ? "page shown" : s.memoryStage === "landmarks" ? "bar-start notes" : "notes hidden"} · chords remain</span>
+            <span aria-live="polite">{s.memoryReview ? "Memory review" : "Memory"} · {s.memoryStage === "page" ? "page shown" : s.memoryStage === "landmarks" ? "landmarks" : "hidden"}</span>
             <button type="button" onClick={s.toggleMemoryPage} disabled={s.phase === "result" || Boolean(s.spot)}>{s.memoryStage === "page" ? "Use landmarks" : "Reveal page"}</button>
-            <SummonVisual then="D♯" />
           </div>
         ) : null}
       </header>
 
       <div className="ss-stage">
-        {(s.phase === "time" || s.phase === "listen") && !s.paused ? (
+        {showBeatRail ? (
           <StageBeatRail
             beat={s.beat}
             counting={initialCount}
             reentry={s.phase === "time" ? s.reentry : 0}
             turnaround={turnaround}
             bpm={s.bpm}
+            entryOffset={
+              card.tl.targets[card.first] && card.tl.slots[card.from]
+                ? Math.max(0, card.tl.targets[card.first].t - card.tl.slots[card.from].start)
+                : 0
+            }
           />
         ) : null}
         <div className="ss-material">
@@ -1552,7 +1544,7 @@ function Running({
                 ? input.error ?? (input.status === "starting" ? "Listening will begin automatically once the input opens." : input.status === "idle" ? "Allow the microphone or play along without scoring." : "The session carries on when the guitar is connected.")
                 : s.away
                   ? "A note brings the session back."
-                  : "Space to carry on · low E for the guitar menu"}
+                  : "Space to carry on · high e fret 11 for the guitar menu"}
             </small>
             {s.listeningOff ? <button type="button" onClick={() => void input.start()} disabled={input.status === "starting"}>{input.status === "starting" ? "Opening input…" : input.paused ? "Resume listening" : input.status === "idle" ? "Enable listening" : "Reconnect input"}</button> : null}
             {s.listeningOff ? <button type="button" onClick={s.continueWithoutScoring}>{input.status === "idle" ? "Practise without scoring" : "Continue without scoring"}</button> : null}
@@ -1561,30 +1553,42 @@ function Running({
         {s.phase === "result" && s.outcome ? <ResultMark o={s.outcome} titleOf={(id) => byId.get(id)?.title ?? ""} secret={s.outcome.secret} /> : null}
       </div>
 
-      <div className="ss-coach">
-        <p className={`ss-say ${say.tone ? `is-${say.tone}` : ""}`} aria-live="polite" key={say.text}>
-          {say.text || " "}
-        </p>
-        <span className={`ss-takes ${pips ? "" : "is-hidden"}`} aria-hidden="true">
-          {Array.from({ length: Math.max(1, s.needClean) }, (_, i) => (
-            <i key={i} className={i < s.takes.clean ? "is-on" : ""} />
-          ))}
-        </span>
+      <div className={`ss-coach ${hasCoach ? "has-copy" : ""}`}>
+        {hasCoach ? (
+          <div className="ss-coach-row">
+            {say.text ? (
+              <p className={`ss-say ${say.tone ? `is-${say.tone}` : ""}`} aria-live="polite" key={say.text}>
+                {say.text}
+              </p>
+            ) : null}
+            {pips ? (
+              <span className="ss-takes" aria-hidden="true">
+                {Array.from({ length: Math.max(1, s.needClean) }, (_, i) => (
+                  <i key={i} className={i < s.takes.clean ? "is-on" : ""} />
+                ))}
+              </span>
+            ) : null}
+            {hasMeter ? (
+              <span className="ss-meter" aria-hidden="true">
+                {s.run >= 4 ? (
+                  <span className={`ss-streak ${s.run >= 16 ? "is-hot" : s.run >= 8 ? "is-warm" : ""}`} title="notes landed in a row">
+                    <b key={s.run}>{s.run}</b> streak
+                  </span>
+                ) : null}
+                {s.phase === "time" && s.passLog.length ? (
+                  <span className="ss-passes" title="each time through: hollow bar is Pass 1 settle-in; solid green landed cleanly">
+                    {s.passLog.slice(-8).map((entry, i) => (
+                      <i key={i} className={entry.settle ? "is-settle" : entry.clean ? "is-in" : ""} style={{ height: `${Math.max(12, entry.share * 100)}%` }} />
+                    ))}
+                    <em style={{ bottom: `${card.pass * 100}%` }} />
+                  </span>
+                ) : null}
+                {s.phase === "time" && s.playback.lastPass ? <TimingStrip at={s.playback.lastPass.at} first={card.first} last={card.last} beatMs={60000 / s.bpm} /> : null}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
         <span className="ss-flow" aria-hidden="true" title="how it is going" />
-        <span className="ss-meter" aria-hidden="true">
-          <span className={`ss-streak ${s.run >= 4 ? "" : "is-hidden"} ${s.run >= 16 ? "is-hot" : s.run >= 8 ? "is-warm" : ""}`} title="notes landed in a row">
-            <b key={s.run}>{s.run}</b> in a row
-          </span>
-          {s.phase === "time" && s.passLog.length ? (
-            <span className="ss-passes" title="each time through: hollow bar is Pass 1 settle-in; solid green landed cleanly">
-              {s.passLog.slice(-8).map((entry, i) => (
-                <i key={i} className={entry.settle ? "is-settle" : entry.clean ? "is-in" : ""} style={{ height: `${Math.max(12, entry.share * 100)}%` }} />
-              ))}
-              <em style={{ bottom: `${card.pass * 100}%` }} />
-            </span>
-          ) : null}
-          {s.phase === "time" && s.playback.lastPass ? <TimingStrip at={s.playback.lastPass.at} first={card.first} last={card.last} beatMs={60000 / s.bpm} /> : null}
-        </span>
       </div>
 
       <footer className="ss-foot" data-pool="calm">
@@ -1592,18 +1596,51 @@ function Running({
           <Ear input={input} size="small" ring={ring} tag={earTag} />
           <span className="ss-menu-access">
             <button type="button" onClick={onGuitarMenu}>Guitar menu</button>
-            <SummonVisual />
+            <SummonVisual compact />
           </span>
         </span>
+        {!free ? (
+          <ol className="ss-trail" aria-label={playedShortcuts ? "Hold a shown note in the exact octave" : "Exercise controls"}>
+            {trail.map((r, i) => (
+              <li key={r.id} className={stateOf(r.id)}>
+                <button
+                  type="button"
+                  onClick={r.fire}
+                  disabled={s.paused || s.phase === "result"}
+                  title={playedShortcuts && r.key !== null ? `${r.label} · hold ${keyName(r.key)} (exact octave)` : r.label}
+                  aria-label={`${r.label}${playedShortcuts && r.key !== null ? ` · hold ${keyName(r.key)}` : ""}`}
+                  aria-current={s.phase === r.id ? "step" : undefined}
+                >
+                  <NoteTag midi={playedShortcuts ? r.key : null} held={held === i} />
+                  <span>{r.label}</span>
+                </button>
+              </li>
+            ))}
+            <li className="ss-trail-next">
+              <button
+                type="button"
+                onClick={s.next}
+                disabled={s.paused}
+                title={playedShortcuts && s.keys.next !== null ? `${s.selfGuided ? "Done practising" : "Next exercise"} · hold ${keyName(s.keys.next)} (exact octave)` : s.selfGuided ? "Done practising" : "Next exercise"}
+                aria-label={`${s.selfGuided ? "Done practising" : "Next exercise"}${playedShortcuts && s.keys.next !== null ? ` · hold ${keyName(s.keys.next)}` : ""}`}
+              >
+                <NoteTag midi={playedShortcuts ? s.keys.next : null} held={held === 3} />
+                <span>{s.selfGuided ? "Done" : "Next"}</span>
+              </button>
+            </li>
+          </ol>
+        ) : <span className="ss-foot-note">Every note is music</span>}
         <div className="ss-side" data-pool="calm">
-          <span className={`ss-aid ${aidLevel >= 0.08 ? "is-on" : ""}`} style={{ opacity: s.phase === "time" ? Math.min(1, aidLevel * 2.1) : 0 }} title="Adaptive guide melody blending in where needed and fading out as you carry it">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M3 12c2-5 4-5 6 0s4 5 6 0 4-5 6 0" />
-            </svg>
-            <em>with band</em>
-          </span>
-          {s.phase === "time" ? <BeatMeter drift={s.playback.drift} beatMs={60000 / s.bpm} /> : null}
-          <span className={`ss-tempo-cluster ${own ? "is-own" : ""}`} title={own ? "your own tempo" : s.target > s.bpm ? `the click, on its way to ${s.target}` : "tempo"}>
+          {s.phase === "time" && aidLevel >= 0.08 ? (
+            <span className="ss-aid is-on" style={{ opacity: Math.min(1, aidLevel * 2.1) }} title="Adaptive guide melody blending in where needed and fading out as you carry it">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M3 12c2-5 4-5 6 0s4 5 6 0 4-5 6 0" />
+              </svg>
+              <em>guide</em>
+            </span>
+          ) : null}
+          {s.phase === "time" && s.playback.drift !== null ? <BeatMeter drift={s.playback.drift} beatMs={60000 / s.bpm} /> : null}
+          <span className={`ss-tempo-cluster ${own ? "is-own" : ""}`} title={own ? "your own tempo" : card.goalBpm > card.bpm ? `tempo ${s.bpm} bpm · goal ${card.goalBpm} bpm` : "tempo"}>
             <BeatPulse beat={s.beat} bpm={own ? s.pulse ?? s.bpm : s.bpm} onTempo={stepTempo} />
             {lifted && s.tempoLift ? <b className="ss-tempo-lift">+{s.tempoLift.to - s.tempoLift.from} → {s.tempoLift.to}</b> : s.phase === "time" && s.target > s.bpm ? <em>→ {s.target}</em> : null}
           </span>
@@ -1702,6 +1739,18 @@ interface Ghost {
   wy: number;
 }
 
+function entryLabel(offsetBeats: number): string | null {
+  if (!(offsetBeats > 1e-6)) return null;
+  const beatNum = Math.floor(offsetBeats + 1e-6) + 1;
+  const frac = offsetBeats - Math.floor(offsetBeats + 1e-6);
+  if (Math.abs(frac) < 0.05) return `enters on beat ${beatNum}`;
+  if (Math.abs(frac - 0.5) < 0.08) return `enters on ${beatNum} &`;
+  if (Math.abs(frac - 0.25) < 0.08) return `enters on ${beatNum} e`;
+  if (Math.abs(frac - 0.75) < 0.08) return `enters on ${beatNum} a`;
+  if (Math.abs(frac - 1 / 3) < 0.06 || Math.abs(frac - 2 / 3) < 0.06) return `enters off beat ${beatNum}`;
+  return null;
+}
+
 /**
  * Eye-level beat rail directly above the score: 4 tactile beat pills pulsing strictly on the heard
  * audio clock (beat 1 anchored brightly), plus an unmistakable "Bar 1 in N" re-entry countdown
@@ -1713,19 +1762,22 @@ function StageBeatRail({
   reentry,
   turnaround,
   bpm,
+  entryOffset = 0,
 }: {
   beat: SessionApi["beat"];
   counting: number;
   reentry: number;
   turnaround: boolean;
   bpm: number;
+  entryOffset?: number;
 }) {
   const total = Math.max(2, Math.min(8, beat.beats || 4));
   const active = beat.active ? beat.index : -1;
+  const entry = entryLabel(entryOffset);
   const tag = counting
-    ? `Count-in · bar 1 in ${counting}`
+    ? `Count-in · bar 1 in ${counting}${entry ? ` · ${entry}` : ""}`
     : reentry > 0
-      ? `${turnaround ? "Turnaround" : "Next pass"} · bar 1 in ${reentry}`
+      ? `${turnaround ? "Turnaround" : "Next pass"} · bar 1 in ${reentry}${entry ? ` · ${entry}` : ""}`
       : null;
   return (
     <div
@@ -2076,9 +2128,10 @@ function LineStage({ card, session: s, sheet, labels }: { card: Card; session: S
     [landedOn, landedAs, landed, s.follow.take],
   );
   const lineHideBars = useMemo(() => (card.memory ? written.bars.map((_, i) => i) : null), [card.memory, written]);
+  const showHarm = card.family !== "scales" && card.kind !== "spider";
   return (
-    <div className="ss-line">
-      {card.family === "scales" || card.kind === "spider" ? null : <Harm ctx={ctx} scale />}
+    <div className={`ss-line ${showHarm ? "has-harm" : "no-harm"} ${neck === "away" ? "is-neck-away" : ""}`}>
+      {showHarm ? <Harm ctx={ctx} scale /> : null}
       <div className="ss-score ss-score--line" data-scroll-host ref={host} data-pool="rock calm" data-pool-anchor="focus">
         <Score
           exercise={written}
@@ -2453,7 +2506,9 @@ function PromptStage({ card, session: s, labels }: { card: Card; session: Sessio
         <b>{prompt?.text ?? ""}</b>
         <span>{prompt?.sub ?? ""}</span>
       </p>
-      <Fretboard notes={[]} fretCount={12} position={position} labels={labels} pattern={pattern} activeStep={prompt?.show ? pattern.length - 1 : -1} />
+      <div className="ss-board ss-board--stage">
+        <Fretboard notes={[]} fretCount={12} position={position} labels={labels} pattern={pattern} activeStep={prompt?.show ? pattern.length - 1 : -1} />
+      </div>
       <ol className="ss-strip" aria-label="the notes asked for">
         {(card.prompts ?? []).map((_, j) => {
           const i = card.first + j;
@@ -2482,7 +2537,9 @@ function ImprovStage({ card, session: s, labels }: { card: Card; session: Sessio
   return (
     <div className="ss-improv">
       <Harm ctx={ctx} scale />
-      <Fretboard notes={notes} fretCount={Math.max(12, p + 5)} position={position} labels={labels} />
+      <div className="ss-board ss-board--stage">
+        <Fretboard notes={notes} fretCount={Math.max(12, p + 5)} position={position} labels={labels} />
+      </div>
       <ol className="ss-strip" aria-label="the strong beats">
         {card.tl.targets.slice(card.first, card.last + 1).map((_, k) => {
           const i = card.first + k;
@@ -2680,7 +2737,7 @@ function Drawer({
             label="Loop wrap"
             value={s.loopMode}
             options={[
-              { value: "adaptive" as LoopMode, label: "adaptive", title: "Live-band turnaround while settling, tightening into continuous groove once locked in" },
+              { value: "adaptive" as LoopMode, label: "adaptive", title: "Continuous circle on short phrases; live-band turnaround on longer sections while learning" },
               { value: "turnaround" as LoopMode, label: "turnaround", title: "Always play a live-band turnaround bar between passes" },
               { value: "continuous" as LoopMode, label: "continuous", title: "Loop continuously with no turnaround bar" },
             ]}

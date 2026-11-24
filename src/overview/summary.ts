@@ -1,6 +1,6 @@
 import { tunePath, type TunePath } from "./progress";
 import type { Card, Deck, Family } from "../song/deck";
-import { BOXES, boxCounts, today, unlocked, type Store } from "../song/leitner";
+import { BOXES, boxCounts, today, unlocked, waiting, type Store } from "../song/leitner";
 import type { LeadSheet } from "../tunes/musicxml";
 import type { ReadingExercise } from "../core/contract";
 import { goalDeck, goalProgress, type Goal } from "../song/goals";
@@ -80,14 +80,14 @@ export function nextUnits(deck: Deck, store: Store, count = 3, day = today()): U
   };
 
   const due = deck.intro
-    .filter((id) => store.cards[id] && store.cards[id].due <= day)
+    .filter((id) => store.cards[id] && store.cards[id].due <= day && !byId.get(id)?.once)
     .sort(
       (a, b) =>
         store.cards[a].box - store.cards[b].box ||
         store.cards[a].due.localeCompare(store.cards[b].due) ||
         (order.get(a) ?? 0) - (order.get(b) ?? 0),
     );
-  const fresh = deck.intro.filter((id) => !store.cards[id] && unlocked(byId.get(id), store));
+  const fresh = deck.intro.filter((id) => !store.cards[id] && unlocked(byId.get(id), store) && !waiting(byId.get(id), store));
 
   for (const id of [...due, ...fresh]) add(id);
 

@@ -267,15 +267,26 @@ export function unlocked(card: Card | undefined, store: Store): boolean {
   return (store.cards[card.needs]?.box ?? 0) >= UNLOCK_BOX || (store.credit?.[card.id] ?? 0) >= 1;
 }
 
+/** A side exercise of a tune still being met: it is introduced once the tune's opening is clean. */
+export function waiting(card: Card | undefined, store: Store): boolean {
+  return Boolean(card?.after && (store.cards[card.after]?.box ?? 0) < UNLOCK_BOX);
+}
+
+/** The due date of an exercise met once (hearing a tune through): never due again. */
+export const NEVER = "9999-12-31";
+
 /** Today's cards: what's due (lowest box first), then a few new ones, a scale card up front to warm up. */
-export function planSession(deck: Deck, store: Store, day: string, exclude: Set<string> = new Set(), newCount = store.settings.newPerSession): string[] {
+export function planSession(deck: Deck, store: Store, day: string, exclude: Set<string> = new Set(), newCount = store.settings.newPerSession, ignoreAfter = false): string[] {
   const order = new Map(deck.intro.map((id, i) => [id, i]));
   const byId = new Map(deck.cards.map((c) => [c.id, c]));
   const due = deck.intro
-    .filter((id) => !exclude.has(id) && store.cards[id] && store.cards[id].due <= day)
+    .filter((id) => !exclude.has(id) && store.cards[id] && store.cards[id].due <= day && !byId.get(id)?.once)
     .sort((a, b) => store.cards[a].box - store.cards[b].box || store.cards[a].due.localeCompare(store.cards[b].due) || order.get(a)! - order.get(b)!)
     .slice(0, MAX_REVIEWS);
-  const fresh = deck.intro.filter((id) => !exclude.has(id) && !store.cards[id] && unlocked(byId.get(id), store)).slice(0, newCount);
+  // a tune is heard through only by the planner, before its first part is learned
+  const fresh = deck.intro
+    .filter((id) => !exclude.has(id) && !store.cards[id] && !byId.get(id)?.once && unlocked(byId.get(id), store) && (ignoreAfter || !waiting(byId.get(id), store)))
+    .slice(0, newCount);
 
   const warm = [...due, ...fresh].find((id) => byId.get(id)?.family === "scales");
   const reviews = due.filter((id) => id !== warm);
@@ -296,8 +307,9 @@ export function planSession(deck: Deck, store: Store, day: string, exclude: Set<
 /** When nothing is due: the cards furthest from done, for a session anyway. */
 export function planExtra(deck: Deck, store: Store, n = 6): string[] {
   const order = new Map(deck.intro.map((id, i) => [id, i]));
+  const once = new Set(deck.cards.filter((c) => c.once).map((c) => c.id));
   return deck.intro
-    .filter((id) => store.cards[id])
+    .filter((id) => store.cards[id] && !once.has(id))
     .sort((a, b) => store.cards[a].box - store.cards[b].box || store.cards[a].due.localeCompare(store.cards[b].due) || order.get(a)! - order.get(b)!)
     .slice(0, n);
 }
@@ -333,7 +345,7 @@ export function applyResult(prev: CardState | undefined, card: Card, result: Res
   return {
     ...s,
     box,
-    due,
+    due: card.once ? NEVER : due,
     bpm,
     seen: s.seen + 1,
     clean: s.clean + (result === "clean" ? 1 : 0),
@@ -384,7 +396,9 @@ export function boxCounts(deck: Deck, store: Store): { boxes: number[]; fresh: n
   let fresh = 0;
   let due = 0;
   const day = today();
+  const once = new Set(deck.cards.filter((c) => c.once).map((c) => c.id));
   for (const id of deck.intro) {
+    if (once.has(id)) continue;
     const s = store.cards[id];
     if (!s) fresh++;
     else {

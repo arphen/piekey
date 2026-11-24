@@ -19,6 +19,7 @@ interface LearnViewProps {
 }
 
 const KIND_LABEL: Record<Step["kind"], string> = {
+  hear: "Hear",
   new: "New",
   review: "Review",
   join: "Join",
@@ -31,7 +32,7 @@ const pretty = (s: string) => s.replace(/maj7/g, "Δ7").replace(/(^|\/)([A-G])b/
 const noteLabel = (midi: number) => `${pitchClassToName(midi).replace("#", "♯")}${Math.floor(midi / 12) - 1}`;
 
 export function LearnView({ sheet, tl, input, anyOctave, showFingering, bpm, onBpm }: LearnViewProps) {
-  const plan = useMemo(() => buildPlan(sheet, tl), [sheet, tl]);
+  const plan = useMemo(() => buildPlan(sheet, tl).filter((step) => step.kind !== "hear"), [sheet, tl]);
   const over = useMemo(() => melodyOverChords(sheet), [sheet]);
   const [guide, setGuide] = useState(false);
   const [degrees, setDegrees] = useState(true);

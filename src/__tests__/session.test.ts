@@ -106,12 +106,14 @@ describe("exercises that are related", () => {
 
   it("open in stages: a pattern waits for the scale it is made of", () => {
     const store = emptyStore();
+    const opening = deck.cards.find((c) => c.after)?.after;
+    if (opening) store.cards[opening] = { box: 2, due: "2026-11-16", bpm: 76, seen: 1, clean: 1, last: "clean" };
     const thirds = deck.cards.find((c) => c.id === "scale:A-naturalMinor:thirds")!;
     expect(thirds.needs).toBe(run);
     expect(unlocked(thirds, store)).toBe(false);
     const ids = planSession(deck, { ...store, settings: { ...store.settings, newPerSession: 40 } }, "2026-11-15");
     expect(ids).toContain(run);
-    expect(ids.some((id) => deck.cards.find((c) => c.id === id)?.needs)).toBe(false);
+    expect(ids.filter((id) => id.startsWith("scale:")).some((id) => deck.cards.find((c) => c.id === id)?.needs)).toBe(false);
     store.cards[run] = { box: 2, due: "2026-11-16", bpm: 76, seen: 1, clean: 1, last: "clean" };
     expect(unlocked(thirds, store)).toBe(true);
   });

@@ -219,50 +219,6 @@ body:has(.ss:not(.is-parked)) .abyssal-water-fallback { display: none; }
 }
 .app .shell-end .device-sync-trigger[aria-pressed="true"] svg { color: var(--algae); opacity: 1; }
 
-/* Floating global instrument dock: Free play, Tuner & Metronome reachable from anywhere */
-.shell-dock {
-  position: fixed;
-  right: 18px;
-  bottom: max(14px, env(safe-area-inset-bottom));
-  z-index: 48;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px;
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  background: rgba(4, 12, 22, 0.86);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.58), 0 0 0 1px rgba(90, 232, 107, 0.12) inset;
-}
-body:has(.ss:not(.is-parked)) .shell-dock { display: none; }
-.shell-dock button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 34px;
-  padding: 0 12px;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--ink-soft);
-  font-size: 12px;
-  font-weight: 400;
-  white-space: nowrap;
-  transition: transform 0.2s cubic-bezier(0.22, 1.4, 0.36, 1), color 0.18s, background 0.18s, border-color 0.18s;
-}
-.shell-dock button svg { color: var(--algae); opacity: 0.85; }
-.shell-dock button:hover {
-  transform: translateY(-1px);
-  border-color: rgba(114, 232, 84, 0.42);
-  background: rgba(90, 232, 107, 0.14);
-  color: var(--ink);
-  filter: none;
-}
-.shell-dock button:hover svg { opacity: 1; }
-.shell-dock button:active { transform: scale(0.97); }
-
 /* Satisfying directional slide-and-dissolve view transitions synced with the water sweep */
 .app > main {
   animation: shell-view-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) backwards;

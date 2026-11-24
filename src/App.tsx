@@ -42,12 +42,13 @@ const TABS: { id: Tab; label: string; glyph: GlyphName | UtilityGlyphName }[] = 
 ];
 /** The guitar walks the three tabs and then Play, the room they lead to. */
 const TAB_CYCLE: Tab[] = ["tutor", "tunes", "progress", "play"];
-const primaryTab = (tab: Tab) => tab === "tunes" || tab === "progress" ? tab : tab === "play" || tab === "free" ? "play" : "tutor";
+const primaryTab = (tab: Tab) => tab === "tunes" || tab === "progress" ? tab : tab === "play" ? "play" : tab === "free" ? "free" : "tutor";
 const tabRank = (route: Route) => {
   const p = primaryTab(route.tab);
   if (p === "tutor") return 0;
   if (p === "tunes") return route.song ? 1.5 : 1;
   if (p === "play") return 3;
+  if (p === "free") return 3.5;
   return 2;
 };
 
@@ -303,6 +304,11 @@ export default function App() {
     if (room) askRoom(tool);
     else setToolsTool(tool);
   }, [room, askRoom]);
+  const openSettings = useCallback(() => {
+    setDevicesOpen(false);
+    if (room) askRoom("settings");
+    else openPlay();
+  }, [room, askRoom, openPlay]);
   const openMode = useCallback((target: TutorTargetTab) => {
     setLaunch(undefined);
     if (target === "free") {
@@ -358,13 +364,23 @@ export default function App() {
                 );
               })}
               <span className="tabs-rule" aria-hidden="true" />
-              <button type="button" className={`tab-play ${onPlay ? "is-on" : ""} ${roomLive && !onPlay ? "is-live" : ""}`} aria-current={onPlay ? "page" : undefined} onClick={openPlay} title={roomLive && !onPlay ? "Back to the session" : "Play"} aria-label={roomLive && !onPlay ? "Play, session waiting" : "Play"}>
-                <Glyph name="play" size={20} /><span>Play</span>{onPlay ? <i className="tab-ink" aria-hidden="true" /> : null}
+              <button type="button" className={`tab-play ${onPlay ? "is-on" : ""} ${roomLive && !onPlay ? "is-live" : ""}`} aria-current={onPlay ? "page" : undefined} onClick={openPlay} title={roomLive && !onPlay ? "Back to the session" : "Practice"} aria-label={roomLive && !onPlay ? "Practice, session waiting" : "Practice"}>
+                <Glyph name="play" size={20} /><span>Practice</span>{onPlay ? <i className="tab-ink" aria-hidden="true" /> : null}
                 {roomLive && !onPlay ? <b className="tab-live" aria-hidden="true" /> : null}
+              </button>
+              <span className="tabs-rule" aria-hidden="true" />
+              <button type="button" className={`tab-tool ${tab === "free" && !toolsOpen ? "is-on" : ""}`} aria-current={tab === "free" && !toolsOpen ? "page" : undefined} onClick={() => openMode("free")} title="Free play">
+                <Glyph name="free" size={20} /><span>Free play</span>
+              </button>
+              <button type="button" className={`tab-tool ${toolsTool === "tuner" ? "is-on" : ""}`} aria-current={toolsTool === "tuner" ? "page" : undefined} onClick={() => openTools("tuner")} title="Chromatic tuner">
+                <Glyph name="tools" size={20} /><span>Tuner</span>
+              </button>
+              <button type="button" className={`tab-tool ${toolsTool === "metronome" ? "is-on" : ""}`} aria-current={toolsTool === "metronome" ? "page" : undefined} onClick={() => openTools("metronome")} title="Metronome">
+                <Glyph name="clock" size={20} /><span>Metronome</span>
               </button>
             </nav>
             <div className="shell-end">
-              <button type="button" className="device-sync-trigger guitar-tools-trigger" aria-pressed={toolsOpen} onClick={() => openTools("tuner")} aria-label="Guitar tools"><Glyph name="tools" size={20} /><span>Tools</span></button>
+              <button type="button" className="device-sync-trigger shell-settings" onClick={openSettings} aria-label="Practice settings" title="Practice settings"><Glyph name="gear" size={20} /><span>Settings</span></button>
               <DeviceSync open={devicesOpen} onOpenChange={changeDevices} onUpdated={refreshState} />
             </div>
           </header>
@@ -395,19 +411,6 @@ export default function App() {
             <div className="room-host" hidden={roomParked}>
               <PracticeRoom key={room.serial} input={input} launch={room} parked={roomParked} request={roomRequest} handle={roomHandle} onClose={closeRoom} onLive={setRoomLive} onOpenLibrary={openLibrary} />
             </div>
-          ) : null}
-          {!devicesOpen && !toolsOpen && tab !== "free" && tab !== "play" ? (
-            <nav className="shell-dock" aria-label="Quick instruments">
-              <button type="button" onClick={() => openMode("free")} title="Open Free play">
-                <Glyph name="free" size={16} /><span>Free play</span>
-              </button>
-              <button type="button" onClick={() => openTools("tuner")} title="Open chromatic tuner">
-                <Glyph name="tools" size={15} /><span>Tuner</span>
-              </button>
-              <button type="button" onClick={() => openTools("metronome")} title="Open metronome">
-                <Glyph name="clock" size={15} /><span>Metronome</span>
-              </button>
-            </nav>
           ) : null}
           <footer className="app-legal" data-nav-skip>
             <a href={import.meta.env.VITE_SOURCE_URL} target="_blank" rel="noreferrer">Source</a>

@@ -31,6 +31,7 @@ vi.mock("../song/useSession", () => ({
     return mocked.session;
   },
 }));
+vi.mock("../tools/TuneCheck", () => ({ isTuned: () => true, TuneCheck: () => null }));
 vi.mock("../components/Score", () => ({ Score: () => null }));
 vi.mock("../platform/PracticeWindowBoundary", () => ({ PracticeWindowBoundary: ({ children }: { children: ReactNode }) => <>{children}</> }));
 vi.mock("../listen/calibration", () => ({ loadProfile: () => mocked.calibrated ? {} : null }));

@@ -4,6 +4,7 @@ import type { LeadSheet } from "./musicxml";
 import type { Timeline } from "./order";
 
 // A plan for learning a tune a little at a time, the way it sticks:
+//   hear: the whole tune once, before any of it is learned
 //   new chunk (about 2 bars): listen → read it slowly → play it in time
 //   join: the new chunk with the one before, so the seams hold
 //   section: the whole section in time, then from memory (notes hidden, chords showing)
@@ -11,7 +12,7 @@ import type { Timeline } from "./order";
 // The sections are the file's rehearsal marks; a file without any has its parts found in the
 // music (flow.ts: A, B, A′…), so a tune is still learned part by part before it is played whole.
 
-export type StepKind = "new" | "review" | "join" | "section" | "memory" | "tune";
+export type StepKind = "hear" | "new" | "review" | "join" | "section" | "memory" | "tune";
 
 export interface Step {
   kind: StepKind;
@@ -26,7 +27,7 @@ export interface Step {
 }
 
 const CHUNK_BARS = 2;
-const PASS: Record<StepKind, number> = { new: 0.9, review: 0.9, join: 0.85, section: 0.85, memory: 0.8, tune: 0.85 };
+const PASS: Record<StepKind, number> = { hear: 0, new: 0.9, review: 0.9, join: 0.85, section: 0.85, memory: 0.8, tune: 0.85 };
 
 export function buildPlan(sheet: LeadSheet, tl: Timeline): Step[] {
   const label = (bar: number) => sheet.barNumbers[bar] ?? String(bar + 1);
@@ -92,6 +93,9 @@ export function buildPlan(sheet: LeadSheet, tl: Timeline): Step[] {
   };
 
   const steps: Step[] = [];
+  // before any of it is learned, the whole of it is heard once: every part then has a place to go
+  if (tl.slots.length)
+    steps.push({ kind: "hear", from: 0, to: tl.slots.length - 1, section: "", title: "Hear the whole tune", detail: "Once through with the band, before learning any of it.", listen: true, read: false, pass: PASS.hear });
   const learned = new Map<string, string>(); // signature → where it was learned
   let i = 0;
   while (i < chunks.length) {

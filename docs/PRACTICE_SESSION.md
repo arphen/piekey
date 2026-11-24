@@ -145,14 +145,17 @@ away. Asking for in time while a pass is already playing changes nothing: the pa
   voicings and improvisation keep their own acceptance rules.
 - **The beat.** Hearing the passage and playing it in time both carry a pulse when no click is
   asked for: a soft kick and hat on every beat, with a quiet eighth between beats slower than
-  84 bpm, so rests are heard as time. In a gap only a soft hat stays.
-- **Coming round.** Looped phrases (melody, reading, ear) use an **adaptive live-band turnaround**
-  by default (configurable via the guitar menu's `Loop` row or Settings: `adaptive`, `turnaround`,
-  `continuous`): while learning (Box 0–2, before a clean pass lands), a live-band turnaround bar
-  keeps the groove, bass and opening harmony breathing with a gentle 2-beat pickup click and a
-  top-edge return pill (never obscuring the score); once a clean pass lands (or from Box 3 up),
-  adaptive mode tightens seamlessly into a continuous loop without restarting audio. Scales,
-  technique drills, harmony drills and chord changes cycle on without a break.
+  84 bpm, so rests are heard as time. In a gap only a soft hat stays. When a phrase enters after
+  an 8th-, 16th- or triplet rest (for example an 8th or 16th rest on beat 1), the lead-in beats of
+  the count-in and loop wrap and the opening rest itself subdivide at that grid, and the beat rail
+  notes the entry beat.
+- **Coming round.** Looped phrases use an **adaptive** loop by default (configurable via the guitar
+  menu's `Loop` row or Settings: `adaptive`, `turnaround`, `continuous`): short phrases (up to
+  4 bars, such as 2-bar chunks and 4-bar joins) and scales/harmony drills cycle continuously in a
+  circle with no break; longer sections (over 4 bars, melody/reading/ear) play a live-band
+  turnaround bar while learning (Box 0–2, before a clean pass lands) with a gentle 2-beat pickup
+  click and a top-edge return pill, then tighten seamlessly into a continuous loop once a clean pass
+  lands (or from Box 3 up).
 - **Gaps.** Once a scale drill is well known (box 4) the band drops out for two bars in four (four
   in eight in the top box) while it plays in time; the notes are still judged, so the time is the
   player's. During a focus on time every scale card in the focus plays this way. A tune always
@@ -288,7 +291,10 @@ never influences scoring, tempo, scheduling, evidence, boxes or goals.
 
 Exercises live in a five-box card box per tune (`song/leitner.ts`). On top of that:
 
-- **Melody by parts** (`tunes/learn.ts`). A tune's melody is learned two bars at a time, joined,
+- **Melody by parts** (`tunes/learn.ts`). A new tune always opens by hearing the entire piece once
+  through (`Hear the whole tune`), then learning its opening chunks (bars 1–2 and 3–4) and joining
+  them until they are clean; only then do scales, warm-ups and side study sprinkle in. After the
+  opening, each melody step unlocks once the one before it is clean: two bars at a time, joined,
   then each section in time and from memory, and only then the whole tune. The sections are the
   file's rehearsal marks; a file without marks is cut into the parts found in the music (the same
   A, B, A′ the flowing score names), so its B is learned as B. A found part that only repeats one

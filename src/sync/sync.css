@@ -60,7 +60,7 @@
 .device-sync-join p { max-width: 32ch; color: #b1b5a8; font-size: 12px; }
 .device-sync-dialog .device-sync-primary { background: #d4bf8f; padding: 0 16px; color: #171a17; }
 @keyframes device-spin { to { transform: rotate(360deg); } }
-@media (max-width: 960px) { .device-sync-trigger { position: absolute; top: 12px; right: 20px; } .topbar .guitar-tools-trigger { right: 68px; } .device-sync-trigger span { display: none; } }
+@media (max-width: 960px) { .device-sync-trigger { position: absolute; top: 12px; right: 20px; } .device-sync-trigger span { display: none; } }
 @media (max-width: 500px) { .device-sync-trigger { top: 6px; } }
 @media (max-width: 480px) { .device-sync-dialog { margin: auto auto 12px; padding: 23px 22px 18px; max-height: calc(100dvh - 24px); } }
 @media (prefers-reduced-motion: reduce) { .device-sync-progress svg { animation: none; } }

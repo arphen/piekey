@@ -131,6 +131,20 @@ const median = (xs: number[]) => {
   return s.length ? s[s.length >> 1] : null;
 };
 
+/**
+ * Beat subdivision needed to feel an off-beat phrase entry after an opening rest:
+ * 2 for an 8th-note entry (e.g. 8th rest on beat 1), 3 for a triplet, 4 for a 16th-note entry.
+ */
+export function entrySubdivision(offsetBeats: number): 1 | 2 | 3 | 4 {
+  if (!(offsetBeats > 1e-6)) return 1;
+  const frac = offsetBeats - Math.floor(offsetBeats);
+  if (frac <= 1e-6 || frac >= 1 - 1e-6) return 1;
+  if (Math.abs(frac - 0.5) < 0.08) return 2;
+  if (Math.abs(frac - 1 / 3) < 0.06 || Math.abs(frac - 2 / 3) < 0.06) return 3;
+  if (Math.abs(frac - 0.25) < 0.08 || Math.abs(frac - 0.75) < 0.08) return 4;
+  return 1;
+}
+
 export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, scoring: boolean, anyOctave: boolean, ignore?: ReadonlySet<number>) {
   const [playing, setPlaying] = useState(false);
   const [counting, setCounting] = useState(0); // count-in beats left
@@ -225,6 +239,9 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
       const t0 = ctx.currentTime + 0.15 + countBeats * spb0;
       const inRange = (x: number, lo: number, hi: number) => x >= lo - 1e-9 && x < hi - 1e-9;
       const ranged = t.targets.map((n, i) => (inRange(n.t, from, from + length) ? i : -1)).filter((i) => i >= 0);
+      const firstRangedTarget = ranged.length ? t.targets[ranged[0]] : null;
+      const entryOffset = firstRangedTarget ? Math.max(0, firstRangedTarget.t - from) : 0;
+      const entrySub = entrySubdivision(entryOffset);
       const lastRangedTarget = ranged.length ? t.targets[ranged[ranged.length - 1]] : null;
       // When the final note is a long held resolution (e.g. a 4-beat whole note at the end of a scale),
       // its remaining hold beats after beat 1 act as the re-entry runway into Bar 1 in continuous loops.
@@ -250,8 +267,23 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
           shots.play(hatBuffer(), out, beatTime, k === 0 ? 0.65 : 0.45);
           if (k === 0) shots.play(kickBuffer(), out, beatTime, 0.42);
         }
-        for (let part = 0; part < countDivision; part++)
-          shots.play(clickBuffer(k === 0 && part === 0), out, t0 - (countBeats - k - part / countDivision) * spb0, part === 0 ? (mixRef.current.pulse ? 0.44 : 0.6) : 0.22);
+        // When the phrase enters after an 8th/16th/triplet rest, subdivide the lead-in beats of the
+        // count-in so the player feels the exact grid right into beat 1 (e.g. 1, 2, 3-&, 4-e-&-a).
+        const leadDiv = entrySub > countDivision
+          ? entrySub === 4
+            ? (k === countBeats - 1 ? 4 : k === countBeats - 2 ? 2 : countDivision)
+            : (k >= countBeats - 2 ? entrySub : countDivision)
+          : countDivision;
+        const beatDiv = Math.max(countDivision, leadDiv);
+        for (let part = 0; part < beatDiv; part++) {
+          const when = t0 - (countBeats - k - part / beatDiv) * spb0;
+          if (part === 0) {
+            shots.play(clickBuffer(k === 0), out, when, mixRef.current.pulse ? 0.44 : 0.6);
+          } else {
+            if (mixRef.current.pulse) shots.play(hatBuffer(), out, when, beatDiv === 4 && part % 2 === 1 ? 0.24 : 0.34);
+            shots.play(clickBuffer(false), out, when, beatDiv === 4 && part % 2 === 1 ? 0.16 : 0.22);
+          }
+        }
       }
 
       const blank = () => t.targets.map((): NoteResult => null);
@@ -373,12 +405,20 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
               }
             }
             const off = when + 0.5;
-            if (m.pulse && spb >= SLOW_SPB && inRange(off, tLo, hi)) shots.play(hatBuffer(), out, at(off), 0.28);
-            if (division > 1) {
-              for (let part = 1; part < division; part++) {
-                const sub = when + part / division;
-                if (inRange(sub, tLo, hi) && (m.click || k >= pickupFrom)) shots.play(clickBuffer(false), out, at(sub), 0.18);
+            const leadDiv = entrySub > division
+              ? entrySub === 4
+                ? (k === span.breath - 1 ? 4 : k === span.breath - 2 ? 2 : division)
+                : (k >= pickupFrom ? entrySub : division)
+              : division;
+            if (leadDiv > 1) {
+              for (let part = 1; part < leadDiv; part++) {
+                const sub = when + part / leadDiv;
+                if (!inRange(sub, tLo, hi)) continue;
+                if (m.pulse && (entrySub > 1 || (leadDiv === 2 && spb >= SLOW_SPB))) shots.play(hatBuffer(), out, at(sub), leadDiv === 4 && part % 2 === 1 ? 0.22 : 0.3);
+                if (m.click || k >= pickupFrom) shots.play(clickBuffer(false), out, at(sub), leadDiv === 4 && part % 2 === 1 ? 0.14 : 0.18);
               }
+            } else if (m.pulse && spb >= SLOW_SPB && inRange(off, tLo, hi)) {
+              shots.play(hatBuffer(), out, at(off), 0.28);
             }
           }
         }
@@ -443,6 +483,24 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
             if (inRange(c.t, lo, hi) && !quiet(c.t) && ![...t.comp, ...(t.bass ?? [])].some((x) => x.t <= c.t + 1e-9 && c.t < x.t + x.dur - 1e-9)) shots.play(clickBuffer(c.accent), out, at(c.t), c.accent ? 0.4 : 0.26);
         }
         if (m.bass !== false) for (const v of t.bass ?? []) if (inRange(v.t, lo, hi) && !quiet(v.t)) shots.play(bassBuffer(v.midi), out, at(v.t), 0.75, v.dur * spb * 0.9, 0.08);
+        // For off-beat phrase entries (e.g. 8th or 16th rest on beat 1), tick the matching
+        // subdivision gently across the opening rest and on the final beat before a continuous loop wrap.
+        if (entrySub > 1 && (m.pulse || m.click)) {
+          const baseDiv = m.click ? (m.clickSubdivision ?? 1) : 1;
+          const hasSlowOff = m.pulse && spb >= SLOW_SPB;
+          const tickEntrySub = (beatStart: number, limit: number) => {
+            for (let part = 1; part < entrySub; part++) {
+              const sub = beatStart + part / entrySub;
+              if (sub >= limit - 1e-6 || !inRange(sub, lo, hi) || quiet(sub)) continue;
+              if (baseDiv >= entrySub && Math.abs(part * baseDiv / entrySub - Math.round(part * baseDiv / entrySub)) < 1e-6) continue;
+              const isHalf = Math.abs(part / entrySub - 0.5) < 1e-6;
+              if (m.pulse && !(isHalf && hasSlowOff)) shots.play(hatBuffer(), out, at(sub), isHalf ? 0.34 : 0.24);
+              if (m.click || !isHalf) shots.play(clickBuffer(false), out, at(sub), isHalf ? 0.2 : 0.16);
+            }
+          };
+          for (let b = 0; b < Math.ceil(entryOffset); b++) tickEntrySub(s.from + b, s.from + entryOffset);
+          if (s.loop && span.breath === 0 && s.length >= 1) tickEntrySub(end - 1, end);
+        }
         if (m.guide !== false) for (const g of t.guide ?? []) if (inRange(g.t, lo, hi) && !quiet(g.t)) shots.play(pluckBuffer(g.midi), out, at(g.t), 0.7, g.dur * spb * 0.95 + 0.04, 0.08);
       };
 

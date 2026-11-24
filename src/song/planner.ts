@@ -149,6 +149,63 @@ export function planBlocks(deck: Deck, store: Store, day: string, opts: PlanOpti
   const known = (id: string) => Boolean(store.cards[id]);
   const budget = Math.max(0, opts.minutes);
   const goal = opts.goal?.tuneId === opts.tuneId ? opts.goal : null;
+
+  // A new tune is the tune first: hear it once through, then learn its opening chunks (bars 1–2
+  // and 3–4) and join them until they're clean — only then sprinkle in scales, warm-ups and side
+  // study. Skip this when a specific musical goal is active or the opening is already solid.
+  const hearCard = deck.cards.find((c) => c.once && c.step?.kind === "hear" && c.tuneId === opts.tuneId);
+  const openingCard = (["join", "section", "tune"] as const)
+    .map((kind) => deck.cards.find((c) => c.tuneId === opts.tuneId && c.step?.kind === kind))
+    .find(Boolean);
+  const hasOwnSide = deck.cards.some((c) => c.family !== "melody" && c.family !== "scales" && c.family !== "technique" && Boolean(store.cards[c.id]));
+  const learningOpening = !goal && !hasOwnSide && Boolean(openingCard && (store.cards[openingCard.id]?.box ?? 0) < 2);
+  if (learningOpening) {
+    const openingIds: string[] = [];
+    const addOpening = (id: string) => {
+      if (used.has(id) || !byId.has(id)) return;
+      used.add(id);
+      openingIds.push(id);
+    };
+    if (hearCard && !store.cards[hearCard.id]) addOpening(hearCard.id);
+    const ownMelodies = deck.intro.filter((id) => {
+      const c = byId.get(id);
+      return Boolean(c && c.family === "melody" && c.tuneId === opts.tuneId && !c.once && !used.has(id));
+    });
+    // Due opening chunks first (lowest box first), then unlocked fresh opening chunks in order.
+    const dueOwn = ownMelodies
+      .filter((id) => store.cards[id] && store.cards[id].due <= day)
+      .sort((a, b) => store.cards[a].box - store.cards[b].box);
+    const freshOwn = ownMelodies.filter((id) => !store.cards[id] && unlocked(byId.get(id), store));
+    let m = openingIds.reduce((a, id) => a + cost(id), 0);
+    for (const id of [...dueOwn, ...freshOwn]) {
+      if (used.has(id)) continue;
+      if (openingIds.length > (hearCard && openingIds[0] === hearCard.id ? 1 : 0) && m + cost(id) > budget) continue;
+      addOpening(id);
+      m += cost(id);
+    }
+    // If the opening chunks were already practised today (not due) and join isn't unlocked yet,
+    // revisit the lowest-box opening chunks so there is still a melody session to play.
+    if (!openingIds.length) {
+      const fallback = ownMelodies
+        .filter((id) => store.cards[id])
+        .sort((a, b) => store.cards[a].box - store.cards[b].box);
+      for (const id of fallback) {
+        if (openingIds.length && m + cost(id) > budget) continue;
+        addOpening(id);
+        m += cost(id);
+      }
+    }
+    const blocks: Block[] = openingIds.length
+      ? [{ role: "music", cards: openingIds, minutes: Math.round(openingIds.reduce((a, id) => a + cost(id), 0)) }]
+      : [];
+    return {
+      blocks,
+      ids: openingIds,
+      minutes: openingIds.length ? Math.min(budget, Math.max(1, Math.round(openingIds.reduce((a, id) => a + cost(id), 0)))) : 0,
+      why: "",
+      arc: null,
+    };
+  }
   const relevant = new Set<string>();
   const include = (id: string) => {
     if (relevant.has(id) || !byId.has(id)) return;
@@ -185,7 +242,7 @@ export function planBlocks(deck: Deck, store: Store, day: string, opts: PlanOpti
   let why = "";
   // A focus works on a part. The whole tune and the run-through show every mistake most (they are
   // the longest), but working on them is playing the tune again: they stay music, never the focus.
-  const whole = (id: string) => Boolean(byId.get(id)?.run || byId.get(id)?.step?.kind === "tune");
+  const whole = (id: string) => Boolean(byId.get(id)?.run || byId.get(id)?.once || byId.get(id)?.step?.kind === "tune");
   if (weak) {
     focus = weak.cards.map(local).filter((id) => byId.has(id) && !used.has(id) && !whole(id)).slice(0, MAX_FOCUS);
     if (focus.length) why = weak.fact;

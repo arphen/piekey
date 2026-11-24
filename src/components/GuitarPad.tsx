@@ -98,15 +98,15 @@ function useHeld(input: InputApi, enabled: boolean, ms: number, read: (midi: num
 
 export const SUMMON_HINT = "D♯5 (high e, fret 11) three times quickly · or hold, release, hold";
 
-/** Compact visual cue for opening the guitar menu: miniature high-e fret-11 indicator + ×3 pips. */
-export function SummonVisual({ then }: { then?: string } = {}) {
+/** Compact visual cue for opening the guitar menu: miniature high-e fret-11 indicator + ×3 cue. */
+export function SummonVisual({ then, compact = false }: { then?: string; compact?: boolean } = {}) {
   return (
-    <span className="ss-summon-vis" title={SUMMON_HINT}>
+    <span className={`ss-summon-vis ${compact ? "is-compact" : ""}`} title={SUMMON_HINT}>
       <span className="ss-summon-fret" aria-hidden="true">
         <i>e</i>
         <b>11</b>
       </span>
-      <span className="ss-summon-copy">High e · fret 11 · tap ×3{then ? ` → ${then}` : ""}</span>
+      <span className="ss-summon-copy">{compact ? `×3${then ? ` → ${then}` : ""}` : `High e · fret 11 · tap ×3${then ? ` → ${then}` : ""}`}</span>
     </span>
   );
 }

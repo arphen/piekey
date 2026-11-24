@@ -129,7 +129,7 @@ it("enters guitar mode with the session's first song even when saving the select
 it("parks the Play tab's room behind other tabs and returns to the same room", async () => {
   shell.overview.loading = false;
   const element = await mountShell();
-  await press("Play");
+  await press("Practice");
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
   const room = () => element.querySelector<HTMLElement>("main[data-room]");
   const opened = room();
@@ -138,7 +138,7 @@ it("parks the Play tab's room behind other tabs and returns to the same room", a
   expect(room()).toBe(opened); // still mounted: a session there waits where it was
   expect(room()?.dataset.parked).toBe("true");
   expect(room()?.closest<HTMLElement>(".room-host")?.hidden).toBe(true);
-  await press("Play");
+  await press("Practice");
   expect(room()).toBe(opened);
   expect(room()?.dataset.parked).toBe("false");
   // Back from the room walks the history like any tab

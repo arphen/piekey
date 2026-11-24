@@ -309,13 +309,21 @@ describe("a session with a shape", () => {
   const deck = buildDeck(s, buildTimeline(s));
   const day = "2026-11-17";
   const scale = deck.intro.find((id) => id.startsWith("scale:"))!;
-  const melodies = deck.intro.filter((id) => id.startsWith("mel:"));
+  const melodies = deck.intro.filter((id) => id.startsWith("mel:") && !id.startsWith("mel:hear:"));
 
-  it("gives a new player the box's first cards and no warm-up", () => {
-    const p = planBlocks(deck, store(), day, { minutes: 25, tuneId: "t" });
-    expect(p.blocks.map((b) => b.role)).toEqual(["review", "music"]);
-    expect(p.ids.length).toBeGreaterThan(0);
+  it("starts a new tune by hearing the whole piece, then learning the opening chunks before any scales", () => {
+    const p = planBlocks(deck, store({ [scale]: known(3) }), day, { minutes: 25, tuneId: "t" });
+    expect(p.blocks.map((b) => b.role)).toEqual(["music"]);
+    expect(p.ids[0]).toMatch(/^mel:hear:/);
+    expect(p.ids.slice(1).every((id) => id.startsWith("mel:new:"))).toBe(true);
+    expect(p.ids).not.toContain(scale);
     expect(p.why).toBe("");
+    // Once heard, it does not ask to hear the whole tune again, and still stays on the opening until joined.
+    const heard = store({ [scale]: known(3), [p.ids[0]]: known(2) });
+    const p2 = planBlocks(deck, heard, day, { minutes: 25, tuneId: "t" });
+    expect(p2.ids).not.toContain(p.ids[0]);
+    expect(p2.ids.every((id) => id.startsWith("mel:"))).toBe(true);
+    expect(p2.ids).not.toContain(scale);
   });
 
   it("warms up on a scale the hands know, then works the named mistake, then plays the tune", () => {

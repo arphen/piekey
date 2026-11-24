@@ -81,7 +81,7 @@ function buildGeometry(fretCount: number, compact: boolean, position?: Position)
   const right = 14;
   const boardW = width - nutX - right;
   const spacing = 34;
-  const boardTop = 22;
+  const boardTop = 28;
   const scale = 1 - Math.pow(2, -fretCount / 12);
   const wireX = (fret: number) => nutX + ((1 - Math.pow(2, -fret / 12)) / scale) * boardW;
   return {

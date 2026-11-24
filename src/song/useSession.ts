@@ -335,8 +335,16 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
       !card.run &&
       (card.family === "scales" || card.family === "harmony" || card.family === "melody" || card.family === "reading" || card.family === "ear"),
   );
+  // Short phrases (2-bar chunks, 4-bar joins) and drills cycle continuously in a circle by default;
+  // only longer sections (> 4 bars) take a live-band turnaround bar while learning.
+  const cardBars = card ? card.to - card.from + 1 : 0;
+  const longSection = Boolean(
+    card &&
+      cardBars > 4 &&
+      (card.family === "melody" || card.family === "reading" || card.family === "ear"),
+  );
   const wantsBreath = phase === "time" && phraseLoops && (
-    loopMode === "turnaround" || (loopMode === "adaptive" && box < 3 && !loopLocked)
+    loopMode === "turnaround" || (loopMode === "adaptive" && longSection && box < 3 && !loopLocked)
   );
   const mix = {
     bpm,
@@ -447,6 +455,8 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     ensureAudio();
     void Tone.start().catch(() => undefined);
     const done = new Set(logRef.current.filter((o) => o.result !== "skip").map((o) => o.id));
+    const lastId = queue[pos];
+    if (lastId) done.add(lastId);
     let more = planSession(deck, storeRef.current, today(), done, Math.max(2, storeRef.current.settings.newPerSession));
     if (!more.length) more = planExtra(deck, storeRef.current, 4).filter((id) => !done.has(id));
     if (!more.length) return false;
@@ -458,7 +468,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     setPaused(false);
     setAway(false);
     return true;
-  }, [deck]);
+  }, [deck, queue, pos]);
 
   const exit = useCallback(() => {
     if (running && !finished) finish();
@@ -604,8 +614,8 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
       setLog((l) => [...l, o]);
       setOutcome(o);
       setPhase("result");
-      // a miss comes round once more this session, a few cards later
-      if (result === "fail" && !queue.slice(pos + 1).includes(card.id) && queue.filter((id) => id === card.id).length < 2)
+      // a miss comes round once more this session, a few cards later — never immediately back-to-back
+      if (result === "fail" && pos + 1 < queue.length && !queue.slice(pos + 1).includes(card.id) && queue.filter((id) => id === card.id).length < 2)
         setQueue((q) => [...q.slice(0, pos + 4), card.id, ...q.slice(pos + 4)]);
     },
     [card, bpm, saveStore, stop, queue, pos, deck, spotted, evidence, selfGuided, phase, memoryExercise, memoryStage, spot, guideMelody, nudge, follow.take, mix.shadow, options.arrangementFingerprint, options.arrangementFingerprints, tuneIds],
@@ -673,9 +683,10 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     if (playback.playing) heard.current = true;
     else if (heard.current) {
       heard.current = false;
-      nextPhase("listen");
+      if (card?.once && !returnTo.current) conclude("clean");
+      else nextPhase("listen");
     }
-  }, [playback.playing, phase, inactive, nextPhase]);
+  }, [playback.playing, phase, inactive, nextPhase, card, conclude]);
 
   // at your own pace: count finished takes; starting over mid-take is free
   const afterTake = useRef<(() => void) | null>(null);
@@ -1168,6 +1179,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     setPaused(false);
     setAway(false);
     if (spot && phase !== "result") endSpot();
+    else if (card.once && phase === "listen") conclude("clean");
     else if (phase === "intro" || phase === "listen") nextPhase(phase);
     else if (phase === "pace") {
       stop();

@@ -109,6 +109,16 @@
   opacity: 0;
 }
 
+.ss.is-exercise .ss-chrome {
+  top: 11px;
+  right: clamp(14px, 2.4vw, 32px);
+}
+
+.ss.is-exercise .ss-chrome .ss-icon {
+  width: 30px;
+  height: 30px;
+}
+
 .ss .ss-icon {
   position: relative;
   width: 36px;
@@ -380,7 +390,7 @@
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto auto;
   justify-items: center;
-  padding: 0 clamp(18px, 3vw, 48px) 20px;
+  padding: 0 clamp(14px, 2.4vw, 32px) 10px;
 }
 
 .ss-progress {
@@ -388,7 +398,7 @@
   display: flex;
   gap: 4px;
   height: 3px;
-  margin: 0 calc(-1 * clamp(18px, 3vw, 48px));
+  margin: 0 calc(-1 * clamp(14px, 2.4vw, 32px));
   padding: 0;
   list-style: none;
 }
@@ -421,10 +431,12 @@
 }
 
 .ss-head {
+  position: relative;
+  z-index: 6;
   display: grid;
   justify-items: center;
-  gap: 6px;
-  padding-top: clamp(18px, 3.2vh, 34px);
+  gap: 4px;
+  padding-top: 8px;
   text-align: center;
   animation: ss-rise 0.6s ease both;
 }
@@ -433,9 +445,9 @@
   margin: 0;
   font-family: var(--font-display);
   font-weight: 500;
-  font-size: clamp(22px, 2.3vw, 30px);
-  line-height: 1.1;
-  color: var(--ink-soft);
+  font-size: clamp(20px, 2vw, 26px);
+  line-height: 1.15;
+  color: var(--ink);
   transition: font-size 0.7s cubic-bezier(0.2, 0.7, 0.2, 1), color 0.7s;
 }
 
@@ -446,13 +458,13 @@
   overflow: hidden;
   opacity: 0;
   color: var(--ink-soft);
-  font-size: 17px;
-  line-height: 1.5;
+  font-size: 15px;
+  line-height: 1.45;
   transition: max-height 0.7s, opacity 0.5s;
 }
 
 .phase-intro .ss-title {
-  font-size: clamp(38px, 5vw, 68px);
+  font-size: clamp(34px, 4.6vw, 58px);
   color: var(--ink);
 }
 
@@ -466,15 +478,23 @@
   align-self: stretch;
   justify-self: stretch;
   min-height: 0;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px 0;
 }
 
 .ss-material {
-  width: min(1180px, 100%);
+  flex: 1 1 auto;
+  width: min(1140px, 100%);
   max-height: 100%;
   min-height: 0;
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   transition: opacity 0.6s, filter 0.6s, transform 0.6s;
 }
 
@@ -510,18 +530,16 @@
 
 /* Eye-level beat rail directly above the score: felt in the reading line of sight */
 .ss-beat-rail {
-  position: absolute;
-  top: 2px;
-  left: 50%;
-  transform: translateX(-50%);
+  flex: none;
+  position: relative;
   z-index: 4;
   display: inline-flex;
   align-items: center;
-  gap: 12px;
-  padding: 5px 12px;
+  gap: 10px;
+  padding: 3px 10px;
   border: 1px solid rgba(154, 214, 146, 0.16);
   border-radius: 999px;
-  background: rgba(6, 13, 9, 0.9);
+  background: rgba(6, 13, 9, 0.78);
   pointer-events: none;
   transition: border-color 0.2s;
 }
@@ -606,8 +624,23 @@
 .ss-coach {
   display: grid;
   justify-items: center;
-  gap: 10px;
-  padding: 10px 0 clamp(10px, 2.4vh, 26px);
+  gap: 5px;
+  padding: 4px 0 6px;
+  min-height: 16px;
+}
+
+.ss-coach-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 16px;
+}
+
+.ss-coach .ss-say {
+  min-height: 0;
+  font-size: clamp(15px, 1.5vw, 19px);
+  line-height: 1.2;
 }
 
 .ss-takes,
@@ -743,44 +776,52 @@
 /* ---------- the material ---------- */
 
 .ss-harm {
+  flex: none;
   display: flex;
   align-items: baseline;
-  gap: 14px;
-  min-height: 46px;
+  gap: 12px;
+  min-height: 30px;
+  width: min(1060px, 100%);
   padding: 0 6px;
 }
 
 .ss-harm b {
   font-family: var(--font-display);
   font-weight: 500;
-  font-size: clamp(30px, 3.4vw, 44px);
+  font-size: clamp(24px, 2.8vw, 36px);
   line-height: 1;
 }
 
 .ss-harm i {
   font-style: normal;
   font-family: var(--font-mono);
-  font-size: 15px;
+  font-size: 14px;
   color: var(--fam);
 }
 
 .ss-harm span {
   color: var(--ink-faint);
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .ss-harm em {
   margin-left: auto;
   font-style: normal;
   font-family: var(--font-display);
-  font-size: clamp(20px, 2.2vw, 28px);
+  font-size: clamp(17px, 1.9vw, 24px);
   color: var(--ink-faint);
 }
 
 .ss-line {
   position: relative;
-  display: grid;
-  gap: clamp(8px, 1.6vh, 18px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 1.4vh, 14px);
+  width: 100%;
+  max-height: 100%;
+  min-height: 0;
   min-width: 0;
 }
 
@@ -849,25 +890,33 @@
 
 .ss-melody {
   position: relative;
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: 8px;
+  width: 100%;
+  max-height: 100%;
   min-height: 0;
   min-width: 0;
 }
 
 .ss-score {
   position: relative;
-  max-height: 56vh;
+  flex: 0 1 auto;
+  width: min(1060px, 100%);
+  max-height: min(56vh, 100%);
+  min-height: 0;
   overflow: auto;
   scrollbar-width: none;
-  padding: 16px 20px 10px;
-  border: 1px solid rgba(154, 214, 146, 0.18);
-  border-radius: 20px;
+  padding: 12px 18px 8px;
+  border: 1px solid rgba(154, 214, 146, 0.16);
+  border-radius: 18px;
   background:
-    radial-gradient(ellipse at 50% 0%, rgba(109, 230, 75, 0.06), transparent 68%),
-    rgba(5, 11, 8, 0.84);
+    radial-gradient(ellipse at 50% 0%, rgba(109, 230, 75, 0.05), transparent 68%),
+    rgba(5, 11, 8, 0.72);
   box-shadow:
-    0 20px 54px rgba(0, 0, 0, 0.5),
+    0 16px 42px rgba(0, 0, 0, 0.42),
     inset 0 1px 0 rgba(190, 245, 174, 0.08);
 }
 
@@ -886,10 +935,14 @@
 /* chords */
 
 .ss-prompts {
-  display: grid;
-  justify-items: center;
-  gap: clamp(12px, 2.4vh, 28px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 1.8vh, 20px);
   width: 100%;
+  max-height: 100%;
+  min-height: 0;
 }
 
 .ss-prompt {
@@ -901,27 +954,35 @@
 }
 
 .ss-prompt b {
-  font-size: clamp(40px, 7vh, 72px);
+  font-size: clamp(36px, 6.2vh, 64px);
   font-weight: 600;
   line-height: 1;
 }
 
 .ss-prompt span {
   color: var(--ink-soft);
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .ss-improv {
-  display: grid;
-  justify-items: center;
-  gap: clamp(12px, 2.4vh, 28px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 1.8vh, 20px);
   width: 100%;
+  max-height: 100%;
+  min-height: 0;
 }
 
 .ss-chords {
-  display: grid;
-  justify-items: center;
-  gap: clamp(12px, 2.4vh, 28px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(10px, 2vh, 24px);
+  max-height: 100%;
+  min-height: 0;
 }
 
 .ss-chords-pair {
@@ -1601,24 +1662,30 @@
   white-space: nowrap;
 }
 
-/* Visual-mechanical micro-staff mistake comparison below the score */
+/* Visual-mechanical micro-staff mistake comparison */
 .ss-mistake-bar {
-  /* floats over the stage's top-right corner: out of the grid, so it never shifts the neck or the score */
+  /* floats out of the flex flow, so it never shifts the neck or the score */
   position: absolute;
-  top: 0;
+  top: -4px;
   right: 0;
   z-index: 3;
   pointer-events: none;
   display: inline-flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   margin: 0;
-  padding: 6px 14px 6px 10px;
+  padding: 5px 12px 5px 8px;
   border: 1px solid rgba(229, 131, 99, 0.34);
   border-radius: 12px;
-  background: rgba(14, 14, 12, 0.82);
+  background: rgba(10, 14, 12, 0.86);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.38);
   animation: ss-rise 0.22s ease-out both;
+}
+
+.ss-line.no-harm .ss-mistake-bar {
+  top: auto;
+  bottom: 4px;
+  right: 0;
 }
 .ss-mistake-staff {
   flex: none;
@@ -2066,21 +2133,38 @@
 /* ---------- lines are read: the staff in the middle, the neck as an aside ---------- */
 
 .ss-score--line {
-  max-height: 44vh;
-  justify-self: center;
-  width: min(1100px, 100%);
+  flex: 0 1 auto;
+  max-height: min(44vh, 300px);
+  width: min(1060px, 100%);
   box-sizing: border-box;
 }
 
 .ss-board--aside {
-  justify-self: center;
-  width: min(620px, 78%);
-  opacity: 0.8;
+  flex: 0 0 auto;
+  width: min(740px, 92%, calc(25vh * 4.2));
+  max-width: 100%;
+  padding: 4px 10px 2px;
+  border-radius: 14px;
+  background: rgba(5, 11, 8, 0.44);
+  overflow: visible;
+  opacity: 0.94;
   transition: opacity 0.4s;
 }
 
+.ss-board--stage {
+  flex: 0 0 auto;
+  width: min(880px, 100%, calc(32vh * 4.2));
+  max-width: 100%;
+  padding: 6px 12px 4px;
+  border-radius: 16px;
+  background: rgba(5, 11, 8, 0.44);
+  overflow: visible;
+}
+
 .ss-board--aside .fb--full,
-.ss-board--aside .fb-stack {
+.ss-board--aside .fb-stack,
+.ss-board--stage .fb--full,
+.ss-board--stage .fb-stack {
   min-width: 0;
 }
 
@@ -2099,7 +2183,7 @@
 
 .ss-board--aside.is-spot {
   opacity: 1;
-  width: min(760px, 86%);
+  width: min(780px, 94%, calc(26vh * 4.2));
 }
 
 .ss-why.ss-spotline {
@@ -2113,9 +2197,8 @@
 
 .ss-meter {
   display: inline-flex;
-  align-items: flex-end;
-  gap: 22px;
-  min-height: 26px;
+  align-items: center;
+  gap: 14px;
 }
 
 .phase-intro .ss-meter,
@@ -2125,8 +2208,8 @@
 }
 
 .ss-streak {
-  font-size: 12px;
-  letter-spacing: 0.12em;
+  font-size: 11px;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ink-faint);
   transition: color 0.6s;
@@ -2135,7 +2218,7 @@
 .ss-streak b {
   display: inline-block;
   margin-right: 4px;
-  font: 500 22px / 1 var(--font-display);
+  font: 500 17px / 1 var(--font-display);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
   color: var(--ink-soft);
@@ -2157,7 +2240,7 @@
   display: inline-flex;
   align-items: flex-end;
   gap: 4px;
-  height: 26px;
+  height: 20px;
 }
 
 .ss-passes i {

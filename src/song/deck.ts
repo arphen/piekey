@@ -69,6 +69,8 @@ export interface Card {
   step?: Step; // melody cards
   rhythm?: Rhythm; // scale runs in another division of the beat
   needs?: string; // the exercise this one builds on: it joins the box once that one is played clean
+  after?: string; // a tune's opening (bars 1–4 joined): this side exercise is introduced once that is clean
+  once?: boolean; // met once and never reviewed (hearing a new tune through before learning it)
   fresh?: boolean; // its notes are new every visit: read, never heard first, and the neck stays out of it
   secret?: string; // what it turned out to be, shown once it has been played
   spot?: boolean; // a part taken out of a longer exercise to be worked on by itself
@@ -684,6 +686,11 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
     const s = allSpans.find((sp) => x.t >= sp.t - 1e-6 && x.t < sp.t + sp.dur - 1e-6);
     return s ? { chord: s.chord, scale: s.scale, next: s.next, roman: s.roman } : null;
   });
+  // Each step of the plan builds on the one before it, except the opening two chunks (bars 1–2 and
+  // 3–4), which are both open so the first session can work on both before joining them.
+  // A memory card hangs off its section; hearing the tune through is met once and builds on nothing.
+  let chain: string | undefined;
+  let openingChunks = 0;
   for (const step of plan) {
     const first = tl.targets.findIndex((x) => x.slot >= step.from);
     let last = -1;
@@ -691,16 +698,26 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
       if (x.slot <= step.to) last = i;
     });
     if (first < 0 || last < first) continue;
+    const id = `mel:${step.kind}:${step.from}-${step.to}`;
+    const hear = step.kind === "hear";
+    const isOpeningChunk = step.kind === "new" && openingChunks < 2;
+    if (isOpeningChunk) openingChunks++;
+    const needs = hear || isOpeningChunk ? undefined : chain;
+    if (!hear && step.kind !== "memory") chain = id;
     melodyCards.push({
       ...base,
-      id: `mel:${step.kind}:${step.from}-${step.to}`,
+      id,
       family: "melody",
       kind: "melody",
+      needs,
+      ...(hear ? { once: true } : {}),
       group: step.section ? sectionName(step.section) : sheet.title,
       title: step.title,
       detail: step.detail,
       why:
-        step.kind === "memory"
+        hear
+          ? "The whole shape first, so every part learned after it has a place to go."
+          : step.kind === "memory"
           ? "The page fades in steps; a clean pass schedules a later review."
           : step.kind === "join"
             ? "Seams are where tunes fall apart; this one crosses a seam."
@@ -708,7 +725,7 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
               ? "Top to bottom, as you'd play it."
               : "With the band playing the chords, so you hear where each note sits.",
       where: barsLabel(sheet, tl, step.from, step.to),
-      bpm: densityStartBpm(tl.targets.slice(first, last + 1), tempo),
+      bpm: hear ? tempo : densityStartBpm(tl.targets.slice(first, last + 1), tempo),
       goalBpm: tempo,
       pass: step.pass,
       listen: step.listen,
@@ -1137,10 +1154,10 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
     if (taken.has(c.id)) return;
     taken.add(c.id);
     cards.push(c);
-    intro.push(c.id);
+    if (!c.once) intro.push(c.id);
   };
   let melodyAt = 0;
-  for (let round = 0; intro.length < technique.length + melodyCards.length + harmonyQueue.length + reading.length + earDeck.length + fretDeck.length + mechanics.length && round < 1000; round++) {
+  for (let round = 0; cards.length < technique.length + melodyCards.length + harmonyQueue.length + reading.length + earDeck.length + fretDeck.length + mechanics.length && round < 1000; round++) {
     streams.forEach((stream, si) => {
       if (stream === melodyCards) {
         if (melodyAt < melodyCards.length) add(melodyCards[melodyAt++]);
@@ -1150,6 +1167,11 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
       if (pos[si] < stream.length) add(stream[pos[si]++]);
     });
   }
+
+  // A new tune is the tune first: its opening (bars 1–4 joined, else its first section) before
+  // any scale, line, reading or ear exercise of it is introduced.
+  const opening = (["join", "section", "tune"] as const).map((kind) => melodyCards.find((c) => c.step?.kind === kind)).find(Boolean);
+  if (opening) for (const c of cards) if (c.family !== "melody") c.after = opening.id;
 
   const passage = parsePassageId(opts.passageFrom);
   if (passage && validPassage(tl, passage) && passageId(sheet, passage) === opts.passageFrom) {
@@ -1282,7 +1304,7 @@ export function mixDecks(main: Deck, others: { tuneId: string; deck: Deck }[]): 
       lane.push(id);
       if (have.has(id)) continue;
       have.add(id);
-      cards.push({ ...c, id, needs: c.needs ? glue(tuneId, c.needs) : undefined, followedBy: c.followedBy ? glue(tuneId, c.followedBy) : undefined });
+      cards.push({ ...c, id, needs: c.needs ? glue(tuneId, c.needs) : undefined, after: c.after ? glue(tuneId, c.after) : undefined, followedBy: c.followedBy ? glue(tuneId, c.followedBy) : undefined });
     }
     const at = new Map(deck.intro.map((id, i) => [glue(tuneId, id), i]));
     lanes.push(lane.sort((a, b) => (at.get(a) ?? 0) - (at.get(b) ?? 0)));
@@ -1331,7 +1353,10 @@ export function familiesOnly(deck: Deck, families: Family[]): Deck {
   const ids = new Set(cards.map((card) => card.id));
   return {
     ...deck,
-    cards: cards.map((card) => (card.needs && !ids.has(card.needs) ? { ...card, needs: undefined } : card)),
+    cards: cards.map((card) => {
+      const lost = { ...(card.needs && !ids.has(card.needs) ? { needs: undefined } : {}), ...(card.after && !ids.has(card.after) ? { after: undefined } : {}) };
+      return Object.keys(lost).length ? { ...card, ...lost } : card;
+    }),
     intro: deck.intro.filter((id) => ids.has(id)),
   };
 }
