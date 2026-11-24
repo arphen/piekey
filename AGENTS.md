@@ -118,7 +118,7 @@ Run from the repository root. Prefer quiet forms and redirect long output.
 | Repo map | `make map-update` / `make map-check` |
 | Full gate | `make check` (typecheck + map freshness + tests) |
 | Git hooks | `make hooks` (also run by `make install`): pre-commit = typecheck + map, pre-push = `make check`; tracked in `.githooks/` |
-| Publish | `make publish` (clean tree, `make check`, build, push current branch; `SKIP=1` skips the build; first prints the delta and unmerged branches, also `make report`) |
+| Publish | `make publish [MSG="..."]`: commits any changes, prints the delta and unmerged branches, runs `make check` + build, pushes `HEAD` to `main` (deploys Pages). `SKIP=1` skips the build; `make report` is the read-only report |
 
 `npm run build` runs `tsc` then Vite; `npm run typecheck` is the fast feedback loop. Unit and
 component tests run under jsdom. No CI configuration is committed; `make check` is the local gate.

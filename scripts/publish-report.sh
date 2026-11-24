@@ -7,16 +7,14 @@ git fetch --quiet origin 2>/dev/null || echo "(fetch failed; remote state may be
 
 mainref=main; git rev-parse --verify --quiet origin/main >/dev/null && mainref=origin/main
 
-echo "== Delta to publish: $branch -> origin/$branch =="
-if git rev-parse --verify --quiet "origin/$branch" >/dev/null; then base="origin/$branch"; else base=""; echo "(new remote branch)"; fi
-if [ -n "$base" ]; then range="$base..HEAD"; else range="HEAD"; fi
+echo "== Delta to publish: $branch -> $mainref (this is what goes live) =="
+if git rev-parse --verify --quiet "$mainref" >/dev/null; then range="$mainref..HEAD"; else range="HEAD"; fi
 count=$(git rev-list --count $range)
-if [ "$count" = 0 ]; then echo "nothing new to push"; else
+if [ "$count" = 0 ]; then echo "  nothing new to push"; else
   git log --format='  %h %s' $range | head -20
   [ "$count" -gt 20 ] && echo "  ... $count commits in total"
-  if [ -n "$base" ]; then git diff --shortstat "$base" HEAD | sed 's/^/  /'; fi
+  git diff --shortstat "$mainref" HEAD | sed 's/^/  /'
 fi
-
 echo
 echo "== Against $mainref =="
 if git rev-parse --verify --quiet "$mainref" >/dev/null; then

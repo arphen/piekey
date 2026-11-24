@@ -77,16 +77,24 @@ hooks:
 	@git config core.hooksPath .githooks
 	@echo "git hooks installed from .githooks (pre-commit: typecheck + map, pre-push: make check)"
 
-# Publish the current branch: clean tree, full gate, production build, then push (never forced).
-# The pre-push hook repeats the gate; set SKIP=1 only to skip the local build.
+# One command to ship: commit whatever changed, run the full gate and a build, push to main (which
+# deploys GitHub Pages via .github/workflows/pages.yml). Never forced; fails if main moved elsewhere.
+#   make publish                      auto message
+#   make publish MSG="what I did"     your message
 publish:
+	@if [ -n "$$(git status --porcelain)" ]; then \
+		git add -A; \
+		git commit -q -m "$${MSG:-Update: $$(git diff --cached --shortstat | sed 's/^ *//')}" || exit 1; \
+		echo "Committed local changes."; \
+	fi
+	@./scripts/publish-report.sh
+	@$(MAKE) --no-print-directory check
+	@if [ -z "$(SKIP)" ]; then npm run --silent build:quiet; fi
+	@git push --no-verify origin HEAD:main || { echo; echo "Push to main was rejected: main has changes this checkout lacks. Run: git pull --rebase origin main"; exit 1; }
 	@branch=$$(git rev-parse --abbrev-ref HEAD); \
-	if [ -n "$$(git status --porcelain)" ]; then echo "Working tree is not clean; commit or stash first:"; git status --short; exit 1; fi; \
-	./scripts/publish-report.sh; \
-	$(MAKE) --no-print-directory check; \
-	if [ -z "$(SKIP)" ]; then npm run --silent build:quiet; fi; \
-	git push -u origin "$$branch"; \
-	echo "Published $$branch to $$(git remote get-url origin)"
+	if [ "$$branch" != "main" ]; then git push --no-verify -q origin "$$branch"; fi
+	@echo; echo "Published. Pages deploys in about a minute: https://arphen.github.io/piekey/"
+	@gh run list --workflow pages.yml --limit 1 2>/dev/null || true
 
 # What a publish would send, and which branches main has not integrated. Changes nothing.
 report:
