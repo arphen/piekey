@@ -29,6 +29,11 @@ vi.mock("../components/GuitarNav", () => ({ GuitarNav: () => null }));
 vi.mock("../components/Score", () => ({ Score: () => null }));
 vi.mock("../components/FreePlay", () => ({ FreePlay: () => <div>standalone metronome</div> }));
 vi.mock("../platform/PracticeWindowBoundary", () => ({ PracticeWindowBoundary: ({ children }: { children: ReactNode }) => <>{children}</> }));
+vi.mock("../components/PracticeRoom", () => ({
+  PracticeRoom: ({ launch, parked }: { launch: { tuneId: string | null; cardId?: string }; parked: boolean }) => (
+    <main data-room={launch.tuneId ?? "next"} data-card={launch.cardId} data-parked={String(parked)} />
+  ),
+}));
 vi.mock("../components/TuneView", () => ({
   TuneView: ({ launch }: { launch?: { kind: string; tuneId?: string; cardId?: string } }) => (
     <main data-tune={launch?.tuneId} data-launch={launch?.kind} data-card={launch?.cardId} />
@@ -115,11 +120,31 @@ it("enters guitar mode with the session's first song even when saving the select
   vi.spyOn(localStorage, "setItem").mockImplementation(() => { throw new DOMException("full", "QuotaExceededError"); });
   const element = await mountShell();
   await press("Guitar mode");
-  expect(element.querySelector<HTMLElement>("main[data-launch]")?.dataset).toMatchObject({
-    launch: "session", tune: "study-one",
-  });
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+  expect(element.querySelector<HTMLElement>("main[data-room]")?.dataset).toMatchObject({ room: "study-one", parked: "false" });
   expect(localStorage.getItem("guitar-tune")).toBe(JSON.stringify("previous-song"));
   expect(element.querySelector('[role="alert"]')).toBeTruthy();
+});
+
+it("parks the Play tab's room behind other tabs and returns to the same room", async () => {
+  shell.overview.loading = false;
+  const element = await mountShell();
+  await press("Play");
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+  const room = () => element.querySelector<HTMLElement>("main[data-room]");
+  const opened = room();
+  expect(opened?.dataset).toMatchObject({ room: "next", parked: "false" });
+  await press("Library");
+  expect(room()).toBe(opened); // still mounted: a session there waits where it was
+  expect(room()?.dataset.parked).toBe("true");
+  expect(room()?.closest<HTMLElement>(".room-host")?.hidden).toBe(true);
+  await press("Play");
+  expect(room()).toBe(opened);
+  expect(room()?.dataset.parked).toBe("false");
+  // Back from the room walks the history like any tab
+  await act(async () => element.querySelector<HTMLButtonElement>('[aria-label="Back"]')!.click());
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+  expect(room()?.dataset.parked).toBe("true");
 });
 
 it("keeps archive failures unknown with retry and resets history choices for another tune", async () => {

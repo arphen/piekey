@@ -9,25 +9,25 @@ inventory see [CURRENT_STATE.md](CURRENT_STATE.md).
 
 Local-first React SPA. No app-data backend, router or server state. Optional device exchange uses
 signaling plus encrypted WebRTC. `src/main.tsx` mounts `App`; `App`
-owns the active view, Devices/Tools visibility, transient tune/card launch request, shared mic input and the key used by
-the Scales shape explorer. Each mode owns its feature state; the session modes share one
-component (`FocusView` → `SongCoach`). Free play is also reachable without a tune.
+owns the active view, Devices/Tools visibility, the Play tab's room launch, shared mic input and the key used by
+the Scales shape explorer. Each mode owns its feature state; every session runs in the one Play
+room (`PracticeRoom` → `SongCoach`), Changes/Reading included. Free play is also reachable without a tune.
 
 ```
 main.tsx
   └─ App.tsx
-       ├─ header: Back + brand + Home/Library/Progress pills + Tools + DeviceSync → DeviceSyncPanel
+       ├─ header: Back + brand + Home/Library/Progress tabs | Play + Tools + DeviceSync → DeviceSyncPanel
+       ├─ Play      ── PracticeRoom (kept mounted, parked behind other tabs) → SongCoach → buildDeck → useSession → SessionSummary
        ├─ Home      ── OverviewView → useSongSummaries + overview/map (song/tree)
        │                 └─ SongMap → overview/homeTree (spec + progress) → tree/layout → PassiveTree
        │                     (selection cards beside nodes; song ✓/+ edit song/sessionSet)
        ├─ Library   ── TuneView(songId=null) → LibraryGrid (cards, import, demos, backup tools)
        │             ── TuneView(songId) → parseMusicXml → LeadSheet → buildTimeline
-       │                 ├─ Score + listening transport + phrase strip/passage selection + exercise rows
-       │                 └─ SongCoach → buildDeck → useSession → SessionSummary
+       │                 └─ Score + listening transport + phrase strip/passage selection + exercise rows → Play
        ├─ Progress  ── ProgressView → goals / exercise archive / observed patterns / retained take comparison
-       ├─ Explore: Changes ── FocusView(changes) → SongCoach(focus) over familiesOnly(deck)
+       ├─ Explore: Changes ── FocusView(changes) → Play room with focus (familiesOnly(deck))
        ├─ Scales    ── ScalesView → FocusView(scales) | ShapesView → harmonicMinorShapes → usePlayer
-       ├─ Reading   ── FocusView(reading) → SongCoach(focus) over familiesOnly(deck)
+       ├─ Reading   ── FocusView(reading) → Play room with focus (familiesOnly(deck))
        ├─ Explore: Ear ── EarHub → FocusView(ear) | EarView → useEarTrainer
        ├─ Explore: Triads ── TriadsView → TriadWheel (circle of fifths) | drill: useTriads(focus) → triads/box + triads/triads
        └─ Tools     ── GuitarTools → useTuner / usePlayback (shared input/context)
@@ -183,9 +183,18 @@ songs). `songKey` places a song by its harmony home key when that shares the wri
 else by the signature. `SongMap` draws the SVG and lays real `button`s over song nodes so touch,
 mouse and the played cursor reach them. Song toggles and cards edit `song/sessionSet.ts`; `SongCoachRoom`
 filters its mixed-in guests by that set, frozen while a session is live. `App` mirrors a
-`{ tab, song, depth }` route into `history`: tab buttons push, TuneView's in-session tune
-changes replace, and a launch from elsewhere returns there when the room closes. Browser Back
-is swallowed while a full-screen room is open; the shell's own Back is flagged so it is not.
+`{ tab, song, depth }` route into `history`: tab buttons push, TuneView's song picks replace.
+Every practice launch goes to the Play tab (`{ tab: "play" }`): `App` keeps one `RoomLaunch`
+(serial, tune or null for the next session's lead, card, mix/focus options) and mounts
+`PracticeRoom` keyed by its serial. Behind another tab the room is parked: `SongCoach` hands its
+subtree an input whose frames stop, `PoolRoom` retires the engine, the atmosphere unmounts, keys
+are ignored, and a running session is paused by a pause parking owns (released on return).
+`.ss.is-parked` makes `sessionOpen()` false, so the shell's guitar navigation works elsewhere.
+A new launch first awaits `RoomHandle.leave()` (session exit + `settlePracticeWrites`). Because
+the room holds the practice lock, Tools and Free play with a room open become `RoomRequest`s
+carried out inside it, and Triads/Ear/Devices close it first. Arriving in Play runs a view
+transition where supported: the pressed card title (or `[data-morph]`) and the Ready title share
+`view-transition-name: room-title`, and the tab ink is a real element so it slides.
 Previously: `OverviewView` presented a score and factual metadata, one flat Next exercise list, mode icons
 and simple tune rows. `UnitCard` is a shared exercise row used by the overview and `FocusView`;
 the tune list does not duplicate it. `Glyph` supplies shared icons for the header, modes and
@@ -379,7 +388,7 @@ before resuming a pause it owns. Tuner uses `useTuner`; metronome uses `usePlayb
 timeline of 2–7 quarter beats. Meter changes stop playback and require an explicit fresh Start.
 
 `SongCoachRoom` is keyed inside a stable `PracticeWindowBoundary`, allowing tune replacement
-without releasing writer ownership or fullscreen. `TunePicker` arms `useThemePicker` explicitly,
+without releasing writer ownership. `TunePicker` arms `useThemePicker` explicitly,
 then separates candidate review and fresh confirmation. `song/theme.ts` matches original-key
 pitch-class prefixes (six attacks, three pitch classes; no fuzzy/transposed claim), preserves
 ambiguity and never navigates. Confirmed changes drain pending writes before the host replaces
@@ -426,7 +435,7 @@ applied by the detector. String attribution is inferred by `song/fingering.ts`, 
 
 | Path | Role |
 | --- | --- |
-| `src/components/SongCoach.tsx` | Full-screen session UI, ready screen, running screen, done screen wiring, settings drawer, six-string pad, calibration, free-play switch. Large; treat as orchestration, not domain logic. |
+| `src/components/SongCoach.tsx` | Session UI (in the Play tab, under the header; parked behind other tabs), ready screen, running screen, done screen wiring, settings drawer, six-string pad, calibration, free-play switch. Large; treat as orchestration, not domain logic. |
 | `src/components/SessionSummary.tsx` | Done screen: tiles, movement, trend, tree, guitar actions, interlude. |
 | `src/components/PracticeAtmosphere.tsx` | Shared decorative RMS/flow atmosphere and heard-beat `BeatPulse`; publishes to the room's pool; no practice decisions. |
 | `src/pool/mode.ts`, `src/pool/power.ts` | Device-local room mode (Still/Water/Living/Living on power), legacy migration, GPU probe, charger state. |
@@ -682,8 +691,8 @@ projection can be repaired by repeating the same union. Keep active practice out
 Devices entry waits until pending library saves and whole backup restores finish, including
 operations whose initiating screen has unmounted.
 `App` unmounts the current feature for the dialog's lifetime, cleaning up Song listening/Ear
-timers, then remounts persisted projections on close. A full-screen practice session blocks
-device entry. Merge operations serialize within the page and use a named Web Lock where the
+timers, then remounts persisted projections on close. A visible practice room blocks device
+entry; a parked one finishes and saves (`RoomHandle.leave`) and closes before Devices opens. Merge operations serialize within the page and use a named Web Lock where the
 browser supports it; projection rechecks the committed union and retries if it changed.
 `platform/practiceWindow.ts` reserves one writer across same-origin windows using Web Locks.
 `PracticeWindowBoundary` mounts before session, Free play, Ear quiz, Tools or Devices hooks. A

@@ -27,7 +27,14 @@ const COPY: Record<Mode, { label: string; empty: string; glyph: GlyphName }> = {
  * A tutor mode that works on one slice of the current tune: the full-screen session runs with the
  * deck narrowed to the mode's card families (`FOCUS_FAMILIES`). Progress shares the tune's store.
  */
-export function FocusView({ focus, input, onOpenTunes, extra }: { focus: Mode; input: InputApi; onOpenTunes?: () => void; extra?: { label: string; onOpen: () => void } }) {
+export function FocusView({ focus, input, onOpenTunes, onStartPractice, extra }: {
+  focus: Mode;
+  input: InputApi;
+  onOpenTunes?: () => void;
+  /** The shell's Play room; left out, the mode runs its own room (tests, standalone). */
+  onStartPractice?(tuneId: string, cardId: string | undefined, prepared: boolean, options: { focus: Mode }): void;
+  extra?: { label: string; onOpen: () => void };
+}) {
   const copy = COPY[focus];
   const [library, setLibrary] = useState<TuneEntry[]>(() => loadLibrary());
   const [loading, setLoading] = useState(true);
@@ -79,6 +86,7 @@ export function FocusView({ focus, input, onOpenTunes, extra }: { focus: Mode; i
 
   const start = (cardId?: string) => {
     if (loading || loadError || !sheet || !tl || !next.length) return;
+    if (onStartPractice) { onStartPractice(sheet.id, cardId, false, { focus }); return; }
     openPractice(input);
     setInitialCardId(cardId);
     setCoach(true);

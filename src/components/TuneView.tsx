@@ -27,7 +27,7 @@ import { UnitCard } from "./UnitCard";
 import { Score } from "./Score";
 import { GoalChooser } from "./GoalChooser";
 import { PracticeBriefPanel } from "./PracticeBriefPanel";
-import { openPractice, SongCoach } from "./SongCoach";
+import { openPractice } from "./SongCoach";
 import { CampfireView } from "./CampfireView";
 import { LibraryGrid } from "./LibraryGrid";
 import "../tunes/tunes.css";
@@ -52,15 +52,15 @@ interface Launch extends PracticeLaunchOptions {
 
 type PendingImport = Omit<TuneEntry, "id"> & { repairId?: string };
 
-export function TuneView({ input, launch, onLaunched, songId, onSong, onSessionEnd, onStartPractice }: {
+export function TuneView({ input, launch, onLaunched, songId, onSong, onStartPractice }: {
   input: InputApi;
   launch?: Launch;
   onLaunched?: () => void;
   /** The shell's route: a tune's page, or null for the library. Left out, the view keeps its own choice. */
   songId?: string | null;
   onSong?(id: string | null, replace?: boolean): void;
-  onSessionEnd?(): void;
-  onStartPractice?(tuneId: string): void;
+  /** Practice happens in the Play tab's room; `prepared` once the click has already primed sound. */
+  onStartPractice?(tuneId: string, cardId?: string, prepared?: boolean): void;
 }) {
   const [library, setLibrary] = useState<TuneEntry[]>(() => loadLibrary());
   const [demoPreview, setDemoPreview] = useState<TuneEntry | null>(null);
@@ -95,13 +95,10 @@ export function TuneView({ input, launch, onLaunched, songId, onSong, onSessionE
   const [customPassage, setCustomPassage] = useState(false);
   const [passageDraft, setPassageDraft] = useState<PassageRange | null>(null);
   const [looping, setLooping] = useState(false);
-  const [coach, setCoach] = useState(false); // the full-screen practice session
   const [campfire, setCampfire] = useState<{ open: boolean; tuneId: string | null }>({ open: false, tuneId: null });
-  const [sessionLaunch, setSessionLaunch] = useState<Launch>();
   const [demoToListen, setDemoToListen] = useState<string | null>(null);
   const launched = useRef<Launch>();
   const openingDemo = useRef(false);
-  const browseScroll = useRef(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const folderRef = useRef<HTMLInputElement>(null);
   const backupRef = useRef<HTMLInputElement>(null);
@@ -147,26 +144,6 @@ export function TuneView({ input, launch, onLaunched, songId, onSong, onSessionE
   }, [entry, selectedStudyHub]);
   const sheet = parsed.sheet;
   const tl = useMemo(() => buildTimeline(sheet ?? { bars: [], comp: [] }), [sheet]);
-
-  // the rest of the library + any virtual key studies in a custom mix, read only while the practice session is open
-  const others = useMemo(() => {
-    if (!coach) return [];
-    const fromLibrary = library.flatMap((t) => {
-      if (t.id === sheet?.id) return [];
-      try {
-        const s = parseTuneEntry(t);
-        return [{ sheet: s, tl: buildTimeline(s) }];
-      } catch {
-        return [];
-      }
-    });
-    const fromStudies = (sessionLaunch?.studyHubIds ?? []).flatMap((hub) => {
-      const s = keyStudySheet(hub);
-      if (!s || s.id === sheet?.id) return [];
-      return [{ sheet: s, tl: buildTimeline(s) }];
-    });
-    return [...fromLibrary, ...fromStudies];
-  }, [coach, library, sheet?.id, sessionLaunch?.studyHubIds]);
 
   // a new tune: its own tempo, no loop
   useEffect(() => {
@@ -216,13 +193,7 @@ export function TuneView({ input, launch, onLaunched, songId, onSong, onSessionE
     }
     if (!sheet) return;
     launched.current = launch;
-    if (launch.kind === "listen") {
-      setCoach(false);
-      setDemoToListen(sheet.id);
-    } else if (launch.kind !== "song") {
-      setSessionLaunch(launch);
-      setCoach(true);
-    } else setCoach(false);
+    if (launch.kind === "listen") setDemoToListen(sheet.id);
     onLaunched?.();
   }, [launch, loading, sheet, library, libraryIssues, pick, toLibrary, onLaunched]);
 
@@ -460,31 +431,25 @@ export function TuneView({ input, launch, onLaunched, songId, onSong, onSessionE
     return () => setNavMuted(false);
   }, [playback.playing]);
   useEffect(() => {
-    if (coach) stop();
-  }, [coach, stop]);
-  useEffect(() => {
     if (playingRef.current) startRef.current(Math.max(0, slotRef.current));
   }, [bpm]);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement;
-      if (coach || event.key !== " " || document.querySelector("dialog[open]") || ["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(target.tagName)) return;
+      if (event.key !== " " || document.querySelector("dialog[open]") || ["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(target.tagName)) return;
       event.preventDefault();
       if (playingRef.current) stop();
       else startRef.current();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [coach, stop]);
+  }, [stop]);
 
   const practice = useCallback((cardId?: string) => {
     if (!sheet || loading || busy) return;
     stop();
-    browseScroll.current = window.scrollY;
-    openPractice(input);
-    setSessionLaunch(cardId ? { kind: "card", tuneId: sheet.id, cardId } : undefined);
-    setCoach(true);
-  }, [sheet, loading, busy, stop, input]);
+    onStartPractice?.(sheet.id, cardId);
+  }, [sheet, loading, busy, stop, onStartPractice]);
   const chooseDemo = async (demo: DemoTune, action: "open" | "listen" | "practice") => {
     if (loading || busy || openingDemo.current) return;
     openingDemo.current = true;
@@ -531,10 +496,7 @@ export function TuneView({ input, launch, onLaunched, songId, onSong, onSessionE
         setMelody(true);
         if (await audioReady) setDemoToListen(chosen.id);
         else setLoadError("The score is ready. Use Listen to piece to enable audio.");
-      } else if (action === "practice") {
-        setSessionLaunch(undefined);
-        setCoach(true);
-      }
+      } else if (action === "practice") onStartPractice?.(chosen.id, undefined, true);
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "This demo could not be opened.");
     } finally {
@@ -612,27 +574,6 @@ export function TuneView({ input, launch, onLaunched, songId, onSong, onSessionE
   const marked = selectedBars?.length && selectedBars.every((bar, index) => bar === selectedBars[0] + index)
     ? { start: selectedBars[0], end: selectedBars[selectedBars.length - 1] } : null;
 
-  if (coach && sheet) return (
-    <SongCoach
-      sheet={sheet}
-      tl={tl}
-      input={input}
-      onClose={() => { setCoach(false); setRevision((value) => value + 1); window.requestAnimationFrame(() => window.scrollTo(0, browseScroll.current)); onSessionEnd?.(); }}
-      tunes={library.map((tune) => ({ id: tune.id, title: tune.name }))}
-      onTune={(id) => {
-        const target = library.find((tune) => tune.id === id);
-        if (!target) throw new Error("That tune is no longer available. Choose another tune.");
-        parseTuneEntry(target); // Keep the current room if the next score cannot open.
-        setSessionLaunch(undefined);
-        pick(id, true);
-      }}
-      others={others}
-      mixIds={sessionLaunch?.mixIds}
-      focus={sessionLaunch?.focus}
-      initialCardId={sessionLaunch?.kind === "card" ? sessionLaunch.cardId : undefined}
-    />
-  );
-
   if (campfire.open) return (
     <CampfireView
       library={library}
@@ -641,8 +582,7 @@ export function TuneView({ input, launch, onLaunched, songId, onSong, onSessionE
       onOpenScore={(id) => { setCampfire({ open: false, tuneId: null }); pick(id); }}
       onPractice={(id) => {
         setCampfire({ open: false, tuneId: null });
-        if (onStartPractice) onStartPractice(id);
-        else { pick(id); setCoach(true); }
+        onStartPractice?.(id);
       }}
     />
   );
@@ -659,26 +599,32 @@ export function TuneView({ input, launch, onLaunched, songId, onSong, onSessionE
     >
       {browsing ? <header className="lib-head">
         <div>
-          <p className="tunes-kicker">Library</p>
-          <h2>Your songs</h2>
-          <p className="tunes-byline">{loading ? "Opening library…" : `${library.length} song${library.length === 1 ? "" : "s"} · ${sessionSet.ids.length} in the next session`}</p>
+          <p className="tunes-kicker">Songbook &amp; Collection</p>
+          <h2>Library</h2>
+          <p className="tunes-byline">{loading ? "Opening library…" : `${library.length} song${library.length === 1 ? "" : "s"} · ${sessionSet.ids.length} queued for practice`}</p>
         </div>
         <div className="lib-head-actions">
-          <button type="button" className="lib-btn is-primary" onClick={() => { repairTarget.current = undefined; fileRef.current?.click(); }} disabled={loading || busy}><Glyph name="plus" size={18} />Import score</button>
-          <button type="button" className="lib-btn" onClick={() => { repairTarget.current = undefined; folderRef.current?.click(); }} disabled={loading || busy}><Glyph name="library" size={18} />Import folder</button>
-          <button type="button" className="lib-btn" onClick={() => setCampfire({ open: true, tuneId: null })} disabled={loading || busy}><Glyph name="reading" size={18} />Campfire songbook</button>
-          <button type="button" className="lib-btn" aria-expanded={toolsOpen} aria-controls="song-library-tools" onClick={() => setToolsOpen((open) => !open)}><Glyph name="tools" size={18} />Backup &amp; tools</button>
+          <button type="button" className="lib-btn is-primary" onClick={() => { repairTarget.current = undefined; fileRef.current?.click(); }} disabled={loading || busy}><Glyph name="plus" size={18} />Add songs</button>
+          <button type="button" className="lib-btn" onClick={() => { repairTarget.current = undefined; folderRef.current?.click(); }} disabled={loading || busy}><Glyph name="library" size={17} />Import folder</button>
+          {library.length ? <button type="button" className="lib-btn is-jam" onClick={() => setCampfire({ open: true, tuneId: null })} disabled={loading || busy}><Glyph name="chords" size={17} />Jam songbook</button> : null}
+          <button type="button" className="lib-btn" aria-expanded={toolsOpen} aria-controls="song-library-tools" onClick={() => setToolsOpen((open) => !open)}><Glyph name="tools" size={17} />Manage</button>
         </div>
       </header> : <header className="tunes-heading">
         <div>
           {controlled ? <button type="button" className="tunes-back" onClick={() => toLibrary()}><Glyph name="arrow" size={18} />Library</button> : null}
           <p className="tunes-kicker">Song</p>
           <h2>{sheet?.title ?? selectedIssue?.name ?? (loading ? "Opening library…" : "Your music")}</h2>
-          {sheet ? <p className="tunes-byline">{[sheet.composer, sheet.keySignature, sheet.timeSignature, `${sheet.bars.length} bars`].filter(Boolean).join(" · ")}</p> : null}
+          {sheet ? <p className="tunes-byline">{[sheet.composer, sheet.keySignature, sheet.timeSignature, sheet.tempo ? `♩ ${sheet.tempo}` : null].filter(Boolean).join(" · ")}</p> : null}
         </div>
-        {sheet && library.some((tune) => tune.id === sheet.id) ? <button type="button" className="tunes-session-toggle" aria-pressed={sessionSet.has(sheet.id)} onClick={() => sessionSet.toggle(sheet.id)}>
-          <Glyph name={sessionSet.has(sheet.id) ? "check" : "plus"} size={18} />{sessionSet.has(sheet.id) ? "In next session" : "Add to next session"}
-        </button> : null}
+        {sheet ? <div className="tunes-heading-actions">
+          <div className="tunes-mode-switch" role="group" aria-label="Song view mode">
+            <button type="button" className="is-on" aria-pressed="true"><Glyph name="reading" size={15} />Score</button>
+            <button type="button" onClick={() => { stop(); setCampfire({ open: true, tuneId: sheet.id }); }} disabled={loading || busy}><Glyph name="chords" size={15} />Chords &amp; lyrics</button>
+          </div>
+          {library.some((tune) => tune.id === sheet.id) ? <button type="button" className="tunes-session-toggle" aria-pressed={sessionSet.has(sheet.id)} onClick={() => sessionSet.toggle(sheet.id)}>
+            <Glyph name={sessionSet.has(sheet.id) ? "check" : "plus"} size={17} />{sessionSet.has(sheet.id) ? "In next session" : "Next session"}
+          </button> : null}
+        </div> : null}
       </header>}
 
       {browsing && toolsOpen ? <div id="song-library-tools" className="tunes-backup-deck" aria-label="Library tools">
@@ -696,8 +642,14 @@ export function TuneView({ input, launch, onLaunched, songId, onSong, onSessionE
             <span>Create a private, read-only summary of recent practice data to share with a teacher or external assistant.</span>
           </button>
         </div>
+        {DEMO_TUNES.some((demo) => !library.some((tune) => tune.id === demo.entry.id)) ? (
+          <div className="tunes-tools-demos">
+            <DemoShelf library={library} disabled={loading || busy} onChoose={(demo, action) => void chooseDemo(demo, action)} onDownload={downloadDemo} />
+          </div>
+        ) : null}
+        <AgentScorePrompt />
         <div className="tunes-backup-foot">
-          <p className="tunes-note">Everything stays local in your browser · use Devices for full encrypted .fretpack sync including audio.</p>
+          <p className="tunes-note">Drop .gp, .musicxml, .xml or .mxl files anywhere on Library to add songs · use Devices for encrypted sync.</p>
           <button type="button" className="tunes-retry-link" onClick={() => {
             const saved = retryStorageWrites();
             setNotice(saved ? "Pending changes saved." : "Some changes are still unsaved. Keep the app open and export a backup.");
@@ -818,13 +770,13 @@ export function TuneView({ input, launch, onLaunched, songId, onSong, onSessionE
           session={sessionSet}
           busy={loading || busy}
           onOpen={(id) => pick(id)}
+          onCampfire={(id) => setCampfire({ open: true, tuneId: id })}
           onPlay={onStartPractice}
           onRemove={(id) => void remove(id)}
           onImport={() => { repairTarget.current = undefined; fileRef.current?.click(); }}
           onRepair={(id) => repairScore(id)}
         />
-        {DEMO_TUNES.some((demo) => !library.some((tune) => tune.id === demo.entry.id)) ? <DemoShelf library={library} disabled={loading || busy} onChoose={(demo, action) => void chooseDemo(demo, action)} onDownload={downloadDemo} /> : null}
-        <AgentScorePrompt />
+        {!library.length ? <DemoShelf library={library} disabled={loading || busy} onChoose={(demo, action) => void chooseDemo(demo, action)} onDownload={downloadDemo} /> : null}
       </> : sheet ? <>
         <div className="tunes-score-actions">
           <button type="button" className={`tunes-listen-button ${playback.playing ? "is-playing" : ""}`} aria-pressed={playback.playing} onClick={() => playback.playing ? stop() : start()} disabled={!tl.slots.length || loading || busy}>

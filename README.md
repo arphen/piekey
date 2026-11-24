@@ -12,10 +12,10 @@ Source repository: [arphen/piekey](https://github.com/arphen/piekey).
   (spiders, rhythm pyramid, string crossings, shifting, enclosures) hung in the keys tunes rarely
   visit, coloured by what they train, each with its tempo gauge. A foundation always plays in its
   key, from the tree or when the curriculum rotates it in. Selecting a key, song or foundation
-  opens its card beside it; the core at the centre is **Guitar mode** for the next session (or
-  plays the selection). The ✓/+ on a song puts it in or out of the next session; its card sets
+  opens its card beside it; the core at the centre opens **Play** with the next session (or
+  plays the selection). Triads and Ear training are keystones on the tree. The ✓/+ on a song puts it in or out of the next session; its card sets
   where the session starts. An empty library offers the two original studies.
-- **Library** — every song as a card: in/out of the next session, play in guitar mode, remove
+- **Library** — every song as a card: in/out of the next session, play it, remove
   (practice history is kept), import a score or add a demo. Opening a card shows the song's page:
   the score, a phrase strip filled as each phrase climbs the box, exact start/end passages,
   listening/looping and launching exactly that passage. Backup tools sit behind **Backup & tools**.
@@ -25,8 +25,12 @@ Source repository: [arphen/piekey](https://github.com/arphen/piekey).
   clean-tempo observations and inspectable attempts. Versions and help remain separate; shared
   scale history is outside this tune-specific view, and unavailable evidence stays unknown.
 
-**Back** is always top-left (and the browser's Back, and G5 on the guitar). Guitar mode has a
-labelled **Dashboard** button and returns to the screen it was opened from.
+- **Play** — the practice room, set apart at the right of the tabs. Everything you start lands
+  here; the selected title flies into the room. Switching to another tab parks the room: a running
+  session pauses and waits (a dot on Play), and coming back resumes it. While you play with the
+  mouse still, the header dims.
+
+**Back** is always top-left (and the browser's Back, and G5 on the guitar).
 
 **Changes, Scales, Reading, Ear and Triads** are drill tiles on Home.
 **Triads** is a by-heart drill: "ii of C major" and four written triads to choose from (tap, keys
@@ -46,7 +50,7 @@ ripples with each note heard and slowly glows over minutes of steady playing (op
 while the laptop is plugged in). All modes stop when the page is hidden.
 The shell's **Tools** button opens the same instruments; Devices remains outside practice.
 
-The full-screen coach is played from the guitar, with ordinary buttons alongside its gestures.
+The practice room is played from the guitar, with ordinary buttons alongside its gestures.
 It also offers **Practise without scoring** when the microphone is unavailable or unwanted.
 Self-guided activity stays in history and never earns measured accuracy, review-box or clean-tempo
 credit. **Finish after this pass** offers a musical ending; see

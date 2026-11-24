@@ -112,8 +112,21 @@ cleanup and late-start cancellation have mounted coverage; physical audio remain
   remove-with-confirm (history kept), import tile, demo shelf, Backup & tools. A song's page has
   a Library back link, a phrase strip filled by box, and the goal chooser behind a disclosure.
 - **Navigation**: `App` routes mirror into browser history; topbar Back, browser Back and G5
-  (formerly Home) walk it. Guitar mode shows a labelled Dashboard button and returns to the
-  screen it was opened from. Views and the room fade in (opacity only, no lingering layers).
+  (formerly Home) walk it. Views fade in (opacity only, no lingering layers).
+- **Play tab** (2026-11-24): guitar mode is no longer fullscreen or an overlay. It is the Play
+  tab, set apart right of Home/Library/Progress, hosting `PracticeRoom` → `SongCoach` under the
+  header; every launch (tree core, cards, Library, song page, Changes, Reading) lands there, and
+  the Dashboard button is gone. Other tabs park the room (no input frames, its own pause on a
+  running session, pool retired); returning resumes it, and Play shows a pulsing dot meanwhile.
+  A new launch finishes and saves the parked session first. With a room open, Tools and Free play
+  open inside it and Triads/Ear/Devices close it first (one practice lock per window). The header
+  dims during an idle exercise. Arrival is a view transition (pressed title → room title, tab ink
+  slides). Verified: typecheck; smoke (new parking test), song-browse (room tune change, session
+  lead), coach-entry (parked pause ownership), input-lifecycle, nav suites; headless Chrome:
+  Home → Play → Library → Play, a self-guided session paused while parked and resumed on return,
+  header opacity 0.14 when idle. The morph itself was not seen landing in dev: StrictMode's double
+  mount keeps the practice-window check ~1 s, past the 450 ms the transition waits; production
+  mounts once. Not verified with a real guitar, on a phone, or in Safari/Firefox.
 - **Guitar-mode chooser** (`TunePicker`): cards instead of a `<select>`; same gestures, review and
   confirmation flow.
 - Verified: typecheck; smoke (incl. a new Back test), song-browse, coach-entry, overview (new

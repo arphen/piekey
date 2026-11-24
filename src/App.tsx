@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { getKey } from "./core";
 import type { KeyInfo } from "./core/contract";
 import { GuitarNav } from "./components/GuitarNav";
@@ -15,19 +16,20 @@ import { FreePlayView } from "./components/FreePlayView";
 import { SaveNotice } from "./components/SaveNotice";
 import { PlatformStatus } from "./platform/PlatformStatus";
 import { Glyph, type UtilityGlyphName } from "./components/Glyph";
+import { AbyssalWater, type WaterScene } from "./components/AbyssalWater";
 import { DeviceSync } from "./components/DeviceSync";
-import { openPractice } from "./components/SongCoach";
+import { openPractice, type RoomHandle, type RoomRequest } from "./components/SongCoach";
+import { PracticeRoom, type RoomLaunch } from "./components/PracticeRoom";
 import type { GlyphName, TutorTargetTab } from "./overview/modes";
 import { useInput } from "./listen/useInput";
-import { sessionOpen } from "./nav/useGuitarNav";
 import { saveCurrentTuneId } from "./tunes/library";
 import { getStoredItem, setStoredItem } from "./storage";
 import { GuitarTools } from "./tools/GuitarTools";
 import "./practice.css";
 import "./shell.css";
 
-type Tab = "tutor" | "progress" | TutorTargetTab;
-type PracticeLaunch = PracticeLaunchOptions & { kind: "song" | "listen" | "session" | "card"; tuneId?: string; cardId?: string };
+type Tab = "tutor" | "progress" | "play" | TutorTargetTab;
+type PracticeLaunch = PracticeLaunchOptions & { kind: "song" | "listen"; tuneId?: string };
 /** Where the shell is. Mirrored into the browser history, so Back (button, key, swipe) walks it. */
 interface Route { tab: Tab; song: string | null; depth: number }
 
@@ -38,7 +40,53 @@ const TABS: { id: Tab; label: string; glyph: GlyphName | UtilityGlyphName }[] = 
   { id: "tunes", label: "Library", glyph: "library" },
   { id: "progress", label: "Progress", glyph: "progress" },
 ];
-const primaryTab = (tab: Tab) => tab === "tunes" || tab === "progress" ? tab : "tutor";
+/** The guitar walks the three tabs and then Play, the room they lead to. */
+const TAB_CYCLE: Tab[] = ["tutor", "tunes", "progress", "play"];
+const primaryTab = (tab: Tab) => tab === "tunes" || tab === "progress" ? tab : tab === "play" || tab === "free" ? "play" : "tutor";
+const tabRank = (route: Route) => {
+  const p = primaryTab(route.tab);
+  if (p === "tutor") return 0;
+  if (p === "tunes") return route.song ? 1.5 : 1;
+  if (p === "play") return 3;
+  return 2;
+};
+
+type ViewTransitionDocument = Document & { startViewTransition?(update: () => Promise<void> | void): unknown };
+/** Resolves once a selector has appeared, checked on timers (rendering is held during a view transition). */
+const appeared = (selector: string, ms: number) => new Promise<void>((resolve) => {
+  const until = Date.now() + ms;
+  const check = () => (document.querySelector(selector) || Date.now() > until ? resolve() : window.setTimeout(check, 16));
+  check();
+});
+/** The morph's source: the pressed card's title, or what was pressed. */
+function markMorphSource(from: Element | null): () => void {
+  const el = from?.closest("[data-morph]") ?? from?.closest(".hm-card, .lib-card")?.querySelector("h3, .lib-card-title") ?? from?.closest("button");
+  if (!(el instanceof HTMLElement)) return () => undefined;
+  el.style.viewTransitionName = "room-title";
+  return () => { el.style.viewTransitionName = ""; };
+}
+const ROOM_TITLE = ".room-host:not([hidden]) .ss-ready .ss-display";
+/**
+ * Arriving in the Play tab: where the browser has view transitions, the pressed title flies into
+ * the room's title and the tab ink slides to Play (waiting briefly for the room to be read);
+ * without them, or with reduced motion, it is a cut.
+ */
+function arriveInRoom(update: () => void, from: Element | null) {
+  const doc = document as ViewTransitionDocument;
+  const still = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!doc.startViewTransition || still) { update(); return; }
+  const unmark = markMorphSource(from);
+  try {
+    doc.startViewTransition(async () => {
+      unmark();
+      flushSync(update);
+      await appeared(ROOM_TITLE, 450);
+    });
+  } catch {
+    unmark();
+    update();
+  }
+}
 const routeOf = (state: unknown): Route | null => {
   const route = (state as { ffl?: Route } | null)?.ffl;
   return route && typeof route.tab === "string" && typeof route.depth === "number" ? route : null;
@@ -47,12 +95,23 @@ const trySaveTune = (id: string) => { try { saveCurrentTuneId(id); } catch { /* 
 
 export default function App() {
   const [route, setRoute] = useState<Route>(() => routeOf(history.state) ?? HOME);
+  const [navDir, setNavDir] = useState<"right" | "left" | "fade">("fade");
   const routeRef = useRef(route);
   routeRef.current = route;
   const tab = route.tab;
   const [launch, setLaunch] = useState<PracticeLaunch>();
-  const returnAfterSession = useRef(false);
-  const ownPop = useRef(false); // a Back the shell asked for itself, as opposed to the browser's
+  // the Play tab's room: mounted from the first visit, parked (not unmounted) behind other tabs
+  const [room, setRoom] = useState<RoomLaunch | null>(() => (route.tab === "play" ? { serial: 1, tuneId: null } : null));
+  const roomSerial = useRef(1);
+  const roomHandle = useRef<RoomHandle | null>(null);
+  const [roomLive, setRoomLive] = useState(false);
+  const [roomRequest, setRoomRequest] = useState<RoomRequest>();
+  const lastPress = useRef<Element | null>(null);
+  useEffect(() => {
+    const press = (event: PointerEvent) => { lastPress.current = event.target as Element | null; };
+    window.addEventListener("pointerdown", press, true);
+    return () => window.removeEventListener("pointerdown", press, true);
+  }, []);
   const [stateRevision, setStateRevision] = useState(0);
   const [devicesOpen, setDevicesOpen] = useState(() => new URLSearchParams(location.hash.slice(1)).has("pair"));
   const [toolsTool, setToolsTool] = useState<"tuner" | "metronome" | null>(null);
@@ -72,17 +131,12 @@ export default function App() {
   useEffect(() => {
     try { history.replaceState({ ...(history.state ?? {}), ffl: routeRef.current }, ""); } catch { /* history is a convenience */ }
     const onPop = (event: PopStateEvent) => {
-      // guitar mode owns the screen: Back there is its own Dashboard button, so the shell stays put
-      const own = ownPop.current;
-      ownPop.current = false;
-      if (!own && sessionOpen()) {
-        try { history.pushState({ ffl: routeRef.current }, ""); } catch { /* ignore */ }
-        return;
-      }
       setToolsTool(null);
       setLaunch(undefined);
-      returnAfterSession.current = false;
-      setRoute(routeOf(event.state) ?? HOME);
+      const nextRoute = routeOf(event.state) ?? HOME;
+      const diff = tabRank(nextRoute) - tabRank(routeRef.current);
+      setNavDir(diff > 0 ? "right" : diff < 0 ? "left" : "fade");
+      setRoute(nextRoute);
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
@@ -92,15 +146,18 @@ export default function App() {
     const now = routeRef.current;
     if (now.tab === tab && now.song === song) return false;
     const next: Route = { tab, song, depth: replace ? now.depth : tab === "tutor" && song === null ? 0 : now.depth + 1 };
+    const diff = tabRank(next) - tabRank(now);
+    setNavDir(diff > 0 ? "right" : diff < 0 ? "left" : "fade");
     routeRef.current = next;
-    setRoute(next);
+    if (tab === "play") arriveInRoom(() => setRoute(next), lastPress.current);
+    else setRoute(next);
     try {
       if (replace || next.depth === 0) history.replaceState({ ffl: next }, "");
       else history.pushState({ ffl: next }, "");
     } catch { /* history is a convenience */ }
     return !replace && next.depth > 0;
   }, []);
-  const historyBack = useCallback(() => { ownPop.current = true; history.back(); }, []);
+  const historyBack = useCallback(() => { history.back(); }, []);
   const back = useCallback(() => {
     if (toolsOpen) { setToolsTool(null); return; }
     setLaunch(undefined);
@@ -134,12 +191,62 @@ export default function App() {
   const input = useInput({ fftSize: 4096, intervalMs: 25 });
   const { autoStart } = input;
   useEffect(() => { autoStart(); }, [autoStart]);
+
+  // ---------- the Play tab's room ----------
+  /** Replace what the room plays, after a session under way there has finished and saved. */
+  const startPractice = useCallback(async (tuneId: string | null, cardId?: string, prepared = false, options?: PracticeLaunchOptions) => {
+    if (tuneId && !isKeyStudyId(tuneId)) trySaveTune(tuneId);
+    if (!prepared) openPractice(input);
+    setToolsTool(null);
+    setLaunch(undefined);
+    await roomHandle.current?.leave();
+    roomSerial.current += 1;
+    setRoomRequest(undefined);
+    setRoom({ serial: roomSerial.current, tuneId, cardId, ...options });
+    go("play");
+  }, [input, go]);
+  const startTune = useCallback((tuneId: string, cardId?: string, prepared = false, options?: PracticeLaunchOptions) => { void startPractice(tuneId, cardId, prepared, options); }, [startPractice]);
+  /** The Play tab: back to the room as it was left, or the next session when none is open. */
+  const openPlay = useCallback(() => {
+    setToolsTool(null);
+    setLaunch(undefined);
+    if (room) go("play");
+    else void startPractice(null);
+  }, [room, go, startPractice]);
+  /** The room closed itself (Esc, another window took the practice): it unmounts, the shell steps back. */
+  const closeRoom = useCallback(() => {
+    setRoom(null);
+    setRoomLive(false);
+    if (routeRef.current.tab !== "play") return;
+    if (routeRef.current.depth > 0) historyBack();
+    else go("tutor");
+  }, [go, historyBack]);
+  // arriving on Play through history with no room (after a reload or a closed room): the next session
+  useEffect(() => {
+    if (tab !== "play" || room) return;
+    roomSerial.current += 1;
+    setRoom({ serial: roomSerial.current, tuneId: null });
+  }, [tab, room]);
+  /** Devices pairs only outside practice: a room's session finishes and saves, and the room closes. */
+  const changeDevices = useCallback((open: boolean) => {
+    setToolsTool(null);
+    if (!open) { setDevicesOpen(false); return; }
+    void (async () => {
+      await roomHandle.current?.leave();
+      setRoom(null);
+      setRoomLive(false);
+      setDevicesOpen(true);
+    })();
+  }, []);
+
   const moveTab = useCallback((dir: 1 | -1) => {
     setLaunch(undefined);
     setToolsTool(null);
-    const at = TABS.findIndex((t) => t.id === primaryTab(routeRef.current.tab));
-    go(TABS[(at + dir + TABS.length) % TABS.length].id);
-  }, [go]);
+    const at = TAB_CYCLE.indexOf(primaryTab(routeRef.current.tab));
+    const next = TAB_CYCLE[(at + dir + TAB_CYCLE.length) % TAB_CYCLE.length];
+    if (next === "play") openPlay();
+    else go(next);
+  }, [go, openPlay]);
 
   const openLibrary = useCallback(() => { setLaunch(undefined); setToolsTool(null); go("tunes", null); }, [go]);
   const openTunes = openLibrary;
@@ -156,38 +263,57 @@ export default function App() {
   /** TuneView moves between its library and a song itself (a pick, a tune change in guitar mode). */
   const songRoute = useCallback((tuneId: string | null, replace = false) => { go("tunes", tuneId, replace); }, [go]);
 
-  const startPractice = useCallback((tuneId: string, cardId?: string, prepared = false, options?: PracticeLaunchOptions) => {
-    if (!isKeyStudyId(tuneId)) trySaveTune(tuneId);
-    if (!prepared) openPractice(input);
-    setLaunch({ kind: cardId ? "card" : "session", tuneId, cardId, ...options });
-    returnAfterSession.current = go("tunes", tuneId);
-  }, [input, go]);
-  /** Leaving guitar mode returns to wherever it was entered from. */
-  const sessionEnded = useCallback(() => {
-    if (!returnAfterSession.current) return;
-    returnAfterSession.current = false;
-    historyBack();
-  }, [historyBack]);
+  /**
+   * One practice surface per window owns the practice lock, so with a room open the shell never
+   * mounts a second one: instruments and free play open inside the room, and the separate
+   * trainers (Triads, Ear) first let the room finish and save.
+   */
+  const askRoom = useCallback((kind: RoomRequest["kind"]) => {
+    setToolsTool(null);
+    setLaunch(undefined);
+    setRoomRequest((prev) => ({ serial: (prev?.serial ?? 0) + 1, kind }));
+    go("play");
+  }, [go]);
+  const openTools = useCallback((tool: "tuner" | "metronome") => {
+    setDevicesOpen(false);
+    if (room) askRoom(tool);
+    else setToolsTool(tool);
+  }, [room, askRoom]);
   const openMode = useCallback((target: TutorTargetTab) => {
     setLaunch(undefined);
-    if (target === "free") openPractice(input);
+    if (target === "free") {
+      openPractice(input);
+      if (room) { askRoom("free"); return; }
+    }
+    if ((target === "triads" || target === "ear") && room) {
+      void (async () => {
+        await roomHandle.current?.leave();
+        setRoom(null);
+        setRoomLive(false);
+        go(target);
+      })();
+      return;
+    }
     go(target);
-  }, [input, go]);
+  }, [input, go, room, askRoom]);
   const launched = useCallback(() => setLaunch(undefined), []);
-  const closeFree = useCallback(() => {
-    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
-    back();
-  }, [back]);
+  const closeFree = back;
 
   useEffect(() => {
     window.scrollTo?.(0, 0);
   }, [route.tab, route.song]);
 
   const canGoBack = route.depth > 0 || toolsOpen;
+  const roomParked = tab !== "play" || toolsOpen || devicesOpen;
+  const onPlay = primaryTab(tab) === "play" && !toolsOpen;
+  const waterScene: WaterScene = tab === "progress" ? "progress" : tab === "tunes" ? (route.song ? "song" : "library") : "home";
+  // the practice room brings its own water
+  const waterSuspended = devicesOpen || toolsOpen || tab === "free" || tab === "play";
   return (
     <KeyContext.Provider value={key}>
       <RomanContext.Provider value={true}>
-        <div className={`app tab-${tab}`}>
+        <div className={`app tab-${tab} dir-${navDir}`}>
+          <AbyssalWater scene={waterScene} suspended={waterSuspended} />
           <header className="topbar" ref={topbar}>
             <div className="shell-start">
               <button type="button" className="shell-back" onClick={back} disabled={!canGoBack} aria-label="Back" title="Back">
@@ -199,49 +325,62 @@ export default function App() {
               </div>
             </div>
             <nav className="tabs" aria-label="views">
-              {TABS.map((t) => (
-                <button key={t.id} type="button" className={primaryTab(tab) === t.id && !toolsOpen ? "is-on" : ""} aria-current={primaryTab(tab) === t.id ? "page" : undefined} onClick={() => { setToolsTool(null); setLaunch(undefined); go(t.id); }}>
-                  <Glyph name={t.glyph} size={20} /><span>{t.label}</span>
-                </button>
-              ))}
+              {TABS.map((t) => {
+                const on = primaryTab(tab) === t.id && !toolsOpen;
+                return (
+                  <button key={t.id} type="button" className={on ? "is-on" : ""} aria-current={on ? "page" : undefined} onClick={() => { setToolsTool(null); setLaunch(undefined); go(t.id); }}>
+                    <Glyph name={t.glyph} size={20} /><span>{t.label}</span>{on ? <i className="tab-ink" aria-hidden="true" /> : null}
+                  </button>
+                );
+              })}
+              <span className="tabs-rule" aria-hidden="true" />
+              <button type="button" className={`tab-play ${onPlay ? "is-on" : ""} ${roomLive && !onPlay ? "is-live" : ""}`} aria-current={onPlay ? "page" : undefined} onClick={openPlay} title={roomLive && !onPlay ? "Back to the session" : "Play"} aria-label={roomLive && !onPlay ? "Play, session waiting" : "Play"}>
+                <Glyph name="play" size={20} /><span>Play</span>{onPlay ? <i className="tab-ink" aria-hidden="true" /> : null}
+                {roomLive && !onPlay ? <b className="tab-live" aria-hidden="true" /> : null}
+              </button>
             </nav>
             <div className="shell-end">
-              <button type="button" className="device-sync-trigger guitar-tools-trigger" aria-pressed={toolsOpen} onClick={() => { setDevicesOpen(false); setToolsTool("tuner"); }} aria-label="Guitar tools"><Glyph name="tools" size={20} /><span>Tools</span></button>
-              <DeviceSync open={devicesOpen} onOpenChange={(open) => { setToolsTool(null); setDevicesOpen(open); }} onUpdated={refreshState} />
+              <button type="button" className="device-sync-trigger guitar-tools-trigger" aria-pressed={toolsOpen} onClick={() => openTools("tuner")} aria-label="Guitar tools"><Glyph name="tools" size={20} /><span>Tools</span></button>
+              <DeviceSync open={devicesOpen} onOpenChange={changeDevices} onUpdated={refreshState} />
             </div>
           </header>
 
           <SaveNotice />
           <PlatformStatus />
 
-          {devicesOpen ? <main className="device-sync-placeholder" aria-hidden="true" /> : toolsTool ? <GuitarTools input={input} initialTool={toolsTool} onClose={() => setToolsTool(null)} /> : tab === "tutor" ? (
-            <OverviewView key={stateRevision} input={input} onOpenMode={openMode} onOpenSong={openSong} onOpenLibrary={openLibrary} onListenSong={listenSong} onStartPractice={startPractice} />
+          {devicesOpen ? <main className="device-sync-placeholder" aria-hidden="true" /> : toolsTool ? <GuitarTools input={input} initialTool={toolsTool} onClose={() => setToolsTool(null)} /> : tab === "play" ? null : tab === "tutor" ? (
+            <OverviewView key={stateRevision} input={input} onOpenMode={openMode} onOpenSong={openSong} onOpenLibrary={openLibrary} onListenSong={listenSong} onStartPractice={startTune} />
           ) : tab === "progress" ? (
-            <ProgressView key={stateRevision} onOpenSong={openSong} onStartPractice={startPractice} />
+            <ProgressView key={stateRevision} onOpenSong={openSong} onStartPractice={startTune} />
           ) : tab === "tunes" ? (
-            <TuneView key={stateRevision} input={input} launch={launch} onLaunched={launched} songId={route.song} onSong={songRoute} onSessionEnd={sessionEnded} onStartPractice={startPractice} />
+            <TuneView key={stateRevision} input={input} launch={launch} onLaunched={launched} songId={route.song} onSong={songRoute} onStartPractice={startTune} />
           ) : tab === "free" ? (
             <FreePlayView key={stateRevision} input={input} onClose={closeFree} />
           ) : tab === "changes" ? (
-            <FocusView key={stateRevision} focus="changes" input={input} onOpenTunes={openTunes} />
+            <FocusView key={stateRevision} focus="changes" input={input} onOpenTunes={openTunes} onStartPractice={startTune} />
           ) : tab === "scales" ? (
             <ScalesView key={stateRevision} keyInfo={key} input={input} onKey={changeKey} onOpenTunes={openTunes} />
           ) : tab === "reading" ? (
-            <FocusView key={stateRevision} focus="reading" input={input} onOpenTunes={openTunes} />
+            <FocusView key={stateRevision} focus="reading" input={input} onOpenTunes={openTunes} onStartPractice={startTune} />
           ) : tab === "triads" ? (
             <TriadsView key={stateRevision} input={input} onExit={back} />
           ) : (
             <EarHub key={stateRevision} input={input} onOpenTunes={openTunes} />
           )}
-          {!devicesOpen && !toolsOpen && tab !== "free" ? (
+          {room && !devicesOpen ? (
+            <div className="room-host" hidden={roomParked}>
+              <PracticeRoom key={room.serial} input={input} launch={room} parked={roomParked} request={roomRequest} handle={roomHandle} onClose={closeRoom} onLive={setRoomLive} onOpenLibrary={openLibrary} />
+            </div>
+          ) : null}
+          {!devicesOpen && !toolsOpen && tab !== "free" && tab !== "play" ? (
             <nav className="shell-dock" aria-label="Quick instruments">
               <button type="button" onClick={() => openMode("free")} title="Open Free play">
                 <Glyph name="free" size={16} /><span>Free play</span>
               </button>
-              <button type="button" onClick={() => { setDevicesOpen(false); setToolsTool("tuner"); }} title="Open chromatic tuner">
+              <button type="button" onClick={() => openTools("tuner")} title="Open chromatic tuner">
                 <Glyph name="tools" size={15} /><span>Tuner</span>
               </button>
-              <button type="button" onClick={() => { setDevicesOpen(false); setToolsTool("metronome"); }} title="Open metronome">
+              <button type="button" onClick={() => openTools("metronome")} title="Open metronome">
                 <Glyph name="clock" size={15} /><span>Metronome</span>
               </button>
             </nav>

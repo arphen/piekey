@@ -12,7 +12,7 @@ signaling and encrypted WebRTC; there is no app-data backend.
 Read `PLAN.md` for the product intent and musical constraints. It is the original roadmap; much of
 it is now implemented, so verify features against the code rather than assuming a phase is missing.
 
-There is one learning system: **Tunes** (`src/tunes/*`, `src/song/*`, full-screen `SongCoach`) with
+There is one learning system: **Tunes** (`src/tunes/*`, `src/song/*`, `SongCoach` in the Play tab) with
 arbitrary MusicXML, mic-scored sessions and guitar-driven gestures. The tutor shell (`src/overview/*`,
 `OverviewView`) is the entrypoint; Changes, Scales and Reading are the same session on a narrowed
 deck (`FocusView`, `FOCUS_FAMILIES`). The old Practice tab (`src/tutor/*`), Fretboard Lab and the
@@ -30,7 +30,7 @@ exact phrases in `SongCoach`; do not restore an inline Learn flow. Ear (`src/ear
 ## Critical entry points
 
 1. `src/main.tsx` — mounts React and loads global styles.
-2. `src/App.tsx` — thin shell: three primary tabs (Home, Library, Progress), with Changes, Scales, Reading, Ear and Triads as Home's drill tiles, the one shared mic input, and `GuitarNav`. Its `{ tab, song, depth }` route is mirrored into `history` so the topbar Back, browser Back and the G5 guitar key walk it; guitar mode returns to where it was entered from. It also holds the key for the Scales shape explorer. Feature state belongs in the feature's hook, not here.
+2. `src/App.tsx` — thin shell: three primary tabs (Home, Library, Progress) and **Play**, set apart, the practice room every launch leads to (`components/PracticeRoom.tsx` hosting `SongCoach`, under the header, no automatic fullscreen); Changes, Scales, Reading, Ear and Triads are reached from Home. It holds the one shared mic input and `GuitarNav`. Its `{ tab, song, depth }` route is mirrored into `history` so the topbar Back, browser Back and the G5 guitar key walk it. The room is parked, not unmounted, behind other tabs (no input frames, its session paused by a pause it owns, the pool retired) and a new launch replaces it only after `RoomHandle.leave()` has finished and saved. Arriving in Play is a view transition where supported. It also holds the key for the Scales shape explorer. Feature state belongs in the feature's hook, not here.
 3. `src/core/contract.ts` — the typed boundary between logic (`core`, `audio`) and UI (`App`, `components`). Change only by agreement, then update every consumer.
 4. `src/core/index.ts` — public music-domain API (`getKey`, `getTune`, `buildPattern`, `fretboardNotes`, ...).
 5. `src/audio/usePlayer.ts` — transport/playback API (`play`, `stop`, `setLoop`, `setPattern`, mix). `src/audio/backing.ts` generates the band.
@@ -185,7 +185,10 @@ component tests run under jsdom. No CI configuration is committed; `make check` 
   Whole-tune cards (`step.kind === "tune"` as well as `run`) and improvisation reserve notes for
   music. Command allocation reserves every octave of chord tones, improvisation choices and
   non-exact melody notes. The menu summon is D♯5 hold/release/hold; menu rows are first frets.
-  Never put a command on an open-string pitch. Tune changes retain the outer practice boundary and never exit fullscreen.
+  Never put a command on an open-string pitch. Tune changes retain the outer practice boundary.
+  One practice surface per window holds the practice lock: with a room open, the shell opens
+  instruments and free play inside it (`RoomRequest`) and lets it finish before Triads, Ear or
+  Devices mount their own boundary. Changes and Reading launch into the Play room.
   Modal suspension blocks scoring, playback and automatic wake/reconnect until the modal closes;
   resume only a pause owned by that modal. Renderer preferences are device-local
   (`guitar-room-render`, `guitar-pool-tier`, `guitar-score-zoom`); with nothing chosen the room is Living on power

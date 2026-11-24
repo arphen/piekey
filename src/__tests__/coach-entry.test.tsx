@@ -124,6 +124,24 @@ describe("coach entry", () => {
     expect(input.start).not.toHaveBeenCalled();
   });
 
+  it("holds a parked room still and releases only the pause parking took", async () => {
+    const togglePause = vi.fn();
+    const frames: ((frame: never) => void)[] = [];
+    const input = inputAt("listening", "guitar");
+    input.subscribe = (fn) => { frames.push(fn as (frame: never) => void); return () => undefined; };
+    mocked.calibrated = true;
+    mocked.session = { ...mocked.session, running: true, paused: false, togglePause } as SessionApi;
+    const render = (parked: boolean) => act(async () => root.render(<SongCoach sheet={sheet} tl={tl} input={input} parked={parked} onClose={() => undefined} />));
+    await render(true);
+    expect(mocked.suspended).toBe(true);
+    expect(togglePause).toHaveBeenCalledTimes(1);
+    expect(host.querySelector(".ss")?.classList.contains("is-parked")).toBe(true);
+    mocked.session = { ...mocked.session, paused: true } as SessionApi;
+    await render(false);
+    expect(togglePause).toHaveBeenCalledTimes(2); // its own pause, released on return
+    expect(mocked.suspended).toBe(false);
+  });
+
   it("returns from rhythm isolation to its original phrase in the selected route", async () => {
     mocked.calibrated = true;
     const source = buildDeck(sheet, tl).cards.find((card) => card.family === "melody" && card.view === "score" && !card.run)!;

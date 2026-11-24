@@ -1,6 +1,6 @@
 # The practice session
 
-How the full-screen session in the Tunes view (`src/song/`, `src/components/SongCoach.tsx`) is
+How the session in the Play tab (`src/song/`, `src/components/SongCoach.tsx`, hosted by `PracticeRoom`) is
 meant to behave, and why. The rule behind all of it: the app reacts to what the player does; it
 does not tell them what to do.
 
@@ -47,13 +47,16 @@ notes to open strings.
 **Choose tune** lives inside this room, including from free play. It shows the library as a row
 of cards (A♯2/D♯3 move, G♯3 reviews); outside a matched list, F4 puts the highlighted tune in or
 out of the **next session** (`song/sessionSet.ts`). A change to that set made while a session runs
-applies when the next one starts, so the running deck never changes under the player. The corner
-**Dashboard** button (Esc outside fullscreen) leaves guitar mode for the screen it was opened from;
-browser Back is ignored while the room is open. Its optional **Listen to
+applies when the next one starts, so the running deck never changes under the player. The room
+sits under the shell's header; fullscreen is only the settings switch. Another tab, the header's
+Back or browser Back park the room: input stops reaching it and a running session pauses, then
+resumes when the player returns to Play (a dot on Play marks a waiting session). While an
+exercise runs and the mouse is still, the header dims with the room's own chrome. Esc (outside
+fullscreen) ends the session and closes the room. The tune chooser's optional **Listen to
 opening** only listens while explicitly armed. Matching needs at least six fresh attacks and
 three pitch classes from an original-key opening; octaves may differ. It offers candidates,
 then a separate review and fresh confirmation. Recognition alone never changes music. A change
-waits for practice saves and keeps the outer writer boundary and fullscreen. Save failures stay
+waits for practice saves and keeps the outer writer boundary. Save failures stay
 in the picker for retry. Menus and pickers suspend scoring, clocks and auto wake/reconnect;
 closing one only releases a pause it owns.
 

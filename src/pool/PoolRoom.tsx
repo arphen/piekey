@@ -12,16 +12,17 @@ const PoolContext = createContext<PoolBus | null>(null);
 
 interface HostHandle { retire(): void; revive(): void; dispose(): void; setAnimate(animate: boolean): void }
 
-export function PoolRoom({ input, children }: { input: InputApi; children: ReactNode }) {
+/** `parked`: the room is behind another tab, so the engine retires (no GPU work) until it returns. */
+export function PoolRoom({ input, parked = false, children }: { input: InputApi; parked?: boolean; children: ReactNode }) {
   const parent = useContext(PoolContext);
-  return parent ? <>{children}</> : <PoolRoot input={input}>{children}</PoolRoot>;
+  return parent ? <>{children}</> : <PoolRoot input={input} parked={parked}>{children}</PoolRoot>;
 }
 
-function PoolRoot({ input, children }: { input: InputApi; children: ReactNode }) {
+function PoolRoot({ input, parked, children }: { input: InputApi; parked: boolean; children: ReactNode }) {
   const bus = useMemo(() => new PoolBus(), []);
   const host = useRef<HostHandle | null>(null);
   const room = useRoomRender();
-  const living = room.effective === "living";
+  const living = room.effective === "living" && !parked;
   const animate = useRef(room.animate);
   animate.current = room.animate;
 

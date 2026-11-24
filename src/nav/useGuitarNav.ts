@@ -28,7 +28,8 @@ export function setNavMuted(on: boolean) {
 }
 
 /** True while a full-screen session is open: it has its own gestures, the shell stays quiet. */
-export const sessionOpen = () => document.querySelector(".ss") !== null;
+/** A practice room or free play owns the guitar; a room parked behind another tab does not. */
+export const sessionOpen = () => document.querySelector(".ss:not(.is-parked)") !== null;
 
 /** Everything pressable and showing, in reading order. */
 export function pressables(root: ParentNode = document): HTMLElement[] {

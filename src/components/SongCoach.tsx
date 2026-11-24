@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { flushSync } from "react-dom";
 import * as Tone from "tone";
 import { ensureAudio } from "../audio/context";
@@ -54,7 +54,7 @@ import { Glyph } from "./Glyph";
 import "../song/song.css";
 import "../song/coach-flow.css";
 
-// The practice session, full screen and quiet: one exercise at a time, hands on the guitar. The
+// The practice session, quiet under the shell's header: one exercise at a time, hands on the guitar. The
 // guitar runs it: hold a note to begin, play to move on, start over whenever. Single notes the
 // exercise doesn't use are keys (hear it again, your pace, in time, next), each shown beside
 // what it works; the menu note (D♯5: hold, release, hold) calls the menu. Everything else
@@ -71,6 +71,35 @@ interface SongCoachProps {
   mixIds?: readonly string[]; // explicit guest IDs for a tree selection (solo = [], key/custom mix = [...])
   focus?: Focus; // a tutor mode: only that mode's card families
   initialCardId?: string; // an exercise chosen on the overview or a focused mode
+  /** Behind another tab: no input reaches the room, the session holds still, the pool rests. */
+  parked?: boolean;
+  /** Lets the host finish and save the session before it replaces the room's music. */
+  handle?: MutableRefObject<RoomHandle | null>;
+  /** Whether a session is under way, for the Play tab's live mark while parked. */
+  onLive?(live: boolean): void;
+  /** The shell asks the room for its own instruments or free play (a new serial each time), so they never compete with it. */
+  request?: RoomRequest;
+  /** The last request carried out, kept outside the tune-keyed room so a tune change does not repeat it. */
+  served?: MutableRefObject<number>;
+}
+
+export interface RoomRequest {
+  serial: number;
+  kind: "tuner" | "metronome" | "free";
+}
+
+export interface RoomHandle {
+  /** End the session (recording what was played) and wait for practice saves. */
+  leave(): Promise<void>;
+}
+
+/** The room's view of the shared input: frames stop while it is parked behind another tab. */
+function useParkedInput(input: InputApi, parked: boolean): InputApi {
+  const parkedRef = useRef(parked);
+  parkedRef.current = parked;
+  const { subscribe } = input;
+  const gated = useCallback<InputApi["subscribe"]>((fn) => subscribe((frame) => { if (!parkedRef.current) fn(frame); }), [subscribe]);
+  return useMemo(() => ({ ...input, subscribe: gated }), [input, gated]);
 }
 
 const FRET_COUNT = 12;
@@ -212,13 +241,11 @@ function shapeOf(card: Card, active: number): { key: string; spots: Set<string> 
   return { key: `${card.id}:${from}:${to}`, spots };
 }
 
-/** Prime sound from the opening click; a new microphone permission remains an explicit choice. */
+/** Prime sound from the opening click; a new microphone permission remains an explicit choice. Fullscreen is the player's own choice (settings). */
 export function openPractice(input: InputApi) {
   ensureAudio();
   void Tone.start().catch(() => undefined);
   if (input.status === "idle" || input.status === "error") input.autoStart();
-  const el = document.documentElement;
-  if (el.requestFullscreen && !document.fullscreenElement) el.requestFullscreen().catch(() => undefined);
 }
 
 /** The pitch classes a card plays, chords included: tone keys are picked from outside them. */
@@ -286,12 +313,14 @@ function useStartPhrase(input: InputApi, enabled: boolean, onStart: () => void):
 const seenIn = (tuneId: string) => Object.fromEntries(Object.entries(loadStore(tuneId).cards).map(([id, st]) => [id, st.seen]));
 
 export function SongCoach(props: SongCoachProps) {
+  const input = useParkedInput(props.input, Boolean(props.parked));
+  const served = useRef(0);
   // The pool sits outside the keyed room so its water keeps moving when the tune changes.
-  return <PracticeWindowBoundary onExit={props.onClose}><PoolRoom input={props.input}><SongCoachRoom key={props.sheet.id} {...props} /></PoolRoom></PracticeWindowBoundary>;
+  return <PracticeWindowBoundary onExit={props.onClose}><PoolRoom input={input} parked={props.parked}><SongCoachRoom key={props.sheet.id} {...props} input={input} served={served} /></PoolRoom></PracticeWindowBoundary>;
 }
 
 /** The practice room must remain inside a stable PracticeWindowBoundary while changing tunes. */
-export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_TUNES, mixIds, focus = "all", initialCardId }: SongCoachProps) {
+export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_TUNES, mixIds, focus = "all", initialCardId, parked = false, handle, onLive, request, served: servedRef }: SongCoachProps) {
   const explicitMix = mixIds !== undefined;
   const [windowP, setWindowP] = useState<number | null>(() => loadStore(sheet.id).settings.window);
   const [mix, setMix] = useState(() => (explicitMix ? mixIds.length > 0 : loadStore(sheet.id).settings.mix !== false)); // the other tunes' exercises too
@@ -344,13 +373,13 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
   const [calib, setCalib] = useState(() => !loadProfile() && input.status !== "idle" && input.status !== "error");
   const checkedSetups = useRef(new Set<string>());
   const skippedPendingSetup = useRef(false);
-  const idle = useIdle(!menu && !choosingTune && !tools && !freeInstruments);
+  const idle = useIdle(!parked && !menu && !choosingTune && !tools && !freeInstruments);
   const pausedByMenu = useRef(false);
   const pausedByChooser = useRef(false);
   const pausedByTools = useRef(false);
   const switchStopped = useRef(false);
   const themeSources = useMemo(() => [{ id: sheet.id, title: sheet.title, tl }, ...others.map((other) => ({ id: other.sheet.id, title: other.sheet.title, tl: other.tl }))], [sheet.id, sheet.title, tl, others]);
-  const session = useSession(deck, tuneIds, input, { gap: gapIds, arrangementFingerprint, arrangementFingerprints, tempoBounds: activeGoal?.tempo, suspended: choosingTune || Boolean(tools) || free || menu || pad !== null || calib });
+  const session = useSession(deck, tuneIds, input, { gap: gapIds, arrangementFingerprint, arrangementFingerprints, tempoBounds: activeGoal?.tempo, suspended: parked || choosingTune || Boolean(tools) || free || menu || pad !== null || calib });
   // Decoration only: the pool hears landed notes, clean passes and exercise moves; nothing comes back.
   usePoolCalm(menu || calib);
   const emitPool = usePoolEmit();
@@ -444,7 +473,6 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
 
   const close = () => {
     session.exit();
-    if (document.fullscreenElement) document.exitFullscreen().catch(() => undefined);
     onClose();
   };
   const beginNow = (self = false) => {
@@ -724,12 +752,65 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
   ];
 
   // keys: all optional. Space pauses, arrows (or a page-turner pedal) skip and go again, −/+ tempo, S settings
-  const act = { session, menu, pad, calib, free, freeInstruments, choosingTune, tools, endCalib, close, beginNow, openMenu, closeMenu, openPad, closePad, openFree, closeFree, inExercise, barAlone, flowing, scoreZoom };
+  const act = { session, menu, pad, calib, free, freeInstruments, choosingTune, tools, endCalib, close, beginNow, openMenu, closeMenu, openPad, closePad, openFree, closeFree, openTools, inExercise, barAlone, flowing, scoreZoom, parked, running, finished };
   const actRef = useRef(act);
   actRef.current = act;
+
+  // Parked behind another tab: the room's own instruments close (they make sound), a running
+  // session holds still, and only the pause parking took is released on return. Pauses owned by
+  // the instruments pass to parking, so coming back resumes exactly what was playing.
+  const pausedByPark = useRef(false);
+  useEffect(() => {
+    const a = actRef.current;
+    if (parked) {
+      if (a.tools) {
+        if (pausedByTools.current) pausedByPark.current = true;
+        pausedByTools.current = false;
+        setTools(null);
+      }
+      if (a.free) {
+        if (pausedByMenu.current) pausedByPark.current = true;
+        pausedByMenu.current = false;
+        setFree(false);
+      }
+      if (a.running && !a.finished && !a.session.paused) {
+        a.session.togglePause();
+        pausedByPark.current = true;
+      }
+    } else if (pausedByPark.current) {
+      pausedByPark.current = false;
+      if (a.session.paused) a.session.togglePause();
+    }
+  }, [parked]);
+  useEffect(() => { onLive?.(live); }, [live, onLive]);
+  // a request from the shell, carried out once the room is in view
+  const ownServed = useRef(0);
+  const served = servedRef ?? ownServed;
+  useEffect(() => {
+    if (!request || parked || served.current === request.serial) return;
+    served.current = request.serial;
+    const a = actRef.current;
+    if (request.kind === "free") { if (!a.free) a.openFree(); }
+    else if (a.tools !== request.kind) a.openTools(request.kind);
+  }, [request, parked, served]);
+  useEffect(() => () => onLive?.(false), [onLive]);
+  useEffect(() => {
+    if (!handle) return;
+    handle.current = {
+      async leave() {
+        const a = actRef.current;
+        if (a.free) flushSync(() => setFree(false)); // commit free-play's saved visit before draining practice writes
+        a.session.exit();
+        await settlePracticeWrites();
+      },
+    };
+    return () => { handle.current = null; };
+  }, [handle]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const a = actRef.current;
+      if (a.parked) return;
       const s = a.session;
       const el = e.target as HTMLElement;
       const k = e.key;
@@ -786,12 +867,12 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
   const between = !menu && !calib && !choosingTune && !tools; // the screens between exercises listen for their own keys
   return (
     <div
-      className={`ss ${idle ? "is-idle" : ""} ${fam ? `fam-${fam}` : ""} ${pad !== null && inExercise ? "has-pad" : ""}`}
+      className={`ss ${idle ? "is-idle" : ""} ${fam ? `fam-${fam}` : ""} ${pad !== null && inExercise ? "has-pad" : ""} ${inExercise ? "is-exercise" : ""} ${parked ? "is-parked" : ""}`}
       style={{ "--flow": inExercise ? session.flow : 0.5 } as CSSProperties}
       role="dialog"
       aria-label="practice session"
     >
-      {!free && !choosingTune && !tools ? <PracticeAtmosphere input={input} warmth={Math.min(1, session.elapsed() / 45000)} flow={inExercise ? session.flow : 0} hitSerial={hitSerial} playing={inExercise && (session.phase === "pace" || session.phase === "time") && !session.paused && !session.away && !session.listeningOff && pad === null && !menu && !calib} beat={inExercise && !session.paused && pad === null && !menu && !calib ? session.beat : undefined} bpm={session.bpm} /> : null}
+      {!parked && !free && !choosingTune && !tools ? <PracticeAtmosphere input={input} warmth={Math.min(1, session.elapsed() / 45000)} flow={inExercise ? session.flow : 0} hitSerial={hitSerial} playing={inExercise && (session.phase === "pace" || session.phase === "time") && !session.paused && !session.away && !session.listeningOff && pad === null && !menu && !calib} beat={inExercise && !session.paused && pad === null && !menu && !calib ? session.beat : undefined} bpm={session.bpm} /> : null}
       <div style={{ display: choosingTune || tools ? "none" : "contents" }} aria-hidden={choosingTune || Boolean(tools) || undefined}>
       {free ? (
         <FreePlay input={input} deck={deck} onClose={closeFree} onPractise={practise} active={!choosingTune && !tools} onChooseTune={onTune ? openTunePicker : undefined} onToolsChange={setFreeInstruments} />
@@ -853,12 +934,6 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
         <button type="button" className="ss-icon" onClick={openMenu} aria-label="settings" title="Settings (S)">
           <Gear />
           <ToneTag pc={tonesLive ? toneKeys[0] : null} lit={tapped === 0} />
-        </button>
-        <button type="button" className="ss-icon ss-leave" onClick={close} aria-label="leave" title="Back to the dashboard (Esc)">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M3 5h18v11H3zM8 20h8M12 16v4" />
-          </svg>
-          <span>Dashboard</span>
         </button>
       </div> : null}
       {pad !== null && inExercise ? <GuitarPad input={input} title={padPages[pad].title} rows={padPages[pad].rows} onFire={(i) => padPages[pad].fire[i]()} /> : null}

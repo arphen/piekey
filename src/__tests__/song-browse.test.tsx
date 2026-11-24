@@ -9,6 +9,7 @@ import { STARTER_ENTRY } from "../tunes/starter";
 import { BLUE_HOUR_ENTRY } from "../tunes/demos";
 import { parsePassageId } from "../tunes/passage";
 import { TuneView } from "../components/TuneView";
+import { PracticeRoom } from "../components/PracticeRoom";
 
 const browser = vi.hoisted(() => ({
   library: [] as TuneEntry[],
@@ -18,6 +19,7 @@ const browser = vi.hoisted(() => ({
   stop: vi.fn(),
   audioStart: vi.fn(async () => undefined),
   openPractice: vi.fn(),
+  startPractice: vi.fn(),
   nextTune: "",
 }));
 
@@ -90,7 +92,7 @@ afterEach(async () => {
 
 async function mount(launch?: { kind: "listen"; tuneId: string }) {
   root = createRoot(host);
-  await act(async () => root!.render(<TuneView input={input} launch={launch} />));
+  await act(async () => root!.render(<TuneView input={input} launch={launch} onStartPractice={browser.startPractice} />));
 }
 
 async function press(label: string) {
@@ -127,10 +129,7 @@ it("selects a score phrase without autoplay, listens to its range, and launches 
   expect(browser.play).toHaveBeenLastCalledWith(0, undefined, false);
   await press("Score bar 3");
   await press("Practise phrase");
-  expect(browser.openPractice).toHaveBeenCalledWith(input);
-  expect(host.querySelector<HTMLElement>("[data-coach]")?.dataset).toMatchObject({
-    coach: STARTER_ENTRY.id, card: "mel:new:2-3",
-  });
+  expect(browser.startPractice).toHaveBeenLastCalledWith(STARTER_ENTRY.id, "mel:new:2-3");
 });
 
 it("listens to a bundled demo when the library cannot save it", async () => {
@@ -142,19 +141,20 @@ it("listens to a bundled demo when the library cannot save it", async () => {
   expect(browser.audioStart).toHaveBeenCalled();
   expect(browser.play).toHaveBeenCalledWith(0, undefined, false);
   expect(host.querySelector('[role="status"]')?.textContent).toMatch(/not been saved/i);
-  expect(host.querySelector("[data-coach]")).toBeNull();
+  expect(browser.startPractice).not.toHaveBeenCalled();
 });
 
-it("keeps the coach host mounted when choosing another tune", async () => {
+it("keeps the Play room's coach mounted when choosing another tune, and opens the next session's lead", async () => {
   browser.library = [STARTER_ENTRY, BLUE_HOUR_ENTRY];
   browser.nextTune = BLUE_HOUR_ENTRY.id;
-  await mount();
-  await press("Practice piece");
+  root = createRoot(host);
+  const handle = { current: null };
+  await act(async () => root!.render(<PracticeRoom input={input} launch={{ serial: 1, tuneId: null }} parked={false} handle={handle} onClose={vi.fn()} onLive={vi.fn()} onOpenLibrary={vi.fn()} />));
   const coach = host.querySelector("[data-coach]");
+  expect(coach?.getAttribute("data-coach")).toBe(STARTER_ENTRY.id); // no tune named: the current tune leads
   await press("Choose another tune");
   expect(host.querySelector("[data-coach]")).toBe(coach);
   expect(coach?.getAttribute("data-coach")).toBe(BLUE_HOUR_ENTRY.id);
-  expect(host.querySelector("[data-score]")).toBeNull();
 });
 
 it("selects exact repeat occurrences, cancels edits, and preserves the range after practice", async () => {
@@ -180,9 +180,7 @@ it("selects exact repeat occurrences, cancels edits, and preserves the range aft
   expect(document.activeElement?.getAttribute("aria-controls")).toBe("song-passage-picker");
   expect(host.querySelector('[aria-label="Selected passage"]')?.textContent).toContain(description);
   await press("Practise passage");
-  expect(browser.openPractice).toHaveBeenCalledWith(input);
-  expect(parsePassageId(host.querySelector<HTMLElement>("[data-coach]")?.dataset.card)).toMatchObject({ start: 10, end: 13 });
-  await press("Return to Songs");
+  expect(parsePassageId(browser.startPractice.mock.lastCall?.[1])).toMatchObject({ start: 10, end: 13 });
   expect(host.querySelector('[aria-label="Selected passage"]')?.textContent).toContain(description);
   await press("Listen to passage");
   expect(browser.play).toHaveBeenLastCalledWith(10, 13, true);
@@ -201,7 +199,7 @@ it("allows listening to an all-rest passage without launching an unrelated pract
   expect(host.querySelector('[aria-label="Selected passage"]')?.textContent).toContain("no melody notes");
   await press("Listen to passage");
   expect(browser.play).toHaveBeenLastCalledWith(1, 1, false);
-  expect(host.querySelector("[data-coach]")).toBeNull();
+  expect(browser.startPractice).not.toHaveBeenCalled();
 });
 
 it("honors a demo Listen launch even when the saved library cannot be opened", async () => {
@@ -210,5 +208,5 @@ it("honors a demo Listen launch even when the saved library cannot be opened", a
   expect(host.querySelector("[data-score]")?.getAttribute("data-score")).toBe(BLUE_HOUR_ENTRY.id);
   expect(browser.play).toHaveBeenCalledWith(0, undefined, false);
   expect(host.querySelector('[role="status"]')?.textContent).toMatch(/not been saved/i);
-  expect(host.querySelector("[data-coach]")).toBeNull();
+  expect(browser.startPractice).not.toHaveBeenCalled();
 });
