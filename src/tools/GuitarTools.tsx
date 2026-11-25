@@ -86,7 +86,7 @@ export function GuitarToolsRoom({ input, onClose, initialTool = "tuner", initial
   keyboard.current = { pad, close };
   useEffect(() => {
     const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    room.current?.querySelector<HTMLButtonElement>('.guitar-tools-return')?.focus({ preventScroll: true });
+    room.current?.focus({ preventScroll: true });
     return () => { if (trigger?.isConnected) trigger.focus({ preventScroll: true }); };
   }, []);
   useEffect(() => {
@@ -198,13 +198,9 @@ export function GuitarToolsRoom({ input, onClose, initialTool = "tuner", initial
   const tunerText = !listening ? input.paused ? "Resume listening below." : "Enable listening below." : tuner.state === "quiet" ? "One string. Let it ring." : tuner.state === "uncertain" ? "One clear string at a time." : settled ? "In tune" : cents > 0 ? "A little lower" : "A little higher";
   const inputText = input.status === "starting" ? "Opening input…" : input.paused ? "Input paused" : listening ? "Guitar listening" : input.status === "error" ? "Reconnect guitar" : "Input off";
 
-  return <main ref={room} tabIndex={-1} className={`ss guitar-tools instrument-room is-${tool} ${reading ? "is-reading" : ""} ${settled ? "is-in-tune" : ""}`} role="dialog" aria-modal="true" aria-labelledby="guitar-tools-title">
+  return <main ref={room} tabIndex={-1} className={`ss guitar-tools instrument-room is-${tool} ${reading ? "is-reading" : ""} ${settled ? "is-in-tune" : ""}`} role="dialog" aria-modal="true" aria-label={tool === "tuner" ? "Tuner" : "Metronome"}>
     <PracticeAtmosphere input={input} warmth={settled ? 0.85 : reading ? 0.35 : 0} flow={settled ? 0.92 : reading ? 0.45 : 0} playing={listening && pad === null} beat={tool === "metronome" ? beat : undefined} bpm={bpm} />
     <div className="guitar-tools-flow" aria-hidden={pad !== null || undefined} style={{ visibility: pad !== null ? "hidden" : undefined }}>
-      <header className="guitar-tools-head" data-pool="calm">
-        <div><p className="guitar-tools-kicker">Your practice room</p><h1 id="guitar-tools-title">Instruments</h1></div>
-        <button type="button" className="guitar-tools-return" onClick={close} aria-label="Return to practice"><Glyph name="arrow" size={16} /><span>Return</span></button>
-      </header>
       {tool === "tuner" ? <section className="guitar-tools-tuner" aria-label="chromatic tuner">
         <div className="guitar-tools-tuner-stage" data-pool="calm" data-pool-anchor="tuner" style={{ "--tuner-angle": `${needleAngle.toFixed(2)}deg`, "--tuner-position": `${50 + clampedCents}%` } as CSSProperties}>
           <p className="guitar-tools-overline">Chromatic · A 440 Hz</p>

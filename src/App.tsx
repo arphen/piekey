@@ -400,7 +400,7 @@ export default function App() {
   }, [go]);
   const openTools = useCallback((tool: "tuner" | "metronome") => {
     setDevicesOpen(false);
-    if (room) { askRoom(tool); return; }
+    if (room && roomHandle.current) { askRoom(tool); return; }
     if (toolsRef.current === tool) return;
     const diff = tabRank(routeRef.current, tool, "practice") - tabRank(routeRef.current, toolsRef.current, roomSurfaceRef.current);
     const dir: TransitionKind = diff > 0 ? "right" : diff < 0 ? "left" : "fade";
@@ -412,14 +412,14 @@ export default function App() {
   }, [room, askRoom]);
   const openSettings = useCallback(() => {
     setDevicesOpen(false);
-    if (room) askRoom("settings");
+    if (room && roomHandle.current) askRoom("settings");
     else openPlay();
   }, [room, askRoom, openPlay]);
   const openMode = useCallback((target: TutorTargetTab) => {
     setLaunch(undefined);
     if (target === "free") {
       openPractice(input);
-      if (room) { askRoom("free"); return; }
+      if (room && roomHandle.current) { askRoom("free"); return; }
     }
     if ((target === "triads" || target === "ear") && room) {
       void (async () => {

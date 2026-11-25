@@ -374,7 +374,7 @@ describe("coach entry", () => {
     expect(mocked.session.hear).not.toHaveBeenCalled();
     expect(mocked.session.next).not.toHaveBeenCalled();
     expect(mocked.session.begin).not.toHaveBeenCalled();
-    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Return to practice"]')!.click());
+    await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
     expect(mocked.session.paused).toBe(false);
     expect(mocked.suspended).toBe(false);
     expect(togglePause).toHaveBeenCalledTimes(4);
@@ -389,12 +389,12 @@ describe("coach entry", () => {
     expect(host.querySelector('[aria-label="metronome"]')).not.toBeNull();
     expect(host.querySelector<HTMLInputElement>('[aria-label="Tempo in beats per minute"]')?.value).toBe(String(card.bpm));
     expect(togglePause).toHaveBeenCalledTimes(5);
-    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Return to practice"]')!.click());
+    await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
     expect(mocked.session.paused).toBe(false);
     expect(togglePause).toHaveBeenCalledTimes(6);
     mocked.session.paused = true;
     await click("Tuner");
-    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Return to practice"]')!.click());
+    await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
     expect(mocked.session.paused).toBe(true);
     expect(togglePause).toHaveBeenCalledTimes(6);
     expect(mocked.session.card).toBe(card);
@@ -418,7 +418,7 @@ describe("coach entry", () => {
       for (const now of [200, 1200, 2200]) [...listeners].forEach((listener) => listener({ now, rms: 0.05, buf: new Float32Array(16), sampleRate: 48000 }));
     });
     expect(mocked.session.begin).not.toHaveBeenCalled();
-    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Return to practice"]')!.click());
+    await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
     expect(mocked.suspended).toBe(false);
     expect(host.querySelector(".ss-ready")?.closest('[aria-hidden="true"]')).toBeNull();
 

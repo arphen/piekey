@@ -294,6 +294,15 @@
   top: var(--topbar-h, 48px);
   z-index: 20;
 }
+.app .fp-standalone .ss-free.fp-room {
+  padding-top: clamp(32px, 5vh, 58px);
+}
+/* Inside the unified shell, the topbar owns navigation, instruments, settings and Back. */
+.app .ss-instruments,
+.app .fp-instruments,
+.app .ss-chrome {
+  display: none;
+}
 .app.tab-play .app-legal,
 .app.tab-free .app-legal,
 .app.has-tools .app-legal { display: none; }

@@ -2525,8 +2525,7 @@
 .ss {
   --flow: 0.5;
   background:
-    radial-gradient(1100px 620px at 50% -12%, color-mix(in srgb, var(--fam) calc(4% + var(--flow) * 14%), transparent), transparent 62%),
-    var(--night);
+    radial-gradient(1100px 620px at 50% -12%, color-mix(in srgb, var(--fam) calc(4% + var(--flow) * 14%), transparent), transparent 62%);
 }
 
 /* it changes with every note: only transform and opacity move, so the compositor carries it and

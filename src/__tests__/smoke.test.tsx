@@ -178,6 +178,19 @@ it("keeps AbyssalWater live and updates scene & topbar across Practice, Free pla
   expect(currentTab()).toBe("Practice");
   expect(water().classList.contains("is-practice")).toBe(true);
   expect(water().classList.contains("is-suspended")).toBe(false);
+
+  // When Practice has no active SongCoach (e.g. empty library), Free play / Tuner / Metronome must still open.
+  await press("Free play");
+  expect(currentTab()).toBe("Free play");
+  expect(element.querySelector('[role="dialog"][aria-label="free play"]')).toBeTruthy();
+
+  await press("Tuner");
+  expect(currentTab()).toBe("Tuner");
+  expect(element.querySelector(".guitar-tools.is-tuner")).toBeTruthy();
+
+  await press("Metronome");
+  expect(currentTab()).toBe("Metronome");
+  expect(element.querySelector(".guitar-tools.is-metronome")).toBeTruthy();
 });
 
 it("launches C thirds directly into a running exercise when clicked on the Home tree", async () => {

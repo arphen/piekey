@@ -49,13 +49,15 @@ export function PracticeRoom({ input, launch, parked, request, handle, onClose, 
   // a tune chosen inside the room replaces the launch's tune and drops its card and mix
   const [chosen, setChosen] = useState<string | null>(null);
 
+  const hasLibrary = Boolean(library?.length);
   useEffect(() => {
+    if (parked || hasLibrary) return;
     let gone = false;
     void loadLibraryAsync().then((entries) => { if (!gone) setLibrary(entries); }).catch((error: unknown) => {
       if (!gone) setLoadError(error instanceof Error ? error.message : "The saved library could not be opened.");
     });
     return () => { gone = true; };
-  }, []);
+  }, [parked, hasLibrary]);
 
   const tuneId = chosen ?? launch.tuneId ?? (library ? sessionLead(library) : null);
   const options: PracticeLaunchOptions = chosen ? {} : launch;
