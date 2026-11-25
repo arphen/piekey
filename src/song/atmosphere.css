@@ -39,6 +39,7 @@
   background: url("../assets/pond-neon.webp") center 48% / cover no-repeat;
   filter: saturate(1.75) contrast(1.42) brightness(0.86) hue-rotate(14deg); /* bioluminescent emerald-cyan algae surging from abyssal water */
   opacity: calc(var(--bloom) * 0.48 + var(--hit) * 0.22);
+  mix-blend-mode: screen;
   mask-image: radial-gradient(ellipse at 54% 52%, rgba(0, 0, 0, 0.28) 12%, rgba(0, 0, 0, 0.84) 60%, #000 100%);
   transform: translate(calc(var(--drift-y) * -1), var(--drift-x)) scale(calc(1.08 + var(--hit) * 0.03));
 }
@@ -63,7 +64,7 @@
     radial-gradient(ellipse at 50% 48%, rgba(3, 9, 20, 0.24) 0%, transparent 66%);
 }
 
-.pa-rendered-water { inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity 0.6s; }
+.pa-rendered-water { inset: 0; width: 100%; height: 100%; opacity: 0; mix-blend-mode: screen; transition: opacity 0.6s; }
 .pa-rendered-water[data-renderer="ready"] { opacity: 1; }
 /* Each heard beat lights the whole room from its edges, strongest on the bar's first beat. Only
    opacity and transform animate, so the compositor carries it. */

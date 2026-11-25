@@ -182,24 +182,23 @@ void main() {
 
   vec3 color = mix(baseWater, algaeBody, clamp(matMask * visibility, 0.0, 0.86));
 
-  // Bioluminescence: reactive swells and earned bloom emerge transparently over AbyssalWater.
+  // Bioluminescence: pure luminous reactive swells and earned zone radiance (screen-blended over AbyssalWater).
   vec3 poisonNeon = mix(vec3(0.16, 0.88, 0.64), vec3(0.54, 1.0, 0.30), noteHue);
-  vec3 birchGold = vec3(0.90, 0.78, 0.42);
+  vec3 birchGold = vec3(0.92, 0.80, 0.42);
   float noteNear = exp(-dot(p - notePos, p - notePos) / 0.24) * noteWarmth;
-  float glowStrength = bloom * 0.26 + zone * 0.92 + swellLight * (0.20 + 0.34 * bloom) + noteNear * (0.14 + 0.26 * zone);
-  vec3 reactive = poisonNeon * algaeMask * raw.g * glowStrength * (0.38 + 0.82 * rimPresence);
+  float glowStrength = energy * 0.22 + bloom * 0.48 + zone * 1.05 + swellLight * (0.32 + 0.48 * bloom) + noteNear * (0.28 + 0.42 * zone);
+  vec3 reactive = poisonNeon * (0.12 + algaeMask * raw.g) * glowStrength * (0.42 + 0.78 * rimPresence);
 
-  // Subtle golden warmth breathing softly in the deep zone on downbeats.
-  vec3 tideColor = mix(poisonNeon, birchGold, downbeat * 0.65);
-  reactive += tideColor * algaeMask * sway * zone * 0.26 * (0.35 + 0.65 * rimPresence);
+  // Subtle golden warmth breathing softly on downbeats as intensity builds.
+  vec3 tideColor = mix(poisonNeon, birchGold, downbeat * 0.7);
+  reactive += tideColor * algaeMask * sway * (0.14 + 0.34 * zone) * (0.35 + 0.65 * rimPresence);
 
   float vig = smoothstep(1.32, 0.22, centerDist);
-  float earned = clamp(bloom * 0.52 + zone * 0.42, 0.0, 0.86);
-  vec3 rgb = (color * earned + reactive) * mix(0.68, 1.02, vig);
-  vec3 over = max(rgb - 0.54, 0.0);
-  rgb = min(rgb, 0.54) + over / (1.0 + over / 0.36);
+  vec3 rgb = reactive * mix(0.68, 1.06, vig);
+  vec3 over = max(rgb - 0.56, 0.0);
+  rgb = min(rgb, 0.56) + over / (1.0 + over / 0.38);
 
-  float alpha = clamp(max(earned, max(rgb.r, max(rgb.g, rgb.b))), 0.0, 0.92);
+  float alpha = clamp(max(rgb.r, max(rgb.g, rgb.b)), 0.0, 0.90);
   float dither = (hash12(gl_FragCoord.xy) - 0.5) / 255.0;
   vec3 outRgb = min(max(rgb + dither * alpha, 0.0), vec3(alpha));
   gl_FragColor = vec4(outRgb, alpha);
@@ -404,18 +403,18 @@ export function RenderedWater({ playing, warmth, flow, hitSerial = 0, beat, leve
         changedSize = false;
       }
 
-      // Heavy old-engine flywheel: spins up slowly with sustained clean playing, ebbs gracefully on silence or mistakes.
+      // Responsive playing flywheel: wakes noticeably in the first few seconds, climbs into full zone over ~18s, ebbs smoothly on rest.
       const heard = s.playing && now - level.current.heard < 2200;
-      if (heard) engineMs = Math.min(45000, engineMs + dtMs);
-      else engineMs = Math.max(0, engineMs - dtMs * 0.28);
+      if (heard) engineMs = Math.min(26000, engineMs + dtMs);
+      else engineMs = Math.max(0, engineMs - dtMs * 0.32);
 
-      smoothEnergy += ((heard ? level.current.level : 0) - smoothEnergy) * (1 - Math.exp(-dtMs / 650));
-      const spunUp = Math.pow(unit(engineMs / 36000), 1.65); // convex: whisper-quiet first 6s, strong after 30-36s
-      const quality = 0.28 + 0.72 * unit((s.flow - 0.35) / 0.58);
+      smoothEnergy += ((heard ? level.current.level : 0) - smoothEnergy) * (1 - Math.exp(-dtMs / 420));
+      const spunUp = Math.pow(unit(engineMs / 18000), 1.05);
+      const quality = 0.40 + 0.60 * unit((s.flow - 0.28) / 0.62);
       const targetBloom = heard ? unit(spunUp * quality) : 0;
-      bloom += (targetBloom - bloom) * (1 - Math.exp(-dtMs / (targetBloom > bloom ? 6800 : 11500)));
-      // Transcendent algae embrace opens non-linearly only in the upper zone.
-      const zone = Math.pow(unit(bloom), 2.15);
+      bloom += (targetBloom - bloom) * (1 - Math.exp(-dtMs / (targetBloom > bloom ? 3200 : 7500)));
+      // Deep bioluminescent embrace opens smoothly in the upper zone.
+      const zone = Math.pow(unit(bloom), 1.65);
 
       let morphAmount = 0;
       if (moving && hasTexA) {

@@ -4,6 +4,7 @@ import type { InputApi } from "../listen/useInput";
 import type { BeatSignal } from "../song/pulse";
 import { useRoomRender } from "../pool/mode";
 import { usePoolPublisher } from "../pool/PoolRoom";
+import { publishWaterDrive, wakeWaterDrive, type WaterDrive } from "./AbyssalWater";
 import { RenderedWater } from "./RenderedWater";
 import "../song/atmosphere.css";
 
@@ -17,6 +18,19 @@ export function PracticeAtmosphere({ input, warmth, flow, playing, hitSerial = 0
   const energy = useRef<{ level: number; heard: number; played: number; hit: number; lastHit: number; noteX: number; noteY: number; noteHue: number; noteAt: number; wake?: () => void }>({
     level: 0, heard: -Infinity, played: 0, hit: 0, lastHit: hitSerial, noteX: 0, noteY: 0, noteHue: 0.5, noteAt: -Infinity,
   });
+  const drive = useRef<WaterDrive>({
+    playing, level: 0, heardAt: -Infinity, flow, hitSerial, noteX: 0, noteY: 0, noteHue: 0.5, noteAt: -Infinity,
+    beatSerial: beat?.serial ?? -1, beatIndex: beat?.index ?? -1, beatActive: Boolean(beat?.active), beatCounting: Boolean(beat?.counting),
+  });
+  drive.current.playing = playing;
+  drive.current.flow = flow;
+  drive.current.hitSerial = hitSerial;
+  drive.current.beatSerial = beat?.serial ?? -1;
+  drive.current.beatIndex = beat?.index ?? -1;
+  drive.current.beatActive = Boolean(beat?.active);
+  drive.current.beatCounting = Boolean(beat?.counting);
+  useEffect(() => publishWaterDrive(drive), []);
+  useEffect(() => { if (beat?.active) wakeWaterDrive(); }, [beat?.active, beat?.serial]);
   const render = useRoomRender();
   const living = render.effective === "living";
   // Inside a pool room this atmosphere publishes to the shared pool, and its canvas moves in here.
@@ -27,6 +41,7 @@ export function PracticeAtmosphere({ input, warmth, flow, playing, hitSerial = 0
       energy.current.lastHit = hitSerial;
       energy.current.hit = Math.min(1, energy.current.hit + 0.14);
       energy.current.wake?.();
+      wakeWaterDrive();
     }
   }, [hitSerial]);
 
@@ -34,24 +49,38 @@ export function PracticeAtmosphere({ input, warmth, flow, playing, hitSerial = 0
     if (input.status !== "listening" || input.paused) {
       energy.current.level = 0;
       energy.current.heard = -Infinity;
+      drive.current.level = 0;
+      drive.current.heardAt = -Infinity;
       return;
     }
     return input.subscribe((frame) => {
       // Reuse the shared analyser & per-frame pitch cache; no extra detector runs here.
-      energy.current.level = unit(Math.sqrt(frame.rms) * 2.5);
+      const lvl = unit(Math.sqrt(frame.rms) * 2.5);
+      energy.current.level = lvl;
+      drive.current.level = lvl;
       if (frame.rms > 0.008) {
         const now = performance.now();
-        energy.current.heard = now;
         const midi = midiOf(frame);
         if (midi !== null) {
+          energy.current.heard = now;
+          drive.current.heardAt = now;
           const norm = unit((midi - 40) / 36); // E2 (0) .. E5 (1)
           const fifths = ((midi * 7) % 12) / 11; // harmonic position 0..1
-          energy.current.noteX = (fifths - 0.5) * 1.15;
-          energy.current.noteY = (norm - 0.5) * 0.72;
+          const nx = (fifths - 0.5) * 1.15;
+          const ny = (norm - 0.5) * 0.72;
+          energy.current.noteX = nx;
+          energy.current.noteY = ny;
           energy.current.noteHue = norm;
           energy.current.noteAt = now;
+          drive.current.noteX = nx;
+          drive.current.noteY = ny;
+          drive.current.noteHue = norm;
+          drive.current.noteAt = now;
+          if (state.current.playing) {
+            energy.current.wake?.();
+            wakeWaterDrive();
+          }
         }
-        if (state.current.playing) energy.current.wake?.();
       }
     });
   }, [input.status, input.paused, input.subscribe]);

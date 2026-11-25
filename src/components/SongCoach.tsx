@@ -382,8 +382,6 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
   });
   const [gapIds, setGapIds] = useState<ReadonlySet<string>>(() => new Set()); // a focus on time: these play with gaps in the band
   const [sessionBlocks, setSessionBlocks] = useState<SessionPlan["blocks"]>(() => direct?.blocks ?? []);
-  const [sessionWhy, setSessionWhy] = useState(() => direct?.why ?? "");
-  const [sessionSideWhy, setSessionSideWhy] = useState("");
   const outputs = useOutputs();
   const [labels, setLabels] = useState<LabelMode>("names");
   const [menu, setMenu] = useState(false);
@@ -516,8 +514,6 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
     const onTime = shaped.arc && ["rushing", "dragging", "unsteady"].includes(shaped.arc.cls);
     setGapIds(new Set(onTime ? shaped.blocks.find((b) => b.role === "focus")?.cards ?? [] : []));
     setSessionBlocks(shaped.blocks);
-    setSessionWhy(shaped.why);
-    setSessionSideWhy(shaped.sideWhy ?? "");
     if (self) session.begin(plan, true);
     else session.begin(plan);
     setChosenCard(undefined);
@@ -526,8 +522,6 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
     if (calib || menu || free || choosingTune || tools) return;
     setGapIds(new Set());
     setSessionBlocks([{ role: "focus", cards: [cardId], minutes: 2 }]);
-    setSessionWhy("");
-    setSessionSideWhy("");
     session.begin([cardId]);
     setChosenCard(undefined);
   };
@@ -1014,8 +1008,6 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
           earTag={<ToneTag pc={tonesLive && !menu ? toneKeys[1] : null} lit={tapped === 1} />}
           held={held}
           blocks={sessionBlocks}
-          focusWhy={sessionWhy}
-          sideWhy={sessionSideWhy}
           onGuitarMenu={openPad}
           onTools={openTools}
           shapes={shapes}
@@ -1367,8 +1359,6 @@ function Running({
   earTag,
   held,
   blocks,
-  focusWhy,
-  sideWhy,
   onGuitarMenu,
   onTools,
   shapes,
@@ -1387,8 +1377,6 @@ function Running({
   earTag: ReactNode;
   held: number | null; // the note key being held
   blocks: SessionPlan["blocks"];
-  focusWhy: string;
-  sideWhy: string;
   onGuitarMenu(): void;
   onTools(tool: RoomTool): void;
   shapes: ShapeOption[]; // a scale exercise's shapes, the default first; empty elsewhere
@@ -1410,8 +1398,6 @@ function Running({
   const card = s.card;
   if (!card) return null;
   const say = coachLine(card, s, s.passes[s.passes.length - 1]);
-  const curRole = roleByPos[s.pos] ?? null;
-  const roleContext = curRole === "focus" && focusWhy ? focusWhy : curRole === "side" && sideWhy ? sideWhy : "";
   const aidLevel = s.phase === "time" ? s.shadow?.level() ?? 0 : 0;
 
   // the three ways to work on it: each one a note away
@@ -1437,15 +1423,6 @@ function Running({
     s.tempo(delta);
   };
   const mixed = new Set(s.queue.map((id) => byId.get(id)?.tuneId)).size > 1;
-  const listening = input.status === "listening" && !input.paused;
-  const phaseName = {
-    intro: "Getting ready",
-    listen: "Listening",
-    pace: card.view === "chords" ? "Your shapes" : "Your pace",
-    time: free ? "Improvising" : "In time",
-    result: "Pass complete",
-  }[s.phase];
-  const phase = s.paused ? s.away ? "Resting" : s.listeningOff ? "Input paused" : "Paused" : turnaround ? "Turnaround" : initialCount ? "Count-in" : phaseName;
   const showMeter = s.phase !== "intro" && s.phase !== "listen" && s.phase !== "result";
   const hasMeter = showMeter && (s.run >= 4 || (s.phase === "time" && (s.passLog.length > 0 || Boolean(s.playback.lastPass))));
   const hasCoach = Boolean(say.text || pips || hasMeter);
@@ -1463,16 +1440,7 @@ function Running({
       </ol>
 
       <header className="ss-head" key={`${s.pos}:${card.id}`} data-pool="calm">
-        <div className="ss-topbar">
-          <RoomInstruments onOpen={onTools} />
-          <div className="ss-status">
-            <span className="ss-exercise-count">{String(s.pos + 1).padStart(2, "0")}<em>/{String(s.queue.length).padStart(2, "0")}</em></span>
-            <span className="ss-phase-name" aria-live="polite"><i />{phase}</span>
-            {curRole ? <span className={`ss-role-pill is-${curRole}`} title={roleContext || undefined}>{ROLE_LABEL[curRole]}</span> : null}
-            {s.selfGuided || !listening ? <span className="ss-connection"><i />{s.selfGuided ? "Unscored" : "Input off"}</span> : null}
-          </div>
-          <span className="ss-topbar-end" aria-hidden="true" />
-        </div>
+        <RoomInstruments onOpen={onTools} />
 
         <div className="ss-titlebar">
           <p className="ss-kicker">

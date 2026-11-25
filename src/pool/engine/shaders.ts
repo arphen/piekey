@@ -603,8 +603,8 @@ void main() {
   }
   // Keep AbyssalWater visible underneath at rest; the living pool's fluid, ripples, tuner rings
   // and earned bioluminescence emerge transparently over the continuous lagoon.
-  float earned = clamp(smoothstep(0.02, 0.72, uEmission) * 0.72 + smoothstep(0.02, 0.55, uLava) * 0.24, 0.0, 0.90) * (1.0 - 0.65 * lens);
-  vec3 light = glow + bloom + tunerGlow;
+  float earned = clamp(smoothstep(0.008, 0.56, uEmission) * 0.78 + smoothstep(0.015, 0.48, uLava) * 0.28, 0.0, 0.92) * (1.0 - 0.65 * lens);
+  vec3 light = (glow * 1.25) + bloom + tunerGlow;
   vec3 rgb = colour * earned + light;
   // soft knee: dark values pass untouched, bright glow never clips
   vec3 over = max(rgb - 0.6, 0.0);
