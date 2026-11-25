@@ -229,8 +229,8 @@ explicitly redistributable, with provenance.
   `THIRD_PARTY_NOTICES.md` when changing distributed third-party material.
 - Do not add personal full-score transcriptions to release source. Importing or converting a
   score does not grant redistribution rights or put it under the app's AGPL license.
-- Publish only release history cleared for redistribution. Preserve private development history;
-  do not rewrite or publish it without explicit authorization.
+- Never rewrite history or force-push. The owner has authorized ordinary publishing of the
+  existing `main` history (see "Shipping to main" under Working agreements).
 
 ## Working agreements
 
@@ -255,6 +255,21 @@ explicitly redistributable, with provenance.
   when a layer, model or data flow changes, and `docs/BACKLOG.md` when a `T*` item is completed,
   split or re-scoped. Keep these three docs consistent with the code; stale status docs are worse
   than none.
+
+## Shipping to main
+
+The owner works alone, on `main`, and does not want to ask for deploys. Pushing `main` deploys
+GitHub Pages. **Standing authorization: when a feature or fix is complete and verified, ship it
+without being asked: run `make publish MSG="what changed and why"`.** It commits everything in the
+tree, runs `make check` and a build, and pushes to `main`.
+
+- Do this at the end of finished work, not mid-feature or with failing checks. Say what shipped.
+- Read the delta it prints; if it contains something obviously unintended (secrets, personal
+  scores, `tunes/`, large binaries), stop and ask instead.
+- If the push is rejected because `main` moved, `git pull --rebase origin main`, rerun the gate,
+  publish again. Never force-push, rewrite history, or delete branches without being asked.
+- The commit rule above still applies to work you did not author only when it is clearly someone
+  else's in-progress edits in a different area; the owner's own uncommitted work ships with a publish.
 
 ## User communication
 
