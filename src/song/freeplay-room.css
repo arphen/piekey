@@ -15,7 +15,8 @@
 .ss .fp-instruments button:hover { background: rgba(10, 28, 46, 0.88); border-color: var(--line-strong); color: var(--ink); }
 .ss .fp-instruments button:focus-visible { outline: 2px solid var(--algae-cyan, #38e8c6); outline-offset: 4px; }
 .fp-room.has-tools { padding: 0; }
-.fp-tools-overlay { position: fixed; inset: 0; z-index: 30; overflow-y: auto; overscroll-behavior: contain; background: #040914; }
+.fp-tools-overlay { position: fixed; inset: 0; z-index: 30; overflow-y: auto; overscroll-behavior: contain; background: transparent; }
+.app .fp-tools-overlay { top: var(--topbar-h, 48px); }
 .fp-tools-overlay .guitar-tools { min-height: 100%; box-sizing: border-box; }
 .ss-free.fp-room .ss-display { margin: 24px 0 14px; font-size: clamp(48px, 6.8vw, 100px); line-height: 1.05; letter-spacing: -0.055em; text-shadow: 0 4px 28px rgba(2, 8, 18, 0.76); }
 .ss-free.fp-room .ss-sub { color: var(--ink-soft); font-size: 13px; line-height: 1.7; letter-spacing: 0; }

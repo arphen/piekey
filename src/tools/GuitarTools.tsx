@@ -46,6 +46,7 @@ interface GuitarToolsRoomProps {
   onClose(): void;
   initialTool?: Tool;
   initialBpm?: number;
+  onToolChange?(tool: Tool): void;
 }
 
 export function GuitarTools(props: GuitarToolsRoomProps) {
@@ -53,8 +54,9 @@ export function GuitarTools(props: GuitarToolsRoomProps) {
 }
 
 /** The same instruments can open inside an already protected practice room. */
-export function GuitarToolsRoom({ input, onClose, initialTool = "tuner", initialBpm = 80 }: GuitarToolsRoomProps) {
+export function GuitarToolsRoom({ input, onClose, initialTool = "tuner", initialBpm = 80, onToolChange }: GuitarToolsRoomProps) {
   const [tool, setTool] = useState<Tool>(initialTool);
+  const prevInitialTool = useRef(initialTool);
   const [bpm, setBpm] = useState(() => clampToolBpm(initialBpm));
   const [beats, setBeats] = useState<BeatsPerBar>(4);
   const [division, setDivision] = useState<NonNullable<PlaybackMix["clickSubdivision"]>>(1);
@@ -72,6 +74,14 @@ export function GuitarToolsRoom({ input, onClose, initialTool = "tuner", initial
   const beat = useMemo(() => ({ ...playback.beat, beats }), [playback.beat, beats]);
   const tuner = useTuner(input, tool === "tuner" && pad === null);
   const close = useCallback(() => { playback.stop(); onClose(); }, [playback.stop, onClose]);
+  useEffect(() => {
+    if (prevInitialTool.current !== initialTool) {
+      prevInitialTool.current = initialTool;
+      if (initialTool === "tuner") playback.stop();
+      setTool(initialTool);
+      setError("");
+    }
+  }, [initialTool, playback.stop]);
   const keyboard = useRef({ pad, close });
   keyboard.current = { pad, close };
   useEffect(() => {
@@ -122,6 +132,7 @@ export function GuitarToolsRoom({ input, onClose, initialTool = "tuner", initial
   const changeTool = (next: Tool) => {
     if (next === "tuner") playback.stop();
     setTool(next);
+    onToolChange?.(next);
     setError("");
   };
   const changeTempo = (value: number) => { setBpm(clampToolBpm(value)); setTempoDraft(null); taps.current = []; };
@@ -146,6 +157,7 @@ export function GuitarToolsRoom({ input, onClose, initialTool = "tuner", initial
     if (playback.playing) playback.stop();
     else {
       setTool("metronome");
+      onToolChange?.("metronome");
       void playback.play(0, 0, true).catch(() => setError("Audio could not start. Try Start again."));
     }
   };

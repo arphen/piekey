@@ -10,9 +10,9 @@
   --fam: var(--tool-accent);
   --line: rgba(110, 214, 200, 0.14);
   --line-strong: rgba(112, 232, 186, 0.28);
-  z-index: 350;
+  z-index: 20;
   overflow: auto;
-  background: #040914;
+  background: transparent;
   color: var(--ink);
   isolation: isolate;
 }

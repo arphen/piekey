@@ -14,7 +14,7 @@
   --drift-y: 0%;
   overflow: hidden;
   pointer-events: none;
-  background: #040914;
+  background: transparent;
   contain: strict;
 }
 
@@ -22,27 +22,24 @@
 .pa-dawn {
   inset: -12%;
   background:
-    radial-gradient(ellipse at 14% 78%, rgba(28, 124, 154, 0.24), transparent 50%),
+    radial-gradient(ellipse at 14% 78%, rgba(28, 124, 154, 0.22), transparent 50%),
     radial-gradient(ellipse at 82% 20%, rgba(56, 232, 198, 0.16), transparent 50%),
     radial-gradient(ellipse at 74% 88%, rgba(42, 168, 96, 0.18), transparent 52%);
-  opacity: calc(0.26 + var(--bloom) * 0.5 + var(--hit) * 0.28);
+  opacity: calc(var(--bloom) * 0.55 + var(--hit) * 0.28);
   transform: translate(var(--drift-x), var(--drift-y)) scale(calc(1 + var(--breath) * 0.03));
 }
 
 .pa-water {
-  inset: -12%;
-  background: url("../assets/pond-abyss.webp") center 48% / cover no-repeat;
-  filter: saturate(1.32) contrast(1.34) brightness(0.42) hue-rotate(8deg);
-  opacity: calc(0.5 + var(--breath) * 0.06);
-  mask-image: radial-gradient(ellipse at 54% 52%, rgba(0, 0, 0, 0.42) 12%, rgba(0, 0, 0, 0.84) 55%, #000 100%);
-  transform: translate(var(--drift-x), var(--drift-y)) scale(calc(1.05 + var(--breath) * 0.025));
+  display: none;
 }
 
 .pa-water-colour {
-  background-image: url("../assets/pond-neon.webp");
+  display: block;
+  inset: -12%;
+  background: url("../assets/pond-neon.webp") center 48% / cover no-repeat;
   filter: saturate(1.75) contrast(1.42) brightness(0.86) hue-rotate(14deg); /* bioluminescent emerald-cyan algae surging from abyssal water */
-  opacity: calc(0.08 + var(--bloom) * 0.54 + var(--hit) * 0.26);
-  mix-blend-mode: screen;
+  opacity: calc(var(--bloom) * 0.48 + var(--hit) * 0.22);
+  mask-image: radial-gradient(ellipse at 54% 52%, rgba(0, 0, 0, 0.28) 12%, rgba(0, 0, 0, 0.84) 60%, #000 100%);
   transform: translate(calc(var(--drift-y) * -1), var(--drift-x)) scale(calc(1.08 + var(--hit) * 0.03));
 }
 
@@ -55,7 +52,7 @@
   fill: none;
   stroke: rgba(56, 232, 198, 0.42);
   stroke-width: 0.5;
-  opacity: calc(0.07 + var(--breath) * 0.05 + var(--bloom) * 0.12);
+  opacity: calc(0.04 + var(--breath) * 0.06 + var(--bloom) * 0.14);
   transform: translateY(calc(var(--breath) * -4px));
 }
 .pa-current path:nth-child(2n) { opacity: 0.4; }
@@ -63,11 +60,10 @@
 .pa-shade {
   inset: 0;
   background:
-    radial-gradient(ellipse at 50% 48%, rgba(4, 10, 22, 0.62) 12%, rgba(3, 8, 18, 0.24) 64%, rgba(3, 8, 18, 0.52) 100%),
-    linear-gradient(180deg, rgba(3, 8, 18, 0.68) 0%, transparent 22%, transparent 78%, rgba(3, 8, 18, 0.76) 100%);
+    radial-gradient(ellipse at 50% 48%, rgba(3, 9, 20, 0.24) 0%, transparent 66%);
 }
 
-.pa-rendered-water { inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity 1.1s; }
+.pa-rendered-water { inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity 0.6s; }
 .pa-rendered-water[data-renderer="ready"] { opacity: 1; }
 /* Each heard beat lights the whole room from its edges, strongest on the bar's first beat. Only
    opacity and transform animate, so the compositor carries it. */

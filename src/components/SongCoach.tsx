@@ -84,15 +84,19 @@ interface SongCoachProps {
   handle?: MutableRefObject<RoomHandle | null>;
   /** Whether a session is under way, for the Play tab's live mark while parked. */
   onLive?(live: boolean): void;
+  /** Which surface inside the room is visible, so the shell's topbar and water stay in sync. */
+  onSurface?(surface: RoomSurface): void;
   /** The shell asks the room for its own instruments or free play (a new serial each time), so they never compete with it. */
   request?: RoomRequest;
   /** The last request carried out, kept outside the tune-keyed room so a tune change does not repeat it. */
   served?: MutableRefObject<number>;
 }
 
+export type RoomSurface = "practice" | "free" | "tuner" | "metronome";
+
 export interface RoomRequest {
   serial: number;
-  kind: "tuner" | "metronome" | "free" | "settings";
+  kind: "practice" | "tuner" | "metronome" | "free" | "settings";
 }
 
 export interface RoomHandle {
@@ -327,7 +331,7 @@ export function SongCoach(props: SongCoachProps) {
 }
 
 /** The practice room must remain inside a stable PracticeWindowBoundary while changing tunes. */
-export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_TUNES, mixIds, focus = "all", initialCardId, autoStart = false, parked = false, handle, onLive, request, served: servedRef }: SongCoachProps) {
+export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_TUNES, mixIds, focus = "all", initialCardId, autoStart = false, parked = false, handle, onLive, onSurface, request, served: servedRef }: SongCoachProps) {
   const explicitMix = mixIds !== undefined;
   const [windowP, setWindowP] = useState<number | null>(() => loadStore(sheet.id).settings.window);
   const [mix, setMix] = useState(() => (explicitMix ? mixIds.length > 0 : loadStore(sheet.id).settings.mix !== false)); // the other tunes' exercises too
@@ -626,7 +630,11 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
     await onTune(id);
   };
   const openTools = (tool: RoomTool) => {
-    if (tools || choosingTune || calib) return;
+    if (choosingTune || calib) return;
+    if (tools) {
+      setTools(tool);
+      return;
+    }
     if (running && !finished && !session.paused) {
       session.togglePause();
       pausedByTools.current = true;
@@ -846,6 +854,8 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
     }
   }, [parked]);
   useEffect(() => { onLive?.(live); }, [live, onLive]);
+  const surface: RoomSurface = tools ?? (free ? "free" : "practice");
+  useEffect(() => { onSurface?.(surface); }, [surface, onSurface]);
   // a request from the shell, carried out once the room is in view
   const ownServed = useRef(0);
   const served = servedRef ?? ownServed;
@@ -853,9 +863,23 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
     if (!request || parked || served.current === request.serial) return;
     served.current = request.serial;
     const a = actRef.current;
-    if (request.kind === "settings") { if (a.tools) { a.closeTools(); window.setTimeout(() => { if (!actRef.current.menu) actRef.current.openMenu(); }, 0); } else if (!a.menu) a.openMenu(); }
-    else if (request.kind === "free") { if (!a.free) a.openFree(); }
-    else if (a.tools !== request.kind) a.openTools(request.kind);
+    if (request.kind === "settings") {
+      if (a.tools) { a.closeTools(); window.setTimeout(() => { if (!actRef.current.menu) actRef.current.openMenu(); }, 0); }
+      else if (!a.menu) a.openMenu();
+    } else if (request.kind === "practice") {
+      if (a.tools) a.closeTools();
+      if (a.free) a.closeFree();
+    } else if (request.kind === "free") {
+      if (a.tools) {
+        setTools(null);
+        if (pausedByTools.current) pausedByMenu.current = true;
+        pausedByTools.current = false;
+      }
+      if (!a.free) a.openFree();
+    } else {
+      if (a.free) setFree(false);
+      if (a.tools !== request.kind) a.openTools(request.kind);
+    }
   }, [request, parked, served]);
   useEffect(() => () => onLive?.(false), [onLive]);
   useEffect(() => {
@@ -1032,7 +1056,7 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
       ) : null}
       </div>
       {choosingTune ? <TunePicker input={input} sources={themeSources} currentTuneId={sheet.id} session={sessionSet} onCancel={closeTunePicker} onChoose={chooseTune} /> : null}
-      {tools ? <GuitarToolsRoom input={input} initialTool={tools} initialBpm={session.bpm} onClose={closeTools} /> : null}
+      {tools ? <GuitarToolsRoom input={input} initialTool={tools} initialBpm={session.bpm} onToolChange={setTools} onClose={closeTools} /> : null}
     </div>
   );
 }

@@ -7,7 +7,7 @@ import { loadCurrentTuneId, loadLibraryAsync, parseTuneEntry, saveCurrentTuneId,
 import type { LeadSheet } from "../tunes/musicxml";
 import { buildTimeline } from "../tunes/order";
 import { Glyph } from "./Glyph";
-import { SongCoach, type RoomHandle, type RoomRequest } from "./SongCoach";
+import { SongCoach, type RoomHandle, type RoomRequest, type RoomSurface } from "./SongCoach";
 import type { PracticeLaunchOptions } from "./TuneView";
 
 // The Play tab's room: it holds one practice room (`SongCoach`) for the shell, apart from the
@@ -33,7 +33,7 @@ export function sessionLead(library: readonly TuneEntry[]): string | null {
 
 const trySaveTune = (id: string) => { try { saveCurrentTuneId(id); } catch { /* the save notice reports it */ } };
 
-export function PracticeRoom({ input, launch, parked, request, handle, onClose, onLive, onOpenLibrary }: {
+export function PracticeRoom({ input, launch, parked, request, handle, onClose, onLive, onSurface, onOpenLibrary }: {
   input: InputApi;
   launch: RoomLaunch;
   parked: boolean;
@@ -41,6 +41,7 @@ export function PracticeRoom({ input, launch, parked, request, handle, onClose, 
   handle: MutableRefObject<RoomHandle | null>;
   onClose(): void;
   onLive(live: boolean): void;
+  onSurface?(surface: RoomSurface): void;
   onOpenLibrary(): void;
 }) {
   const [library, setLibrary] = useState<TuneEntry[] | null>(null);
@@ -109,6 +110,7 @@ export function PracticeRoom({ input, launch, parked, request, handle, onClose, 
       request={request}
       handle={handle}
       onLive={onLive}
+      onSurface={onSurface}
       onClose={onClose}
       tunes={(library ?? []).map((tune) => ({ id: tune.id, title: tune.name }))}
       onTune={(id) => {

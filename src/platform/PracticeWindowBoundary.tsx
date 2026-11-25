@@ -43,7 +43,7 @@ export function PracticeWindowBoundary({ children, onExit }: { children: ReactNo
     if (snapshot.state !== "active") { unmounted.current?.(); unmounted.current = null; }
   }, [snapshot.state]);
   if (snapshot.state === "active") return <>{children}</>;
-  return <main className="platform-practice" aria-label="practice window">
+  return <main className="platform-practice" data-state={snapshot.state} aria-label="practice window">
     <h1>{snapshot.state === "checking" ? "Opening practice" : snapshot.state === "yielding" ? "Moving practice" : "Practice window"}</h1>
     <p role="status">{snapshot.message}</p>
     <div className="platform-actions">

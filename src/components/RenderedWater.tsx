@@ -182,26 +182,27 @@ void main() {
 
   vec3 color = mix(baseWater, algaeBody, clamp(matMask * visibility, 0.0, 0.86));
 
-  // Bioluminescence: subtle cyan-emerald ambient whisper at rest, blossoming into luminous algae-gold in the zone.
+  // Bioluminescence: reactive swells and earned bloom emerge transparently over AbyssalWater.
   vec3 poisonNeon = mix(vec3(0.16, 0.88, 0.64), vec3(0.54, 1.0, 0.30), noteHue);
   vec3 birchGold = vec3(0.90, 0.78, 0.42);
-  float breath = 0.5 + 0.5 * sin(t * 0.34 + f0 * 6.2831 + p.x * 1.3);
   float noteNear = exp(-dot(p - notePos, p - notePos) / 0.24) * noteWarmth;
-  float glowStrength = (0.08 + 0.08 * breath) + bloom * 0.24 + zone * 0.92 + swellLight * (0.16 + 0.34 * bloom) + noteNear * (0.10 + 0.26 * zone);
-  color += poisonNeon * algaeMask * raw.g * glowStrength * (0.38 + 0.82 * rimPresence);
+  float glowStrength = bloom * 0.26 + zone * 0.92 + swellLight * (0.20 + 0.34 * bloom) + noteNear * (0.14 + 0.26 * zone);
+  vec3 reactive = poisonNeon * algaeMask * raw.g * glowStrength * (0.38 + 0.82 * rimPresence);
 
   // Subtle golden warmth breathing softly in the deep zone on downbeats.
   vec3 tideColor = mix(poisonNeon, birchGold, downbeat * 0.65);
-  color += tideColor * algaeMask * sway * zone * 0.26 * (0.35 + 0.65 * rimPresence);
+  reactive += tideColor * algaeMask * sway * zone * 0.26 * (0.35 + 0.65 * rimPresence);
 
-  // Subtle dark-blue vignette + filmic highlight knee matching AbyssalWater.
   float vig = smoothstep(1.32, 0.22, centerDist);
-  color *= mix(0.64, 1.02, vig);
-  vec3 over = max(color - 0.54, 0.0);
-  color = min(color, 0.54) + over / (1.0 + over / 0.36);
+  float earned = clamp(bloom * 0.52 + zone * 0.42, 0.0, 0.86);
+  vec3 rgb = (color * earned + reactive) * mix(0.68, 1.02, vig);
+  vec3 over = max(rgb - 0.54, 0.0);
+  rgb = min(rgb, 0.54) + over / (1.0 + over / 0.36);
 
+  float alpha = clamp(max(earned, max(rgb.r, max(rgb.g, rgb.b))), 0.0, 0.92);
   float dither = (hash12(gl_FragCoord.xy) - 0.5) / 255.0;
-  gl_FragColor = vec4(max(color + dither, 0.0), 1.0);
+  vec3 outRgb = min(max(rgb + dither * alpha, 0.0), vec3(alpha));
+  gl_FragColor = vec4(outRgb, alpha);
 }
 `;
 
@@ -251,7 +252,7 @@ export function RenderedWater({ playing, warmth, flow, hitSerial = 0, beat, leve
     const el = canvas.current;
     if (!el) return;
     let gl: WebGLRenderingContext | null = null;
-    try { gl = el.getContext("webgl", { alpha: false, antialias: false, depth: false, stencil: false, powerPreference: "low-power", preserveDrawingBuffer: false }); }
+    try { gl = el.getContext("webgl", { alpha: true, antialias: false, depth: false, stencil: false, premultipliedAlpha: true, powerPreference: "low-power", preserveDrawingBuffer: false }); }
     catch { /* The photographic room remains available when GPU access is denied. */ }
     if (!gl) { el.dataset.renderer = "unavailable"; return; }
     const gpu = gl;

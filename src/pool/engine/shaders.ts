@@ -591,21 +591,29 @@ uniform vec2 uResolution;
 void main() {
   vec3 colour; vec3 glow; float lens;
   scene(vUv, colour, glow, lens);
-  colour += glow + texture(uBloom, vUv).rgb * uBloomGain * (1.0 - 0.75 * lens);
+  vec3 bloom = texture(uBloom, vUv).rgb * uBloomGain * (1.0 - 0.75 * lens);
+  vec3 tunerGlow = vec3(0.0);
   if (uTuner.w > 0.001) {
     // Two ring sets, the second detuned; their moiré moves at the string's real beat frequency.
     float r = length(vUv * vec2(uAspect, 1.0) - uTuner.xy);
     float lambda = 0.016;
     float a = 0.5 + 0.5 * cos(6.2832 * r / lambda);
     float b = 0.5 + 0.5 * cos(6.2832 * r / (lambda * uTunerWave.y) + uTunerWave.x);
-    colour += vec3(0.72, 0.82, 0.66) * a * b * exp(-r * r / (uTuner.z * uTuner.z)) * uTuner.w * 0.07;
+    tunerGlow = vec3(0.54, 0.96, 0.68) * a * b * exp(-r * r / (uTuner.z * uTuner.z)) * uTuner.w * 0.14;
   }
+  // Keep AbyssalWater visible underneath at rest; the living pool's fluid, ripples, tuner rings
+  // and earned bioluminescence emerge transparently over the continuous lagoon.
+  float earned = clamp(smoothstep(0.02, 0.72, uEmission) * 0.72 + smoothstep(0.02, 0.55, uLava) * 0.24, 0.0, 0.90) * (1.0 - 0.65 * lens);
+  vec3 light = glow + bloom + tunerGlow;
+  vec3 rgb = colour * earned + light;
   // soft knee: dark values pass untouched, bright glow never clips
-  vec3 over = max(colour - 0.6, 0.0);
-  colour = min(colour, 0.6) + over / (1.0 + over / 0.4);
+  vec3 over = max(rgb - 0.6, 0.0);
+  rgb = min(rgb, 0.6) + over / (1.0 + over / 0.4);
+  float alpha = clamp(max(earned, max(rgb.r, max(rgb.g, rgb.b))), 0.0, 0.94);
   // dither the dark gradients against banding
   float noise = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
-  o = vec4(colour + (noise - 0.5) / 255.0, 1.0);
+  vec3 outRgb = min(max(rgb + (noise - 0.5) / 255.0 * alpha, 0.0), vec3(alpha));
+  o = vec4(outRgb, alpha);
 }
 `;
 

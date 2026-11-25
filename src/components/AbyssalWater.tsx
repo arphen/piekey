@@ -5,7 +5,15 @@ import currentUrl from "../assets/pond-current.webp";
 import bloomUrl from "../assets/pond-bloom.webp";
 import neonUrl from "../assets/pond-neon.webp";
 
-export type WaterScene = "home" | "library" | "song" | "progress";
+export type WaterScene =
+  | "home"
+  | "library"
+  | "song"
+  | "progress"
+  | "practice"
+  | "free"
+  | "tuner"
+  | "metronome";
 
 interface SceneConfig {
   panX: number; // horizontal station along the continuous algae lagoon strip
@@ -58,6 +66,46 @@ const SCENES: Record<WaterScene, SceneConfig> = {
     flareRgb: [0.92, 0.84, 0.32], // violent chartreuse-gold flare
     calmCenter: 0.44,
     vortex: 0.25,
+  },
+  practice: {
+    panX: 3.15,
+    primary: currentUrl,
+    secondary: bloomUrl,
+    abyssRgb: [0.007, 0.024, 0.064], // deep nocturnal harbor sapphire
+    glowRgb: [0.20, 0.94, 0.50], // luminous chlorophyll-emerald
+    flareRgb: [0.54, 1.0, 0.42], // bright bioluminescent lime-aqua surge
+    calmCenter: 0.48,
+    vortex: 0.24,
+  },
+  free: {
+    panX: 3.95,
+    primary: swirlUrl,
+    secondary: neonUrl,
+    abyssRgb: [0.007, 0.025, 0.068], // deep midnight pelagic blue
+    glowRgb: [0.14, 0.92, 0.72], // electric bioluminescent cyan-jade
+    flareRgb: [0.34, 1.0, 0.88], // vivid aqua surge
+    calmCenter: 0.40,
+    vortex: 0.34,
+  },
+  tuner: {
+    panX: 4.70,
+    primary: abyssUrl,
+    secondary: neonUrl,
+    abyssRgb: [0.007, 0.023, 0.068], // deep oceanic cobalt-navy
+    glowRgb: [0.18, 0.96, 0.56], // glowing emerald-mint lock hue
+    flareRgb: [0.62, 1.0, 0.36], // chartreuse in-tune flare
+    calmCenter: 0.36,
+    vortex: 0.46,
+  },
+  metronome: {
+    panX: 5.45,
+    primary: bloomUrl,
+    secondary: currentUrl,
+    abyssRgb: [0.008, 0.022, 0.064], // deep abyssal indigo-navy
+    glowRgb: [0.16, 0.88, 0.64], // bioluminescent seafoam-emerald
+    flareRgb: [0.92, 0.82, 0.36], // warm downbeat gold flare
+    calmCenter: 0.36,
+    vortex: 0.38,
   },
 };
 
@@ -552,7 +600,6 @@ export function AbyssalWater({ scene, suspended = false }: { scene: WaterScene; 
     const paint = (now: number) => {
       frame = 0;
       if (disposed || failed || document.hidden || gpu.isContextLost() || suspendedRef.current) return;
-      if (document.querySelector(".ss:not(.is-parked)")) return;
       const moving = !motion?.matches;
       const targetFps = 30;
       if (moving && previous && now - previous < 1000 / targetFps) {

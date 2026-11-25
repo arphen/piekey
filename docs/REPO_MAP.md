@@ -134,7 +134,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 
 ## src
 
-- `src/App.tsx` — `App:133`
+- `src/App.tsx` — `App:132`
 - `src/__tests__/attacks.test.ts`
 - `src/__tests__/audio-scoring.test.ts`
 - `src/__tests__/calibration.test.ts`
@@ -191,7 +191,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/audio/setup.ts` — `InputSetup:2`, `AudioSetup:7`, `currentInputSetup:14`, `currentAudioSetup:15`, `setInputSetup:16`, `setOutputSetup:17`, `sameInputSetup:18`, `sameAudioSetup:20`
 - `src/audio/usePlayer.ts` — `usePlayer:49`
 - `src/audio/useTakePlayback.ts` — `useTakePlayback:23`
-- `src/components/AbyssalWater.tsx` — `WaterScene:8`, `AbyssalWater:312`
+- `src/components/AbyssalWater.tsx` — `WaterScene:8`, `AbyssalWater:360`
 - `src/components/Calibrate.tsx` — `Calibrate:34`
 - `src/components/CampfireView.tsx` — `CampfireView:21`
 - `src/components/ChordBox.tsx` — `ChordBox:15`
@@ -221,7 +221,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/components/PracticeRoom.tsx` — `RoomLaunch:19`, `sessionLead:26`, `PracticeRoom:36`
 - `src/components/ProgressView.tsx` — `ProgressView:598`
 - `src/components/RecordingStatus.tsx` — `RecordingStatus:13`, `downloadTake:21`, `RecordingRecovery:32`
-- `src/components/RenderedWater.tsx` — `RenderedWaterProps:208`, `RenderedWater:242`
+- `src/components/RenderedWater.tsx` — `RenderedWaterProps:209`, `RenderedWater:243`
 - `src/components/SaveNotice.tsx` — `SaveNotice:7`
 - `src/components/ScalesView.tsx` — `ScalesView:12`
 - `src/components/Score.tsx` — `drawChord:98`, `Score:212`
@@ -229,7 +229,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/components/SessionSummary.tsx` — `SessionSummary:86`
 - `src/components/ShapesView.tsx` — `ShapesView:16`
 - `src/components/SkillTree.tsx` — `SkillTree:18`
-- `src/components/SongCoach.tsx` — `RoomRequest:93`, `RoomHandle:98`, `openPractice:252`, `SongCoach:322`, `SongCoachRoom:330`
+- `src/components/SongCoach.tsx` — `RoomSurface:95`, `RoomRequest:97`, `RoomHandle:102`, `openPractice:256`, `SongCoach:326`, `SongCoachRoom:334`
 - `src/components/SongMap.tsx` — `SongMap:138`
 - `src/components/Transport.tsx` — `Transport:18`
 - `src/components/TriadWheel.tsx` — `TriadWheel:48`
@@ -368,7 +368,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/sync/state.ts` — `MergeResult:7`, `SyncConflict:7`, `SyncSnapshot:7`, `SyncTransaction:7`, `parseSyncSnapshot:8`, `flushSyncJournal:9`, `getSyncState:9`, `subscribeSyncState:9`, `initializeSyncJournal:15`, `captureSnapshot:29`, `mergeSnapshot:94`
 - `src/sync/sync.css`
 - `src/sync/transport.ts` — `PairedDevice:3`, `PairInvite:10`, `SyncConnection:18`, `SyncTransportOptions:29`, `SyncTransport:42`, `syncNetworkConfig:51`, `encodePairInvite:149`, `decodePairInvite:153`, `createSyncTransport:458`
-- `src/tools/GuitarTools.tsx` — `GuitarTools:51`, `GuitarToolsRoom:56`
+- `src/tools/GuitarTools.tsx` — `GuitarTools:52`, `GuitarToolsRoom:57`
 - `src/tools/TuneCheck.tsx` — `isTuned:17`, `TuneCheck:36`
 - `src/tools/timing.ts` — `MIN_TOOL_BPM:1`, `MAX_TOOL_BPM:2`, `clampToolBpm:4`, `tapTempo:9`
 - `src/tools/tools.css`

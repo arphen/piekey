@@ -43,8 +43,6 @@
   transition: opacity 0.38s ease;
 }
 .abyssal-water.is-suspended { opacity: 0; }
-body:has(.ss:not(.is-parked)) .abyssal-water,
-body:has(.ss:not(.is-parked)) .abyssal-water-fallback { opacity: 0; visibility: hidden; }
 
 .abyssal-water-fallback {
   background:
@@ -53,20 +51,28 @@ body:has(.ss:not(.is-parked)) .abyssal-water-fallback { opacity: 0; visibility: 
   filter: saturate(1.35) contrast(1.32) brightness(0.46) hue-rotate(8deg);
   transition: filter 0.6s ease;
 }
-.abyssal-water-fallback.is-home {
+.abyssal-water-fallback.is-home,
+.abyssal-water-fallback.is-free {
   background:
     radial-gradient(ellipse at 50% 48%, rgba(4, 10, 22, 0.34) 16%, rgba(3, 8, 18, 0.72) 100%),
     url("./assets/pond-swirl.webp") center / cover no-repeat;
 }
-.abyssal-water-fallback.is-progress {
+.abyssal-water-fallback.is-progress,
+.abyssal-water-fallback.is-metronome {
   background:
     radial-gradient(ellipse at 50% 45%, rgba(4, 10, 20, 0.54), rgba(3, 8, 18, 0.86) 82%),
     url("./assets/pond-bloom.webp") center / cover no-repeat;
 }
-.abyssal-water-fallback.is-song {
+.abyssal-water-fallback.is-song,
+.abyssal-water-fallback.is-practice {
   background:
-    radial-gradient(ellipse at 50% 45%, rgba(3, 9, 18, 0.68), rgba(3, 8, 18, 0.90) 82%),
+    radial-gradient(ellipse at 50% 45%, rgba(3, 9, 18, 0.64), rgba(3, 8, 18, 0.88) 82%),
     url("./assets/pond-current.webp") center / cover no-repeat;
+}
+.abyssal-water-fallback.is-tuner {
+  background:
+    radial-gradient(ellipse at 50% 45%, rgba(3, 9, 18, 0.52), rgba(3, 8, 18, 0.84) 82%),
+    url("./assets/pond-abyss.webp") center / cover no-repeat;
 }
 
 .app > header,
@@ -228,13 +234,16 @@ body:has(.ss:not(.is-parked)) .abyssal-water-fallback { opacity: 0; visibility: 
 .app .shell-end .device-sync-trigger[aria-pressed="true"] svg { color: var(--algae); opacity: 1; }
 
 /* Satisfying directional slide-and-dissolve view transitions synced with the water sweep */
-.app > main {
+.app > main,
+.app > .room-host:not([hidden]) {
   animation: shell-view-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
-.app.dir-right > main {
+.app.dir-right > main,
+.app.dir-right > .room-host:not([hidden]) {
   animation: shell-slide-from-right 0.44s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
-.app.dir-left > main {
+.app.dir-left > main,
+.app.dir-left > .room-host:not([hidden]) {
   animation: shell-slide-from-left 0.44s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 @keyframes shell-view-in {
@@ -252,7 +261,10 @@ body:has(.ss:not(.is-parked)) .abyssal-water-fallback { opacity: 0; visibility: 
 @media (prefers-reduced-motion: reduce) {
   .app > main,
   .app.dir-right > main,
-  .app.dir-left > main { animation: none; }
+  .app.dir-left > main,
+  .app > .room-host:not([hidden]),
+  .app.dir-right > .room-host:not([hidden]),
+  .app.dir-left > .room-host:not([hidden]) { animation: none; }
 }
 
 @media (max-width: 1100px) {
@@ -266,20 +278,25 @@ body:has(.ss:not(.is-parked)) .abyssal-water-fallback { opacity: 0; visibility: 
   .app .brand { display: none; }
 }
 
-/* ---------- the Play tab's room & standalone rooms: under the header, not over it ---------- */
+/* ---------- the Play tab's room & standalone rooms: under the header, floating over the lagoon ---------- */
 
 .room-host:not([hidden]) {
   position: fixed;
   inset: var(--topbar-h, 48px) 0 0 0;
-  z-index: 200;
+  z-index: 20;
 }
 .room-host .ss {
   position: absolute;
   inset: 0;
 }
 .ss.fp-standalone,
-.app > .ss.guitar-tools { top: var(--topbar-h, 48px); }
-.app.tab-play .app-legal { display: none; }
+.app > .ss.guitar-tools {
+  top: var(--topbar-h, 48px);
+  z-index: 20;
+}
+.app.tab-play .app-legal,
+.app.tab-free .app-legal,
+.app.has-tools .app-legal { display: none; }
 /* playing with the mouse still, the header steps back like the room's own chrome */
 .app .topbar { transition: opacity 0.6s ease; view-transition-name: app-topbar; }
 body:has(.room-host:not([hidden]) .ss.is-idle.is-exercise) .app .topbar:not(:hover, :focus-within) { opacity: 0.14; }
@@ -323,6 +340,7 @@ body:has(.room-host:not([hidden]) .ss.is-idle.is-exercise) .app .topbar:not(:hov
 
 /* When a browser View Transition is running, it owns the motion — prevent double enter animations. */
 html[data-vt] .app > main,
+html[data-vt] .app > .room-host,
 html[data-vt] .room-host .ss,
 html[data-vt] .room-host .ss-ready,
 html[data-vt] .room-host .ss-run .ss-head,
@@ -343,8 +361,8 @@ html[data-vt] .ss.fp-standalone {
 ::view-transition-old(tab-ink),
 ::view-transition-new(tab-ink) { animation: none; height: 100%; }
 
-/* Smooth background crossfade (water stays continuous with no scale jump) */
-::view-transition-old(root) { animation: 0.3s ease both vt-fade-out; }
+/* Keep the continuous abyssal lagoon solid underneath (no dark dip mid-crossfade) */
+::view-transition-old(root) { animation: none; }
 ::view-transition-new(root) { animation: 0.34s ease both vt-fade-in; }
 
 /* Morphing title into the Practice Room */
@@ -356,7 +374,7 @@ html[data-vt] .ss.fp-standalone {
 ::view-transition-old(room-title),
 ::view-transition-new(room-title) { height: 100%; object-fit: contain; }
 
-/* Stage transitions by direction / room entry-exit (never squash height between scrollable pages and fixed rooms) */
+/* Stage transitions by direction (never squash height between scrollable pages and full-height rooms) */
 ::view-transition-group(app-stage) { animation: none; }
 ::view-transition-image-pair(app-stage) { isolation: auto; }
 ::view-transition-old(app-stage),
@@ -380,21 +398,6 @@ html[data-vt="left"]::view-transition-old(app-stage) {
   animation: 0.24s cubic-bezier(0.4, 0, 1, 1) both vt-slide-out-right;
 }
 html[data-vt="left"]::view-transition-new(app-stage) {
-  animation: 0.36s 0.03s cubic-bezier(0.22, 1, 0.36, 1) both vt-slide-in-left;
-}
-
-/* Entering and leaving the room use the same sideways glide as Home / Library / Progress. */
-html[data-vt="room-in"]::view-transition-old(app-stage) {
-  animation: 0.24s cubic-bezier(0.4, 0, 1, 1) both vt-slide-out-left;
-}
-html[data-vt="room-in"]::view-transition-new(app-stage) {
-  animation: 0.36s 0.03s cubic-bezier(0.22, 1, 0.36, 1) both vt-slide-in-right;
-}
-
-html[data-vt="room-out"]::view-transition-old(app-stage) {
-  animation: 0.24s cubic-bezier(0.4, 0, 1, 1) both vt-slide-out-right;
-}
-html[data-vt="room-out"]::view-transition-new(app-stage) {
   animation: 0.36s 0.03s cubic-bezier(0.22, 1, 0.36, 1) both vt-slide-in-left;
 }
 

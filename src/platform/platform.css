@@ -3,6 +3,9 @@
 .platform-status button { font: inherit; color: inherit; background: transparent; border: 1px solid currentColor; border-radius: .35rem; padding: .2rem .55rem; cursor: pointer; }
 .platform-status button:disabled { opacity: .55; cursor: default; }
 .platform-practice { max-width: 38rem; margin: 12vh auto; padding: 2rem; }
+.platform-practice[data-state="checking"] { animation: platform-check-in 0.2s 0.18s ease both; }
+@keyframes platform-check-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .platform-practice[data-state="checking"] { animation: none; } }
 .platform-practice h1 { font-size: 1.6rem; }
 .platform-practice p { line-height: 1.6; }
 .platform-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1.5rem; }

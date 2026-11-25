@@ -150,7 +150,7 @@ export class PoolHost {
     try {
       this.images ??= await Promise.all([loadImage(photoUrl), loadImage(leafUrl)]);
       if (this.disposed) return;
-      const gl = this.canvas.getContext("webgl2", { alpha: false, antialias: false, depth: false, stencil: false, premultipliedAlpha: false, preserveDrawingBuffer: false, powerPreference: "high-performance" });
+      const gl = this.canvas.getContext("webgl2", { alpha: true, antialias: false, depth: false, stencil: false, premultipliedAlpha: true, preserveDrawingBuffer: false, powerPreference: "high-performance" });
       if (!gl) throw new Error("webgl2");
       const half = gl.getExtension("EXT_color_buffer_half_float");
       const floats = gl.getExtension("EXT_color_buffer_float") !== null;

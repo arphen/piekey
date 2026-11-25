@@ -147,6 +147,39 @@ it("parks the Play tab's room behind other tabs and returns to the same room", a
   expect(room()?.dataset.parked).toBe("true");
 });
 
+it("keeps AbyssalWater live and updates scene & topbar across Practice, Free play, Tuner and Metronome", async () => {
+  shell.overview.loading = false;
+  const element = await mountShell();
+  const water = () => element.querySelector<HTMLElement>(".abyssal-water, .abyssal-water-fallback")!;
+  const currentTab = () => element.querySelector<HTMLButtonElement>('.tabs button[aria-current="page"]')?.textContent?.trim();
+
+  expect(water().classList.contains("is-home")).toBe(true);
+  expect(water().classList.contains("is-suspended")).toBe(false);
+
+  await press("Tuner");
+  expect(currentTab()).toBe("Tuner");
+  expect(water().classList.contains("is-tuner")).toBe(true);
+  expect(water().classList.contains("is-suspended")).toBe(false);
+  expect(element.querySelector(".guitar-tools.is-tuner")).toBeTruthy();
+
+  await press("Metronome");
+  expect(currentTab()).toBe("Metronome");
+  expect(water().classList.contains("is-metronome")).toBe(true);
+  expect(water().classList.contains("is-suspended")).toBe(false);
+  expect(element.querySelector(".guitar-tools.is-metronome")).toBeTruthy();
+
+  await press("Free play");
+  expect(currentTab()).toBe("Free play");
+  expect(water().classList.contains("is-free")).toBe(true);
+  expect(water().classList.contains("is-suspended")).toBe(false);
+
+  await press("Practice");
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+  expect(currentTab()).toBe("Practice");
+  expect(water().classList.contains("is-practice")).toBe(true);
+  expect(water().classList.contains("is-suspended")).toBe(false);
+});
+
 it("launches C thirds directly into a running exercise when clicked on the Home tree", async () => {
   shell.overview.loading = false;
   const element = await mountShell();

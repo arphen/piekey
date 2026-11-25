@@ -18,7 +18,7 @@ import { PlatformStatus } from "./platform/PlatformStatus";
 import { Glyph, type UtilityGlyphName } from "./components/Glyph";
 import { AbyssalWater, type WaterScene } from "./components/AbyssalWater";
 import { DeviceSync } from "./components/DeviceSync";
-import { openPractice, type RoomHandle, type RoomRequest } from "./components/SongCoach";
+import { openPractice, type RoomHandle, type RoomRequest, type RoomSurface } from "./components/SongCoach";
 import { PracticeRoom, type RoomLaunch } from "./components/PracticeRoom";
 import type { GlyphName, TutorTargetTab } from "./overview/modes";
 import { useInput } from "./listen/useInput";
@@ -43,20 +43,25 @@ const TABS: { id: Tab; label: string; glyph: GlyphName | UtilityGlyphName }[] = 
 /** The guitar walks the three tabs and then Play, the room they lead to. */
 const TAB_CYCLE: Tab[] = ["tutor", "tunes", "progress", "play"];
 const primaryTab = (tab: Tab) => tab === "tunes" || tab === "progress" ? tab : tab === "play" ? "play" : tab === "free" ? "free" : "tutor";
-const tabRank = (route: Route, tool: "tuner" | "metronome" | null = null) => {
+const tabRank = (route: Route, tool: "tuner" | "metronome" | null = null, surface: RoomSurface = "practice") => {
   if (tool === "tuner") return 4;
   if (tool === "metronome") return 4.5;
+  if (route.tab === "play") {
+    if (surface === "metronome") return 4.5;
+    if (surface === "tuner") return 4;
+    if (surface === "free") return 3.5;
+    return 3;
+  }
   const p = primaryTab(route.tab);
-  if (p === "tutor") return 0;
+  if (p === "tutor") return route.tab === "tutor" ? 0 : 0.5;
   if (p === "tunes") return route.song ? 1.5 : 1;
-  if (p === "play") return 3;
   if (p === "free") return 3.5;
   return 2;
 };
 
 type ViewTransitionLike = { finished?: Promise<unknown> };
 type ViewTransitionDocument = Document & { startViewTransition?(update: () => Promise<void> | void): ViewTransitionLike };
-type TransitionKind = "right" | "left" | "fade" | "room-in" | "room-out";
+type TransitionKind = "right" | "left" | "fade";
 /** Resolves once a selector has appeared, checked on timers (rendering is held during a view transition). */
 const appeared = (selector: string, ms: number) => new Promise<void>((resolve) => {
   const until = Date.now() + ms;
@@ -64,51 +69,45 @@ const appeared = (selector: string, ms: number) => new Promise<void>((resolve) =
   check();
 });
 interface PressOrigin { el: Element | null; x: number; y: number }
-/** The morph's source: the pressed exercise/card title, or null for icon-only tree blossoms. */
+/** The morph's source: a pressed exercise/card title in the page (never a topbar button or icon blossom). */
 function markMorphSource(from: Element | null): () => void {
-  if (from?.closest(".hm-skill-btn")) return () => undefined;
+  if (!from || from.closest(".topbar, .hm-skill-btn")) return () => undefined;
   const el =
-    from?.closest("[data-morph]") ??
-    from?.closest(".hm-skill-card, .hm-ex-row, .hm-mode-pill")?.querySelector("strong") ??
-    from?.closest(".hm-rhythm-chip")?.querySelector("span") ??
-    from?.closest(".hm-card, .lib-card, .lib-row")?.querySelector("h3, .lib-card-title, .lib-row-title") ??
-    from?.closest("button");
+    from.closest("[data-morph]") ??
+    from.closest(".hm-skill-card, .hm-ex-row, .hm-mode-pill")?.querySelector("strong") ??
+    from.closest(".hm-rhythm-chip")?.querySelector("span") ??
+    from.closest(".hm-card, .lib-card, .lib-row")?.querySelector("h3, .lib-card-title, .lib-row-title");
   if (!(el instanceof HTMLElement)) return () => undefined;
   el.style.viewTransitionName = "room-title";
   return () => { el.style.viewTransitionName = ""; };
 }
-const ROOM_TITLE = ".room-host:not([hidden]) .ss-ready .ss-display, .room-host:not([hidden]) .ss-run .ss-title";
+const BOUNDARY_SETTLED = '.platform-practice[data-state="blocked"], .platform-practice[data-state="error"], .platform-practice[data-state="unsupported"]';
+const stageReadySelector = (tab: Tab, tool: "tuner" | "metronome" | null = null, surface: RoomSurface = "practice"): string | undefined => {
+  if (tool === "tuner" || (tab === "play" && surface === "tuner")) return `.guitar-tools.is-tuner, ${BOUNDARY_SETTLED}`;
+  if (tool === "metronome" || (tab === "play" && surface === "metronome")) return `.guitar-tools.is-metronome, ${BOUNDARY_SETTLED}`;
+  if (tab === "free" || (tab === "play" && surface === "free")) return `.fp-room, ${BOUNDARY_SETTLED}`;
+  if (tab === "play") return `.room-host:not([hidden]) :is(.ss-ready, .ss-run, .ss-summary, .ss-cal, .room-empty), ${BOUNDARY_SETTLED}`;
+  return undefined;
+};
 let vtSerial = 0;
 /**
- * Unified screen transitions: glides the topbar tab ink and cross-slides the stage across every
- * screen (Home, Library, Song, Progress, Practice Room, Free play, Instruments). Entering Play
- * blooms from the pressed point and morphs any pressed title into the room heading; leaving Play
- * dissolves cleanly back into the shell's abyssal water. Falls back cleanly without View Transitions
+ * Unified directional screen transitions across every view (Home, Library, Song, Progress,
+ * Practice, Free play, Tuner, Metronome): glides the topbar tab ink and slides the transparent
+ * stage sideways over the continuous abyssal lagoon. Falls back cleanly without View Transitions
  * or under reduced motion.
  */
 function transitionScreen(
   kind: TransitionKind,
   update: () => void,
-  options?: { press?: PressOrigin | null; waitSelector?: string },
+  options?: { morphFrom?: Element | null; waitSelector?: string },
 ) {
   const rootEl = document.documentElement;
-  const rootStyle = rootEl.style;
-  if (kind === "room-in" || kind === "room-out") {
-    const press = options?.press;
-    if (press && (press.x || press.y)) {
-      rootStyle.setProperty("--room-ox", `${Math.round(press.x)}px`);
-      rootStyle.setProperty("--room-oy", `${Math.round(press.y)}px`);
-    } else {
-      rootStyle.setProperty("--room-ox", "50%");
-      rootStyle.setProperty("--room-oy", "50%");
-    }
-  }
   const doc = document as ViewTransitionDocument;
   const still = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (!doc.startViewTransition || still) { update(); return; }
   const token = ++vtSerial;
   rootEl.dataset.vt = kind;
-  const unmark = kind === "room-in" ? markMorphSource(options?.press?.el ?? null) : () => undefined;
+  const unmark = options?.morphFrom ? markMorphSource(options.morphFrom) : () => undefined;
   const clear = () => { if (vtSerial === token) delete rootEl.dataset.vt; };
   try {
     const vt = doc.startViewTransition(async () => {
@@ -142,6 +141,9 @@ export default function App() {
   const roomSerial = useRef(1);
   const roomHandle = useRef<RoomHandle | null>(null);
   const [roomLive, setRoomLive] = useState(false);
+  const [roomSurface, setRoomSurface] = useState<RoomSurface>("practice");
+  const roomSurfaceRef = useRef<RoomSurface>("practice");
+  roomSurfaceRef.current = roomSurface;
   const [roomRequest, setRoomRequest] = useState<RoomRequest>();
   const lastPress = useRef<PressOrigin | null>(null);
   useEffect(() => {
@@ -155,6 +157,10 @@ export default function App() {
   const toolsRef = useRef(toolsTool);
   toolsRef.current = toolsTool;
   const toolsOpen = toolsTool !== null;
+  const handleRoomSurface = useCallback((surface: RoomSurface) => {
+    roomSurfaceRef.current = surface;
+    setRoomSurface(surface);
+  }, []);
   const topbar = useRef<HTMLElement>(null);
   useEffect(() => {
     const header = topbar.current;
@@ -172,54 +178,55 @@ export default function App() {
     const onPop = (event: PopStateEvent) => {
       const prev = routeRef.current;
       const prevTool = toolsRef.current;
+      const prevSurface = roomSurfaceRef.current;
       const nextRoute = routeOf(event.state) ?? HOME;
-      const diff = tabRank(nextRoute) - tabRank(prev, prevTool);
-      const dir: "right" | "left" | "fade" = diff > 0 ? "right" : diff < 0 ? "left" : "fade";
-      const wasRoom = prev.tab === "play" && !prevTool;
-      const toRoom = nextRoute.tab === "play";
-      const kind: TransitionKind = toRoom ? "room-in" : wasRoom ? "room-out" : dir;
+      const diff = tabRank(nextRoute, null, "practice") - tabRank(prev, prevTool, prevSurface);
+      const dir: TransitionKind = diff > 0 ? "right" : diff < 0 ? "left" : "fade";
       routeRef.current = nextRoute;
       toolsRef.current = null;
+      roomSurfaceRef.current = "practice";
       transitionScreen(
-        kind,
+        dir,
         () => {
           setToolsTool(null);
+          setRoomSurface("practice");
           setLaunch(undefined);
           setNavDir(dir);
           setRoute(nextRoute);
         },
-        { waitSelector: toRoom ? ROOM_TITLE : undefined },
+        { waitSelector: stageReadySelector(nextRoute.tab, null, "practice") },
       );
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
   /** Move to a place. Returns whether a history entry was added. */
-  const go = useCallback((tab: Tab, song: string | null = null, replace = false, commit?: () => void): boolean => {
+  const go = useCallback((tab: Tab, song: string | null = null, replace = false, commit?: () => void, targetSurface: RoomSurface = "practice"): boolean => {
     const now = routeRef.current;
     const prevTool = toolsRef.current;
-    if (now.tab === tab && now.song === song && !prevTool) {
+    const prevSurface = roomSurfaceRef.current;
+    if (now.tab === tab && now.song === song && !prevTool && (tab !== "play" || prevSurface === targetSurface)) {
       commit?.();
       return false;
     }
     const next: Route = { tab, song, depth: replace ? now.depth : tab === "tutor" && song === null ? 0 : now.depth + 1 };
-    const diff = tabRank(next) - tabRank(now, prevTool);
-    const dir: "right" | "left" | "fade" = diff > 0 ? "right" : diff < 0 ? "left" : "fade";
-    const wasRoom = now.tab === "play" && !prevTool;
-    const toRoom = tab === "play";
-    const kind: TransitionKind = toRoom ? "room-in" : wasRoom ? "room-out" : dir;
+    const diff = tabRank(next, null, targetSurface) - tabRank(now, prevTool, prevSurface);
+    const dir: TransitionKind = diff > 0 ? "right" : diff < 0 ? "left" : "fade";
+    const toPractice = tab === "play" && targetSurface === "practice";
     routeRef.current = next;
     toolsRef.current = null;
+    roomSurfaceRef.current = targetSurface;
     const apply = () => {
       setToolsTool(null);
+      setRoomSurface(targetSurface);
       setNavDir(dir);
       commit?.();
       setRoute(next);
       window.scrollTo?.(0, 0);
     };
-    transitionScreen(kind, apply, {
-      press: toRoom ? lastPress.current : null,
-      waitSelector: toRoom ? ROOM_TITLE : undefined,
+    transitionScreen(dir, apply, {
+      morphFrom: toPractice ? lastPress.current?.el ?? null : null,
+      waitSelector: stageReadySelector(tab, null, targetSurface),
     });
     try {
       if (replace || next.depth === 0) history.replaceState({ ffl: next }, "");
@@ -231,12 +238,13 @@ export default function App() {
   const closeTools = useCallback(() => {
     if (!toolsRef.current) return;
     const prev = routeRef.current;
-    const toRoom = prev.tab === "play";
+    const diff = tabRank(prev, null, "practice") - tabRank(prev, toolsRef.current, roomSurfaceRef.current);
+    const dir: TransitionKind = diff > 0 ? "right" : diff < 0 ? "left" : "left";
     toolsRef.current = null;
-    transitionScreen("left", () => {
-      setNavDir("left");
+    transitionScreen(dir, () => {
+      setNavDir(dir);
       setToolsTool(null);
-    }, { waitSelector: toRoom ? ROOM_TITLE : undefined });
+    }, { waitSelector: stageReadySelector(prev.tab, null, "practice") });
   }, []);
   const back = useCallback(() => {
     if (toolsOpen) { closeTools(); return; }
@@ -290,13 +298,29 @@ export default function App() {
   /** The Play tab: back to the room as it was left, or the next session when none is open. */
   const openPlay = useCallback(() => {
     setLaunch(undefined);
-    if (room) go("play");
-    else void startPractice(null);
+    if (!room) { void startPractice(null); return; }
+    if (routeRef.current.tab === "play" && !toolsRef.current) {
+      if (roomSurfaceRef.current === "practice") return;
+      const diff = tabRank(routeRef.current, null, "practice") - tabRank(routeRef.current, null, roomSurfaceRef.current);
+      const dir: TransitionKind = diff > 0 ? "right" : diff < 0 ? "left" : "fade";
+      roomSurfaceRef.current = "practice";
+      transitionScreen(dir, () => {
+        setNavDir(dir);
+        setRoomSurface("practice");
+        setRoomRequest((prev) => ({ serial: (prev?.serial ?? 0) + 1, kind: "practice" }));
+      }, { waitSelector: stageReadySelector("play", null, "practice") });
+      return;
+    }
+    go("play", null, false, () => {
+      setRoomRequest((prev) => ({ serial: (prev?.serial ?? 0) + 1, kind: "practice" }));
+    }, "practice");
   }, [room, go, startPractice]);
   /** The room closed itself (Esc, another window took the practice): it unmounts, the shell steps back. */
   const closeRoom = useCallback(() => {
     setRoom(null);
     setRoomLive(false);
+    roomSurfaceRef.current = "practice";
+    setRoomSurface("practice");
     if (routeRef.current.tab !== "play") return;
     if (routeRef.current.depth > 0) historyBack();
     else go("tutor");
@@ -315,6 +339,8 @@ export default function App() {
       await roomHandle.current?.leave();
       setRoom(null);
       setRoomLive(false);
+      roomSurfaceRef.current = "practice";
+      setRoomSurface("practice");
       setDevicesOpen(true);
     })();
   }, []);
@@ -349,20 +375,40 @@ export default function App() {
    */
   const askRoom = useCallback((kind: RoomRequest["kind"]) => {
     setLaunch(undefined);
+    const targetSurface: RoomSurface = kind === "settings" ? "practice" : kind;
+    const now = routeRef.current;
+    const prevTool = toolsRef.current;
+    if (now.tab === "play" && !prevTool) {
+      if (kind !== "settings" && roomSurfaceRef.current === targetSurface) return;
+      const diff = tabRank(now, null, targetSurface) - tabRank(now, null, roomSurfaceRef.current);
+      const dir: TransitionKind = diff > 0 ? "right" : diff < 0 ? "left" : "fade";
+      roomSurfaceRef.current = targetSurface;
+      if (kind === "settings" && dir === "fade") {
+        setRoomRequest((prev) => ({ serial: (prev?.serial ?? 0) + 1, kind }));
+        return;
+      }
+      transitionScreen(dir, () => {
+        setNavDir(dir);
+        setRoomSurface(targetSurface);
+        setRoomRequest((prev) => ({ serial: (prev?.serial ?? 0) + 1, kind }));
+      }, { waitSelector: stageReadySelector("play", null, targetSurface) });
+      return;
+    }
     go("play", null, false, () => {
       setRoomRequest((prev) => ({ serial: (prev?.serial ?? 0) + 1, kind }));
-    });
+    }, targetSurface);
   }, [go]);
   const openTools = useCallback((tool: "tuner" | "metronome") => {
     setDevicesOpen(false);
     if (room) { askRoom(tool); return; }
-    const diff = tabRank(routeRef.current, tool) - tabRank(routeRef.current, toolsRef.current);
-    const dir: "right" | "left" | "fade" = diff > 0 ? "right" : diff < 0 ? "left" : "fade";
+    if (toolsRef.current === tool) return;
+    const diff = tabRank(routeRef.current, tool, "practice") - tabRank(routeRef.current, toolsRef.current, roomSurfaceRef.current);
+    const dir: TransitionKind = diff > 0 ? "right" : diff < 0 ? "left" : "fade";
     toolsRef.current = tool;
     transitionScreen(dir, () => {
       setNavDir(dir);
       setToolsTool(tool);
-    });
+    }, { waitSelector: stageReadySelector(routeRef.current.tab, tool, "practice") });
   }, [room, askRoom]);
   const openSettings = useCallback(() => {
     setDevicesOpen(false);
@@ -380,6 +426,8 @@ export default function App() {
         await roomHandle.current?.leave();
         setRoom(null);
         setRoomLive(false);
+        roomSurfaceRef.current = "practice";
+        setRoomSurface("practice");
         go(target);
       })();
       return;
@@ -395,14 +443,27 @@ export default function App() {
 
   const canGoBack = route.depth > 0 || toolsOpen;
   const roomParked = tab !== "play" || toolsOpen || devicesOpen;
-  const onPlay = primaryTab(tab) === "play" && !toolsOpen;
-  const waterScene: WaterScene = tab === "progress" ? "progress" : tab === "tunes" ? (route.song ? "song" : "library") : "home";
-  // the practice room brings its own water
-  const waterSuspended = devicesOpen || toolsOpen || tab === "free" || tab === "play";
+  const onPlay = tab === "play" && !toolsOpen && roomSurface === "practice";
+  const onFree = !toolsOpen && (tab === "free" || (tab === "play" && roomSurface === "free"));
+  const onTuner = toolsTool === "tuner" || (tab === "play" && !toolsOpen && roomSurface === "tuner");
+  const onMetronome = toolsTool === "metronome" || (tab === "play" && !toolsOpen && roomSurface === "metronome");
+  const waterScene: WaterScene =
+    toolsTool ??
+    (tab === "play"
+      ? roomSurface
+      : tab === "free"
+        ? "free"
+        : tab === "progress"
+          ? "progress"
+          : tab === "tunes"
+            ? route.song ? "song" : "library"
+            : "home");
+  // Keep one continuous abyssal lagoon alive behind every screen; suspend only behind the Devices modal.
+  const waterSuspended = devicesOpen;
   return (
     <KeyContext.Provider value={key}>
       <RomanContext.Provider value={true}>
-        <div className={`app tab-${tab} dir-${navDir}`}>
+        <div className={`app tab-${tab} dir-${navDir} ${toolsOpen ? "has-tools" : ""}`}>
           <AbyssalWater scene={waterScene} suspended={waterSuspended} />
           <header className="topbar" ref={topbar}>
             <div className="shell-start">
@@ -429,14 +490,14 @@ export default function App() {
                 {roomLive && !onPlay ? <b className="tab-live" aria-hidden="true" /> : null}
               </button>
               <span className="tabs-rule" aria-hidden="true" />
-              <button type="button" className={`tab-tool ${tab === "free" && !toolsOpen ? "is-on" : ""}`} aria-current={tab === "free" && !toolsOpen ? "page" : undefined} onClick={() => openMode("free")} title="Free play">
-                <Glyph name="free" size={20} /><span>Free play</span>{tab === "free" && !toolsOpen ? <i className="tab-ink" aria-hidden="true" /> : null}
+              <button type="button" className={`tab-tool ${onFree ? "is-on" : ""}`} aria-current={onFree ? "page" : undefined} onClick={() => openMode("free")} title="Free play">
+                <Glyph name="free" size={20} /><span>Free play</span>{onFree ? <i className="tab-ink" aria-hidden="true" /> : null}
               </button>
-              <button type="button" className={`tab-tool ${toolsTool === "tuner" ? "is-on" : ""}`} aria-current={toolsTool === "tuner" ? "page" : undefined} onClick={() => openTools("tuner")} title="Chromatic tuner">
-                <Glyph name="tools" size={20} /><span>Tuner</span>{toolsTool === "tuner" ? <i className="tab-ink" aria-hidden="true" /> : null}
+              <button type="button" className={`tab-tool ${onTuner ? "is-on" : ""}`} aria-current={onTuner ? "page" : undefined} onClick={() => openTools("tuner")} title="Chromatic tuner">
+                <Glyph name="tools" size={20} /><span>Tuner</span>{onTuner ? <i className="tab-ink" aria-hidden="true" /> : null}
               </button>
-              <button type="button" className={`tab-tool ${toolsTool === "metronome" ? "is-on" : ""}`} aria-current={toolsTool === "metronome" ? "page" : undefined} onClick={() => openTools("metronome")} title="Metronome">
-                <Glyph name="clock" size={20} /><span>Metronome</span>{toolsTool === "metronome" ? <i className="tab-ink" aria-hidden="true" /> : null}
+              <button type="button" className={`tab-tool ${onMetronome ? "is-on" : ""}`} aria-current={onMetronome ? "page" : undefined} onClick={() => openTools("metronome")} title="Metronome">
+                <Glyph name="clock" size={20} /><span>Metronome</span>{onMetronome ? <i className="tab-ink" aria-hidden="true" /> : null}
               </button>
             </nav>
             <div className="shell-end">
@@ -448,7 +509,7 @@ export default function App() {
           <SaveNotice />
           <PlatformStatus />
 
-          {devicesOpen ? <main className="device-sync-placeholder" aria-hidden="true" /> : toolsTool ? <GuitarTools input={input} initialTool={toolsTool} onClose={closeTools} /> : tab === "play" ? null : tab === "tutor" ? (
+          {devicesOpen ? <main className="device-sync-placeholder" aria-hidden="true" /> : toolsTool ? <GuitarTools input={input} initialTool={toolsTool} onToolChange={(next) => { toolsRef.current = next; setToolsTool(next); }} onClose={closeTools} /> : tab === "play" ? null : tab === "tutor" ? (
             <OverviewView key={stateRevision} input={input} onOpenMode={openMode} onOpenSong={openSong} onOpenLibrary={openLibrary} onListenSong={listenSong} onStartPractice={startTune} />
           ) : tab === "progress" ? (
             <ProgressView key={stateRevision} onOpenSong={openSong} onStartPractice={startTune} />
@@ -469,7 +530,7 @@ export default function App() {
           )}
           {room && !devicesOpen ? (
             <div className="room-host" hidden={roomParked}>
-              <PracticeRoom key={room.serial} input={input} launch={room} parked={roomParked} request={roomRequest} handle={roomHandle} onClose={closeRoom} onLive={setRoomLive} onOpenLibrary={openLibrary} />
+              <PracticeRoom key={room.serial} input={input} launch={room} parked={roomParked} request={roomRequest} handle={roomHandle} onClose={closeRoom} onLive={setRoomLive} onSurface={handleRoomSurface} onOpenLibrary={openLibrary} />
             </div>
           ) : null}
           <footer className="app-legal" data-nav-skip>
