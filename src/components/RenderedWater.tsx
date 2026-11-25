@@ -96,21 +96,20 @@ void main() {
 
   // Nearly still dark water at rest; slow, hypnotic currents wake gradually with bloom and zone.
   float t = time;
-  float vigor = 0.18 + bloom * 0.58 + zone * 0.52 + energy * 0.14;
+  float vigor = 0.18 + bloom * 0.58 + zone * 0.52 + energy * 0.08;
   vec2 drift = vec2(sin(t * 0.022) * 0.12 + t * 0.004, cos(t * 0.017) * 0.09 - t * 0.003);
 
   vec2 c1 = vec2(sin(t * 0.045) * 0.44, cos(t * 0.038) * 0.28);
   vec2 c2 = vec2(cos(t * 0.036 + 2.1) * 0.48, sin(t * 0.042 + 1.3) * 0.32);
   vec2 c3 = vec2(sin(t * 0.03 + 4.2) * 0.32, cos(t * 0.05 + 3.4) * 0.26);
 
-  // Gentle underwater tide sway once warm — never a sharp snap.
-  float tide = sway * (0.04 + 0.1 * zone) * (downbeat > 0.5 ? 1.15 : -0.75);
+  // Beats never twist or jerk the eddies; currents flow continuously and smoothly.
   vec2 swirl = vec2(0.0);
-  swirl += spiralEddy(p, c1, 0.64, (0.28 + 0.22 * sin(t * 0.07)) * vigor + tide);
-  swirl += spiralEddy(p, c2, 0.58, (-0.25 + 0.18 * cos(t * 0.06)) * vigor - tide * 0.7);
+  swirl += spiralEddy(p, c1, 0.64, (0.28 + 0.22 * sin(t * 0.07)) * vigor);
+  swirl += spiralEddy(p, c2, 0.58, (-0.25 + 0.18 * cos(t * 0.06)) * vigor);
   swirl += spiralEddy(p, c3, 0.48, (0.2 * sin(t * 0.08 + 1.2)) * vigor);
-  // Softly drifting harmonic eddy that only opens up once warmed.
-  swirl += spiralEddy(p, notePos, 0.46, (noteHue > 0.5 ? 1.0 : -1.0) * noteWarmth * (0.14 + 0.34 * bloom));
+  // Softly drifting harmonic eddy that glides smoothly without sign flips.
+  swirl += spiralEddy(p, notePos, 0.48, (noteHue * 2.0 - 1.0) * noteWarmth * (0.10 + 0.28 * bloom));
 
   // Delayed far-away propeller swells gliding across the pond.
   vec2 waveShift = vec2(0.0);
@@ -182,23 +181,23 @@ void main() {
 
   vec3 color = mix(baseWater, algaeBody, clamp(matMask * visibility, 0.0, 0.86));
 
-  // Bioluminescence: pure luminous reactive swells and earned zone radiance (screen-blended over AbyssalWater).
+  // Bioluminescence: barely a distant whisper early on, blossoming into intoxicating emerald-gold radiance in the zone.
   vec3 poisonNeon = mix(vec3(0.16, 0.88, 0.64), vec3(0.54, 1.0, 0.30), noteHue);
-  vec3 birchGold = vec3(0.92, 0.80, 0.42);
+  vec3 birchGold = vec3(0.90, 0.78, 0.42);
   float noteNear = exp(-dot(p - notePos, p - notePos) / 0.24) * noteWarmth;
-  float glowStrength = energy * 0.22 + bloom * 0.48 + zone * 1.05 + swellLight * (0.32 + 0.48 * bloom) + noteNear * (0.28 + 0.42 * zone);
-  vec3 reactive = poisonNeon * (0.12 + algaeMask * raw.g) * glowStrength * (0.42 + 0.78 * rimPresence);
+  float glowStrength = bloom * 0.24 + zone * 0.92 + swellLight * (0.16 + 0.34 * bloom) + noteNear * (0.10 + 0.26 * zone);
+  vec3 reactive = poisonNeon * algaeMask * raw.g * glowStrength * (0.38 + 0.82 * rimPresence);
 
-  // Subtle golden warmth breathing softly on downbeats as intensity builds.
-  vec3 tideColor = mix(poisonNeon, birchGold, downbeat * 0.7);
-  reactive += tideColor * algaeMask * sway * (0.14 + 0.34 * zone) * (0.35 + 0.65 * rimPresence);
+  // Subtle golden warmth breathing softly in the deep zone on downbeats.
+  vec3 tideColor = mix(poisonNeon, birchGold, downbeat * 0.65);
+  reactive += tideColor * algaeMask * sway * zone * 0.26 * (0.35 + 0.65 * rimPresence);
 
   float vig = smoothstep(1.32, 0.22, centerDist);
-  vec3 rgb = reactive * mix(0.68, 1.06, vig);
-  vec3 over = max(rgb - 0.56, 0.0);
-  rgb = min(rgb, 0.56) + over / (1.0 + over / 0.38);
+  vec3 rgb = reactive * mix(0.68, 1.02, vig);
+  vec3 over = max(rgb - 0.54, 0.0);
+  rgb = min(rgb, 0.54) + over / (1.0 + over / 0.36);
 
-  float alpha = clamp(max(rgb.r, max(rgb.g, rgb.b)), 0.0, 0.90);
+  float alpha = clamp(max(rgb.r, max(rgb.g, rgb.b)), 0.0, 0.92);
   float dither = (hash12(gl_FragCoord.xy) - 0.5) / 255.0;
   vec3 outRgb = min(max(rgb + dither * alpha, 0.0), vec3(alpha));
   gl_FragColor = vec4(outRgb, alpha);
@@ -267,6 +266,7 @@ export function RenderedWater({ playing, warmth, flow, hitSerial = 0, beat, leve
     let bloom = 0;
     let beatSway = 0;
     let beatTarget = 0;
+    let beatDownbeat = 0;
     let smoothNoteX = 0;
     let smoothNoteY = 0;
     let smoothNoteHue = 0.5;
@@ -327,6 +327,7 @@ export function RenderedWater({ playing, warmth, flow, hitSerial = 0, beat, leve
     const u = Object.fromEntries(
       ["resolution", "time", "energy", "bloom", "zone", "sway", "downbeat", "morph", "hasTexA", "hasTexB", "morphSeed", "notePos", "noteWarmth", "noteHue", "swells", "texA", "texB"].map((key) => [key, gpu.getUniformLocation(program, key)]),
     );
+    if (!u.swells) u.swells = gpu.getUniformLocation(program, "swells[0]");
     gpu.uniform1i(u.texA, 0);
     gpu.uniform1i(u.texB, 1);
 
@@ -365,10 +366,11 @@ export function RenderedWater({ playing, warmth, flow, hitSerial = 0, beat, leve
 
       if (s.beat?.active && s.beat.serial !== serial) {
         serial = s.beat.serial;
-        beatTarget = s.beat.index === 0 ? 1 : 0.55;
+        beatTarget = Math.max(beatTarget, s.beat.index === 0 ? 0.85 : 0.42);
       }
-      beatTarget *= Math.exp(-dt / 0.65);
-      beatSway += (beatTarget - beatSway) * (1 - Math.exp(-dt / 0.26));
+      beatTarget *= Math.exp(-dt / 0.95);
+      beatSway += (beatTarget - beatSway) * (1 - Math.exp(-dt / 0.55));
+      beatDownbeat += ((s.beat?.active && s.beat.index === 0 ? 1 : 0) - beatDownbeat) * (1 - Math.exp(-dt / 0.45));
 
       // Queue a delayed far-away swell when a note lands cleanly (never an instant violent flash).
       if (s.hitSerial !== lastHitSerial) {
@@ -403,18 +405,18 @@ export function RenderedWater({ playing, warmth, flow, hitSerial = 0, beat, leve
         changedSize = false;
       }
 
-      // Responsive playing flywheel: wakes noticeably in the first few seconds, climbs into full zone over ~18s, ebbs smoothly on rest.
+      // Heavy old-engine flywheel: spins up slowly with sustained clean playing, ebbs gracefully on silence or mistakes.
       const heard = s.playing && now - level.current.heard < 2200;
-      if (heard) engineMs = Math.min(26000, engineMs + dtMs);
-      else engineMs = Math.max(0, engineMs - dtMs * 0.32);
+      if (heard) engineMs = Math.min(45000, engineMs + dtMs);
+      else engineMs = Math.max(0, engineMs - dtMs * 0.28);
 
-      smoothEnergy += ((heard ? level.current.level : 0) - smoothEnergy) * (1 - Math.exp(-dtMs / 420));
-      const spunUp = Math.pow(unit(engineMs / 18000), 1.05);
-      const quality = 0.40 + 0.60 * unit((s.flow - 0.28) / 0.62);
+      smoothEnergy += ((heard ? level.current.level : 0) - smoothEnergy) * (1 - Math.exp(-dtMs / 1200));
+      const spunUp = Math.pow(unit(engineMs / 36000), 1.65); // convex: whisper-quiet first 6s, strong after 30-36s
+      const quality = 0.28 + 0.72 * unit((s.flow - 0.35) / 0.58);
       const targetBloom = heard ? unit(spunUp * quality) : 0;
-      bloom += (targetBloom - bloom) * (1 - Math.exp(-dtMs / (targetBloom > bloom ? 3200 : 7500)));
-      // Deep bioluminescent embrace opens smoothly in the upper zone.
-      const zone = Math.pow(unit(bloom), 1.65);
+      bloom += (targetBloom - bloom) * (1 - Math.exp(-dtMs / (targetBloom > bloom ? 6800 : 11500)));
+      // Transcendent algae embrace opens non-linearly only in the upper zone.
+      const zone = Math.pow(unit(bloom), 2.15);
 
       let morphAmount = 0;
       if (moving && hasTexA) {
@@ -478,8 +480,8 @@ export function RenderedWater({ playing, warmth, flow, hitSerial = 0, beat, leve
       gpu.uniform1f(u.energy, motion?.matches ? 0 : smoothEnergy);
       gpu.uniform1f(u.bloom, bloom);
       gpu.uniform1f(u.zone, zone);
-      gpu.uniform1f(u.sway, motion?.matches || !s.beat?.active ? 0 : beatSway * bloom);
-      gpu.uniform1f(u.downbeat, s.beat?.index === 0 ? 1 : 0);
+      gpu.uniform1f(u.sway, motion?.matches || !s.beat?.active ? 0 : beatSway * bloom * bloom);
+      gpu.uniform1f(u.downbeat, beatDownbeat);
       gpu.uniform1f(u.morph, morphAmount);
       gpu.uniform1f(u.hasTexA, hasTexA ? 1 : 0);
       gpu.uniform1f(u.hasTexB, hasTexB ? 1 : 0);

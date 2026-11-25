@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import swirlUrl from "../assets/pond-swirl.webp";
 import abyssUrl from "../assets/pond-abyss.webp";
 import currentUrl from "../assets/pond-current.webp";
@@ -34,6 +34,8 @@ export interface WaterDrive {
 
 const waterDrives: { current: WaterDrive }[] = [];
 const waterDriveWakers = new Set<() => void>();
+const liveListeners = new Set<() => void>();
+const notifyLive = () => { liveListeners.forEach((fn) => fn()); };
 
 /** Registers the active decorative driver (last mounted wins; nested tools cleanly push/pop). */
 export function publishWaterDrive(drive: { current: WaterDrive }): () => void {
@@ -49,6 +51,21 @@ export function publishWaterDrive(drive: { current: WaterDrive }): () => void {
 /** Wakes AbyssalWater when new decorative playing input, hits, or beats arrive. */
 export function wakeWaterDrive(): void {
   waterDriveWakers.forEach((fn) => fn());
+}
+
+/** True while AbyssalWater's live WebGL canvas is mounted, so rooms avoid running a duplicate WebGL water pass. */
+export function hasLiveAbyssalWater(): boolean {
+  return waterDriveWakers.size > 0;
+}
+
+const subscribeLive = (listener: () => void) => {
+  liveListeners.add(listener);
+  return () => { liveListeners.delete(listener); };
+};
+
+/** Reactive subscription to whether AbyssalWater's shared WebGL canvas is live. */
+export function useLiveAbyssalWater(): boolean {
+  return useSyncExternalStore(subscribeLive, hasLiveAbyssalWater, hasLiveAbyssalWater);
 }
 
 const activeWaterDrive = (): WaterDrive | null =>
@@ -182,13 +199,15 @@ uniform vec4 wakeEnergy;
 uniform vec2 burstPos;
 uniform float burstAge;
 uniform float burstPower;
-uniform float arousal;
 uniform float playEnergy;
-uniform float beatPulse;
-uniform float beatDownbeat;
+uniform float bloom;
+uniform float zone;
+uniform float sway;
+uniform float downbeat;
 uniform vec2 notePos;
+uniform float noteWarmth;
 uniform float noteHue;
-uniform float noteGlow;
+uniform vec4 swells[3]; // xy origin, z age (s), w strength: delayed far-away propeller swells
 uniform sampler2D texA;
 uniform sampler2D texB;
 
@@ -249,33 +268,49 @@ void main() {
   float t = time;
   float speed = abs(panVel);
   float agitation = clamp(
-    surge * 0.42 + speed * 0.24 + abs(scrollVel) * 0.16 + burstPower * exp(-burstAge * 1.1) * 0.35
-      + arousal * 0.68 + playEnergy * 0.34 + beatPulse * 0.22,
+    surge * 0.42 + speed * 0.24 + abs(scrollVel) * 0.16 + burstPower * exp(-burstAge * 1.1) * 0.35,
     0.0,
-    1.25
+    0.85
   );
 
   // Slow stagnant-harbor drift + horizontal lagoon pan + vertical scroll drag.
   vec2 drift = vec2(
-    panX * 0.56 + sin(t * 0.032) * 0.10 + t * (0.005 + arousal * 0.004),
-    -scrollY * 0.18 + cos(t * 0.026) * 0.08 - t * (0.003 + arousal * 0.002)
+    panX * 0.56 + sin(t * 0.032) * 0.10 + t * 0.005,
+    -scrollY * 0.18 + cos(t * 0.026) * 0.08 - t * 0.003
   );
 
-  // Ambient counter-rotating harbor eddies that awaken & intensify with sustained playing.
+  // Ambient counter-rotating harbor eddies: serene at rest, waking slowly like an old engine in the zone.
   vec2 c1 = vec2(sin(t * 0.055) * 0.46, cos(t * 0.044) * 0.30);
   vec2 c2 = vec2(cos(t * 0.042 + 2.2) * 0.52, sin(t * 0.052 + 1.1) * 0.34);
   vec2 c3 = vec2(sin(t * 0.038 + 4.1) * 0.32, cos(t * 0.062 + 3.0) * 0.28);
 
   float shear = panVel * 0.11 * sin(p.y * 2.8 + t * 0.5);
   vec2 swirl = vec2(shear, scrollVel * 0.05 * cos(p.x * 2.6));
-  float vigor = 1.0 + agitation * 0.45 + arousal * 0.42;
+  float vigor = 1.0 + agitation * 0.28 + bloom * 0.52 + zone * 0.46 + playEnergy * 0.08;
   // Concentric central vortex wrapping the Home circle-of-fifths tree in flowing algae tendrils.
+  // Beats never twist or jerk the eddies; currents only deepen smoothly as the engine warms up.
   swirl += spiralEddy(p, vec2(0.0, 0.0), 0.82, (0.68 + 0.16 * sin(t * 0.11)) * vortex * (1.0 + agitation * 0.16));
   swirl += spiralEddy(p, c1, 0.62, (0.34 + 0.18 * sin(t * 0.09)) * vigor);
   swirl += spiralEddy(p, c2, 0.54, (-0.30 + 0.16 * cos(t * 0.07)) * vigor);
   swirl += spiralEddy(p, c3, 0.44, (0.24 * sin(t * 0.11 + 1.5)) * vigor);
-  // Harmonic note eddy swirling softly around the pitch currently played on the guitar.
-  swirl += spiralEddy(p, notePos, 0.44, (noteHue > 0.5 ? 1.0 : -1.0) * noteGlow * (0.26 + 0.52 * arousal));
+  // Softly drifting harmonic eddy that glides smoothly without sign flips.
+  swirl += spiralEddy(p, notePos, 0.48, (noteHue * 2.0 - 1.0) * noteWarmth * (0.10 + 0.28 * bloom));
+
+  // Delayed far-away propeller swells gliding slowly across the harbor as notes land cleanly.
+  vec2 waveShift = vec2(0.0);
+  float swellLight = 0.0;
+  for (int i = 0; i < 3; i++) {
+    vec4 sw = swells[i];
+    if (sw.w <= 0.001) continue;
+    vec2 d = p - sw.xy;
+    float dist = length(d) + 1e-4;
+    float radius = sw.z * 0.24; // slow deep-water propagation
+    float band = dist - radius;
+    float env = exp(-band * band / 0.022) * exp(-sw.z * 0.42) * sw.w;
+    float wave = sin(band * 24.0) * env;
+    waveShift += (d / dist) * wave * 0.028;
+    swellLight += env * (0.5 + 0.5 * cos(band * 18.0));
+  }
 
   // 4-node viscous pointer wake: silky, weighted swirl trailing smoothly behind the cursor.
   swirl += spiralEddy(p, wake0, 0.30, wakeSpin.x * 0.36);
@@ -283,23 +318,23 @@ void main() {
   swirl += spiralEddy(p, wake2, 0.42, wakeSpin.z * 0.20);
   swirl += spiralEddy(p, wake3, 0.48, wakeSpin.w * 0.13);
 
-  // Calm stone-drop / landed-note ripple: smooth attack envelope + expanding wave.
-  float burstEnv = smoothstep(0.0, 0.22, burstAge) * exp(-burstAge * 1.05);
+  // Calm click stone-drop: smooth attack envelope (zero 1-frame flash) + single expanding ripple.
+  float burstEnv = smoothstep(0.0, 0.28, burstAge) * exp(-burstAge * 1.15);
   float burstDecay = burstPower * burstEnv;
   float distB = length(p - burstPos);
-  float ringRadius = burstAge * (0.32 + 0.14 * arousal);
-  float ringWave = exp(-pow((distB - ringRadius) / 0.13, 2.0)) * burstDecay;
-  swirl += spiralEddy(p, burstPos, 0.38, burstDecay * (0.34 + 0.26 * arousal));
-  swirl += normalize(p - burstPos + vec2(0.0001)) * ringWave * (0.022 + 0.018 * arousal);
+  float ringRadius = burstAge * 0.30;
+  float ringWave = exp(-pow((distB - ringRadius) / 0.12, 2.0)) * burstDecay;
+  swirl += spiralEddy(p, burstPos, 0.36, burstDecay * 0.32);
+  swirl += normalize(p - burstPos + vec2(0.0001)) * ringWave * 0.018;
 
   // Curl of low-frequency noise stretches organic algae filaments across the abyss.
   vec2 q = p * 1.5 + drift * 0.55;
   float f0 = fbm(q + vec2(t * 0.017, -t * 0.013));
   float fx = fbm(q + vec2(0.06 + t * 0.017, -t * 0.013));
   float fy = fbm(q + vec2(t * 0.017, 0.06 - t * 0.013));
-  vec2 curl = vec2(fy - f0, -(fx - f0)) * (0.42 + agitation * 0.28 + arousal * 0.24);
+  vec2 curl = vec2(fy - f0, -(fx - f0)) * (0.42 + agitation * 0.22 + bloom * 0.28 + zone * 0.22);
 
-  vec2 coord = p + drift + swirl * 0.44 + curl * 0.16;
+  vec2 coord = p + drift + swirl * 0.44 + curl * 0.16 + waveShift;
 
   vec3 raw = abyssColor;
   if (hasTexA > 0.5) {
@@ -336,29 +371,30 @@ void main() {
     vec3(0.036, 0.175, 0.145),
     smoothstep(0.16, 0.72, luma)
   );
-  // Blend subtle photographic micro-texture into the dark mats so real organic ripples stay tactile.
-  vec3 photoDetail = pow(max(raw, 0.0), vec3(2.45)) * vec3(0.36, 0.62, 0.68);
-  vec3 algaeBody = mix(darkMat, photoDetail, 0.48);
+  // Blend subtle photographic micro-texture into the dark mats; enriches organically as you enter the zone.
+  vec3 photoDetail = pow(max(raw, 0.0), vec3(2.45 - bloom * 0.28 - zone * 0.22)) * vec3(0.36, 0.64, 0.68);
+  vec3 algaeBody = mix(darkMat, photoDetail, 0.48 + bloom * 0.22 + zone * 0.20);
 
-  // Calm center lens keeps UI headers & text razor-sharp; algae awaken and embrace inward with playing arousal.
+  // Calm center keeps text crisp; at rest algae hover gently, then creep inward to embrace the room in the zone.
   float centerDist = length((uv - vec2(0.5, 0.48)) * vec2(1.06, 0.96));
-  float rim = smoothstep(mix(0.10, 0.02, arousal), 0.86, centerDist);
-  float matVis = mix(0.42 * (1.0 - calmCenter * (0.52 - arousal * 0.24)) + arousal * 0.14, 0.74 + arousal * 0.16, rim);
+  float rim = smoothstep(mix(0.10, 0.02, zone), 0.86, centerDist);
+  float matVis = mix(0.42 * (1.0 - calmCenter * (0.52 - zone * 0.26)) + bloom * 0.12 + zone * 0.18, 0.74 + bloom * 0.10 + zone * 0.12, rim);
   vec3 color = mix(baseWater, algaeBody, clamp(matMask * matVis, 0.0, 0.88));
 
-  // Bioluminescence Layer 1: ambient pulse escalating into lush bioluminescent arousal as the player locks in.
-  float breath = 0.5 + 0.5 * sin(t * (0.36 + arousal * 0.42) + f0 * 6.2831 + p.x * 1.4);
-  vec3 activeGlow = mix(glowColor, flareColor, clamp(arousal * 0.55 + beatDownbeat * beatPulse * 0.45, 0.0, 1.0));
-  float stenchGlow = veinMask * (0.11 + 0.13 * breath + arousal * (0.46 + 0.28 * breath) + playEnergy * 0.24) * (0.48 + 0.66 * rim);
-  color += activeGlow * stenchGlow;
+  // Bioluminescence Layer 1: slow languid ambient pulse on the thickest algae veins.
+  float breath = 0.5 + 0.5 * sin(t * 0.36 + f0 * 6.2831 + p.x * 1.4);
+  float stenchGlow = veinMask * (0.11 + 0.13 * breath) * (0.48 + 0.66 * rim);
+  color += glowColor * stenchGlow;
 
-  // Bioluminescence Layer 1b: sustained playing halo around the played pitch & warm heard-beat tide.
-  float noteDist = length(p - notePos);
-  float noteHalo = exp(-noteDist * noteDist / 0.16) * noteGlow;
-  vec3 pitchHue = mix(glowColor, flareColor, noteHue);
-  color += pitchHue * (0.14 + 0.95 * matMask + 0.65 * veinMask) * noteHalo * (0.28 + 0.58 * arousal);
-  vec3 beatTint = mix(glowColor, vec3(0.96, 0.84, 0.40), beatDownbeat * 0.72);
-  color += beatTint * (0.12 + 0.88 * matMask + 0.45 * veinMask) * beatPulse * (0.18 + 0.42 * arousal) * (0.35 + 0.65 * rim);
+  // Bioluminescence Layer 1b: earned zone embrace — distant calling early, lush emerald-gold radiance at peak performance.
+  vec3 poisonNeon = mix(vec3(0.16, 0.88, 0.64), vec3(0.54, 1.0, 0.30), noteHue);
+  vec3 birchGold = vec3(0.90, 0.78, 0.42);
+  float noteNear = exp(-dot(p - notePos, p - notePos) / 0.24) * noteWarmth;
+  float zoneGlow = bloom * 0.24 + zone * 0.96 + swellLight * (0.16 + 0.34 * bloom) + noteNear * (0.10 + 0.26 * zone);
+  color += poisonNeon * veinMask * raw.g * zoneGlow * (0.38 + 0.82 * rim);
+  // Subtle golden warmth breathing softly in the deep zone on heard downbeats.
+  vec3 tideColor = mix(poisonNeon, birchGold, downbeat * 0.65);
+  color += tideColor * veinMask * sway * zone * 0.26 * (0.35 + 0.65 * rim);
 
   // Bioluminescence Layer 2: subtle, silky pointer wake shimmer along the trailing eddies.
   float wakeLight =
@@ -368,21 +404,21 @@ void main() {
     exp(-dot(p - wake3, p - wake3) / 0.170) * wakeEnergy.w * 0.24;
   color += mix(glowColor, flareColor, 0.32) * (0.14 + 1.05 * matMask + 0.65 * veinMask) * wakeLight * 0.20;
 
-  // Bioluminescence Layer 3: click & landed-note expanding ripple bloom.
-  float burstCore = exp(-distB * distB / 0.13) * burstDecay;
-  float burstLight = (burstCore * 0.48 + ringWave * 0.82) * (0.18 + 0.95 * matMask);
-  color += mix(glowColor, flareColor, 0.42) * burstLight * (0.22 + 0.28 * arousal);
+  // Bioluminescence Layer 3: understated click ripple & gentle bloom (no abrupt flash).
+  float burstCore = exp(-distB * distB / 0.12) * burstDecay;
+  float burstLight = (burstCore * 0.45 + ringWave * 0.75) * (0.18 + 0.95 * matMask);
+  color += mix(glowColor, flareColor, 0.38) * burstLight * 0.20;
 
   // Directional transition wash: calm luminous current sweeping across the abyss on tab switches.
   float sweepGlow = (surge * 0.18 + speed * 0.14 + abs(scrollVel) * 0.06) * (0.14 + 1.05 * matMask);
   color += mix(glowColor, flareColor, clamp(surge, 0.0, 1.0) * 0.38) * sweepGlow * (0.40 + 0.60 * rim);
 
-  // Subtle dark-blue vignette + filmic highlight knee opening up with arousal so peak playing radiates richly.
+  // Subtle dark-blue vignette + filmic highlight knee so earned peak glow feels lush without clipping.
   float vig = smoothstep(1.32, 0.22, centerDist);
-  color *= mix(0.62, 1.04, vig);
-  float knee = mix(0.48, 0.66, arousal);
+  color *= mix(0.62, 1.02, vig);
+  float knee = mix(0.48, 0.60, zone);
   vec3 over = max(color - knee, 0.0);
-  color = min(color, knee) + over / (1.0 + over / 0.38);
+  color = min(color, knee) + over / (1.0 + over / 0.36);
 
   // Subtle dither against dark-blue banding.
   float dither = (hash12(gl_FragCoord.xy) - 0.5) / 255.0;
@@ -510,10 +546,11 @@ export function AbyssalWater({ scene, suspended = false }: { scene: WaterScene; 
       "morph", "hasTexA", "hasTexB", "abyssColor", "glowColor", "flareColor",
       "calmCenter", "vortex", "surge", "wake0", "wake1", "wake2", "wake3",
       "wakeSpin", "wakeEnergy", "burstPos", "burstAge", "burstPower",
-      "arousal", "playEnergy", "beatPulse", "beatDownbeat", "notePos", "noteHue", "noteGlow",
+      "playEnergy", "bloom", "zone", "sway", "downbeat", "notePos", "noteWarmth", "noteHue", "swells",
       "texA", "texB",
     ];
     const u = Object.fromEntries(names.map((name) => [name, gpu.getUniformLocation(program, name)]));
+    if (!u.swells) u.swells = gpu.getUniformLocation(program, "swells[0]");
     gpu.uniform1i(u.texA, 0);
     gpu.uniform1i(u.texB, 1);
 
@@ -546,19 +583,23 @@ export function AbyssalWater({ scene, suspended = false }: { scene: WaterScene; 
     let lastPtr = { x: 0, y: 0, at: 0 };
     let burst = { x: 0, y: 0, age: 10, power: 0 };
 
-    // Playing arousal state (decorative only: driven by PracticeAtmosphere while playing).
-    let playEngineMs = 0;
-    let arousal = 0;
-    let playEnergy = 0;
-    let beatPulse = 0;
+    // Heavy old-engine flywheel + delayed far-away propeller swells (decorative only).
+    let engineMs = 0;
+    let bloom = 0;
+    let smoothEnergy = 0;
+    let beatTarget = 0;
+    let beatSway = 0;
     let beatDownbeat = 0;
     let lastBeatSerial = -1;
     let lastHitSerial = -1;
-    let lastNoteBurstAt = -Infinity;
     let smoothNoteX = 0;
     let smoothNoteY = 0;
     let smoothNoteHue = 0.5;
-    let noteGlow = 0;
+    let smoothNoteWarmth = 0;
+    let swellCounter = 0;
+    const pendingSwells: { due: number; x: number; y: number; strength: number }[] = [];
+    const activeSwells: { x: number; y: number; age: number; strength: number }[] = [];
+    const swellBuf = new Float32Array(12);
 
     // Texture cache and smooth cross-morph on scene changes
     const imgCache = new Map<string, HTMLImageElement>();
@@ -722,47 +763,75 @@ export function AbyssalWater({ scene, suspended = false }: { scene: WaterScene; 
       burst.age += dt;
       morph = lerp(morph, targetMorph + Math.sin(elapsed * 0.08) * 0.18, 1 - Math.exp(-dt * 0.55));
 
-      // Playing arousal: wakes quickly on pitched playing, climbs into lush intensity, ebbs smoothly on rest/tab-change.
+      // Heavy old-engine flywheel: spins up slowly with sustained clean playing, ebbs gracefully on silence or mistakes.
       const drive = activeWaterDrive();
-      const heard = Boolean(drive && drive.playing && now - drive.heardAt < 2400);
-      if (heard) playEngineMs = Math.min(22000, playEngineMs + dtMs);
-      else playEngineMs = Math.max(0, playEngineMs - dtMs * 0.35);
+      const heard = Boolean(drive && drive.playing && now - drive.heardAt < 2200);
+      if (heard) engineMs = Math.min(45000, engineMs + dtMs);
+      else engineMs = Math.max(0, engineMs - dtMs * 0.28);
 
-      const spinUp = Math.pow(Math.min(1, playEngineMs / 18000), 0.85);
-      const quality = drive ? 0.44 + 0.56 * Math.max(0, Math.min(1, (drive.flow - 0.25) / 0.65)) : 0.44;
-      const targetArousal = heard ? Math.min(1, spinUp * quality + Math.min(0.22, (drive?.level ?? 0) * 0.26)) : 0;
-      arousal += (targetArousal - arousal) * (1 - Math.exp(-dtMs / (targetArousal > arousal ? 2400 : 6200)));
-      playEnergy += ((heard ? drive?.level ?? 0 : 0) - playEnergy) * (1 - Math.exp(-dtMs / 340));
+      smoothEnergy += ((heard ? drive?.level ?? 0 : 0) - smoothEnergy) * (1 - Math.exp(-dtMs / 1200));
+      const spunUp = Math.pow(Math.max(0, Math.min(1, engineMs / 36000)), 1.65); // convex: whisper-quiet first 6s, strong after 30-36s
+      const quality = drive ? 0.28 + 0.72 * Math.max(0, Math.min(1, (drive.flow - 0.35) / 0.58)) : 0.28;
+      const targetBloom = heard ? Math.max(0, Math.min(1, spunUp * quality)) : 0;
+      bloom += (targetBloom - bloom) * (1 - Math.exp(-dtMs / (targetBloom > bloom ? 6800 : 11500)));
+      // Transcendent algae embrace opens non-linearly only in the upper zone.
+      const zone = Math.pow(Math.max(0, Math.min(1, bloom)), 2.15);
 
-      if (drive && drive.playing) {
-        if (drive.hitSerial !== lastHitSerial) {
-          lastHitSerial = drive.hitSerial;
-          burst = { x: drive.noteX * 0.72, y: drive.noteY * 0.72, age: 0, power: 0.44 + 0.52 * arousal };
-          surge = Math.min(0.65, surge + 0.12 + 0.14 * arousal);
-        } else if (drive.noteAt > lastNoteBurstAt + 260 && now - drive.noteAt < 180) {
-          lastNoteBurstAt = drive.noteAt;
-          if (burst.age > 0.24 || burst.power < 0.08) {
-            burst = { x: drive.noteX * 0.72, y: drive.noteY * 0.72, age: 0, power: 0.28 + 0.40 * arousal };
-          }
-        }
-        const noteEase = 1 - Math.exp(-dtMs / 750);
-        smoothNoteX = lerp(smoothNoteX, drive.noteX * 0.72, noteEase);
-        smoothNoteY = lerp(smoothNoteY, drive.noteY * 0.72, noteEase);
-        smoothNoteHue = lerp(smoothNoteHue, drive.noteHue, noteEase);
-        const noteAge = Math.max(0, (now - drive.noteAt) / 1000);
-        const wantNoteGlow = heard ? Math.exp(-noteAge / 2.2) * (0.35 + 0.65 * arousal) : 0;
-        noteGlow += (wantNoteGlow - noteGlow) * (1 - Math.exp(-dtMs / 320));
-      } else {
-        noteGlow *= Math.exp(-dtMs / 900);
-      }
-
+      // Slow, silky luminescence breath on heard beats once deep in the zone (never twists or snaps).
       if (drive && drive.beatActive && drive.beatIndex >= 0 && drive.beatSerial !== lastBeatSerial) {
         lastBeatSerial = drive.beatSerial;
-        beatDownbeat = drive.beatIndex === 0 ? 1 : 0;
-        const strength = drive.beatCounting ? 0.35 : drive.beatIndex === 0 ? 1.0 : 0.62;
-        beatPulse = Math.max(beatPulse, strength * (0.35 + 0.65 * arousal));
+        beatTarget = Math.max(beatTarget, drive.beatIndex === 0 ? 0.85 : 0.42);
       }
-      beatPulse *= Math.exp(-dt / 0.46);
+      beatTarget *= Math.exp(-dt / 0.95);
+      beatSway += (beatTarget - beatSway) * (1 - Math.exp(-dt / 0.55));
+      const wantDownbeat = drive && drive.beatActive && drive.beatIndex === 0 ? 1 : 0;
+      beatDownbeat += (wantDownbeat - beatDownbeat) * (1 - Math.exp(-dt / 0.45));
+
+      // Queue a delayed far-away propeller swell when a note lands cleanly (never an instant violent flash).
+      if (drive && drive.hitSerial !== lastHitSerial) {
+        if (lastHitSerial >= 0 && drive.playing) {
+          const delayMs = 950 - 650 * bloom;
+          const angle = (++swellCounter * 2.39996) % (Math.PI * 2);
+          const dist = 0.52 - 0.22 * bloom; // arrives from farther out when cold, closer as you warm up
+          pendingSwells.push({
+            due: now + delayMs,
+            x: Math.cos(angle) * dist,
+            y: Math.sin(angle) * dist * 0.65,
+            strength: 0.24 + 0.76 * bloom,
+          });
+          if (pendingSwells.length > 6) pendingSwells.shift();
+        }
+        lastHitSerial = drive.hitSerial;
+      }
+      while (pendingSwells.length && pendingSwells[0].due <= now) {
+        const next = pendingSwells.shift()!;
+        activeSwells.push({ x: next.x, y: next.y, age: 0, strength: next.strength });
+        if (activeSwells.length > 3) activeSwells.shift();
+      }
+      for (let i = activeSwells.length - 1; i >= 0; i--) {
+        activeSwells[i].age += dt;
+        if (activeSwells[i].age > 6.5) activeSwells.splice(i, 1);
+      }
+
+      // Smoothly drift harmonic centre instead of snapping on every note.
+      const noteEase = 1 - Math.exp(-dtMs / 1600);
+      if (drive) {
+        smoothNoteX = lerp(smoothNoteX, drive.noteX, noteEase);
+        smoothNoteY = lerp(smoothNoteY, drive.noteY, noteEase);
+        smoothNoteHue = lerp(smoothNoteHue, drive.noteHue, noteEase);
+      }
+      const noteAge = drive ? Math.max(0, (now - drive.noteAt) / 1000) : 99;
+      const wantWarmth = !moving || !heard ? 0 : Math.exp(-noteAge / 2.6) * (0.2 + 0.8 * bloom);
+      smoothNoteWarmth += (wantWarmth - smoothNoteWarmth) * (1 - Math.exp(-dtMs / 700));
+
+      swellBuf.fill(0);
+      for (let i = 0; i < 3 && i < activeSwells.length; i++) {
+        const sw = activeSwells[i];
+        swellBuf[i * 4] = sw.x;
+        swellBuf[i * 4 + 1] = sw.y;
+        swellBuf[i * 4 + 2] = sw.age;
+        swellBuf[i * 4 + 3] = moving ? sw.strength : 0;
+      }
 
       // Viscous spring-integrated pointer wake chain (zero jumps, silky drag)
       ptrEnergyTarget *= Math.exp(-dt * 2.4);
@@ -811,13 +880,15 @@ export function AbyssalWater({ scene, suspended = false }: { scene: WaterScene; 
       gpu.uniform2f(u.burstPos, burst.x, burst.y);
       gpu.uniform1f(u.burstAge, burst.age);
       gpu.uniform1f(u.burstPower, moving ? burst.power : 0);
-      gpu.uniform1f(u.arousal, moving ? arousal : arousal * 0.5);
-      gpu.uniform1f(u.playEnergy, moving ? playEnergy : 0);
-      gpu.uniform1f(u.beatPulse, moving ? beatPulse : 0);
-      gpu.uniform1f(u.beatDownbeat, beatDownbeat);
+      gpu.uniform1f(u.playEnergy, moving ? smoothEnergy : 0);
+      gpu.uniform1f(u.bloom, bloom);
+      gpu.uniform1f(u.zone, zone);
+      gpu.uniform1f(u.sway, moving && drive?.beatActive ? beatSway * bloom * bloom : 0);
+      gpu.uniform1f(u.downbeat, beatDownbeat);
       gpu.uniform2f(u.notePos, smoothNoteX, smoothNoteY);
+      gpu.uniform1f(u.noteWarmth, moving ? smoothNoteWarmth : 0);
       gpu.uniform1f(u.noteHue, smoothNoteHue);
-      gpu.uniform1f(u.noteGlow, moving ? noteGlow : 0);
+      gpu.uniform4fv(u.swells, swellBuf);
       gpu.drawArrays(gpu.TRIANGLES, 0, 6);
       painted = true;
 
@@ -837,7 +908,9 @@ export function AbyssalWater({ scene, suspended = false }: { scene: WaterScene; 
       start();
     };
     const wakeFromDrive = () => start();
+    const wasLive = waterDriveWakers.size > 0;
     waterDriveWakers.add(wakeFromDrive);
+    if (!wasLive) notifyLive();
     transitionRef.current = (next) => applySceneTextures(next, false);
     applySceneTextures(sceneRef.current, true);
 
@@ -854,6 +927,8 @@ export function AbyssalWater({ scene, suspended = false }: { scene: WaterScene; 
       failed = true;
       cancelAnimationFrame(frame);
       frame = 0;
+      waterDriveWakers.delete(wakeFromDrive);
+      if (waterDriveWakers.size === 0) notifyLive();
       setFallback(true);
     };
 
@@ -872,6 +947,7 @@ export function AbyssalWater({ scene, suspended = false }: { scene: WaterScene; 
       cancelAnimationFrame(frame);
       wakeRef.current = () => undefined;
       waterDriveWakers.delete(wakeFromDrive);
+      if (waterDriveWakers.size === 0) notifyLive();
       transitionRef.current = null;
       resize?.disconnect();
       if (!resize) window.removeEventListener("resize", resized);

@@ -4,7 +4,7 @@ import type { InputApi } from "../listen/useInput";
 import type { BeatSignal } from "../song/pulse";
 import { useRoomRender } from "../pool/mode";
 import { usePoolPublisher } from "../pool/PoolRoom";
-import { publishWaterDrive, wakeWaterDrive, type WaterDrive } from "./AbyssalWater";
+import { publishWaterDrive, useLiveAbyssalWater, wakeWaterDrive, type WaterDrive } from "./AbyssalWater";
 import { RenderedWater } from "./RenderedWater";
 import "../song/atmosphere.css";
 
@@ -18,11 +18,14 @@ export function PracticeAtmosphere({ input, warmth, flow, playing, hitSerial = 0
   const energy = useRef<{ level: number; heard: number; played: number; hit: number; lastHit: number; noteX: number; noteY: number; noteHue: number; noteAt: number; wake?: () => void }>({
     level: 0, heard: -Infinity, played: 0, hit: 0, lastHit: hitSerial, noteX: 0, noteY: 0, noteHue: 0.5, noteAt: -Infinity,
   });
+  const render = useRoomRender();
+  const living = render.effective === "living";
+  const sharedWater = useLiveAbyssalWater();
   const drive = useRef<WaterDrive>({
-    playing, level: 0, heardAt: -Infinity, flow, hitSerial, noteX: 0, noteY: 0, noteHue: 0.5, noteAt: -Infinity,
+    playing: playing && render.mode !== "still", level: 0, heardAt: -Infinity, flow, hitSerial, noteX: 0, noteY: 0, noteHue: 0.5, noteAt: -Infinity,
     beatSerial: beat?.serial ?? -1, beatIndex: beat?.index ?? -1, beatActive: Boolean(beat?.active), beatCounting: Boolean(beat?.counting),
   });
-  drive.current.playing = playing;
+  drive.current.playing = playing && render.mode !== "still";
   drive.current.flow = flow;
   drive.current.hitSerial = hitSerial;
   drive.current.beatSerial = beat?.serial ?? -1;
@@ -31,8 +34,6 @@ export function PracticeAtmosphere({ input, warmth, flow, playing, hitSerial = 0
   drive.current.beatCounting = Boolean(beat?.counting);
   useEffect(() => publishWaterDrive(drive), []);
   useEffect(() => { if (beat?.active) wakeWaterDrive(); }, [beat?.active, beat?.serial]);
-  const render = useRoomRender();
-  const living = render.effective === "living";
   // Inside a pool room this atmosphere publishes to the shared pool, and its canvas moves in here.
   const pooled = usePoolPublisher(room, { playing, warmth, flow, beat, bpm });
 
@@ -87,7 +88,7 @@ export function PracticeAtmosphere({ input, warmth, flow, playing, hitSerial = 0
 
   useEffect(() => {
     const el = room.current;
-    if (!el || living) return; // the living pool draws its own breath and bloom
+    if (!el || living || (sharedWater && render.effective === "water")) return; // WebGL water/pool draws its own breath and bloom
     const media = window.matchMedia?.("(prefers-reduced-motion: reduce)");
     let frame = 0;
     let last = performance.now();
@@ -120,7 +121,7 @@ export function PracticeAtmosphere({ input, warmth, flow, playing, hitSerial = 0
     };
     frame = requestAnimationFrame(paint);
     return () => cancelAnimationFrame(frame);
-  }, [living]);
+  }, [living, sharedWater, render.effective]);
 
   return (
     <div className="practice-atmosphere" ref={room} aria-hidden="true" data-nav-skip>
@@ -128,7 +129,7 @@ export function PracticeAtmosphere({ input, warmth, flow, playing, hitSerial = 0
       <div className="pa-water" />
       <div className="pa-water pa-water-colour" />
       <div className="pa-leaf" />
-      {render.effective === "water" ? <RenderedWater playing={playing} warmth={warmth} flow={flow} hitSerial={hitSerial} beat={beat} level={energy} /> : null}
+      {render.effective === "water" && !sharedWater ? <RenderedWater playing={playing} warmth={warmth} flow={flow} hitSerial={hitSerial} beat={beat} level={energy} /> : null}
       <svg className="pa-current" viewBox="0 0 1600 1000" preserveAspectRatio="none">
         <g>
           <path d="M-140 900 C200 420 440 1150 850 680 S1400 550 1730 40" />

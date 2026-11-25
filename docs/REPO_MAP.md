@@ -191,7 +191,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/audio/setup.ts` — `InputSetup:2`, `AudioSetup:7`, `currentInputSetup:14`, `currentAudioSetup:15`, `setInputSetup:16`, `setOutputSetup:17`, `sameInputSetup:18`, `sameAudioSetup:20`
 - `src/audio/usePlayer.ts` — `usePlayer:49`
 - `src/audio/useTakePlayback.ts` — `useTakePlayback:23`
-- `src/components/AbyssalWater.tsx` — `WaterScene:8`, `WaterDrive:19`, `publishWaterDrive:39`, `wakeWaterDrive:50`, `AbyssalWater:419`
+- `src/components/AbyssalWater.tsx` — `WaterScene:8`, `WaterDrive:19`, `publishWaterDrive:41`, `wakeWaterDrive:52`, `hasLiveAbyssalWater:57`, `useLiveAbyssalWater:67`, `AbyssalWater:455`
 - `src/components/Calibrate.tsx` — `Calibrate:34`
 - `src/components/CampfireView.tsx` — `CampfireView:21`
 - `src/components/ChordBox.tsx` — `ChordBox:15`
@@ -215,13 +215,13 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/components/LibraryGrid.tsx` — `LibraryGrid:21`
 - `src/components/OverviewView.tsx` — `OverviewView:73`
 - `src/components/PassiveTree.tsx` — `TreeView:9`, `NodeSkinProps:16`, `NodeSkin:25`, `TreeSkins:32`, `stagePoint:39`, `progressClasses:44`, `PassiveTree:49`
-- `src/components/PracticeAtmosphere.tsx` — `PracticeAtmosphere:14`, `BeatPulse:159`
+- `src/components/PracticeAtmosphere.tsx` — `PracticeAtmosphere:14`, `BeatPulse:160`
 - `src/components/PracticeBriefPanel.tsx` — `PracticeBriefPanel:6`
 - `src/components/PracticeHistory.tsx` — `PracticeHistory:59`
 - `src/components/PracticeRoom.tsx` — `RoomLaunch:19`, `sessionLead:26`, `PracticeRoom:36`
 - `src/components/ProgressView.tsx` — `ProgressView:598`
 - `src/components/RecordingStatus.tsx` — `RecordingStatus:13`, `downloadTake:21`, `RecordingRecovery:32`
-- `src/components/RenderedWater.tsx` — `RenderedWaterProps:208`, `RenderedWater:242`
+- `src/components/RenderedWater.tsx` — `RenderedWaterProps:207`, `RenderedWater:241`
 - `src/components/SaveNotice.tsx` — `SaveNotice:7`
 - `src/components/ScalesView.tsx` — `ScalesView:12`
 - `src/components/Score.tsx` — `drawChord:98`, `Score:212`

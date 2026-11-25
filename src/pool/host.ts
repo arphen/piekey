@@ -85,8 +85,6 @@ export class PoolHost {
   private beatSerial = -1;
   private beatAt: number | undefined;
   private beatKick = 0; // gentle groove-gated tide breath from heard beats
-  private beatSway = 0; // slow pendulum direction for deep-water eddies
-  private beatDance = 0; // pending gentle sway impulse
   private breath = 0; // heavily smoothed visual breathing modulation (never strobes)
   private tune: Tune = { cents: null, frequency: null, at: -Infinity };
   private tunerPhase = 0;
@@ -469,14 +467,11 @@ export class PoolHost {
       if (dial) {
         this.stones.push({ x: dial.x, y: dial.y, radius: 0.018, amp: amp * warmth * 0.45, tint, ring: dial.r * 0.92 });
         this.flash(dial, amp * (0.25 + 0.5 * g));
-        if (g > 0.15) this.swirls.push({ x: dial.x, y: dial.y, impulse: (beat.serial % 2 ? 1 : -1) * 0.01 * amp * g, radius: dial.r * 1.8 });
       } else if (g > 0.1) {
         this.stones.push({ x: aspect / 2, y: 0.02, radius: 0.08, amp: amp * warmth * 0.25, tint });
       }
       if (!beat.counting && g > 0.12) {
         this.beatKick = Math.max(this.beatKick, amp * g);
-        this.beatDance = amp;
-        this.beatSway = beat.serial % 2 ? 1 : -1;
       }
       this.lastEvent = now;
     } else if (!beat?.active) this.beatSerial = beat?.serial ?? -1;
@@ -572,15 +567,6 @@ export class PoolHost {
         if (ox > 0 && oy > 0) { if (ox < oy) x += Math.sign(dx || 1) * ox; else y += Math.sign(dy || 1) * oy; }
       }
       vortices.push({ x, y, spin: (i % 2 ? -1 : 1) * weight * (0.14 + 0.52 * g) * (1 + kick * 0.45), radius: 0.12 + 0.025 * i });
-    }
-    // Deep in the groove, heard beats sway the currents gently like an underwater tide.
-    if (this.beatDance > 0) {
-      const swayGate = Math.max(0, (g - 0.18) / 0.82);
-      const strength = this.beatDance * swayGate * swayGate * (1 - still);
-      if (strength > 0.01) {
-        vortices.slice(0, 3).forEach((v, i) => this.swirls.push({ x: v.x, y: v.y, impulse: this.beatSway * (i % 2 ? -1 : 1) * 0.012 * strength, radius: v.radius * 1.6 }));
-      }
-      this.beatDance = 0;
     }
 
     // the constellation drifts, wandering on golden-ratio periods
