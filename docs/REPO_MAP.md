@@ -265,8 +265,9 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/listen/useInput.ts` — `InputFrame:15`, `InputStatus:22`, `InputApi:24`, `useInput:88`
 - `src/main.tsx`
 - `src/musicTheory.ts` — `ViewMode:1`, `ScaleDefinition:3`, `ParsedScaleQuery:11`, `ChordDefinition:17`, `ParsedChordQuery:26`, `BuiltChord:32`, `SUPPORTED_SCALE_NAMES:311`, `SUPPORTED_CHORD_EXAMPLES:312`, `mod:329`, `noteNameToPitchClass:410`, `pitchClassToName:418`, `parseScaleQuery:422`, `parseChordQuery:449`, `getAnchorIntervals:486`, `buildDiatonicChord:578`, `buildScalePitchClassSet:610` (+2 more)
+- `src/nav/leadKeys.ts` — `CLEAR_MS:8`, `ARM_MS:9`, `LeadState:13`, `createLeadKeys:23`
 - `src/nav/nav.css`
-- `src/nav/useGuitarNav.ts` — `NAV_KEYS:10`, `setNavMuted:26`, `sessionOpen:32`, `pressables:35`, `step:42`, `press:53`, `useGuitarNav:68`
+- `src/nav/useGuitarNav.ts` — `NAV_LEAD:14`, `NAV_KEYS:17`, `setNavMuted:33`, `sessionOpen:39`, `pressables:42`, `step:49`, `press:60`, `useGuitarNav:75`
 - `src/overview/dashboard.ts` — `DailyPracticeCell:13`, `FamilyMastery:20`, `TempoHighlight:28`, `PracticeDashboard:36`, `WeaknessDiagnosis:59`, `PlannedBlockPreview:72`, `SchedulerExplanation:79`, `buildPracticeDashboard:149`, `explainScheduling:301`
 - `src/overview/focus.css`
 - `src/overview/home.css`

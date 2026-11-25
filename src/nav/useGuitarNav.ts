@@ -1,12 +1,19 @@
-import { useCallback, useEffect, useRef } from "react";
-import { useNoteKeys } from "../components/GuitarPad";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { midiOf } from "../listen/pitch";
 import type { InputApi } from "../listen/useInput";
+import { SUMMON_NOTE } from "../song/notekeys";
+import { createLeadKeys, type LeadState } from "./leadKeys";
 
 // The shell is played, not clicked. Notes from the 12th fret up (nothing in an exercise sits that
 // high) move a cursor across everything on screen that can be pressed. The notes are shown in
-// the legend; the cursor is a ring on the element, gone again when the mouse moves.
+// the legend; the cursor is a ring on the element, gone again when the mouse moves. Every action
+// is two clear notes: the lead (D♯5, high e fret 11) and then the action's note, so a single note
+// played while noodling or tuning presses nothing.
 
-/** What each key does, in the order `useNoteKeys` gets them. */
+/** The note that arms the shell's keys. */
+export const NAV_LEAD = SUMMON_NOTE;
+
+/** What each key does, played after `NAV_LEAD`. */
 export const NAV_KEYS = [
   { id: "prev", midi: 76, label: "previous", glyph: "◀" }, // E5, the 12th fret of the high e
   { id: "next", midi: 77, label: "on", glyph: "▶" },
@@ -62,10 +69,10 @@ export function press(el: HTMLElement) {
 }
 
 /**
- * Held high notes drive the cursor. `tab` moves between modes; `home` is the shell's Back.
- * Returns the key being held (an index into `NAV_KEYS`) for the legend.
+ * Lead-then-action notes drive the cursor. `tab` moves between modes; `home` is the shell's Back.
+ * Returns whether the lead is armed and the action key sounding (an index into `NAV_KEYS`) for the legend.
  */
-export function useGuitarNav(input: InputApi, handlers: { home(): void; tab(dir: 1 | -1): void }): number | null {
+export function useGuitarNav(input: InputApi, handlers: { home(): void; tab(dir: 1 | -1): void }): LeadState {
   const cursor = useRef<HTMLElement | null>(null);
   const fns = useRef(handlers);
   fns.current = handlers;
@@ -87,7 +94,6 @@ export function useGuitarNav(input: InputApi, handlers: { home(): void; tab(dir:
 
   const fire = useCallback(
     (k: number) => {
-      if (sessionOpen() || muted) return;
       const id: NavId = NAV_KEYS[k].id;
       const list = pressables();
       const here = cursor.current && list.includes(cursor.current) ? cursor.current : null;
@@ -106,5 +112,31 @@ export function useGuitarNav(input: InputApi, handlers: { home(): void; tab(dir:
     [place],
   );
 
-  return useNoteKeys(input, input.status === "listening", NAV_KEYS.map((k) => k.midi), fire);
+  const [shown, setShown] = useState<LeadState>({ armed: false, held: null });
+  const listening = input.status === "listening";
+  const { subscribe } = input;
+  useEffect(() => {
+    setShown({ armed: false, held: null });
+    if (!listening) return;
+    const keys = createLeadKeys(NAV_LEAD, NAV_KEYS.map((k) => k.midi));
+    let last = "";
+    const show = () => {
+      const now = `${keys.state.armed}:${keys.state.held}`;
+      if (now === last) return;
+      last = now;
+      setShown({ ...keys.state });
+    };
+    return subscribe((f) => {
+      // a session or a sounding screen owns the guitar: nothing armed there carries over
+      if (sessionOpen() || muted) {
+        keys.reset();
+        show();
+        return;
+      }
+      const k = keys.feed(midiOf(f), f.now);
+      show();
+      if (k !== null) fire(k);
+    });
+  }, [listening, subscribe, fire]);
+  return shown;
 }

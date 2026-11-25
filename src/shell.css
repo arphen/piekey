@@ -233,7 +233,10 @@
 }
 .app .shell-end .device-sync-trigger[aria-pressed="true"] svg { color: var(--algae); opacity: 1; }
 
-/* Satisfying directional slide-and-dissolve view transitions synced with the water sweep */
+/* Fallback entrance for browsers without View Transitions. Where they exist the transition owns
+   the motion: a CSS entrance suppressed during it would restart, a second fade, the moment the
+   suppression lifts. */
+@supports not (view-transition-name: none) {
 .app > main,
 .app > .room-host:not([hidden]) {
   animation: shell-view-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) backwards;
@@ -257,6 +260,7 @@
 @keyframes shell-slide-from-left {
   from { opacity: 0; transform: translate3d(-34px, 4px, 0) scale(0.99); }
   to { opacity: 1; transform: none; }
+}
 }
 @media (prefers-reduced-motion: reduce) {
   .app > main,

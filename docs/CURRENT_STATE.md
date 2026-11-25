@@ -482,7 +482,7 @@ dedicated "play the progression" card exists yet; a tune with no chord symbols h
   drill, settings (keys vs guitar sound, pace, progression length).
 - Progress in `guitar-ear-v1`; it picks its own random keys and is not tied to your songs' keys.
 
-**Guitar:** the shell cursor (E5–A5, see Shell navigation) reaches every button, including chord
+**Guitar:** the shell cursor (D♯5 then E5–A5, see Shell navigation) reaches every button, including chord
 answers (`F♯5` presses). Three keys act directly: `A♯5` play/stop, `B5` check (or next once
 answered), `C6` bass line. The keys go quiet while the trainer is sounding, so its own speakers
 cannot press them. Unverified with a real guitar.
@@ -588,14 +588,19 @@ current through rests (the breath between passes still reports none).
 ### Shell navigation (outside sessions)
 
 `App` owns one shared mic input; `GuitarNav` (`src/nav/useGuitarNav.ts`, `components/GuitarNav.tsx`)
-makes every screen outside a session playable. Keys are exact notes from the 12th fret up, held
-~0.4 s (`useNoteKeys`), shown as a compact note-and-icon strip at the foot of the page. Labels
+makes every screen outside a session playable. Every action is two clear notes in a row
+(`src/nav/leadKeys.ts`): the lead `D♯5` (high e, fret 11) and then the action's exact note from the
+12th fret up, each heard ≥150 ms, the second within 1.5 s. A single note, however long, presses
+nothing; any other pitch between them cancels. After an action the lead stays armed for 1.5 s, so
+fresh strikes of action notes walk the cursor on. Shown as a compact strip at the foot of the
+page: the lead lights while armed. Labels
 remain in tooltips and accessible names. It is DOM-driven: the cursor
 moves over every visible `button`, `select`, link and `role="button"` in reading order, so new
 screens are navigable without wiring. It goes quiet while a session (`.ss`) is open.
 
 | Note | Fret | Action |
 | --- | --- | --- |
+| `D♯5`, then… | high e, 11 | Lead: arms the keys below |
 | `E5` / `F5` | high e, 12 / 13 | Cursor back / on |
 | `F♯5` | high e, 14 | Press (a `select` turns to its next option) |
 | `G5` | high e, 15 | Home (Tutor overview) |

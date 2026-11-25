@@ -1,5 +1,5 @@
 import type { InputApi } from "../listen/useInput";
-import { NAV_KEYS, useGuitarNav } from "../nav/useGuitarNav";
+import { NAV_KEYS, NAV_LEAD, useGuitarNav } from "../nav/useGuitarNav";
 import { noteName } from "./GuitarPad";
 import "../nav/nav.css";
 
@@ -14,16 +14,20 @@ const ACTIONS = {
 
 /** The shell's note keys, shown at the foot of the page; held notes light up. With the guitar off it offers to turn it on. */
 export function GuitarNav({ input, onHome, onTab }: { input: InputApi; onHome(): void; onTab(dir: 1 | -1): void }) {
-  const held = useGuitarNav(input, { home: onHome, tab: onTab });
+  const { armed, held } = useGuitarNav(input, { home: onHome, tab: onTab });
   const on = input.status === "listening";
   return (
     <div className="gnav" data-nav-skip={on ? "" : undefined} aria-label="guitar navigation">
       {on ? (
         <>
-          <span className="gnav-mark" title="Guitar controls · hold a note for 0.4 seconds" aria-hidden="true">
+          <span className="gnav-mark" title={`Guitar controls · play ${noteName(NAV_LEAD)}, then the action's note`} aria-hidden="true">
             <svg viewBox="0 0 24 24"><path d="M8 3v18m4-18v18m4-18v18M5 7h14M5 13h14M5 19h14" /></svg>
           </span>
-          <ul className="gnav-keys" aria-label="Hold a note for 0.4 seconds">
+          <span className={`gnav-lead ${armed ? "is-armed" : ""}`} aria-hidden="true">
+            <b>{noteName(NAV_LEAD)}</b>
+            <svg viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5" /></svg>
+          </span>
+          <ul className={`gnav-keys ${armed ? "is-armed" : ""}`} aria-label={`Play ${noteName(NAV_LEAD)}, then one of these notes`}>
             {NAV_KEYS.map((k, i) => (
               <li key={k.id} className={held === i ? "is-held" : ""} title={`${noteName(k.midi)} · ${ACTIONS[k.id].label}`} aria-label={`${noteName(k.midi)}: ${ACTIONS[k.id].label}`}>
                 <b aria-hidden="true">{noteName(k.midi)}</b>

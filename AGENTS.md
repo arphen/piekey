@@ -49,7 +49,7 @@ exact phrases in `SongCoach`; do not restore an inline Learn flow. Ear (`src/ear
    mixed in, and changes made during a live session apply to the next one. Foundations
    (`song/technique.ts`) each carry an anchor `hub` and are built in that key by every deck.
    Nothing on Home is labelled "due"; the player chooses.
-7. `src/nav/useGuitarNav.ts` — played navigation for the whole shell (notes E5–A5, DOM-driven cursor). The Reading mode itself runs on `src/song/reading.ts` cards; `src/reading/generate.ts` is legacy, kept only as a `Score` test fixture.
+7. `src/nav/useGuitarNav.ts` — played navigation for the whole shell (lead D♯5 then an action note E5–A5, `nav/leadKeys.ts`; DOM-driven cursor). The Reading mode itself runs on `src/song/reading.ts` cards; `src/reading/generate.ts` is legacy, kept only as a `Score` test fixture.
 8. `src/components/Fretboard.tsx` — the shared fretboard renderer used across views.
 9. `src/tunes/musicxml.ts` — MusicXML/archive import, the entry point for loaded tunes.
 10. `src/sync/` — immutable transaction journal, deterministic projection, full recording/file

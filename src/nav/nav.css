@@ -74,6 +74,24 @@ body:has(.ss) .gnav { display: none; }
   transition: color 0.12s;
 }
 
+/* The lead note: lit while armed, and the keys after it brighten with it. */
+.gnav-lead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-faint);
+  transition: color 0.12s;
+}
+.gnav-lead b {
+  font: 400 10px/1 var(--font-mono);
+  color: var(--ink-soft);
+  transition: color 0.12s;
+}
+.gnav-lead.is-armed,
+.gnav-lead.is-armed b { color: var(--brass); }
+.gnav-keys.is-armed li,
+.gnav-keys.is-armed b { color: var(--ink); }
+
 .gnav-keys li.is-held,
 .gnav-keys li.is-held b { color: var(--brass); }
 
@@ -102,11 +120,11 @@ body:has(.ss) .gnav { display: none; }
   .gnav-keys li:nth-child(3),
   .gnav-keys li:nth-child(5) { margin-left: 0; padding-left: 12px; }
   .gnav svg { width: 13px; height: 13px; }
-  .gnav-keys b { font-size: 9px; }
+  .gnav-keys b, .gnav-lead b { font-size: 9px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .gnav-keys li, .gnav-keys b { transition: none; }
+  .gnav-keys li, .gnav-keys b, .gnav-lead, .gnav-lead b { transition: none; }
 }
 
 /* Leave one line beneath the page's final control. */

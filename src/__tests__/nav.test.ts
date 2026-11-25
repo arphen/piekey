@@ -6,7 +6,21 @@ import { GuitarPad, useSummon } from "../components/GuitarPad";
 import { SUMMON_NOTE } from "../song/notekeys";
 import * as pitch from "../listen/pitch";
 import type { InputApi, InputFrame } from "../listen/useInput";
-import { NAV_KEYS, press, pressables, step } from "../nav/useGuitarNav";
+import { NAV_KEYS, NAV_LEAD, press, pressables, step } from "../nav/useGuitarNav";
+import { ARM_MS, createLeadKeys } from "../nav/leadKeys";
+
+/** Plays [midi | null, ms] steps into a lead-key machine at 10 ms frames; returns the keys fired. */
+function play(steps: [number | null, number][]) {
+  const keys = createLeadKeys(NAV_LEAD, NAV_KEYS.map((k) => k.midi));
+  const fired: number[] = [];
+  let now = 0;
+  for (const [m, ms] of steps)
+    for (let t = 0; t < ms; t += 10) {
+      const k = keys.feed(m, (now += 10));
+      if (k !== null) fired.push(k);
+    }
+  return { fired, keys };
+}
 
 // jsdom has no layout: every element reports a client rect unless a test says otherwise.
 const shown = (el: Element) => vi.spyOn(el, "getClientRects").mockReturnValue([{}] as unknown as DOMRectList);
@@ -26,6 +40,20 @@ describe("guitar navigation", () => {
     const midis = NAV_KEYS.map((k) => k.midi);
     expect(Math.min(...midis)).toBeGreaterThanOrEqual(76); // E5: fret 12 of the high e
     expect(new Set(midis).size).toBe(midis.length);
+  });
+
+  it("fires only on the lead and then a clear action note", () => {
+    const [E5, F5, C3] = [76, 77, 48];
+    expect(play([[null, 50], [F5, 600]]).fired).toEqual([]); // one note, however long
+    expect(play([[null, 50], [NAV_LEAD, 200], [F5, 200]]).fired).toEqual([1]);
+    expect(play([[null, 50], [NAV_LEAD, 200], [F5, 60], [null, 300]]).fired).toEqual([]); // not clear
+    expect(play([[null, 50], [NAV_LEAD, 60], [F5, 200]]).fired).toEqual([]); // lead not clear
+    expect(play([[null, 50], [NAV_LEAD, 200], [C3, 150], [F5, 200]]).fired).toEqual([]); // stray note cancels
+    expect(play([[null, 50], [NAV_LEAD, 200], [null, ARM_MS + 100], [F5, 200]]).fired).toEqual([]); // too late
+    // a lead ringing when the keys came up does not arm them
+    expect(play([[NAV_LEAD, 400], [F5, 200]]).fired).toEqual([]);
+    // armed after an action: fresh strikes walk on, one fire per strike
+    expect(play([[null, 50], [NAV_LEAD, 200], [F5, 200], [null, 200], [F5, 200], [E5, 200]]).fired).toEqual([1, 1, 0]);
   });
 
   it("lists what can be pressed in reading order, leaving out disabled and skipped things", () => {
