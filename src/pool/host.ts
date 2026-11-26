@@ -11,7 +11,7 @@ import { markLivingDegraded } from "./mode";
 import { readPower } from "./power";
 import { createGroove } from "./groove";
 import { goldenSpread, GOLDEN_ANGLE, mulberry32, phyllotaxis, spiral, wander } from "./golden";
-import { poolParams, tintFor } from "./params";
+import { applyDecay, decayTint, poolParams, tintFor } from "./params";
 import { CALM, GLASS, Renderer, ROCK, TIERS, type Flash, type FrameState, type PoolRect, type Ring, type Stone, type Swirl, type Vec3, type Vortex } from "./engine/renderer";
 
 // Owns the renderer's life: when it draws, how often, at what quality, and what it hears. The
@@ -90,6 +90,10 @@ export class PoolHost {
   private tunerPhase = 0;
   private tunerAmount = 0;
   private calm = 0;
+  private decay = 0;
+  private decayImpulse = 0;
+  private decayTone: "drift" | "miss" = "miss";
+  private decayCount = 0;
   private pond = { next: 0, phase: 0, turning: false, loading: false, image: null as ImageBitmap | null, seed: [0, 0] as [number, number] };
   private glassy = 0;
   private turn = 0;
@@ -133,6 +137,7 @@ export class PoolHost {
         },
         tune: (cents: number | null, frequency = 110) => { this.tune = { cents, frequency: cents === null ? null : frequency, at: performance.now() }; this.wake(); },
         bloom: () => { this.bus.emit({ kind: "bloom", strength: 1 }); this.wake(); },
+        decay: (strength = 0.7, tone: "drift" | "miss" = "miss") => { this.bus.emit({ kind: "decay", strength, tone }); this.wake(); },
         pond: (phase: number) => { this.pond.phase = phase; this.wake(); }, // jump the photographs' turn
 
         stats: () => ({ pond: { ...this.pond, image: Boolean(this.pond.image) }, tier: this.tier, ready: this.ready, gpuMs: this.renderer?.gpuMs ?? null, groove: this.level(), size: [this.canvas.width, this.canvas.height], rects: this.rects.length, anchors: [...this.anchors.keys()] }),
@@ -414,11 +419,12 @@ export class PoolHost {
     const state = this.groove.state;
     // Far-away propeller feel: cold notes arrive ~1s later as a faint wide swell; in the zone they arrive sooner and deeper.
     const delayMs = 1050 - 780 * g;
+    const tone: "drift" | "miss" = this.decayImpulse > 0.05 ? this.decayTone : this.decay >= 0.45 ? "miss" : "drift";
     const swell: Stone = {
       x: point.x, y: point.y,
       radius: Math.max(0.016, 0.05 * Math.pow(2, -(midi - 40) / 28)),
       amp: velocity * (0.14 + 0.68 * g * g) * (0.65 + 0.35 * state.energy),
-      tint: tintFor(state.tonic, state.mode),
+      tint: decayTint(tintFor(state.tonic, state.mode), this.decay * 0.65, tone),
     };
     this.pendingStones.push({ due: now + delayMs, stone: swell });
     if (this.pendingStones.length > 16) this.pendingStones.shift();
@@ -450,6 +456,30 @@ export class PoolHost {
         const at = this.anchors.get(event.at ?? "focus") ?? this.anchors.get("cursor") ?? { x: aspect / 2, y: 0.5, r: 0 };
         this.rings.push({ x: at.x, y: at.y, age: 0, strength: event.strength * (0.25 + 0.75 * g) });
         if (this.rings.length > 4) this.rings.shift();
+        this.lastEvent = now;
+      } else if (event.kind === "decay") {
+        const strength = Math.max(0, Math.min(1, event.strength));
+        const tone: "drift" | "miss" = event.tone ?? "miss";
+        this.decayTone = tone;
+        this.decayImpulse = Math.min(1, Math.max(this.decayImpulse, strength * (tone === "miss" ? 0.85 : 0.6)));
+        // A quiet, localized settling ripple and warm-ochre dye puff outside calm lenses.
+        let spot = { x: aspect * 0.5, y: 0.5 };
+        for (let k = 0; k < 8; k++) {
+          this.decayCount++;
+          spot = {
+            x: aspect * (0.12 + 0.76 * goldenSpread(this.decayCount + 19)),
+            y: 0.16 + 0.68 * goldenSpread(this.decayCount * 2 + 11),
+          };
+          if (!this.inLens(spot.x, spot.y)) break;
+        }
+        const state = this.groove.state;
+        this.stones.push({
+          x: spot.x,
+          y: spot.y,
+          radius: 0.024 + 0.014 * strength,
+          amp: strength * (tone === "miss" ? 0.34 : 0.24),
+          tint: decayTint(tintFor(state.tonic, state.mode), 0.92, tone),
+        });
         this.lastEvent = now;
       } else if (event.kind === "sweep") {
         this.push = [event.direction * 0.032, 0.006];
@@ -488,7 +518,7 @@ export class PoolHost {
 
   private fps(now: number): number {
     const playing = Boolean(this.bus.top()?.props.playing);
-    const quiet = !playing && this.level() < 0.02 && now - this.lastEvent > 4000 && this.calm < 0.05;
+    const quiet = !playing && this.level() < 0.02 && now - this.lastEvent > 4000 && this.calm < 0.05 && this.decay < 0.02;
     return quiet ? 20 : TIERS[this.tier].fps; // idle and visible: a slow pond
   }
 
@@ -526,9 +556,19 @@ export class PoolHost {
   private frameState(dt: number, now: number): FrameState {
     const aspect = this.aspect();
     const g = this.level();
-    const params = poolParams(g);
+    const propDecay = Math.max(0, Math.min(1, this.bus.top()?.props.decay ?? 0));
+    if (dt > 0) {
+      this.decayImpulse *= Math.exp(-dt / 2.2);
+      const decayTarget = Math.max(propDecay, this.decayImpulse);
+      const tau = decayTarget > this.decay ? 0.6 : 3.5;
+      this.decay += (decayTarget - this.decay) * (1 - Math.exp(-dt / tau));
+    } else {
+      this.decay = Math.max(propDecay, this.decayImpulse);
+    }
+    const tone: "drift" | "miss" = this.decayImpulse > 0.05 ? this.decayTone : this.decay >= 0.45 ? "miss" : "drift";
+    const params = applyDecay(poolParams(g), this.decay);
     const state = this.groove.state;
-    const tint = tintFor(state.tonic, state.mode);
+    const tint = decayTint(tintFor(state.tonic, state.mode), this.decay, tone);
     this.time += dt;
     const t = this.time;
     const calmTarget = this.bus.calmed ? 1 : 0;
@@ -584,7 +624,7 @@ export class PoolHost {
 
     return {
       morph: this.turnPond(dt, g),
-      dt, params, velocityHalfLife: params.velocityHalfLife * (1 - 0.7 * still), kick: kick * 0.5, tint,
+      dt, params, velocityHalfLife: params.velocityHalfLife * (1 - 0.7 * still), kick: kick * 0.5, tint, decay: this.decay,
       dawn: 0.06 + 0.48 * g, drift: [this.drift[0] - aspect * 0.62, this.drift[1] - 0.5], driftVelocity: this.driftVelocity,
       vortices, stones: this.stones, swirls: this.swirls, push: this.push, emitters, buoyancy: 0.026, rings: this.rings, flashes, rects: this.rects,
       tuner: tuner && this.tunerAmount > 0.01 ? { x: tuner.x, y: tuner.y, radius: Math.max(0.12, tuner.r * 4), amount: this.tunerAmount, phase: this.tunerPhase, ratio: inTune ? 1 : 1 + 0.004 * cents } : null,

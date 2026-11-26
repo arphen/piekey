@@ -10,13 +10,13 @@ import "../song/atmosphere.css";
 
 const unit = (n: number) => Math.max(0, Math.min(1, n));
 
-/** A quiet harbor room that opens with the player. Loudness, live pitch and landed notes awaken its poison-green algae. */
-export function PracticeAtmosphere({ input, warmth, flow, playing, hitSerial = 0, beat, bpm }: { input: InputApi; warmth: number; flow: number; playing: boolean; hitSerial?: number; beat?: BeatSignal; bpm?: number }) {
+/** A quiet harbor room that opens with the player. Loudness, live pitch and landed notes awaken its poison-green algae; mistakes and drift warm it toward amber-umber decay. */
+export function PracticeAtmosphere({ input, warmth, flow, playing, hitSerial = 0, beat, bpm, decay = 0, missSerial = 0 }: { input: InputApi; warmth: number; flow: number; playing: boolean; hitSerial?: number; beat?: BeatSignal; bpm?: number; decay?: number; missSerial?: number }) {
   const room = useRef<HTMLDivElement>(null);
-  const state = useRef({ warmth, flow, playing, hitSerial });
-  state.current = { warmth, flow, playing, hitSerial };
-  const energy = useRef<{ level: number; heard: number; played: number; hit: number; lastHit: number; noteX: number; noteY: number; noteHue: number; noteAt: number; wake?: () => void }>({
-    level: 0, heard: -Infinity, played: 0, hit: 0, lastHit: hitSerial, noteX: 0, noteY: 0, noteHue: 0.5, noteAt: -Infinity,
+  const state = useRef({ warmth, flow, playing, hitSerial, decay, missSerial });
+  state.current = { warmth, flow, playing, hitSerial, decay, missSerial };
+  const energy = useRef<{ level: number; heard: number; played: number; hit: number; lastHit: number; miss: number; lastMiss: number; noteX: number; noteY: number; noteHue: number; noteAt: number; wake?: () => void }>({
+    level: 0, heard: -Infinity, played: 0, hit: 0, lastHit: hitSerial, miss: 0, lastMiss: missSerial, noteX: 0, noteY: 0, noteHue: 0.5, noteAt: -Infinity,
   });
   const render = useRoomRender();
   const living = render.effective === "living";
@@ -24,6 +24,7 @@ export function PracticeAtmosphere({ input, warmth, flow, playing, hitSerial = 0
   const drive = useRef<WaterDrive>({
     playing: playing && render.mode !== "still", level: 0, heardAt: -Infinity, flow, hitSerial, noteX: 0, noteY: 0, noteHue: 0.5, noteAt: -Infinity,
     beatSerial: beat?.serial ?? -1, beatIndex: beat?.index ?? -1, beatActive: Boolean(beat?.active), beatCounting: Boolean(beat?.counting),
+    decay, missSerial,
   });
   drive.current.playing = playing && render.mode !== "still";
   drive.current.flow = flow;
@@ -32,10 +33,13 @@ export function PracticeAtmosphere({ input, warmth, flow, playing, hitSerial = 0
   drive.current.beatIndex = beat?.index ?? -1;
   drive.current.beatActive = Boolean(beat?.active);
   drive.current.beatCounting = Boolean(beat?.counting);
+  drive.current.decay = decay;
+  drive.current.missSerial = missSerial;
   useEffect(() => publishWaterDrive(drive), []);
   useEffect(() => { if (beat?.active) wakeWaterDrive(); }, [beat?.active, beat?.serial]);
+  useEffect(() => { if (decay > 0) wakeWaterDrive(); }, [decay]);
   // Inside a pool room this atmosphere publishes to the shared pool, and its canvas moves in here.
-  const pooled = usePoolPublisher(room, { playing, warmth, flow, beat, bpm });
+  const pooled = usePoolPublisher(room, { playing, warmth, flow, beat, bpm, decay });
 
   useEffect(() => {
     if (hitSerial !== energy.current.lastHit) {
@@ -45,6 +49,15 @@ export function PracticeAtmosphere({ input, warmth, flow, playing, hitSerial = 0
       wakeWaterDrive();
     }
   }, [hitSerial]);
+
+  useEffect(() => {
+    if (missSerial !== energy.current.lastMiss) {
+      energy.current.lastMiss = missSerial;
+      energy.current.miss = Math.min(1, energy.current.miss * 0.35 + 0.85);
+      energy.current.wake?.();
+      wakeWaterDrive();
+    }
+  }, [missSerial]);
 
   useEffect(() => {
     if (input.status !== "listening" || input.paused) {
@@ -88,12 +101,17 @@ export function PracticeAtmosphere({ input, warmth, flow, playing, hitSerial = 0
 
   useEffect(() => {
     const el = room.current;
-    if (!el || living || (sharedWater && render.effective === "water")) return; // WebGL water/pool draws its own breath and bloom
+    if (!el || living || (sharedWater && render.effective === "water")) {
+      el?.style.setProperty("--decay", "0");
+      el?.style.setProperty("--miss", "0");
+      return; // WebGL water/pool draws its own breath, bloom and decay
+    }
     const media = window.matchMedia?.("(prefers-reduced-motion: reduce)");
     let frame = 0;
     let last = performance.now();
     let breath = 0;
     let bloom = 0;
+    let decayLevel = 0;
     let drift = 0;
     const paint = (now: number) => {
       frame = requestAnimationFrame(paint);
@@ -105,17 +123,22 @@ export function PracticeAtmosphere({ input, warmth, flow, playing, hitSerial = 0
       if (heard) energy.current.played = Math.min(45000, energy.current.played + dt);
       else energy.current.played = Math.max(0, energy.current.played - dt * 0.25);
       energy.current.hit *= Math.exp(-dt / 2400);
+      energy.current.miss *= Math.exp(-dt / 1800);
       // Slow old-engine warm-up: convex start, rising into the zone only with sustained clean playing.
       const warm = Math.pow(unit(energy.current.played / 36000), 1.65);
       const quality = 0.28 + 0.72 * unit((s.flow - 0.35) / 0.58);
       const target = heard ? Math.min(1, warm * quality) : 0;
       bloom += (target - bloom) * (1 - Math.exp(-dt / (target > bloom ? 6800 : 11500)));
       breath += ((heard ? energy.current.level : 0) - breath) * (1 - Math.exp(-dt / 750));
+      const decayTarget = unit(s.decay);
+      decayLevel += (decayTarget - decayLevel) * (1 - Math.exp(-dt / (decayTarget > decayLevel ? 600 : 3500)));
       if (!media?.matches) drift += (dt / 1000) * (s.playing ? 0.4 + bloom * 0.9 : 0.25);
       const zone = Math.pow(unit(bloom), 1.9);
       el.style.setProperty("--bloom", zone.toFixed(3));
       el.style.setProperty("--breath", (media?.matches ? 0 : breath * (0.25 + 0.75 * bloom)).toFixed(3));
       el.style.setProperty("--hit", (media?.matches ? 0 : energy.current.hit * bloom).toFixed(3));
+      el.style.setProperty("--decay", decayLevel.toFixed(3));
+      el.style.setProperty("--miss", (media?.matches ? 0 : energy.current.miss).toFixed(3));
       el.style.setProperty("--drift-x", `${(Math.sin(drift / 22) * 2.2).toFixed(3)}%`);
       el.style.setProperty("--drift-y", `${(Math.cos(drift / 27) * 1.8).toFixed(3)}%`);
     };
@@ -128,6 +151,7 @@ export function PracticeAtmosphere({ input, warmth, flow, playing, hitSerial = 0
       <div className="pa-dawn" />
       <div className="pa-water" />
       <div className="pa-water pa-water-colour" />
+      <div className="pa-decay" />
       <div className="pa-leaf" />
       {render.effective === "water" && !sharedWater ? <RenderedWater playing={playing} warmth={warmth} flow={flow} hitSerial={hitSerial} beat={beat} level={energy} /> : null}
       <svg className="pa-current" viewBox="0 0 1600 1000" preserveAspectRatio="none">

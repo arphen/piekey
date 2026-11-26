@@ -339,10 +339,14 @@ export function explainScheduling({
   let pacingReason = `Introduces up to ${usualNewCards} new exercises per session while collecting your first ${ZONE_ATTEMPTS / 2} graded attempts.`;
 
   if (recentCleanPct !== null) {
-    if (recentCleanPct < 60) {
+    if (recentCleanPct < 55) {
       pacingZone = "consolidating";
       pacingLabel = "Consolidating";
-      pacingReason = `${recentCleanPct}% clean over your last ${recent.length} attempts (under 60%). Pausing new exercises so current cards settle into higher boxes.`;
+      pacingReason = `${recentCleanPct}% clean over your last ${recent.length} attempts (under 55%). Easing new material down to ${newCardsPerSession} exercise per session so current passages settle cleanly.`;
+    } else if (recentCleanPct < 70) {
+      pacingZone = "consolidating";
+      pacingLabel = "Building footing";
+      pacingReason = `${recentCleanPct}% clean over your last ${recent.length} attempts (55–70%). Trimming new material to ${newCardsPerSession} exercises per session while reinforcing current work.`;
     } else if (recentCleanPct > 85) {
       pacingZone = "cruising";
       pacingLabel = "Cruising";
@@ -350,7 +354,7 @@ export function explainScheduling({
     } else {
       pacingZone = "steady";
       pacingLabel = "In the sweet spot";
-      pacingReason = `${recentCleanPct}% clean over your last ${recent.length} attempts (60–85% target zone). Keeping steady at ${newCardsPerSession} new cards per session.`;
+      pacingReason = `${recentCleanPct}% clean over your last ${recent.length} attempts (70–85% target zone). Keeping steady at ${newCardsPerSession} new cards per session.`;
     }
   }
 

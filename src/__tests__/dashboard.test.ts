@@ -105,7 +105,7 @@ describe("explainScheduling", () => {
     const dash1 = buildPracticeDashboard([{ tuneId: sheet.id, store: struggling }], day);
     const exp1 = explainScheduling({ sheet, deck, store: struggling, profile: dash1.profile, day, arc: null });
     expect(exp1.pacingZone).toBe("consolidating");
-    expect(exp1.newCardsPerSession).toBe(0);
+    expect(exp1.newCardsPerSession).toBe(1);
 
     const cruising = emptyStore();
     cruising.history = Array.from({ length: 10 }, (_, i) =>

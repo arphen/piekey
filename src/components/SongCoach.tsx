@@ -438,9 +438,30 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
     if (session.outcome === pooled.current.notifiedOutcome) return;
     pooled.current.notifiedOutcome = session.outcome;
     if (session.outcome?.result === "clean") {
-      emitPool({ kind: "bloom", strength: 0.85, at: "focus" });
+      emitPool({ kind: "bloom", strength: session.outcome.newBest ? 1 : 0.85, at: "focus" });
+    } else if (session.outcome?.result === "fail") {
+      emitPool({ kind: "decay", strength: 0.78, tone: "miss" });
     }
   }, [session.outcome, emitPool]);
+  const lastLiftKey = useRef(0);
+  useEffect(() => {
+    if (session.tempoLift && session.tempoLift.key !== lastLiftKey.current) {
+      lastLiftKey.current = session.tempoLift.key;
+      emitPool({ kind: "bloom", strength: 0.55, at: "focus" });
+    }
+  }, [session.tempoLift, emitPool]);
+  const lastPassLen = useRef(0);
+  useEffect(() => {
+    const passLog = session.passLog ?? [];
+    const len = passLog.length;
+    if (len > lastPassLen.current) {
+      const latest = passLog[len - 1];
+      if (latest && !latest.clean && !latest.settle) {
+        emitPool({ kind: "decay", strength: latest.reason === "timing" ? 0.45 : 0.72, tone: latest.reason === "timing" ? "drift" : "miss" });
+      }
+    }
+    lastPassLen.current = len;
+  }, [session.passLog, emitPool]);
   useEffect(() => {
     if (pooled.current.pos !== null && pooled.current.pos !== session.pos) emitPool({ kind: "sweep", direction: 1 });
     pooled.current.pos = session.pos;
@@ -509,13 +530,24 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
     onClose();
   };
   const beginNow = (self = false) => {
-    if (calib || menu || free || choosingTune || tools || !plan.length || input.status === "listening" && !tuned) return;
+    if (calib || menu || free || choosingTune || tools || !plan.length) return;
     saveArc(shaped.arc);
     const onTime = shaped.arc && ["rushing", "dragging", "unsteady"].includes(shaped.arc.cls);
     setGapIds(new Set(onTime ? shaped.blocks.find((b) => b.role === "focus")?.cards ?? [] : []));
     setSessionBlocks(shaped.blocks);
     if (self) session.begin(plan, true);
     else session.begin(plan);
+    setChosenCard(undefined);
+  };
+  const beginFromCard = (cardId: string) => {
+    if (calib || menu || free || choosingTune || tools) return;
+    const rest = plan.filter((id) => id !== cardId);
+    const ordered = [cardId, ...rest];
+    saveArc(shaped.arc);
+    const onTime = shaped.arc && ["rushing", "dragging", "unsteady"].includes(shaped.arc.cls);
+    setGapIds(new Set(onTime ? shaped.blocks.find((b) => b.role === "focus")?.cards ?? [] : []));
+    setSessionBlocks(rest.length ? [{ role: "focus", cards: [cardId], minutes: 2 }, ...shaped.blocks.map((b) => ({ ...b, cards: b.cards.filter((id) => id !== cardId) })).filter((b) => b.cards.length)] : [{ role: "focus", cards: [cardId], minutes: 2 }]);
+    session.begin(ordered);
     setChosenCard(undefined);
   };
   const beginCard = (cardId: string) => {
@@ -526,6 +558,7 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
     setChosenCard(undefined);
   };
   const wholeCard = useMemo(() => wholeTuneCard(own), [own]);
+  const hearCard = useMemo(() => own.cards.find((c) => c.once && c.step?.kind === "hear"), [own]);
   const toggleFull = () => {
     if (document.fullscreenElement) document.exitFullscreen().catch(() => undefined);
     else document.documentElement.requestFullscreen?.().catch(() => undefined);
@@ -954,7 +987,7 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
       role="dialog"
       aria-label="practice session"
     >
-      {!parked && !free && !choosingTune && !tools ? <PracticeAtmosphere input={input} warmth={Math.min(1, session.elapsed() / 45000)} flow={inExercise ? session.flow : 0} hitSerial={hitSerial} playing={inExercise && (session.phase === "pace" || session.phase === "time") && !session.paused && !session.away && !session.listeningOff && pad === null && !menu && !calib} beat={inExercise && !session.paused && pad === null && !menu && !calib ? session.beat : undefined} bpm={session.bpm} /> : null}
+      {!parked && !free && !choosingTune && !tools ? <PracticeAtmosphere input={input} warmth={Math.min(1, session.elapsed() / 45000)} flow={inExercise ? session.flow : 0} decay={inExercise ? session.decay : 0} missSerial={inExercise ? session.missSerial : 0} hitSerial={hitSerial} playing={inExercise && (session.phase === "pace" || session.phase === "time") && !session.paused && !session.away && !session.listeningOff && pad === null && !menu && !calib} beat={inExercise && !session.paused && pad === null && !menu && !calib ? session.beat : undefined} bpm={session.bpm} /> : null}
       <div style={{ display: choosingTune || tools ? "none" : "contents" }} aria-hidden={choosingTune || Boolean(tools) || undefined}>
       {free ? (
         <FreePlay input={input} deck={deck} onClose={closeFree} onPractise={practise} active={!choosingTune && !tools} onChooseTune={onTune ? openTunePicker : undefined} onToolsChange={setFreeInstruments} />
@@ -970,8 +1003,12 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
           onLength={cycleLength}
           onBegin={() => beginNow()}
           onSelfBegin={() => beginNow(true)}
+          onStartFromCard={beginFromCard}
           onStartCard={beginCard}
           wholeCardId={wholeCard?.id}
+          hearCardId={hearCard?.id}
+          windowP={windowP}
+          onWindow={(p) => (setWindowP(p), session.updateSettings({ window: p }))}
           onFree={openFree}
           onSettings={openMenu}
           onChooseTune={onTune ? openTunePicker : undefined}
@@ -1062,6 +1099,8 @@ function RoomInstruments({ onOpen, ready = false, held = null, disabled = false 
   </nav>;
 }
 
+const READY_WINDOWS: (number | null)[] = [null, 1, 5, 7, 9, 10];
+
 function Ready({
   deck,
   session,
@@ -1073,8 +1112,12 @@ function Ready({
   onLength,
   onBegin,
   onSelfBegin,
+  onStartFromCard,
   onStartCard,
   wholeCardId,
+  hearCardId,
+  windowP,
+  onWindow,
   onFree,
   onSettings,
   onChooseTune,
@@ -1098,8 +1141,12 @@ function Ready({
   onLength(): void;
   onBegin(): void;
   onSelfBegin(): void;
+  onStartFromCard(cardId: string): void;
   onStartCard(cardId: string): void;
   wholeCardId?: string;
+  hearCardId?: string;
+  windowP: number | null;
+  onWindow(p: number | null): void;
   onFree(): void;
   onSettings(): void;
   onChooseTune?(): void;
@@ -1114,8 +1161,8 @@ function Ready({
   unavailablePassage: boolean;
 }) {
   const byId = useMemo(() => new Map(deck.cards.map((c) => [c.id, c])), [deck]);
-  // a short 3-note fretted phrase begins, leaving single held option keys and open strings free
-  const { ring, notes: phraseNotes } = useStartPhrase(input, plan.length > 0 && keysOn && tuned, onBegin);
+  // a short 3-note fretted phrase begins immediately (open strings remain free for quick tuning)
+  const { ring, notes: phraseNotes } = useStartPhrase(input, plan.length > 0 && keysOn, onBegin);
   const held = useNoteKeys(input, keysOn, [READY_KEYS[0], READY_KEYS[1], guests.length ? READY_KEYS[2] : null, READY_KEYS[3], READY_KEYS[4], onChooseTune ? READY_KEYS[5] : null, READY_KEYS[6]], (k) => (k === 0 ? onFree() : k === 1 ? onSettings() : k === 2 ? onMix() : k === 3 ? onLength() : k === 4 ? onSelfBegin() : k === 5 ? onChooseTune?.() : onTools("tuner")), true);
   const from = new Set(plan.map((id) => byId.get(id)?.tune).filter(Boolean));
   const listening = input.status === "listening" && !input.paused;
@@ -1124,7 +1171,7 @@ function Ready({
   const say = unavailablePassage ? "Choose this passage again in Songs" : !plan.length
     ? deck.cards.length ? "A little more time for this one" : "No exercise in this score yet"
     : listening
-      ? tuned ? "Ready when you are" : "Tune up first"
+      ? "Ready when you are"
       : input.status === "starting"
         ? "Connecting your guitar…"
         : input.paused
@@ -1133,6 +1180,11 @@ function Ready({
   const inputLabel = listening ? "Guitar listening" : input.status === "starting" ? "Opening input" : input.paused ? "Audio suspended" : "Input off";
   const startLabel = listening ? "Begin session" : input.status === "starting" ? "Opening input…" : input.paused ? "Resume listening" : input.status === "error" ? "Reconnect input" : "Enable listening";
   const isWholeSelected = Boolean(wholeCardId && plan.length === 1 && plan[0] === wholeCardId);
+  const cycleWindow = () => {
+    const idx = READY_WINDOWS.indexOf(windowP);
+    onWindow(READY_WINDOWS[(idx + 1) % READY_WINDOWS.length]);
+  };
+  const winLabel = windowP === null ? `Frets ${deck.window.p}–${deck.window.p + 3} (auto)` : `Frets ${windowP}–${windowP + 3}`;
   return (
     <div className="ss-ready ss-ready-flow">
       <div className="ss-ready-story">
@@ -1149,17 +1201,32 @@ function Ready({
             {shaped.sideWhy ? <span>{shaped.sideWhy}</span> : null}
           </p>
         ) : null}
-        {wholeCardId && !isWholeSelected ? (
-          <button
-            type="button"
-            className="ss-whole-jump"
-            disabled={!keysOn || unavailablePassage}
-            onClick={() => onStartCard(wholeCardId)}
-          >
-            <Glyph name="play" size={14} />
-            <span>Play the whole tune</span>
-            <small>scrolling score · jump right in</small>
-          </button>
+        {(wholeCardId && !isWholeSelected) || hearCardId ? (
+          <div className="ss-whole-actions">
+            {wholeCardId && !isWholeSelected ? (
+              <button
+                type="button"
+                className="ss-whole-jump"
+                disabled={!keysOn || unavailablePassage}
+                onClick={() => onStartCard(wholeCardId)}
+              >
+                <Glyph name="play" size={14} />
+                <span>Play the whole tune</span>
+                <small>scrolling score · jump right in</small>
+              </button>
+            ) : null}
+            {hearCardId ? (
+              <button
+                type="button"
+                className="ss-whole-hear"
+                disabled={!keysOn || unavailablePassage}
+                onClick={() => onStartCard(hearCardId)}
+                title="Listen to the whole tune once through before practising"
+              >
+                <span>Hear the tune</span>
+              </button>
+            ) : null}
+          </div>
         ) : null}
         {first ? (
           <div className="ss-ready-preview">
@@ -1169,10 +1236,10 @@ function Ready({
                 if (!card) return null;
                 const role = shaped.blocks.find((b) => b.cards.includes(id))?.role;
                 const cardState = session.store.cards[id];
-                const cardBpm = cardState?.bpm ?? card.bpm;
+                const cardBpm = cardState?.bestCleanBpm ?? cardState?.bpm ?? card.bpm;
                 return (
                   <li key={id} className={`fam-${card.family}`}>
-                    <button type="button" className="ss-ready-row" disabled={!keysOn} onClick={() => onStartCard(id)}>
+                    <button type="button" className="ss-ready-row" disabled={!keysOn} onClick={() => onStartFromCard(id)}>
                       <span className="ss-ready-num">{String(i + 1).padStart(2, "0")}</span>
                       <span className="ss-ready-copy">
                         <strong>{card.title}</strong>
@@ -1211,13 +1278,13 @@ function Ready({
         <p className="ss-ready-instruction">
           {unavailablePassage ? "Return to Songs to choose a passage with melody notes in this arrangement." : !plan.length
             ? deck.cards.length ? "Hold F below for more time, or open free play." : "Free play is always available."
-            : listening ? tuned ? "Play 3 fretted notes to begin · open strings stay free" : "Tune every string, then we listen once more" : input.paused ? "Tap to wake audio, then play to begin." : "Connect an interface or allow the microphone."}
+            : listening ? "Play 3 fretted notes to begin · open strings stay free" : input.paused ? "Tap to wake audio, then play to begin." : "Connect an interface or allow the microphone."}
         </p>
         {input.error ? <p className="ss-input-detail" role="status">{input.error}</p> : null}
         <button
           type="button"
           className="ss-begin"
-          disabled={!keysOn || unavailablePassage || input.status === "starting" || (listening && (!plan.length || !tuned))}
+          disabled={!keysOn || unavailablePassage || input.status === "starting" || (listening && !plan.length)}
           onClick={listening ? onBegin : () => void input.start()}
         >
           {startLabel}<span aria-hidden="true">↗</span>
@@ -1246,6 +1313,11 @@ function Ready({
             <button type="button" onClick={onLength} disabled={!keysOn}>
               <NoteTag midi={READY_KEYS[3]} held={held === 3} octave={false} />
               <span>Length · {LENGTH_MINUTES[length as keyof typeof LENGTH_MINUTES]} min</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" onClick={cycleWindow} disabled={!keysOn} title="Region of the neck for warm-ups, scales and reading lines (never restricts how you finger the melody)">
+              <span>{winLabel}</span>
             </button>
           </li>
           {guests.length ? (
@@ -1298,19 +1370,28 @@ function barsOf(card: Card, sheet: LeadSheet): string {
  * The one line under the material. It reports what was heard, in numbers where there are any, and
  * stays silent while the player plays: what there is to do is on the page already.
  */
-function coachLine(card: Card, s: SessionApi, last: number | undefined): { text: string; tone?: "good" | "soft" } {
+function coachLine(card: Card, s: SessionApi, last: number | undefined): { text: string; tone?: "good" | "soft" | "drift" | "decay" } {
   if (s.paused) return { text: "" };
   if (s.ending) return { text: "Finishing after this pass" };
   if (s.selfGuided) return { text: "Self-guided · no mic score" };
   if (s.phase === "pace") {
     if (card.view === "chords" || !s.follow.done || !s.lastTake) return { text: "" };
-    return { text: `${s.lastTake.hit} of ${s.lastTake.total}`, tone: s.lastTake.clean ? "good" : undefined };
+    return { text: `${s.lastTake.hit} of ${s.lastTake.total}`, tone: s.lastTake.clean ? "good" : "decay" };
   }
   if (s.phase === "time") {
     if (s.waiting) return { text: "The band comes back in on a note." };
     if (s.settling) return { text: "Settling in · next pass counts", tone: "soft" };
-    if (s.playback.counting || last === undefined) return { text: "" };
-    return { text: `${Math.round(last * 100)}%`, tone: last >= card.pass ? "good" : undefined };
+    if (s.freeRide && s.bankedBpm) return { text: `Banked ♩${s.bankedBpm} · riding ♩${s.bpm}`, tone: "good" };
+    if (s.playback.counting) return { text: "" };
+    const latest = s.passLog[s.passLog.length - 1];
+    if (latest) {
+      const pct = Math.round(latest.share * 100);
+      if (latest.clean) return { text: `${pct}%`, tone: "good" };
+      if (latest.reason === "timing") return { text: `${pct}% · pulse unsteady`, tone: "drift" };
+      if (!latest.settle) return { text: `${pct}%`, tone: "decay" };
+    }
+    if (last === undefined) return { text: "" };
+    return { text: `${Math.round(last * 100)}%`, tone: last >= card.pass ? "good" : "decay" };
   }
   return { text: "" };
 }
@@ -1475,6 +1556,14 @@ function Running({
           </p>
         )}
 
+        {s.suggestedSpot && !s.spot && s.phase !== "result" ? (
+          <div className="ss-spot-offer" role="status">
+            <span>Tough spot · <b>{barsOf({ ...card, ...s.suggestedSpot }, sheet)}</b></span>
+            <button type="button" onClick={s.acceptSpot}>Drill alone</button>
+            <button type="button" className="ss-spot-offer-x" onClick={s.dismissSpot} aria-label="Keep playing full passage">×</button>
+          </div>
+        ) : null}
+
         {s.memoryStage ? (
           <div className="ss-memory-aid">
             <span aria-live="polite">{s.memoryReview ? "Memory review" : "Memory"} · {s.memoryStage === "page" ? "page shown" : s.memoryStage === "landmarks" ? "landmarks" : "hidden"}</span>
@@ -1568,9 +1657,9 @@ function Running({
                   </span>
                 ) : null}
                 {s.phase === "time" && s.passLog.length ? (
-                  <span className="ss-passes" title="each time through: hollow bar is Pass 1 settle-in; solid green landed cleanly">
+                  <span className="ss-passes" title="each pass: emerald clean · amber unsteady pulse · ochre missed notes · hollow settle-in">
                     {s.passLog.slice(-8).map((entry, i) => (
-                      <i key={i} className={entry.settle ? "is-settle" : entry.clean ? "is-in" : ""} style={{ height: `${Math.max(12, entry.share * 100)}%` }} />
+                      <i key={i} className={entry.settle ? "is-settle" : entry.clean ? "is-in" : entry.reason === "timing" ? "is-timing" : "is-miss"} style={{ height: `${Math.max(12, entry.share * 100)}%` }} />
                     ))}
                     <em style={{ bottom: `${card.pass * 100}%` }} />
                   </span>
@@ -1608,16 +1697,16 @@ function Running({
                 </button>
               </li>
             ))}
-            <li className="ss-trail-next">
+            <li className={`ss-trail-next ${s.bankedBpm !== null ? "is-banked" : ""}`}>
               <button
                 type="button"
                 onClick={s.next}
                 disabled={s.paused}
-                title={playedShortcuts && s.keys.next !== null ? `${s.selfGuided ? "Done practising" : "Next exercise"} · hold ${keyName(s.keys.next)} (exact octave)` : s.selfGuided ? "Done practising" : "Next exercise"}
-                aria-label={`${s.selfGuided ? "Done practising" : "Next exercise"}${playedShortcuts && s.keys.next !== null ? ` · hold ${keyName(s.keys.next)}` : ""}`}
+                title={playedShortcuts && s.keys.next !== null ? `${s.selfGuided ? "Done practising" : s.bankedBpm !== null ? `Bank ♩${s.bankedBpm} & next` : "Next exercise"} · hold ${keyName(s.keys.next)} (exact octave)` : s.selfGuided ? "Done practising" : s.bankedBpm !== null ? `Bank ♩${s.bankedBpm} & next` : "Next exercise"}
+                aria-label={`${s.selfGuided ? "Done practising" : s.bankedBpm !== null ? "Bank and next exercise" : "Next exercise"}${playedShortcuts && s.keys.next !== null ? ` · hold ${keyName(s.keys.next)}` : ""}`}
               >
                 <NoteTag midi={playedShortcuts ? s.keys.next : null} held={held === 3} />
-                <span>{s.selfGuided ? "Done" : "Next"}</span>
+                <span>{s.selfGuided ? "Done" : s.bankedBpm !== null ? "Bank & next" : "Next"}</span>
               </button>
             </li>
           </ol>
@@ -1632,9 +1721,17 @@ function Running({
             </span>
           ) : null}
           {s.phase === "time" && s.playback.drift !== null ? <BeatMeter drift={s.playback.drift} beatMs={60000 / s.bpm} /> : null}
-          <span className={`ss-tempo-cluster ${own ? "is-own" : ""}`} title={own ? "your own tempo" : card.goalBpm > card.bpm ? `tempo ${s.bpm} bpm · goal ${card.goalBpm} bpm` : "tempo"}>
+          <span className={`ss-tempo-cluster ${own ? "is-own" : ""} ${s.freeRide ? "is-riding" : ""}`} title={own ? "your own tempo" : card.goalBpm > card.bpm ? `tempo ${s.bpm} bpm · goal ${card.goalBpm} bpm${s.priorBest ? ` · prior best ${s.priorBest} bpm` : ""}` : "tempo"}>
             <BeatPulse beat={s.beat} bpm={own ? s.pulse ?? s.bpm : s.bpm} onTempo={stepTempo} />
-            {lifted && s.tempoLift ? <b className="ss-tempo-lift">+{s.tempoLift.to - s.tempoLift.from} → {s.tempoLift.to}</b> : s.phase === "time" && s.target > s.bpm ? <em>→ {s.target}</em> : null}
+            {lifted && s.tempoLift ? (
+              <b className="ss-tempo-lift">+{s.tempoLift.to - s.tempoLift.from} → {s.tempoLift.to}</b>
+            ) : s.bankedBpm !== null && card.goalBpm > card.bpm && (s.priorBest === null || s.bankedBpm > s.priorBest) ? (
+              <b className="ss-tempo-best is-new">new best ♩{s.bankedBpm}</b>
+            ) : s.priorBest !== null && card.goalBpm > card.bpm ? (
+              <em className="ss-tempo-best">best ♩{s.priorBest}</em>
+            ) : s.phase === "time" && s.target > s.bpm ? (
+              <em>→ {s.target}</em>
+            ) : null}
           </span>
           <BoxPips box={s.box} />
         </div>
@@ -1655,8 +1752,19 @@ function BoxPips({ box, gained = 0 }: { box: number; gained?: number }) {
 
 function ResultMark({ o, titleOf, secret }: { o: Outcome; titleOf(id: string): string; secret?: string }) {
   const self = o.conditions?.source === "self";
-  const text = self ? "Practice noted · unscored" : o.result === "clean" ? `Box ${o.to}` : o.result === "ok" ? `Stays in box ${o.to}` : o.result === "fail" ? "Back to box 1" : "";
+  const text = self ? "Practice noted · unscored" : o.result === "clean" ? `Box ${o.to}` : o.result === "ok" ? `Stays in box ${o.to}` : o.result === "fail" ? "Back a step" : "";
   const also = o.also.map((a) => titleOf(a.id)).filter(Boolean);
+  const deltaText = !self && o.result === "clean"
+    ? o.newBest && o.startBpm && o.bpm > o.startBpm
+      ? `♩${o.startBpm} → ♩${o.bpm} (+${o.bpm - o.startBpm} · new best)`
+      : o.newBest
+        ? `New best · ♩${o.bpm}`
+        : o.priorBest && o.bpm >= o.priorBest
+          ? `Matched best · ♩${o.bpm}`
+          : o.startBpm && o.bpm > o.startBpm
+            ? `♩${o.startBpm} → ♩${o.bpm} (+${o.bpm - o.startBpm})`
+            : null
+    : null;
   return (
     <div className={`ss-result is-${o.result}`}>
       <svg viewBox="0 0 100 100" aria-hidden="true">
@@ -1665,12 +1773,16 @@ function ResultMark({ o, titleOf, secret }: { o: Outcome; titleOf(id: string): s
       </svg>
       {secret ? <p className="ss-result-secret">{secret}</p> : null}
       {text ? <p>{text}</p> : null}
+      {deltaText ? <p className={`ss-result-delta ${o.newBest ? "is-best" : ""}`}>{deltaText}</p> : null}
       {o.result !== "skip" && !self ? <BoxPips box={o.to} gained={o.to > o.from ? o.to : 0} /> : null}
       {o.result !== "skip" ? (
         <p className="ss-result-facts">
           {!self ? <>{o.conditions?.tempo === "own-pace" ? "reference " : ""}♩ {o.bpm}</> : "Unscored"}
           {o.share !== null ? ` · ${Math.round(o.share * 100)}%` : ""}
         </p>
+      ) : null}
+      {o.unlocked?.length ? (
+        <p className="ss-result-unlock">Unlocks {o.unlocked.join(" · ")}</p>
       ) : null}
       {o.bars?.length ? (
         <ol className="ss-runbars" aria-label="the run-through, bar by bar">
@@ -1686,6 +1798,7 @@ function ResultMark({ o, titleOf, secret }: { o: Outcome; titleOf(id: string): s
           {also.length > 3 ? ` +${also.length - 3}` : ""}
         </p>
       ) : null}
+      {!self ? <p className="ss-result-hint">Play a note for next</p> : null}
     </div>
   );
 }
@@ -2526,9 +2639,11 @@ function ImprovStage({ card, session: s, labels }: { card: Card; session: Sessio
   }, [card, at, p]);
   const notes = useMemo(() => boardNotes(ctx, p, "harmony", lit), [ctx?.chord?.symbol, ctx?.scale.id, p, lit]); // eslint-disable-line react-hooks/exhaustive-deps
   const position: Position = useMemo(() => ({ id: "V", label: "", from: p, to: p + 3 }), [p]);
+  const proposal = "proposal" in card ? (card as { proposal?: string }).proposal : undefined;
   return (
     <div className="ss-improv">
       <Harm ctx={ctx} scale />
+      {proposal ? <p className="ss-improv-proposal">{proposal}</p> : null}
       <div className="ss-board ss-board--stage">
         <Fretboard notes={notes} fretCount={Math.max(12, p + 5)} position={position} labels={labels} />
       </div>

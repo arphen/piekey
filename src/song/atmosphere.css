@@ -10,6 +10,8 @@
   --bloom: 0;
   --breath: 0;
   --hit: 0;
+  --decay: 0;
+  --miss: 0;
   --drift-x: 0%;
   --drift-y: 0%;
   overflow: hidden;
@@ -25,7 +27,7 @@
     radial-gradient(ellipse at 14% 78%, rgba(28, 124, 154, 0.22), transparent 50%),
     radial-gradient(ellipse at 82% 20%, rgba(56, 232, 198, 0.16), transparent 50%),
     radial-gradient(ellipse at 74% 88%, rgba(42, 168, 96, 0.18), transparent 52%);
-  opacity: calc(var(--bloom) * 0.55 + var(--hit) * 0.28);
+  opacity: calc((var(--bloom) * 0.55 + var(--hit) * 0.28) * (1 - var(--decay) * 0.35));
   transform: translate(var(--drift-x), var(--drift-y)) scale(calc(1 + var(--breath) * 0.03));
 }
 
@@ -37,11 +39,28 @@
   display: block;
   inset: -12%;
   background: url("../assets/pond-neon.webp") center 48% / cover no-repeat;
-  filter: saturate(1.75) contrast(1.42) brightness(0.86) hue-rotate(14deg); /* bioluminescent emerald-cyan algae surging from abyssal water */
-  opacity: calc(var(--bloom) * 0.48 + var(--hit) * 0.22);
+  filter:
+    saturate(calc(1.75 - var(--decay) * 0.65))
+    contrast(1.42)
+    brightness(calc(0.86 - var(--decay) * 0.14))
+    hue-rotate(calc(14deg - var(--decay) * 48deg))
+    sepia(calc(var(--decay) * 0.42 + var(--miss) * 0.14)); /* bioluminescent emerald-cyan algae wilting toward warm olive-ochre on decay */
+  opacity: calc((var(--bloom) * 0.48 + var(--hit) * 0.22) * (1 - var(--decay) * 0.28));
   mix-blend-mode: screen;
   mask-image: radial-gradient(ellipse at 54% 52%, rgba(0, 0, 0, 0.28) 12%, rgba(0, 0, 0, 0.84) 60%, #000 100%);
   transform: translate(calc(var(--drift-y) * -1), var(--drift-x)) scale(calc(1.08 + var(--hit) * 0.03));
+}
+
+/* Yellowing amber to warm umber-brown decay layer: blooms softly along the rim, preserving center readability. */
+.pa-decay {
+  inset: -12%;
+  background:
+    radial-gradient(ellipse at 18% 24%, rgba(184, 137, 46, 0.24), transparent 54%),
+    radial-gradient(ellipse at 82% 76%, rgba(143, 91, 34, 0.26), transparent 56%),
+    radial-gradient(ellipse at 52% 92%, rgba(92, 51, 24, 0.30), transparent 58%);
+  opacity: clamp(0, calc(var(--decay) * 0.58 + var(--miss) * 0.26), 0.72);
+  mask-image: radial-gradient(ellipse at 50% 48%, rgba(0, 0, 0, 0.16) 14%, rgba(0, 0, 0, 0.78) 62%, #000 100%);
+  transform: translate(calc(var(--drift-x) * -0.6), calc(var(--drift-y) * -0.6));
 }
 
 .pa-leaf { display: none; }

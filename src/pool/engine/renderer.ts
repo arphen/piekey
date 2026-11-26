@@ -34,6 +34,7 @@ export interface FrameState {
   velocityHalfLife: number;
   kick: number;
   tint: Vec3;
+  decay?: number;
   dawn: number;
   drift: Vec2;
   driftVelocity: Vec2;
@@ -438,8 +439,10 @@ export class Renderer {
       this.f1(u, "uEmission", params.emission);
       this.f1(u, "uKick", s.kick);
       this.f1(u, "uLava", Math.min(1, params.lava * 1.5));
+      const decay = Math.max(0, Math.min(1, s.decay ?? 0));
       this.f1(u, "uRefract", 0.05);
-      this.f1(u, "uDyeGain", 0.04 + params.emission * 0.28);
+      this.f1(u, "uDyeGain", 0.04 + params.emission * 0.28 + decay * 0.14);
+      this.f1(u, "uDecay", decay);
       this.f1(u, "uCalmDepth", Math.min(1, params.spread * 1.4));
       gl.uniform3f(this.uniform(u, "uTint"), s.tint[0], s.tint[1], s.tint[2]);
       this.f2(u, "uWaveTexel", 1 / waves.read.width, 1 / waves.read.height);

@@ -9,9 +9,10 @@ export type PoolAnchor = "metronome" | "tuner" | "cursor" | "focus";
 export type PoolEvent =
   | { kind: "tune"; cents: number | null; frequency: number | null }
   | { kind: "bloom"; strength: number; at?: PoolAnchor } // a clean pass
+  | { kind: "decay"; strength: number; tone?: "drift" | "miss" } // yellowing tension or ochre-brown decay
   | { kind: "sweep"; direction: -1 | 1 }; // the card changed
 
-export interface PublisherProps { playing: boolean; warmth: number; flow: number; beat?: BeatSignal; bpm?: number }
+export interface PublisherProps { playing: boolean; warmth: number; flow: number; beat?: BeatSignal; bpm?: number; decay?: number }
 export interface Publisher { host: HTMLElement; props: PublisherProps }
 
 export interface PoolSink {

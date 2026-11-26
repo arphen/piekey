@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fitLatency } from "../audio/latency";
 import { toDrop } from "../audio/recorder";
 import type { ReadingBar, ReadingNote } from "../core/contract";
-import { buildDeck } from "../song/deck";
+import { buildDeck, familiesOnly } from "../song/deck";
 import { newCards, nextArc, planBlocks } from "../song/planner";
 import { tunePath, weeklyMinutes } from "../overview/progress";
 import { addChord, cardForLoop, findLoop, nameChord } from "../song/progression";
@@ -293,12 +293,12 @@ describe("a learner's musical goal", () => {
     }
   });
 
-  it("prepares an improvisation goal with its guide tones without enlarging the frozen route", () => {
+  it("prepares an improvisation goal through its section melody without enlarging the frozen route", () => {
     const { deck, goal } = make("improv");
     const fixed = JSON.stringify(goal.essentialTasks);
     const plan = planBlocks(deck, store(), "2026-11-17", { minutes: 10, tuneId: "t", goal });
     expect(plan.ids.length).toBeGreaterThan(0);
-    expect(plan.ids.every((id) => id.endsWith(":guides"))).toBe(true);
+    expect(plan.ids.every((id) => id.startsWith("mel:") || id.endsWith(":guides"))).toBe(true);
     expect(plan.why).toContain("Improvise over the changes");
     expect(JSON.stringify(goal.essentialTasks)).toBe(fixed);
   });
@@ -311,19 +311,42 @@ describe("a session with a shape", () => {
   const scale = deck.intro.find((id) => id.startsWith("scale:"))!;
   const melodies = deck.intro.filter((id) => id.startsWith("mel:") && !id.startsWith("mel:hear:"));
 
-  it("starts a new tune by hearing the whole piece, then learning the opening chunks before any scales", () => {
+  it("starts a new tune directly on Bar 1 (never auto-inserting mel:hear) and weaves an in-key reset when revisiting opening chunks", () => {
     const p = planBlocks(deck, store({ [scale]: known(3) }), day, { minutes: 25, tuneId: "t" });
     expect(p.blocks.map((b) => b.role)).toEqual(["music"]);
-    expect(p.ids[0]).toMatch(/^mel:hear:/);
-    expect(p.ids.slice(1).every((id) => id.startsWith("mel:new:"))).toBe(true);
+    expect(p.ids[0]).toMatch(/^mel:new:0-/);
+    expect(p.ids.some((id) => id.startsWith("mel:hear:"))).toBe(false);
     expect(p.ids).not.toContain(scale);
     expect(p.why).toBe("");
-    // Once heard, it does not ask to hear the whole tune again, and still stays on the opening until joined.
-    const heard = store({ [scale]: known(3), [p.ids[0]]: known(2) });
-    const p2 = planBlocks(deck, heard, day, { minutes: 25, tuneId: "t" });
-    expect(p2.ids).not.toContain(p.ids[0]);
-    expect(p2.ids.every((id) => id.startsWith("mel:"))).toBe(true);
-    expect(p2.ids).not.toContain(scale);
+    // After playing the opening chunk today (not due yet, section still locked), revisiting weaves an in-key reset card
+    const playedToday = store({
+      [scale]: known(3),
+      [p.ids[0]]: { box: 1, due: "2026-11-20", bpm: 72, seen: 1, clean: 0, last: "ok" },
+    });
+    const p2 = planBlocks(deck, playedToday, day, { minutes: 25, tuneId: "t" });
+    expect(p2.ids.some((id) => id.startsWith("mel:hear:"))).toBe(false);
+    expect(p2.ids).toContain(p.ids[0]);
+    const resetBlock = p2.blocks.find((b) => b.role === "side");
+    expect(resetBlock?.cards).toHaveLength(1);
+    const resetCard = deck.cards.find((c) => c.id === resetBlock!.cards[0])!;
+    expect(["scales", "harmony", "reading"]).toContain(resetCard.family);
+    expect(resetCard.id.startsWith("tech:")).toBe(false);
+    expect(p2.blocks[p2.blocks.length - 1].role).toBe("music");
+  });
+
+  it("warms up on the tune's own home-key scale in position rather than remote-key tech foundations", () => {
+    const tech = deck.cards.find((c) => c.family === "technique")!;
+    const cards = Object.fromEntries([[scale, known(3)], [tech.id, known(3)], ...melodies.map((id) => [id, known(2)])]);
+    // Odd session count previously alternated remote-key tech:* into song warm-ups
+    const oddSessions = { ...store(cards), sessions: [{ date: "2026-11-16", minutes: 20, cards: 4, clean: 3 }] };
+    const p = planBlocks(deck, oddSessions, day, { minutes: 25, tuneId: "t" });
+    expect(p.blocks[0]).toMatchObject({ role: "warmup", cards: [scale] });
+    expect(p.ids.some((id) => id.startsWith("tech:"))).toBe(false);
+
+    // Technique focus mode (no scale cards in deck) still warms up with a known technique card
+    const techDeck = familiesOnly(deck, ["technique"]);
+    const pTech = planBlocks(techDeck, store({ [tech.id]: known(3) }), day, { minutes: 25, tuneId: "t" });
+    expect(pTech.blocks[0]).toMatchObject({ role: "warmup", cards: [tech.id] });
   });
 
   it("warms up on a scale the hands know, then works the named mistake, then plays the tune", () => {
@@ -365,13 +388,48 @@ describe("a session with a shape", () => {
     expect(p.blocks.find((b) => b.role === "focus")!.cards.every((id) => id.startsWith("mel:"))).toBe(true);
   });
 
-  it("weaves a holistic side-study drill into normal sessions for returning players", () => {
+  it("caps focus at 3, schedules cohesive units in 25 min, and weaves an in-key pattern-breaker between heavy melody work", () => {
     const cards = Object.fromEntries([[scale, known(3)], ...melodies.map((id) => [id, known(2)])]);
-    const weak = { cls: "crossing" as const, strength: 0.6, n: 40, cards: [`t::${melodies[0]}`], fact: "String crossings · 45 % missed" };
+    const weak = { cls: "crossing" as const, strength: 0.6, n: 40, cards: melodies.slice(0, 5).map((id) => `t::${id}`), fact: "String crossings · 45 % missed" };
     const p = planBlocks(deck, store(cards), day, { minutes: 25, tuneId: "t", profile: profileWith({ weaknesses: [weak] }) });
-    const side = p.blocks.find((b) => b.role === "side");
-    expect(side?.cards).toEqual(["tech:skip:adjacent"]);
-    expect(p.sideWhy).toContain("String crossings");
+    const focusIdx = p.blocks.findIndex((b) => b.role === "focus");
+    const sideIdx = p.blocks.findIndex((b) => b.role === "side");
+    const musicIdx = p.blocks.findIndex((b) => b.role === "music");
+    expect(p.blocks[focusIdx].cards.length).toBeLessThanOrEqual(3);
+    expect(sideIdx).toBeGreaterThan(focusIdx);
+    expect(sideIdx).toBeLessThan(musicIdx);
+    const sideCard = deck.cards.find((c) => c.id === p.blocks[sideIdx].cards[0])!;
+    expect(["reading", "harmony", "scales"]).toContain(sideCard.family);
+    expect(sideCard.id.startsWith("tech:")).toBe(false);
+    expect(p.sideWhy).toBeTruthy();
+    expect(p.ids.length).toBeGreaterThanOrEqual(4);
+    expect(p.ids.length).toBeLessThanOrEqual(8);
+  });
+
+  it("graduates to longer melody passages once shorter chunks are confident while keeping weak chunks drillable", () => {
+    const shortChunk = deck.cards.find((c) => c.step?.kind === "new")!;
+    const sectionCard = deck.cards.find((c) => c.step?.kind === "section")!;
+    const wholeTune = deck.cards.find((c) => c.step?.kind === "tune")!;
+    const cards: Store["cards"] = {
+      [scale]: known(3),
+      [shortChunk.id]: { ...known(4), bestCleanBpm: shortChunk.goalBpm },
+      [sectionCard.id]: known(2),
+      [wholeTune.id]: known(2),
+    };
+    const p = planBlocks(deck, store(cards), day, { minutes: 25, tuneId: "t" });
+    const musicBlock = p.blocks.find((b) => b.role === "music")!;
+    expect([wholeTune.id, "mel:run", sectionCard.id]).toContain(musicBlock.cards[0]);
+    expect(musicBlock.cards[0]).not.toBe(shortChunk.id);
+
+    // A weak/slow short chunk remains drillable in focus when named by a weakness
+    const weakCards: Store["cards"] = {
+      [scale]: known(3),
+      [shortChunk.id]: { box: 1, due: day, bpm: 60, bestCleanBpm: 60, seen: 2, clean: 0, last: "fail" },
+      [sectionCard.id]: known(2),
+    };
+    const weak = { cls: "leaps" as const, strength: 0.6, n: 40, cards: [`t::${shortChunk.id}`], fact: "Leaps · 40 % missed" };
+    const pWeak = planBlocks(deck, store(weakCards), day, { minutes: 25, tuneId: "t", profile: profileWith({ weaknesses: [weak] }) });
+    expect(pWeak.blocks.find((b) => b.role === "focus")!.cards).toContain(shortChunk.id);
   });
 });
 
@@ -464,14 +522,32 @@ describe("the run-through", () => {
 describe("improvising cards", () => {
   const s = sheet();
   const deck = buildDeck(s, buildTimeline(s));
-  const card = deck.cards.find((c) => c.kind === "improv")!;
+  const card = deck.cards.find((c) => c.id.endsWith(":improv"))!;
+  const motif = deck.cards.find((c) => c.id.endsWith(":improv-motif"))!;
 
-  it("land any chord tone on beats one and three, after the guide tones", () => {
-    expect(card.needs).toBe(card.id.replace(":improv", ":guides"));
+  it("land any chord tone on beats one and three, unlock from the section melody, and include a motif proposal", () => {
+    const secMel = deck.cards.find((c) => c.step?.kind === "section")!;
+    expect(card.stage).toBe(3);
+    expect(card.needs).toBe(secMel.id);
+    expect(card.anchor).toBe(secMel.id);
+    expect(card.proposal).toBeTruthy();
     const hits = card.tl.targets.slice(card.first, card.last + 1);
     expect(hits.slice(0, 2).map((t) => t.t - card.tl.slots[card.from].start)).toEqual([0, 2]);
     hits.forEach((t, k) => expect(t.any).toEqual(card.context[card.first + k]!.chord!.pcs));
     expect(card.pace).toBe(false);
+    expect(motif.needs).toBe(card.id);
+    expect(motif.stage).toBe(3);
+    expect(motif.proposal).toBeTruthy();
+
+    // When a chord-only sheet has no melody notes, improv falls back to unlocking from guide tones
+    const chordOnly: LeadSheet = {
+      ...s,
+      id: "chords-only",
+      bars: s.bars.map((b) => ({ ...b, notes: [{ ...b.notes[0], rest: true, midi: 0, duration: "w", durationBeats: 4 }] })),
+    };
+    const chordDeck = buildDeck(chordOnly, buildTimeline(chordOnly));
+    const fallbackImprov = chordDeck.cards.find((c) => c.id.endsWith(":improv"))!;
+    expect(fallbackImprov.needs).toBe(fallbackImprov.id.replace(":improv", ":guides"));
   });
 });
 
@@ -541,11 +617,12 @@ describe("echo calls beyond the home scale's phrases", () => {
 describe("new material by how it is going", () => {
   const withResults = (results: Attempt["result"][]) => ({ ...store(), history: results.map((r, i) => attempt(`mel:new:${i}`, "2026-11-16", { result: r })) });
 
-  it("brings none while struggling, more while cruising, the usual in between or without history", () => {
-    expect(newCards(withResults(Array(16).fill("fail")))).toBe(0);
-    expect(newCards(withResults(Array(16).fill("clean")))).toBe(6);
-    expect(newCards(withResults([...Array(10).fill("clean"), ...Array(6).fill("ok")]))).toBe(4);
-    expect(newCards(withResults(["fail", "fail"]))).toBe(4);
+  it("tapers gently while struggling, adds more while cruising, and holds steady in between or without history", () => {
+    expect(newCards(withResults(Array(16).fill("fail")))).toBe(1); // < 55%: keeps 1 flowing instead of dropping to 0
+    expect(newCards(withResults([...Array(10).fill("clean"), ...Array(6).fill("ok")]))).toBe(2); // 62.5% (< 70%): half usual
+    expect(newCards(withResults([...Array(12).fill("clean"), ...Array(4).fill("ok")]))).toBe(4); // 75% (70–85%): usual
+    expect(newCards(withResults(Array(16).fill("clean")))).toBe(6); // > 85%: usual + 2
+    expect(newCards(withResults(["fail", "fail"]))).toBe(4); // < 8 attempts: usual
   });
 
   it("uses recent dates and timestamps rather than the order mixed tunes were loaded", () => {
@@ -553,7 +630,7 @@ describe("new material by how it is going", () => {
     const older = Array.from({ length: 16 }, (_, i) => attempt("other::mel:new:0", "2026-11-16", { result: "fail", at: i }));
     expect(newCards({ ...store(), history: [...recent, ...older] })).toBe(6);
     const later = recent.map((a, i) => ({ ...a, result: "fail" as const, at: 200 + i }));
-    expect(newCards({ ...store(), history: [...later, ...recent] })).toBe(0);
+    expect(newCards({ ...store(), history: [...later, ...recent] })).toBe(1);
   });
 });
 

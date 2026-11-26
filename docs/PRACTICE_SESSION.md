@@ -63,14 +63,7 @@ closing one only releases a pause it owns.
 
 ## The session's shape
 
-The ready screen plans a session of the chosen length (`song/planner.ts`): a scale the hands know,
-then a focus, then what the box says is due, then a melody of the tune. The focus is the mistake the
-player's history shows most (`song/profile.ts`), kept for up to ten days and dropped once it has
-halved; without one, the last run-through's short bars or a skill left alone for a week. The
-focus is always a part: the whole tune and the run-through show every mistake most, being the
-longest, but they stay music and never become the focus. It is
-named as one fact ("Leaps · 41 % missed"), never as advice. Struggling lately brings no new cards;
-cruising brings more.
+The ready screen plans a session of the chosen length (`song/planner.ts`): a key- and position-anchored warm-up (preferring the active tune's home scale/arpeggio in the chosen fret window rather than unrelated remote-key foundations), then a bounded focus (at most 3 cards), review, a mid-session in-key pattern-breaker / reset card (reading, arpeggio, or home scale) so heavy melody work gets a fresh reset, and a melody/music block that graduates toward longer passages (joins, sections, whole tune) as chunks gain speed and confidence. A new tune opens directly on Bar 1 (its opening phrase), while **Hear the tune** remains an optional one-click listen on Ready. Clicking any previewed exercise on Ready starts the full planned session from that card, and a lightweight neck-region pill lets the player target a fret window (e.g. frets 5–8 or 10–13) without policing fingerings. Quick tuning on Ready is a single-pass, non-blocking helper: open strings check tuning while a 3-note fretted phrase or **Begin session** starts right away. The focus is the mistake the player's history shows most (`song/profile.ts`), kept for up to ten days and dropped once it has halved; without one, the last run-through's short bars or a skill left alone for a week. The focus is always a part: the whole tune and the run-through show every mistake most, being the longest, but they stay music and never become the focus. It is named as one fact ("Leaps · 41 % missed"), never as advice. Struggling lately eases new cards down gently (to 1 under 55% clean, half under 70%) instead of freezing progression; cruising above 85% brings two more.
 
 The opening three exercises are visible before starting. Input status and connection/reconnect
 actions sit beside the held-note start gesture; the option notes are shown separately. During a
@@ -110,30 +103,37 @@ kept; × or simply playing on leaves it.
 
 ## One exercise
 
-`intro → (listen) → (your pace) → in time → result`, by itself (`song/useSession.ts`). Once the
-music has been heard, just now or on an earlier visit, it goes straight to in time; your pace comes
-first only for music never heard, new-every-time cards and a part taken out, and stays one note key
-away. Asking for in time while a pass is already playing changes nothing: the pass carries on.
+`intro → (listen) → (your pace) → in time → result`, by itself (`song/useSession.ts`). Transitions are snappy (`intro` 0.8 s / 1.4 s new, `result` 1.5 s) and guitar-woken: after a brief 280 ms ringout guard, a fresh played note immediately dismisses `intro` or `result`. Once the music has been heard, just now or on an earlier visit, it goes straight to in time; your pace comes first only for music never heard, new-every-time cards and a part taken out, asks for **one** clean take before handing off to the band, and stays one note key away. Asking for in time while a pass is already playing changes nothing: the pass carries on.
 
 - **Your pace.** The cursor waits for each note. Going back is followed, not punished. A take
   starts on a fresh attack, so a string still ringing is not its first note. A take is clean when
   the notes landed first time, forgiving the first and last note and one stray mark in twelve
   (`song/judge.ts`): detection is least reliable at the edges of a phrase.
-- **In time.** If the player came in with a steady tempo of their own, the click starts ~12 % under
-  it, so they settle down onto it. **First-run grace (settle-in pass):** on Pass 1 of a timed
+- **In time (Warm-in → Climb → Free ride).** Returning tempo-building cards warm in ~8% below the
+  player's `bestCleanBpm` (with a compact `best ♩N` marker on the tempo cluster) instead of
+  cold-starting at peak; if the player came in from own-pace with a steady tempo of their own, the
+  click starts ~12% under it. **First-run grace (settle-in pass):** on Pass 1 of a timed
   exercise (outside a run-through or hidden memory review), a clean pass earns immediate credit,
   while a rough first pass is forgiven as a warm-in (shown as a hollow settle bar, without counting
   as missed, slowing tempo, extracting a spot or skewing profile evidence) and wakes the adaptive
   shadow melody right where notes stumbled. For new/low-box melody and harmony cards (never fresh
   sight-reading Pass 1 or memory), the shadow starts softly blended in (~36%) and dissolves as
-  soon as notes land. Only clean passes raise tempo (capped at 3 climbs per visit, with a subtle
-  lift cue); two scored short passes lower it a step (4 bpm, as much as a clean pass earns). The first time, where the visit is heading stays put, so
-  clean passes earn the way back; after that it comes down too. Right notes with too few attacks
-  caught to time them hold the tempo without counting as short; three such passes end the
-  exercise as ok. In a tune (melody cards) right notes whose time is not yet even do the same:
-  the tempo holds rather than coming down, and three such passes end it as ok, kept in its box.
-  Only notes falling short slow a tune; a drill (scales, technique and lines) still slows for uneven time. Two passes of mostly wrong notes send the band away until a take at the
-  player's own pace is clean again. The tempo moves while the band plays. The first note may come early, the last may land
+  soon as notes land. Clean passes smoothly lift tempo (+4 bpm, or +8 when well below target, up to
+  6 climbs) **without kicking the player out**: once a clean pass is banked at or above target, the
+  exercise enters **Free ride** so the player can keep grooving and pushing their personal best.
+  Stopping playing (1 silent pass after banking), pressing/holding **Bank & next**, or missing twice
+  in Free ride automatically banks the visit's highest clean BPM as `clean` (zero downside to pushing
+  faster), and early stumbles never block earning `clean` once recovered. A repeated tough bar never
+  abruptly cuts the band mid-groove: it surfaces a quiet non-yanking **Drill alone** pill while the
+  groove stays alive and tempo eases gently (-4 bpm after two scored misses). Two scored short passes
+  lower tempo a step (4 bpm); the first time the visit target stays put so clean passes earn the way
+  back, and after that it eases down too. Right notes with unsteady timing are distinguished visually
+  in amber/yellowing (`pulse unsteady`, amber pass bar) rather than misleading green; missed notes
+  accent in ochre/rust decay. Right notes with too few attacks caught to time them hold the tempo
+  without counting as short; three such passes end the exercise as ok. In a tune (melody cards) right
+  notes whose time is not yet even do the same. Two passes of mostly wrong notes send the band away
+  until a take at the player's own pace is clean again. The Result overlay reports the concrete unit
+  delta (tempo climb, new/matched best, newly unlocked exercises). The tempo moves while the band plays. The first note may come early, the last may land
   late, and a finished pass keeps its colours for a moment.
   Untied repeated notes need separate attacks; ties remain a single target. Scale, melody and
   comping passes must also establish steady timing before the tempo rises. A bounded constant
@@ -291,14 +291,18 @@ never influences scoring, tempo, scheduling, evidence, boxes or goals.
 
 Exercises live in a five-box card box per tune (`song/leitner.ts`). On top of that:
 
-- **Melody by parts** (`tunes/learn.ts`). A new tune always opens by hearing the entire piece once
-  through (`Hear the whole tune`), then learning its opening chunks (bars 1–2 and 3–4) and joining
-  them until they are clean; only then do scales, warm-ups and side study sprinkle in. After the
-  opening, each melody step unlocks once the one before it is clean: two bars at a time, joined,
-  then each section in time and from memory, and only then the whole tune. The sections are the
-  file's rehearsal marks; a file without marks is cut into the parts found in the music (the same
-  A, B, A′ the flowing score names), so its B is learned as B. A found part that only repeats one
-  already learned is reviewed chunk by chunk rather than given another whole-section card.
+- **Melody by parts & 3-stage song arc** (`tunes/learn.ts`, `song/deck.ts`). Melodies are sliced
+  into natural 2–4 bar musical phrases (respecting rests, sustained cadences and section marks
+  instead of rigid 2-bar cuts), joined across seams, then played per section in time, from memory,
+  and whole. Stage 2 anchors each section's arpeggios, guide tones, voicings, comping, reading lines
+  and chord-backed section echoes (`ear:tune:*`) directly to that section's melody. Stage 3 unlocks
+  concrete improvisation proposals (`improv` and `improv-motif`) directly from knowing the section's
+  melody, branching into chord-tone landing, motif call-and-response and enclosures over the tune's
+  own changes.
+- **Decay-to-bloom visual accents** (`PracticeAtmosphere`, `AbyssalWater`, `src/pool/`). Strictly
+  decorative: luminous emerald/teal bloom accompanies locked-in groove and tempo climbs, while
+  yellowing amber signals timing drift and muted ochre/rust/umber decay tints the water and algae
+  subtly on mistakes before blooming back on recovery.
 
 - **Stages.** A scale opens in steps: its notes, then the same notes on other grids (quarters,
   triplets, 16ths) and in patterns (thirds, triads, 7th arpeggios). A step joins the box once the

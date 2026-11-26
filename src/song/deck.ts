@@ -82,6 +82,9 @@ export interface Card {
   insight?: string; // crisp one-line musical or mechanical side-education cue
   base?: string; // scale cards: the exercise this is a shape of (its ID in the default shape)
   shape?: string; // scale cards: the chosen shape ("" the default, "E", "my1", …)
+  stage?: 1 | 2 | 3; // curriculum stage: 1 = melody phrases→passages, 2 = anchored harmony/ear/reading, 3 = improv proposals
+  anchor?: string; // melody section/passage card ID this card is anchored to
+  proposal?: string; // concrete musical improvisation prompt grounded in the section's chords
 }
 
 export interface Deck {
@@ -386,6 +389,7 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
           shape: option?.id ?? "",
           family: "scales",
           kind: drill,
+          stage: 2,
           rhythm,
           needs: needBase ? built.get(needBase) ?? needBase : undefined,
           group: centre.key.name,
@@ -418,279 +422,21 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
       }
   }
 
-  // lines over the changes, for a set of spans on a given timeline
-  const lineCard = (
-    kind: "arps" | "guides" | "chain",
-    spans: Spanned[],
-    timeline: Omit<Timeline, "targets">,
-    meta: { id: string; group: string; where: string; from: number; to: number; tempoGoal: number },
-  ): Card | null => {
-    const notes = kind === "arps" ? arpLine(spans, w) : kind === "guides" ? guideLine(spans, w) : chainLine(spans, w);
-    if (!notes.length) return null;
-    const targets = toTargets(timeline, notes);
-    const context = notes.map((n) => {
-      const s = spans.find((x) => n.t >= x.t - 1e-6 && n.t < x.t + x.dur - 1e-6) ?? spans[spans.length - 1];
-      return { chord: s.chord, scale: s.scale, next: s.next, roman: s.roman };
-    });
-    const first = spans[0];
-    const second = spans.find((s) => s.chord.symbol !== first.chord.symbol);
-    let example = "";
-    if (kind === "guides" && second) {
-      const a = notes.find((n) => n.t < second.t)?.midi;
-      const b = notes.find((n) => n.t >= second.t - 1e-6)?.midi;
-      if (a !== undefined && b !== undefined)
-        example = ` ${spellIn(first.scale, a)} → ${spellIn(second.scale, b)} from ${pretty(first.chord.symbol)} to ${pretty(second.chord.symbol)}.`;
-    }
-    const n = spans.length;
-    return {
-      ...base,
-      id: `${meta.id}:${kind}`,
-      family: "harmony",
-      kind,
-      group: meta.group,
-      title: `${meta.group} · ${KIND_LABEL[kind].toLowerCase()}`,
-      detail:
-        kind === "arps"
-          ? "Each chord as it arrives: 1-3-5-7 from its root, up and back down, in 8ths."
-          : kind === "guides"
-            ? "The 3rd and 7th of each chord, each moving to the closest one of the next chord."
-            : "Unbroken 8ths on chord tones only. At every change, a step to the nearest note of the new chord.",
-      why:
-        kind === "arps"
-          ? `${n} chord${n === 1 ? "" : "s"} under your fingers: ${list([...new Set(spans.map((s) => pretty(s.chord.symbol)))].slice(0, 6))}.`
-          : kind === "guides"
-            ? `The 3rd and 7th say which chord it is; between chords they move by step.${example}`
-            : "This is how a line walks through the changes instead of restarting at every chord.",
-      where: meta.where,
-      bpm: kind === "guides" ? 72 : kind === "chain" ? 56 : 60,
-      goalBpm: kind === "guides" ? Math.max(90, meta.tempoGoal) : meta.tempoGoal,
-      pass: kind === "chain" ? 0.75 : 0.8,
-      listen: true,
-      tl: { ...timeline, targets },
-      from: meta.from,
-      to: meta.to,
-      first: 0,
-      last: notes.length - 1,
-      steps: stepsFor(notes, w, timeline.slots[meta.from].start),
-      context,
-    };
-  };
-
-  const voicingCard = (
-    spans: Spanned[],
-    timeline: Omit<Timeline, "targets" | "guide">,
-    guide: Voice[],
-    meta: { id: string; group: string; where: string; from: number; to: number; tempoGoal: number },
-  ): Card | null => {
-    if (!spans.length) return null;
-    const voicings = voiceChords(spans.map((s) => s.chord), w);
-    const targets: Target[] = spans.map((s, i) => {
-      const slot = slotAt(timeline, s.t);
-      const v = voicings[i];
-      return {
-        midi: v.midis[v.midis.length - 1],
-        notes: [i],
-        bar: timeline.slots[slot].bar,
-        slot,
-        t: s.t,
-        dur: s.dur,
-        chord: { required: s.chord.required, clash: s.chord.clash, voicing: v.midis },
-      };
-    });
-    return {
-      ...base,
-      id: `${meta.id}:voicings`,
-      family: "chords",
-      kind: "voicings",
-      group: meta.group,
-      title: `${meta.group} · voicings`,
-      detail: "Each chord strummed as it comes: at your own pace first (it waits for each chord), then in time under the melody.",
-      why: "Shells: root, 3rd and 7th, the sound of each chord in three or four notes. Hear the melody sit on top of them.",
-      where: meta.where,
-      bpm: Math.min(72, tempo),
-      goalBpm: meta.tempoGoal,
-      pass: 0.7,
-      listen: true,
-      view: "chords",
-      tl: { ...timeline, targets, guide },
-      from: meta.from,
-      to: meta.to,
-      first: 0,
-      last: targets.length - 1,
-      steps: targets.map(() => null),
-      context: spans.map((s) => ({ chord: s.chord, scale: s.scale, next: s.next, roman: s.roman })),
-      voicings,
-    };
-  };
-
-  // comping: the same shapes struck on a rhythm, with the bass; every hit must be struck again, not
-  // left ringing. Two and four first (the hi-hat's beats), then the Charleston (one, and of two).
-  const COMP = {
-    comp24: { beats: [1, 3], label: "on 2 and 4", detail: "Each chord short on beats 2 and 4, where the hi-hat is." },
-    charleston: { beats: [0, 1.5], label: "Charleston", detail: "Every bar: on one, then on the and of two. Short." },
-  } as const;
-  const compCard = (
-    style: keyof typeof COMP,
-    spans: Spanned[],
-    timeline: Omit<Timeline, "targets">,
-    meta: { id: string; group: string; where: string; from: number; to: number; tempoGoal: number },
-  ): Card | null => {
-    if (!spans.length) return null;
-    const voiced = voiceChords(spans.map((s) => s.chord), w);
-    const hits: { t: number; slot: number; span: number }[] = [];
-    for (let slot = meta.from; slot <= meta.to; slot++) {
-      const bar = timeline.slots[slot];
-      for (const b of COMP[style].beats) {
-        const t = bar.start + b;
-        const span = spans.findIndex((x) => t >= x.t - 1e-6 && t < x.t + x.dur - 1e-6);
-        if (b < bar.beats && span >= 0) hits.push({ t, slot, span });
-      }
-    }
-    if (hits.length < 2) return null;
-    const targets: Target[] = hits.map((h, i) => {
-      const v = voiced[h.span];
-      const c = spans[h.span].chord;
-      return { midi: v.midis[v.midis.length - 1], notes: [i], bar: timeline.slots[h.slot].bar, slot: h.slot, t: h.t, dur: 0.5, chord: { required: c.required, clash: c.clash, voicing: v.midis, strike: true } };
-    });
-    return {
-      ...base,
-      id: `${meta.id}:${style}`,
-      family: "chords",
-      kind: "comping",
-      needs: style === "comp24" ? `${meta.id}:voicings` : `${meta.id}:comp24`,
-      group: meta.group,
-      title: `${meta.group} · comping ${COMP[style].label}`,
-      detail: COMP[style].detail,
-      why: "Most of a tune is played behind the melody. The shapes you know, now in time with the bass.",
-      where: meta.where,
-      bpm: Math.min(80, tempo),
-      goalBpm: meta.tempoGoal,
-      pass: 0.7,
-      listen: true,
-      pace: false, // the shapes were learnt at your own pace on the voicings card
-      click: true,
-      view: "chords",
-      tl: { ...timeline, targets },
-      from: meta.from,
-      to: meta.to,
-      first: 0,
-      last: targets.length - 1,
-      steps: targets.map(() => null),
-      context: hits.map((h) => ({ chord: spans[h.span].chord, scale: spans[h.span].scale, next: spans[h.span].next, roman: spans[h.span].roman })),
-      voicings: hits.map((h) => voiced[h.span]),
-    };
-  };
-
-  // improvising over the changes: nothing written, any notes; on the strong beats (one and three)
-  // a note of the chord sounding counts as landed. It opens once the guide tones are clean.
-  const improvCard = (spans: Spanned[], timeline: Omit<Timeline, "targets">, meta: { id: string; group: string; where: string; from: number; to: number; tempoGoal: number }): Card | null => {
-    const hits: Target[] = [];
-    const context: Context[] = [];
-    for (let slot = meta.from; slot <= meta.to; slot++) {
-      const bar = timeline.slots[slot];
-      for (const b of bar.beats >= 4 ? [0, 2] : [0]) {
-        const t = bar.start + b;
-        const sp = spans.find((x) => t >= x.t - 1e-6 && t < x.t + x.dur - 1e-6);
-        if (!sp) continue;
-        const shown = w.low + mod(sp.chord.root - w.low); // the root in the position, for the page
-        hits.push({ midi: shown, notes: [], bar: bar.bar, slot, t, dur: Math.min(2, bar.beats - b), any: sp.chord.pcs });
-        context.push({ chord: sp.chord, scale: sp.scale, next: sp.next, roman: sp.roman });
-      }
-    }
-    if (hits.length < 4) return null;
-    return {
-      ...base,
-      id: `${meta.id}:improv`,
-      family: "harmony",
-      kind: "improv",
-      needs: `${meta.id}:guides`,
-      group: meta.group,
-      title: `${meta.group} · improvise`,
-      detail: "Any notes, any rhythm. The chord's own notes are lit; one of them on beats one and three lands.",
-      why: "Scales and arpeggios are there to make lines up with. A chord tone on the strong beats is what makes a line sound like the changes.",
-      where: meta.where,
-      bpm: Math.min(80, tempo),
-      goalBpm: meta.tempoGoal,
-      pass: 0.6,
-      pace: false,
-      click: true,
-      view: "improv",
-      tl: { ...timeline, targets: hits },
-      from: meta.from,
-      to: meta.to,
-      first: 0,
-      last: hits.length - 1,
-      steps: hits.map(() => null),
-      context,
-    };
-  };
-
-  // sections of the tune, on the tune's own timeline with its backing
-  const sectionCards = new Map<string, Card[]>();
-  const sectionChunks = chunks(sheet, tl, harmony.events);
-  for (const ch of sectionChunks) {
-    const t0 = tl.slots[ch.from].start;
-    const t1 = tl.slots[ch.to].start + tl.slots[ch.to].beats;
-    const spans = spansIn(harmony.events, t0, t1);
-    if (!spans.length) continue;
-    const timeline = { slots: tl.slots, comp: songComp, bass: songBass, total: tl.total };
-    const meta = { id: `sec:${ch.key}`, group: ch.label, where: barsLabel(sheet, tl, ch.from, ch.to), from: ch.from, to: ch.to, tempoGoal: tempo };
-    const guide: Voice[] = tl.targets.filter((x) => x.t >= t0 - 1e-6 && x.t < t1 - 1e-6).map((x) => ({ t: x.t, dur: x.dur, midi: x.midi }));
-    const cards = [
-      lineCard("arps", spans, timeline, meta),
-      lineCard("guides", spans, timeline, meta),
-      voicingCard(spans, { slots: tl.slots, comp: [], bass: bassLine(spans), total: tl.total }, guide, meta),
-      compCard("comp24", spans, { slots: tl.slots, comp: [], bass: bassLine(spans), total: tl.total, guide }, meta),
-      compCard("charleston", spans, { slots: tl.slots, comp: [], bass: bassLine(spans), total: tl.total, guide }, meta),
-      lineCard("chain", spans, timeline, meta),
-      improvCard(spans, timeline, meta),
-    ].filter((c): c is Card => c !== null);
-    sectionCards.set(ch.key, cards);
-  }
-
-  // cadences, looped on their own: | ii | V | I | I |  or  | V | V | I | I |
-  const cadenceCards = new Map<string, Card[]>();
-  const cadenceAt = new Map<string, number>(); // cadence id → first slot
-  for (const cad of harmony.cadences) {
-    const spans = cadenceSpans(cad);
-    const total = 16;
-    const slots = synthSlots(total);
-    const timeline = { slots, comp: padHits(spans), bass: bassLine(spans), total };
-    const where = cad.where.map((i) => sheet.barNumbers[harmony.events[i].bar] ?? String(harmony.events[i].bar + 1));
-    const uniq = [...new Set(where)];
-    const meta = {
-      id: `cad:${cad.id}`,
-      group: cad.label,
-      where: `${cad.chords.map((c) => pretty(c.symbol)).join(" ")} · bar${uniq.length > 1 ? "s" : ""} ${uniq.slice(0, 4).join(", ")}`,
-      from: 0,
-      to: slots.length - 1,
-      tempoGoal: Math.max(tempo, 100),
-    };
-    const bassOnly = { slots, comp: [], bass: bassLine(spans), total };
-    const cards = [lineCard("arps", spans, timeline, meta), lineCard("guides", spans, timeline, meta), voicingCard(spans, timeline, [], meta), compCard("comp24", spans, bassOnly, meta), compCard("charleston", spans, bassOnly, meta)].filter(
-      (c): c is Card => c !== null,
-    );
-    for (const c of cards) {
-      c.why = `${cad.label} comes ${cad.where.length === 1 ? "once" : `${cad.where.length} times`} in the tune. ${c.why}`;
-      if (c.kind === "voicings") c.detail = "The cadence round and round: at your own pace first, then in time over the bass.";
-      if (c.kind === "comping") c.why = `${cad.label} comes ${cad.where.length === 1 ? "once" : `${cad.where.length} times`} in the tune. Struck in time, the change has to be ready before the beat.`;
-    }
-    cadenceCards.set(cad.id, cards);
-    cadenceAt.set(cad.id, harmony.events[cad.where[0]].slot);
-  }
-
-  // melody: the learning plan, on the tune's timeline
+  // Stage 1 — melody: the learning plan's phrases, joins, sections, memory, whole tune, and run-through.
+  // Built before section harmony/ear/improv so Stage 2 and Stage 3 cards can anchor directly to
+  // each section's melody card.
   const plan = buildPlan(sheet, tl);
   const melodyTl: Timeline = fromFile ? tl : { ...tl, comp: songComp, bass: songBass };
   const melodyContext: (Context | null)[] = tl.targets.map((x) => {
     const s = allSpans.find((sp) => x.t >= sp.t - 1e-6 && x.t < sp.t + sp.dur - 1e-6);
     return s ? { chord: s.chord, scale: s.scale, next: s.next, roman: s.roman } : null;
   });
-  // Each step of the plan builds on the one before it, except the opening two chunks (bars 1–2 and
-  // 3–4), which are both open so the first session can work on both before joining them.
+  // Each step of the plan builds on the one before it, except the opening section's first two
+  // chunks, which are both open so the first session can work through them before joining.
   // A memory card hangs off its section; hearing the tune through is met once and builds on nothing.
   let chain: string | undefined;
   let openingChunks = 0;
+  const firstMelodySection = plan.find((s) => s.kind === "new")?.section;
   for (const step of plan) {
     const first = tl.targets.findIndex((x) => x.slot >= step.from);
     let last = -1;
@@ -700,7 +446,7 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
     if (first < 0 || last < first) continue;
     const id = `mel:${step.kind}:${step.from}-${step.to}`;
     const hear = step.kind === "hear";
-    const isOpeningChunk = step.kind === "new" && openingChunks < 2;
+    const isOpeningChunk = step.kind === "new" && step.section === firstMelodySection && openingChunks < 2;
     if (isOpeningChunk) openingChunks++;
     const needs = hear || isOpeningChunk ? undefined : chain;
     if (!hear && step.kind !== "memory") chain = id;
@@ -709,6 +455,7 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
       id,
       family: "melody",
       kind: "melody",
+      stage: 1,
       needs,
       ...(hear ? { once: true } : {}),
       group: step.section ? sectionName(step.section) : sheet.title,
@@ -752,6 +499,7 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
       id: "mel:run",
       family: "melody",
       kind: "melody",
+      stage: 1,
       needs: whole.id,
       group: sheet.title,
       title: "Run-through",
@@ -775,13 +523,330 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
     });
   }
 
+  /** Find the Stage 1 melody card that anchors a given section chunk. */
+  const melodyAnchorFor = (ch: Chunk): Card | undefined =>
+    melodyCards.find((c) => c.step?.kind === "section" && c.from <= ch.to && c.to >= ch.from) ??
+    melodyCards
+      .filter((c) => c.step && c.step.kind !== "hear" && c.step.kind !== "memory" && c.step.kind !== "tune" && c.from <= ch.to && c.to >= ch.from)
+      .sort((a, b) => (Math.min(b.to, ch.to) - Math.max(b.from, ch.from)) - (Math.min(a.to, ch.to) - Math.max(a.from, ch.from)))[0] ??
+    melodyCards.find((c) => c.step?.kind === "tune");
+
+  // lines over the changes, for a set of spans on a given timeline
+  const lineCard = (
+    kind: "arps" | "guides" | "chain",
+    spans: Spanned[],
+    timeline: Omit<Timeline, "targets">,
+    meta: { id: string; group: string; where: string; from: number; to: number; tempoGoal: number; anchor?: string },
+  ): Card | null => {
+    const notes = kind === "arps" ? arpLine(spans, w) : kind === "guides" ? guideLine(spans, w) : chainLine(spans, w);
+    if (!notes.length) return null;
+    const targets = toTargets(timeline, notes);
+    const context = notes.map((n) => {
+      const s = spans.find((x) => n.t >= x.t - 1e-6 && n.t < x.t + x.dur - 1e-6) ?? spans[spans.length - 1];
+      return { chord: s.chord, scale: s.scale, next: s.next, roman: s.roman };
+    });
+    const first = spans[0];
+    const second = spans.find((s) => s.chord.symbol !== first.chord.symbol);
+    let example = "";
+    if (kind === "guides" && second) {
+      const a = notes.find((n) => n.t < second.t)?.midi;
+      const b = notes.find((n) => n.t >= second.t - 1e-6)?.midi;
+      if (a !== undefined && b !== undefined)
+        example = ` ${spellIn(first.scale, a)} → ${spellIn(second.scale, b)} from ${pretty(first.chord.symbol)} to ${pretty(second.chord.symbol)}.`;
+    }
+    const n = spans.length;
+    const anchorPrefix = meta.anchor ? `Under ${meta.group} (${meta.where}): ` : "";
+    return {
+      ...base,
+      id: `${meta.id}:${kind}`,
+      family: "harmony",
+      kind,
+      stage: 2,
+      ...(meta.anchor ? { anchor: meta.anchor } : {}),
+      group: meta.group,
+      title: `${meta.group} · ${KIND_LABEL[kind].toLowerCase()}`,
+      detail:
+        kind === "arps"
+          ? `${anchorPrefix}each chord as it arrives — 1-3-5-7 from its root, up and back down, in 8ths.`.replace(/^./, (c) => c.toUpperCase())
+          : kind === "guides"
+            ? `${anchorPrefix}the 3rd and 7th of each chord, each moving to the closest one of the next chord.`.replace(/^./, (c) => c.toUpperCase())
+            : `${anchorPrefix}unbroken 8ths on chord tones only. At every change, a step to the nearest note of the new chord.`.replace(/^./, (c) => c.toUpperCase()),
+      why:
+        kind === "arps"
+          ? `${anchorPrefix}${n} chord${n === 1 ? "" : "s"} under your fingers: ${list([...new Set(spans.map((s) => pretty(s.chord.symbol)))].slice(0, 6))}.`
+          : kind === "guides"
+            ? `${anchorPrefix}the 3rd and 7th say which chord it is; between chords they move by step.${example}`.replace(/^./, (c) => c.toUpperCase())
+            : `${anchorPrefix}this is how a line walks through the changes instead of restarting at every chord.`.replace(/^./, (c) => c.toUpperCase()),
+      where: meta.where,
+      bpm: kind === "guides" ? 72 : kind === "chain" ? 56 : 60,
+      goalBpm: kind === "guides" ? Math.max(90, meta.tempoGoal) : meta.tempoGoal,
+      pass: kind === "chain" ? 0.75 : 0.8,
+      listen: true,
+      tl: { ...timeline, targets },
+      from: meta.from,
+      to: meta.to,
+      first: 0,
+      last: notes.length - 1,
+      steps: stepsFor(notes, w, timeline.slots[meta.from].start),
+      context,
+    };
+  };
+
+  const voicingCard = (
+    spans: Spanned[],
+    timeline: Omit<Timeline, "targets" | "guide">,
+    guide: Voice[],
+    meta: { id: string; group: string; where: string; from: number; to: number; tempoGoal: number; anchor?: string },
+  ): Card | null => {
+    if (!spans.length) return null;
+    const voicings = voiceChords(spans.map((s) => s.chord), w);
+    const targets: Target[] = spans.map((s, i) => {
+      const slot = slotAt(timeline, s.t);
+      const v = voicings[i];
+      return {
+        midi: v.midis[v.midis.length - 1],
+        notes: [i],
+        bar: timeline.slots[slot].bar,
+        slot,
+        t: s.t,
+        dur: s.dur,
+        chord: { required: s.chord.required, clash: s.chord.clash, voicing: v.midis },
+      };
+    });
+    const anchorPrefix = meta.anchor ? `Under ${meta.group} (${meta.where}): ` : "";
+    return {
+      ...base,
+      id: `${meta.id}:voicings`,
+      family: "chords",
+      kind: "voicings",
+      stage: 2,
+      ...(meta.anchor ? { anchor: meta.anchor } : {}),
+      group: meta.group,
+      title: `${meta.group} · voicings`,
+      detail: `${anchorPrefix}each chord strummed as it comes — at your own pace first, then in time under the melody.`.replace(/^./, (c) => c.toUpperCase()),
+      why: `${anchorPrefix}shells (root, 3rd and 7th) hold the harmony of ${meta.group}. Hear the melody sit on top of them.`.replace(/^./, (c) => c.toUpperCase()),
+      where: meta.where,
+      bpm: Math.min(72, tempo),
+      goalBpm: meta.tempoGoal,
+      pass: 0.7,
+      listen: true,
+      view: "chords",
+      tl: { ...timeline, targets, guide },
+      from: meta.from,
+      to: meta.to,
+      first: 0,
+      last: targets.length - 1,
+      steps: targets.map(() => null),
+      context: spans.map((s) => ({ chord: s.chord, scale: s.scale, next: s.next, roman: s.roman })),
+      voicings,
+    };
+  };
+
+  // comping: the same shapes struck on a rhythm, with the bass; every hit must be struck again, not
+  // left ringing. Two and four first (the hi-hat's beats), then the Charleston (one, and of two).
+  const COMP = {
+    comp24: { beats: [1, 3], label: "on 2 and 4", detail: "Each chord short on beats 2 and 4, where the hi-hat is." },
+    charleston: { beats: [0, 1.5], label: "Charleston", detail: "Every bar: on one, then on the and of two. Short." },
+  } as const;
+  const compCard = (
+    style: keyof typeof COMP,
+    spans: Spanned[],
+    timeline: Omit<Timeline, "targets">,
+    meta: { id: string; group: string; where: string; from: number; to: number; tempoGoal: number; anchor?: string },
+  ): Card | null => {
+    if (!spans.length) return null;
+    const voiced = voiceChords(spans.map((s) => s.chord), w);
+    const hits: { t: number; slot: number; span: number }[] = [];
+    for (let slot = meta.from; slot <= meta.to; slot++) {
+      const bar = timeline.slots[slot];
+      for (const b of COMP[style].beats) {
+        const t = bar.start + b;
+        const span = spans.findIndex((x) => t >= x.t - 1e-6 && t < x.t + x.dur - 1e-6);
+        if (b < bar.beats && span >= 0) hits.push({ t, slot, span });
+      }
+    }
+    if (hits.length < 2) return null;
+    const targets: Target[] = hits.map((h, i) => {
+      const v = voiced[h.span];
+      const c = spans[h.span].chord;
+      return { midi: v.midis[v.midis.length - 1], notes: [i], bar: timeline.slots[h.slot].bar, slot: h.slot, t: h.t, dur: 0.5, chord: { required: c.required, clash: c.clash, voicing: v.midis, strike: true } };
+    });
+    return {
+      ...base,
+      id: `${meta.id}:${style}`,
+      family: "chords",
+      kind: "comping",
+      stage: 2,
+      ...(meta.anchor ? { anchor: meta.anchor } : {}),
+      needs: style === "comp24" ? `${meta.id}:voicings` : `${meta.id}:comp24`,
+      group: meta.group,
+      title: `${meta.group} · comping ${COMP[style].label}`,
+      detail: meta.anchor ? `Behind ${meta.group} (${meta.where}): ${COMP[style].detail.charAt(0).toLowerCase()}${COMP[style].detail.slice(1)}` : COMP[style].detail,
+      why: meta.anchor
+        ? `Anchored to ${meta.group} (${meta.where}): comp the shapes you know in time with the bass.`
+        : "Most of a tune is played behind the melody. The shapes you know, now in time with the bass.",
+      where: meta.where,
+      bpm: Math.min(80, tempo),
+      goalBpm: meta.tempoGoal,
+      pass: 0.7,
+      listen: true,
+      pace: false, // the shapes were learnt at your own pace on the voicings card
+      click: true,
+      view: "chords",
+      tl: { ...timeline, targets },
+      from: meta.from,
+      to: meta.to,
+      first: 0,
+      last: targets.length - 1,
+      steps: targets.map(() => null),
+      context: hits.map((h) => ({ chord: spans[h.span].chord, scale: spans[h.span].scale, next: spans[h.span].next, roman: spans[h.span].roman })),
+      voicings: hits.map((h) => voiced[h.span]),
+    };
+  };
+
+  // Stage 3 — improvisation proposals over known sections: nothing written, any notes; on strong
+  // beats (one and three) a note of the sounding chord counts as landed. Unlocks directly from the
+  // section's melody card (falling back to guide tones when no melody section exists), followed by
+  // a concrete motif / call-and-response proposal grounded in that section's changes.
+  const improvCards = (
+    spans: Spanned[],
+    timeline: Omit<Timeline, "targets">,
+    meta: { id: string; group: string; where: string; from: number; to: number; tempoGoal: number; anchor?: string },
+  ): Card[] => {
+    const hits: Target[] = [];
+    const context: Context[] = [];
+    for (let slot = meta.from; slot <= meta.to; slot++) {
+      const bar = timeline.slots[slot];
+      for (const b of bar.beats >= 4 ? [0, 2] : [0]) {
+        const t = bar.start + b;
+        const sp = spans.find((x) => t >= x.t - 1e-6 && t < x.t + x.dur - 1e-6);
+        if (!sp) continue;
+        const shown = w.low + mod(sp.chord.root - w.low); // the root in the position, for the page
+        hits.push({ midi: shown, notes: [], bar: bar.bar, slot, t, dur: Math.min(2, bar.beats - b), any: sp.chord.pcs });
+        context.push({ chord: sp.chord, scale: sp.scale, next: sp.next, roman: sp.roman });
+      }
+    }
+    if (hits.length < 4) return [];
+    const uniqueChords = [...new Set(spans.map((s) => pretty(s.chord.symbol)))];
+    const chordSummary = list(uniqueChords.slice(0, 4));
+    const first = spans[0];
+    const second = spans.find((s) => s.chord.symbol !== first.chord.symbol);
+    const firstGuides = [first.chord.third, first.chord.seventh]
+      .filter((iv): iv is number => iv !== null)
+      .map((iv) => spellIn(first.scale, first.chord.root + iv));
+    const guideHint = firstGuides.length ? ` (try ${firstGuides.join(" or ")} on ${pretty(first.chord.symbol)})` : "";
+    const coreProposal = `Land chord tones of ${chordSummary} on beats 1 and 3${guideHint}; leave space between phrases.`;
+    const motifProposal = second
+      ? `Play a 2-bar motif over ${pretty(first.chord.symbol)}, then answer it into ${pretty(second.chord.symbol)} by enclosing a 3rd or 7th from a step above and below.`
+      : `State a 3–4 note motif on ${pretty(first.chord.symbol)}, rest a beat, then answer it with a rhythmic variation landing on a chord tone.`;
+
+    const core: Card = {
+      ...base,
+      id: `${meta.id}:improv`,
+      family: "harmony",
+      kind: "improv",
+      stage: 3,
+      ...(meta.anchor ? { anchor: meta.anchor } : {}),
+      needs: meta.anchor ?? `${meta.id}:guides`,
+      proposal: coreProposal,
+      group: meta.group,
+      title: `${meta.group} · improvise`,
+      detail: `Over ${meta.group} (${meta.where}): any notes, any rhythm — land a chord tone of ${chordSummary} on beats 1 and 3${guideHint}.`,
+      why: meta.anchor
+        ? `You know the ${meta.group} melody — now shape your own line over ${chordSummary}. Chord tones on strong beats make it sound like the changes.`
+        : "Scales and arpeggios are there to make lines up with. A chord tone on the strong beats is what makes a line sound like the changes.",
+      where: meta.where,
+      bpm: Math.min(80, tempo),
+      goalBpm: meta.tempoGoal,
+      pass: 0.6,
+      pace: false,
+      click: true,
+      view: "improv",
+      tl: { ...timeline, targets: hits },
+      from: meta.from,
+      to: meta.to,
+      first: 0,
+      last: hits.length - 1,
+      steps: hits.map(() => null),
+      context,
+    };
+
+    const motif: Card = {
+      ...core,
+      id: `${meta.id}:improv-motif`,
+      needs: core.id,
+      proposal: motifProposal,
+      title: `${meta.group} · motif & answer`,
+      detail: motifProposal,
+      why: `Call-and-response turns ${meta.group} (${meta.where}) into real phrasing: repeat a short rhythmic idea and steer its landing note through ${chordSummary}.`,
+      bpm: Math.min(84, tempo),
+    };
+
+    return [core, motif];
+  };
+
+  // sections of the tune, on the tune's own timeline with its backing
+  const sectionCards = new Map<string, Card[]>();
+  const sectionChunks = chunks(sheet, tl, harmony.events);
+  for (const ch of sectionChunks) {
+    const t0 = tl.slots[ch.from].start;
+    const t1 = tl.slots[ch.to].start + tl.slots[ch.to].beats;
+    const spans = spansIn(harmony.events, t0, t1);
+    if (!spans.length) continue;
+    const timeline = { slots: tl.slots, comp: songComp, bass: songBass, total: tl.total };
+    const anchorCard = melodyAnchorFor(ch);
+    const meta = { id: `sec:${ch.key}`, group: ch.label, where: barsLabel(sheet, tl, ch.from, ch.to), from: ch.from, to: ch.to, tempoGoal: tempo, anchor: anchorCard?.id };
+    const guide: Voice[] = tl.targets.filter((x) => x.t >= t0 - 1e-6 && x.t < t1 - 1e-6).map((x) => ({ t: x.t, dur: x.dur, midi: x.midi }));
+    const cards = [
+      lineCard("arps", spans, timeline, meta),
+      lineCard("guides", spans, timeline, meta),
+      voicingCard(spans, { slots: tl.slots, comp: [], bass: bassLine(spans), total: tl.total }, guide, meta),
+      compCard("comp24", spans, { slots: tl.slots, comp: [], bass: bassLine(spans), total: tl.total, guide }, meta),
+      compCard("charleston", spans, { slots: tl.slots, comp: [], bass: bassLine(spans), total: tl.total, guide }, meta),
+      lineCard("chain", spans, timeline, meta),
+      ...improvCards(spans, timeline, meta),
+    ].filter((c): c is Card => c !== null);
+    sectionCards.set(ch.key, cards);
+  }
+
+  // cadences, looped on their own: | ii | V | I | I |  or  | V | V | I | I |
+  const cadenceCards = new Map<string, Card[]>();
+  const cadenceAt = new Map<string, number>(); // cadence id → first slot
+  for (const cad of harmony.cadences) {
+    const spans = cadenceSpans(cad);
+    const total = 16;
+    const slots = synthSlots(total);
+    const timeline = { slots, comp: padHits(spans), bass: bassLine(spans), total };
+    const where = cad.where.map((i) => sheet.barNumbers[harmony.events[i].bar] ?? String(harmony.events[i].bar + 1));
+    const uniq = [...new Set(where)];
+    const meta = {
+      id: `cad:${cad.id}`,
+      group: cad.label,
+      where: `${cad.chords.map((c) => pretty(c.symbol)).join(" ")} · bar${uniq.length > 1 ? "s" : ""} ${uniq.slice(0, 4).join(", ")}`,
+      from: 0,
+      to: slots.length - 1,
+      tempoGoal: Math.max(tempo, 100),
+    };
+    const bassOnly = { slots, comp: [], bass: bassLine(spans), total };
+    const cards = [lineCard("arps", spans, timeline, meta), lineCard("guides", spans, timeline, meta), voicingCard(spans, timeline, [], meta), compCard("comp24", spans, bassOnly, meta), compCard("charleston", spans, bassOnly, meta)].filter(
+      (c): c is Card => c !== null,
+    );
+    for (const c of cards) {
+      c.why = `${cad.label} comes ${cad.where.length === 1 ? "once" : `${cad.where.length} times`} in the tune. ${c.why}`;
+      if (c.kind === "voicings") c.detail = "The cadence round and round: at your own pace first, then in time over the bass.";
+      if (c.kind === "comping") c.why = `${cad.label} comes ${cad.where.length === 1 ? "once" : `${cad.where.length} times`} in the tune. Struck in time, the change has to be ready before the beat.`;
+    }
+    cadenceCards.set(cad.id, cards);
+    cadenceAt.set(cad.id, harmony.events[cad.where[0]].slot);
+  }
+
   // reading: notes nobody could have practised. A tune everybody knows in this tune's key, then per
   // section its melody with notes moved and a new line over its chords.
   const reading: Card[] = [];
   const seen = (id: string) => opts.seen?.[id] ?? 0;
   const rand = (id: string) => seeded(`${sheet.id}:${id}:${opts.round ?? ""}:${seen(id)}`);
   const home = harmony.home;
-  const readBase = { ...base, family: "reading" as const, fresh: true, pass: 0.8, group: "Reading" };
+  const readBase = { ...base, family: "reading" as const, stage: 2 as const, fresh: true, pass: 0.8, group: "Reading" };
   const knownCard = (n: number, bars: number): Card | null => {
     const id = `read:known:${n}`;
     const tune = pickKnown(seeded(`${sheet.id}:known:${n}`), seen(id));
@@ -814,7 +879,7 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
       context: notes.map(() => ctx),
     };
   };
-  const overTune = (id: string, kind: "varied" | "line", notes: LineNote[], from: number, to: number, text: Pick<Card, "title" | "detail" | "why" | "bpm" | "goalBpm">): Card | null => {
+  const overTune = (id: string, kind: "varied" | "line", notes: LineNote[], from: number, to: number, text: Pick<Card, "title" | "detail" | "why" | "bpm" | "goalBpm" | "anchor">): Card | null => {
     if (notes.length < 4) return null;
     const fit = fitWindow(notes.map((n) => n.midi), w.p);
     return {
@@ -843,6 +908,7 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
     const t0 = tl.slots[ch.from].start;
     const t1 = tl.slots[to].start + tl.slots[to].beats;
     const spans = spansIn(harmony.events, t0, t1);
+    const anchor = melodyAnchorFor(ch)?.id;
     const lineId = `read:line:${ch.key}`;
     const readLevel = Math.min(4, Math.floor(seen(lineId) / 2));
     const readNotes = spans.length ? freshLine(spans, w, rand(lineId), readLevel) : [];
@@ -853,6 +919,7 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
       why: readLevel >= 4 ? "Chromatic approaches into chord tones; let the eyes read ahead by two beats." : readLevel >= 3 ? "Syncopations and wider skips over the changes — keep the picking hand swinging." : "Nobody has heard it, so it can only be read: chord tones on the beats, the scale between them.",
       bpm: densityStartBpm(readNotes, readGoal),
       goalBpm: readGoal,
+      ...(anchor ? { anchor } : {}),
     });
     const melody = tl.targets.filter((x) => x.t >= t0 - 1e-6 && x.t < t1 - 1e-6).map((x) => ({ midi: x.midi, t: x.t, dur: Math.min(x.dur, t1 - x.t) }));
     const varId = `read:var:${ch.key}`;
@@ -865,6 +932,7 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
       why: "The fingers know the tune. Only the eyes can find what moved.",
       bpm: densityStartBpm(moved, tempo),
       goalBpm: tempo,
+      ...(anchor ? { anchor } : {}),
     });
     if (line) reading.push(line);
     if (varied) reading.push(varied);
@@ -884,17 +952,33 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
     const hi = OPEN_MIDI[0] + w.p + 3;
     const rootMidi = 48 + mod(home.tonic - 48);
     const triad = [rootMidi, rootMidi + (home.mode === "minor" ? 3 : 4), rootMidi + 7]; // the key, quietly under it
-    const earCard = (id: string, notes: LineNote[], text: Pick<Card, "title" | "detail" | "why" | "memory" | "needs" | "where">, scale = homeScale): Card | null => {
+    const earCard = (
+      id: string,
+      notes: LineNote[],
+      text: Pick<Card, "title" | "detail" | "why" | "memory" | "needs" | "where" | "anchor">,
+      scale = homeScale,
+      harmonySpans?: Spanned[],
+    ): Card | null => {
       if (notes.length < 2) return null;
       const end = notes[notes.length - 1].t + notes[notes.length - 1].dur;
       const slots = synthSlots(end);
+      const hasHarmony = Boolean(harmonySpans && harmonySpans.length > 0);
+      const comp = hasHarmony ? padHits(harmonySpans!) : slots.map((s) => ({ t: s.start, dur: s.beats, midis: triad }));
+      const bass = hasHarmony ? bassLine(harmonySpans!) : undefined;
       const ctx: Context = { chord: null, scale, next: null, roman: "" };
+      const context = hasHarmony
+        ? notes.map((n) => {
+            const sp = harmonySpans!.find((x) => n.t >= x.t - 1e-6 && n.t < x.t + x.dur - 1e-6) ?? harmonySpans![harmonySpans!.length - 1];
+            return { chord: sp.chord, scale: sp.scale, next: sp.next, roman: sp.roman };
+          })
+        : notes.map(() => ctx);
       return {
         ...base,
         ...text,
         id,
         family: "ear",
         kind: "echo",
+        stage: 2,
         group: "Ear",
         fresh: true,
         listen: true,
@@ -904,13 +988,13 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
         bpm: 76,
         goalBpm: 76,
         secret: notes.map((n) => spellIn(scale, n.midi)).join(" "),
-        tl: { slots, targets: toTargets({ slots }, notes), comp: slots.map((s) => ({ t: s.start, dur: s.beats, midis: triad })), total: slots.length * 4 },
+        tl: { slots, targets: toTargets({ slots }, notes), comp, ...(bass ? { bass } : {}), total: slots.length * 4 },
         from: 0,
         to: slots.length - 1,
         first: 0,
         last: notes.length - 1,
         steps: stepsFor(notes, w, 0),
-        context: notes.map(() => ctx),
+        context,
       };
     };
     for (const tier of EAR_TIERS) {
@@ -975,18 +1059,43 @@ export function buildDeck(sheet: LeadSheet, tl: Timeline, opts: { window?: numbe
         }, scale);
         if (card) earDeck.push(card);
       });
-    sectionChunks.slice(0, 2).forEach((ch) => {
+    sectionChunks.slice(0, 3).forEach((ch) => {
+      const endSlot = Math.min(ch.to, ch.from + 1);
       const t0 = tl.slots[ch.from].start;
-      const t1 = tl.slots[Math.min(ch.to, ch.from + 1)].start + tl.slots[Math.min(ch.to, ch.from + 1)].beats;
+      const t1 = tl.slots[endSlot].start + tl.slots[endSlot].beats;
       const melody = tl.targets.filter((x) => x.t >= t0 - 1e-6 && x.t < t1 - 1e-6).map((x) => ({ midi: x.midi, t: x.t, dur: x.dur }));
-      const card = earCard(`ear:tune:${ch.key}`, echoOfTune(melody, t0, 6), {
-        title: `${ch.label} · echo the tune`,
-        detail: "Hear it, then play it back.",
-        why: "A phrase of the tune itself, by ear.",
-        memory: true,
-        needs: "ear:2",
-        where: barsLabel(sheet, tl, ch.from, Math.min(ch.to, ch.from + 1)),
-      });
+      const echoNotes = echoOfTune(melody, t0, 6);
+      if (echoNotes.length < 2) return;
+      const phraseStart = melody.find((n) => n.t >= t0 - 1e-6)?.t ?? t0;
+      const phraseEnd = echoNotes[echoNotes.length - 1].t + echoNotes[echoNotes.length - 1].dur;
+      const phraseTotal = Math.max(4, Math.ceil(phraseEnd / 4 - 1e-9) * 4);
+      const shiftedSpans: Spanned[] = spansIn(harmony.events, phraseStart, phraseStart + phraseTotal).map((s) => ({
+        ...s,
+        t: Math.max(0, s.t - phraseStart),
+        dur: Math.min(phraseTotal, s.t + s.dur - phraseStart) - Math.max(0, s.t - phraseStart),
+      })).filter((s) => s.dur > 1e-6);
+      const anchor = melodyAnchorFor(ch)?.id;
+      const where = barsLabel(sheet, tl, ch.from, endSlot);
+      const chordNames = list([...new Set(shiftedSpans.map((s) => pretty(s.chord.symbol)))].slice(0, 4));
+      const card = earCard(
+        `ear:tune:${ch.key}`,
+        echoNotes,
+        {
+          title: `${ch.label} · echo the tune`,
+          detail: chordNames
+            ? `Hear this ${ch.label} phrase (${where}) over ${chordNames}, then play it back.`
+            : `Hear this ${ch.label} phrase (${where}), then play it back.`,
+          why: chordNames
+            ? `Anchored to ${ch.label} (${where}): hear how the melody sits over ${chordNames}.`
+            : `Anchored to ${ch.label} (${where}): a phrase of the tune itself, by ear.`,
+          memory: true,
+          needs: "ear:int",
+          where,
+          ...(anchor ? { anchor } : {}),
+        },
+        shiftedSpans[0]?.scale ?? homeScale,
+        shiftedSpans.length ? shiftedSpans : undefined,
+      );
       if (card) earDeck.push(card);
     });
   }
@@ -1304,7 +1413,7 @@ export function mixDecks(main: Deck, others: { tuneId: string; deck: Deck }[]): 
       lane.push(id);
       if (have.has(id)) continue;
       have.add(id);
-      cards.push({ ...c, id, needs: c.needs ? glue(tuneId, c.needs) : undefined, after: c.after ? glue(tuneId, c.after) : undefined, followedBy: c.followedBy ? glue(tuneId, c.followedBy) : undefined });
+      cards.push({ ...c, id, needs: c.needs ? glue(tuneId, c.needs) : undefined, after: c.after ? glue(tuneId, c.after) : undefined, anchor: c.anchor ? glue(tuneId, c.anchor) : undefined, followedBy: c.followedBy ? glue(tuneId, c.followedBy) : undefined });
     }
     const at = new Map(deck.intro.map((id, i) => [glue(tuneId, id), i]));
     lanes.push(lane.sort((a, b) => (at.get(a) ?? 0) - (at.get(b) ?? 0)));

@@ -52,20 +52,22 @@ import { isShared, tuneOf } from "./ids";
 export type Phase = "intro" | "listen" | "pace" | "time" | "result";
 type MemoryStage = "page" | "landmarks" | "hidden";
 
-const INTRO_NEW_MS = 3400;
-const INTRO_MS = 2200;
-const NEXT_TAKE_MS = 1100;
-const START_TIME_MS = 900;
-const RESULT_MS = 2600;
-const SKIPPED_MS = 900;
+const INTRO_NEW_MS = 1400;
+const INTRO_MS = 800;
+const NEXT_TAKE_MS = 650;
+const START_TIME_MS = 450;
+const RESULT_MS = 1500;
+const SKIPPED_MS = 500;
+const WAKE_GUARD_MS = 280; // brief ringout guard before a played note dismisses intro/result
 const MAX_UNCLEAN = 4; // finished takes that weren't clean before the band takes over anyway
 const PULSE_NOTES = 4; // notes in a row that must come evenly for the player to have a tempo
 const PULSE_SPREAD = 0.35; // how far apart the slowest and fastest of them may be (share of the beat)
 const UNDER = 0.88; // the click starts this far under the player's own tempo
+const WARM_IN = 0.92; // returning cards start ~8% under prior best so the hands warm in before climbing
 const STEP_UP = 4; // bpm a clean pass earns
 const STEP_UP_FAR = 8; // while the tempo is far below where it is heading, after a steady pass
 const STEP_DOWN = 4; // as gentle as a step up: two short passes cost one clean one
-const MAX_CLIMBS = 3; // cap in-visit tempo climbs so no single exercise becomes a treadmill
+const MAX_CLIMBS = 6; // enough headroom to warm in, pass prior best, and ride up smoothly
 const MIN_BPM = 40;
 const MAX_BPM = 240;
 const MAX_MISSED_PASSES = 7;
@@ -96,6 +98,8 @@ export interface PassEntry {
   share: number;
   settle?: boolean; // Pass 1 warm-in grace: did not penalize or skew profile
   clean?: boolean;
+  reason?: "clean" | "settle" | "timing" | "notes";
+  bpm?: number;
 }
 
 export interface Outcome {
@@ -113,6 +117,10 @@ export interface Outcome {
   bars?: { bar: number; share: number }[]; // a run-through, bar by bar
   recordingId?: string;
   conditions?: AttemptConditions;
+  priorBest?: number | null; // demonstrated clean peak BPM before this visit
+  startBpm?: number; // BPM this visit started at
+  newBest?: boolean; // true when this visit beat priorBest (or set the first clean peak)
+  unlocked?: string[]; // titles of exercises newly unlocked by reaching Box 2
 }
 
 /** Notes landed per printed bar over a card's range. */
@@ -176,6 +184,12 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
   const [waiting, setWaiting] = useState(false); // the band stopped: play to bring it back
   const [bpm, setBpm] = useState(() => initTempo);
   const [target, setTarget] = useState(() => initTempo); // the tempo this visit is heading for
+  const [priorBest, setPriorBest] = useState<number | null>(null);
+  const [bankedBpm, setBankedBpm] = useState<number | null>(null);
+  const [freeRide, setFreeRide] = useState(false); // clean pass banked: riding the groove upward
+  const [suggestedSpot, setSuggestedSpot] = useState<Spot | null>(null); // quiet bar-drill offer without yanking
+  const [decay, setDecay] = useState(0); // 0..1 decorative tension/decay signal for atmosphere & pool
+  const [missSerial, setMissSerial] = useState(0); // increments on missed note/pass for decorative decay ripple
   const [takes, setTakes] = useState({ clean: 0, unclean: 0 });
   const [lastTake, setLastTake] = useState<{ hit: number; total: number; clean: boolean } | null>(null);
   const [passes, setPasses] = useState<number[]>([]);
@@ -206,6 +220,11 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
   const timeStarts = useRef(0); // in-time loops started for this card
   const passCount = useRef(0); // timed passes heard for this card (Pass 0 gets free settle-in grace if rough)
   const climbs = useRef(0); // clean tempo bumps earned in this visit
+  const priorBestRef = useRef<number | null>(null);
+  const startBpmRef = useRef(initTempo);
+  const bankedRef = useRef<{ bpm: number; share: number; conditions: AttemptConditions } | null>(null);
+  const rideMisses = useRef(0); // misses after banking a clean pass in Free Ride
+  const ceilingHits = useRef(0); // clean passes landed at the tempo ceiling
   const runBars = useRef<Outcome["bars"]>(undefined); // the last run-through, bar by bar
   const missRun = useRef(0); // passes in a row that fell short
   const rhythmMisses = useRef(0); // right pitches without a steady pulse do not earn a faster click
@@ -281,8 +300,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     [saveStore],
   );
 
-  // what this card asks for, given its box
-  const long = card ? card.last - card.first + 1 > 24 : false;
+  // what this card asks for, given its box — 1 clean own-pace take is enough to bring the band in smoothly
   const isDrill = card?.family === "scales" || card?.family === "technique";
   const needClean = spot
     ? SPOT_CLEAN
@@ -294,11 +312,9 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
           ? (level <= 2 ? 1 : 0)
           : isDrill
             ? (level <= 1 ? 1 : 0)
-            : level <= 1
-              ? (long ? 1 : 2)
-              : level === 2
-                ? 1
-                : 0;
+            : level <= 2
+              ? 1
+              : 0;
   const doListen = Boolean(card?.listen && (level <= 1 || card.family === "ear")); // an echo is always heard first
   const heardBefore = Boolean(card && (storeRef.current.cards[card.id]?.seen ?? 0) > 0);
 
@@ -494,6 +510,9 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     timeStarts.current = 0;
     passCount.current = 0;
     climbs.current = 0;
+    bankedRef.current = null;
+    rideMisses.current = 0;
+    ceilingHits.current = 0;
     missRun.current = 0;
     rhythmMisses.current = 0;
     untimed.current = 0;
@@ -518,6 +537,10 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     setSettling(false);
     setLoopLocked(false);
     setTempoLift(null);
+    setBankedBpm(null);
+    setFreeRide(false);
+    setSuggestedSpot(null);
+    setDecay(0);
     setSilent(0);
     setSlowed(0);
     setBacked(0);
@@ -528,10 +551,22 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     setRun(0);
     setSpot(null);
     setSpotted(0);
-    const restored = storeRef.current.cards[card.id]?.bpm ?? card.bpm;
-    const tempo = Math.min(maxTempo, Math.max(minTempo, restored));
+    const cardState = storeRef.current.cards[card.id];
+    const prior = cardState?.bestCleanBpm ?? null;
+    priorBestRef.current = prior;
+    setPriorBest(prior);
+    const restored = cardState?.bpm ?? card.bpm;
+    const canWarmIn = Boolean(!card.run && !memoryExercise && prior && card.goalBpm > card.bpm);
+    const warmStart = canWarmIn
+      ? Math.max(minTempo, card.bpm, Math.min(prior! - STEP_UP, even(prior! * WARM_IN)))
+      : restored;
+    const tempo = Math.min(maxTempo, Math.max(minTempo, warmStart));
+    const goal = canWarmIn
+      ? Math.min(maxTempo, Math.max(tempo, restored, prior!))
+      : tempo;
+    startBpmRef.current = tempo;
     setBpm(tempo);
-    setTarget(tempo);
+    setTarget(goal);
     if (storeRef.current.settings.voice) say(card.title);
   }, [cardKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -576,7 +611,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
   );
 
   const conclude = useCallback(
-    (result: Result, share: number | null = null, recordingId?: string) => {
+    (result: Result, share: number | null = null, recordingId?: string, override?: { bpm?: number; conditions?: AttemptConditions }) => {
       if (!card) return;
       // A finished visible/own-pace pass is still part of learning this memory task.
       // Ending, skipping or taking a spot must not defer its later hidden review.
@@ -584,9 +619,9 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
       stop();
       const before = storeRef.current;
       const prev = before.cards[card.id];
-      const conditions = selfGuided ? conditionsFor(phase === "time" ? "fixed" : "own-pace") : assessment.current;
+      const conditions = override?.conditions ?? (selfGuided ? conditionsFor(phase === "time" ? "fixed" : "own-pace") : assessment.current);
       const self = conditions?.source === "self";
-      const playedBpm = self ? bpm : assessedBpm.current ?? bpm;
+      const playedBpm = override?.bpm ?? (self ? bpm : assessedBpm.current ?? bpm);
       const day = today();
       let nextState = applyResult(prev, card, result, playedBpm, day);
       let used = 0;
@@ -596,7 +631,18 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
         used = head.used;
       }
       const from = prev?.box ?? 0;
-      const o: Outcome = { id: card.id, at: pos, result, from, to: result === "skip" || self ? from : nextState.box, bpm: playedBpm, share: self ? null : share, secs: Math.round(clock.current.card / 1000), also: [], spots: spotted, secret: result === "clean" || result === "ok" ? card.secret : undefined, bars: card.run ? runBars.current : undefined, recordingId, conditions };
+      const prior = priorBestRef.current;
+      const newBest = Boolean(!self && result === "clean" && Number.isFinite(playedBpm) && playedBpm > 0 && card.goalBpm > card.bpm && (prior === null || playedBpm > prior));
+      const unlocked = !self && result === "clean" && from < 2 && nextState.box >= 2
+        ? deck.cards.filter((c) => c.needs === card.id && !before.cards[c.id]).slice(0, 2).map((c) => c.title)
+        : [];
+      const o: Outcome = {
+        id: card.id, at: pos, result, from, to: result === "skip" || self ? from : nextState.box, bpm: playedBpm,
+        share: self ? null : share, secs: Math.round(clock.current.card / 1000), also: [], spots: spotted,
+        secret: result === "clean" || result === "ok" ? card.secret : undefined,
+        bars: card.run ? runBars.current : undefined, recordingId, conditions,
+        priorBest: prior, startBpm: startBpmRef.current, newBest, ...(unlocked.length ? { unlocked } : {}),
+      };
       if (result !== "skip") {
         let n: Store = self ? before : { ...before, cards: { ...before.cards, [card.id]: nextState } };
         if (used) n = { ...n, credit: { ...n.credit, [card.id]: (n.credit?.[card.id] ?? 0) - used } };
@@ -611,6 +657,10 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
         setStore(n);
         if (!self) chime(result !== "fail");
       }
+      bankedRef.current = null;
+      setBankedBpm(null);
+      setFreeRide(false);
+      setSuggestedSpot(null);
       setLog((l) => [...l, o]);
       setOutcome(o);
       setPhase("result");
@@ -630,6 +680,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
       hush();
       spotFrom.current = from;
       returnTo.current = null;
+      setSuggestedSpot(null);
       setSpot({ ...sp, key: cardKey });
       setSpotted((n) => n + 1);
       setTakes({ clean: 0, unclean: 0 });
@@ -663,12 +714,47 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     [whole, phase, startSpot],
   );
 
-  // intro → first phase
+  const acceptSpot = useCallback(() => {
+    if (!suggestedSpot || phase === "result") return;
+    startSpot({ ...suggestedSpot, asked: true }, phase === "time" ? "time" : "pace");
+  }, [suggestedSpot, phase, startSpot]);
+
+  const dismissSpot = useCallback(() => setSuggestedSpot(null), []);
+
+  // intro → first phase (auto timer, or immediately woken by a fresh played note after a brief ringout guard)
   useEffect(() => {
     if (phase !== "intro" || !card || inactive) return;
     const id = window.setTimeout(() => nextPhase("intro"), box === 0 ? INTRO_NEW_MS : INTRO_MS);
     return () => window.clearTimeout(id);
   }, [phase, card, inactive, box, nextPhase]);
+
+  useEffect(() => {
+    if ((phase !== "intro" && phase !== "result") || !card || inactive || selfGuided) return;
+    const entered = performance.now();
+    let seenQuiet = false;
+    let steady = 0;
+    let lastMidi: number | null = null;
+    let fired = false;
+    return sessionSubscribe((f) => {
+      if (fired) return;
+      const m = midiOf(f);
+      if (m === null || f.rms < 0.012) {
+        seenQuiet = true;
+        steady = 0;
+        lastMidi = null;
+        return;
+      }
+      if (f.now - entered < WAKE_GUARD_MS || !seenQuiet) return;
+      steady = m === lastMidi ? steady + 1 : 1;
+      lastMidi = m;
+      if (steady < 3) return;
+      fired = true;
+      if (phase === "intro") nextPhase("intro");
+      else if (ending) finish();
+      else if (pos + 1 < queue.length) setPos(pos + 1);
+      else finish();
+    });
+  }, [phase, card, inactive, selfGuided, sessionSubscribe, nextPhase, ending, finish, pos, queue.length]);
 
   // listen: hear it once
   const heard = useRef(false);
@@ -730,8 +816,10 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
         }
         else (spot ? endSpot : enterTime)();
       }
-      else if (sp) startSpot(sp, "pace");
-      else follow.restart();
+      else {
+        if (sp) setSuggestedSpot(sp);
+        follow.restart();
+      }
     };
     return () => { afterTake.current = null; };
   }, [phase, follow.done]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -829,8 +917,14 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     b.index = i;
     b.at = now;
     if (landed && i >= 0 && follow.results[i]) {
-      estimator.note(follow.results[i] === "hit");
+      const hit = follow.results[i] === "hit";
+      estimator.note(hit);
       feel();
+      if (hit) setDecay((d) => Math.max(0, d - 0.08));
+      else {
+        setDecay((d) => Math.min(0.85, d + 0.14));
+        setMissSerial((n) => n + 1);
+      }
     }
     const sorted = [...b.ms].sort((x, y) => x - y);
     const mid = sorted[sorted.length >> 1];
@@ -864,20 +958,32 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     return () => window.clearTimeout(id);
   }, [phase, card, inactive, waiting, loopKey, play]);
 
-  // each note scored in time feeds the estimate of how it is going
+  // each note scored in time feeds the estimate of how it is going and subtle decay/bloom visuals
   const scored = useRef<NoteResult[]>([]);
   useEffect(() => {
     const before = scored.current;
     scored.current = playback.results;
     if (phase !== "time" || selfGuided || suspended) return;
     let fed = false;
+    let hits = 0;
+    let misses = 0;
     playback.results.forEach((r, i) => {
       if (r && !before[i]) {
         estimator.note(r === "hit");
+        if (r === "hit") hits++;
+        else misses++;
         fed = true;
       }
     });
-    if (fed) feel();
+    if (fed) {
+      feel();
+      if (misses > 0) {
+        setDecay((d) => Math.min(0.85, d + 0.12 * misses));
+        setMissSerial((n) => n + misses);
+      } else if (hits > 0) {
+        setDecay((d) => Math.max(0, d - 0.07 * hits));
+      }
+    }
   }, [playback.results]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -891,6 +997,12 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     if (!stableTempo) assessment.current.uninterrupted = false;
     exposed.current = true;
     if (p.heard < HEARD_FRAMES) {
+      // Stopped playing after banking a clean pass in Free Ride: bank peak clean BPM cleanly!
+      if (bankedRef.current) {
+        const b = bankedRef.current;
+        conclude("clean", b.share, undefined, { bpm: b.bpm, conditions: b.conditions });
+        return;
+      }
       const n = silent + 1;
       setSilent(n);
       if (n >= SILENT_PASSES) {
@@ -918,7 +1030,12 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     }
     // A setting changed partway through: the next complete pass establishes the new tempo.
     if (!stableTempo) {
-      if (ending) finish();
+      if (ending) {
+        if (bankedRef.current) {
+          const b = bankedRef.current;
+          conclude("clean", b.share, undefined, { bpm: b.bpm, conditions: b.conditions });
+        } else finish();
+      }
       return;
     }
     const targets = card.tl.targets.slice(card.first, card.last + 1);
@@ -927,7 +1044,12 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     const timing = assessTiming(p.at.slice(card.first, card.last + 1), assessedBpm.current, spacing);
     const onTime = (card.view === "chords" && card.kind !== "comping") || card.kind === "improv" || timing.ready;
     if (ending) {
-      if (score >= card.pass && onTime) conclude("ok", score);
+      if (bankedRef.current) {
+        const b = score >= card.pass && onTime && assessedBpm.current >= bankedRef.current.bpm
+          ? { bpm: assessedBpm.current, share: score, conditions: assessment.current! }
+          : bankedRef.current;
+        conclude("clean", b.share, undefined, { bpm: b.bpm, conditions: b.conditions });
+      } else if (score >= card.pass && onTime) conclude("ok", score);
       else finish();
       return;
     }
@@ -937,8 +1059,9 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     const isFirstSettle = passCount.current === 0 && !(memoryExercise && memoryStage === "hidden");
     passCount.current++;
     if (isFirstSettle && !(score >= card.pass && onTime)) {
-      setPassLog((prev) => [...prev, { share: score, settle: true }]);
+      setPassLog((prev) => [...prev, { share: score, settle: true, reason: "settle", bpm: assessedBpm.current }]);
       setSettling(true);
+      setDecay(0.25);
       return;
     }
     setSettling(false);
@@ -948,47 +1071,87 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     setPasses(all);
     estimator.pass(score, timing.fit ? Math.max(timing.fit.spread, Math.abs(timing.fit.drift)) : null, beatMs);
     feel();
+    const sp = !spot && spotted < MAX_SPOTS && card.kind !== "improv" ? trouble?.pass(p.results) ?? null : null;
+
+    if (score >= card.pass && onTime) {
+      setPassLog((prev) => [...prev, { share: score, clean: true, reason: "clean", bpm: assessedBpm.current }]);
+      setLoopLocked(true);
+      setSuggestedSpot(null);
+      setDecay(0);
+      missRun.current = 0;
+      rideMisses.current = 0;
+      // Memory cards step cleanly through page → landmarks → hidden and finish when hidden lands.
+      if (memoryExercise && !spot) {
+        if (memoryStage !== "hidden") {
+          changeMemoryStage(memoryStage === "page" ? "landmarks" : "hidden");
+          return;
+        }
+        conclude("clean", score);
+        return;
+      }
+      // Bank the highest clean pass from this visit so the player can keep riding tempo safely.
+      if (!bankedRef.current || assessedBpm.current >= bankedRef.current.bpm) {
+        bankedRef.current = { bpm: assessedBpm.current, share: score, conditions: assessment.current! };
+        setBankedBpm(assessedBpm.current);
+      }
+      const rideCeiling = Math.min(maxTempo, Math.max(target, card.goalBpm + 16, (priorBestRef.current ?? card.bpm) + 20));
+      const canClimb = card.goalBpm > card.bpm && assessedBpm.current < rideCeiling && climbs.current < MAX_CLIMBS;
+      if (!canClimb) {
+        // Already at ceiling or climb cap: confirm 1 groove rep at ceiling if we haven't climbed yet, else bank clean.
+        if (climbs.current === 0 && card.goalBpm > card.bpm && ceilingHits.current === 0 && assessedBpm.current >= maxTempo) {
+          ceilingHits.current++;
+          setFreeRide(true);
+          glint();
+          return;
+        }
+        const b = bankedRef.current;
+        conclude("clean", b.share, undefined, { bpm: b.bpm, conditions: b.conditions });
+        return;
+      }
+      // Warm-in → Climb → Free ride: never kick the player out on the first clean pass!
+      const belowTarget = assessedBpm.current < target;
+      const far = target - assessedBpm.current > 12;
+      const step = belowTarget && far ? STEP_UP_FAR : STEP_UP;
+      const nextBpm = belowTarget ? Math.min(target, assessedBpm.current + step) : Math.min(rideCeiling, assessedBpm.current + STEP_UP);
+      climbs.current++;
+      if (assessedBpm.current >= target) setFreeRide(true);
+      setBpm(nextBpm);
+      setTempoLift({ from: assessedBpm.current, to: nextBpm, key: Date.now() });
+      lift();
+      return;
+    }
+
+    // Non-clean pass: distinguish timing drift (amber/yellowing) from missed notes (ochre/browning).
+    const timingOnly = score >= card.pass && !onTime;
+    setPassLog((prev) => [...prev, { share: score, clean: false, reason: timingOnly ? "timing" : "notes", bpm: assessedBpm.current }]);
+    setDecay((d) => (timingOnly ? Math.max(d, 0.42) : Math.min(1, Math.max(0.55, d + 0.28))));
+    setMissSerial((n) => n + 1);
+
+    // Already reached/passed target in Free Ride: allow 1 retry at the faster tempo, then bank peak cleanly!
+    // Never count detection-gap untimed passes (`timingOnly && !timing.measured`) as a Free Ride miss.
+    if (bankedRef.current && freeRide && !(timingOnly && !timing.measured)) {
+      rideMisses.current++;
+      if (rideMisses.current >= 2) {
+        const b = bankedRef.current;
+        conclude("clean", b.share, undefined, { bpm: b.bpm, conditions: b.conditions });
+      }
+      return;
+    }
+
     // the right notes with too few attacks caught to time them, or a tune's notes right with the time
     // not yet even: the tempo holds and nothing is held against it. Slowing a tune whose notes are
     // there teaches nothing; its time settles with playing it, and the timing strip shows it.
-    if (score >= card.pass && !onTime && (!timing.measured || card.family === "melody")) {
-      setPassLog((prev) => [...prev, { share: score, clean: false }]);
+    if (timingOnly && (!timing.measured || card.family === "melody")) {
       missRun.current = 0;
       if (++untimed.current >= UNTIMED_PASSES) conclude("ok", score);
       return;
     }
-    if (score >= card.pass && !onTime) rhythmMisses.current++;
+    if (timingOnly) rhythmMisses.current++;
     const missed = all.filter((s) => s < card.pass).length + rhythmMisses.current;
-    const sp = !spot && spotted < MAX_SPOTS && card.kind !== "improv" ? trouble?.pass(p.results) ?? null : null;
-    if (score >= card.pass && onTime) {
-      setPassLog((prev) => [...prev, { share: score, clean: true }]);
-      setLoopLocked(true);
-      missRun.current = 0;
-      if (assessedBpm.current >= target || climbs.current >= MAX_CLIMBS) {
-        if (memoryExercise && !spot && memoryStage !== "hidden") {
-          changeMemoryStage(memoryStage === "page" ? "landmarks" : "hidden");
-          return;
-        }
-        conclude(slowed === 0 && backed === 0 && spotted === 0 && missed <= 1 ? "clean" : "ok", score);
-        return;
-      }
-      // A steady pass earns the step; a constant phase offset never makes the step larger.
-      const far = target - bpm > 12;
-      const nextBpm = Math.min(target, bpm + (far ? STEP_UP_FAR : STEP_UP));
-      climbs.current++;
-      setBpm(nextBpm);
-      setTempoLift({ from: bpm, to: nextBpm, key: Date.now() });
-      lift();
-      return;
-    }
-    setPassLog((prev) => [...prev, { share: score, clean: false }]);
     missRun.current++;
+    if (sp) setSuggestedSpot(sp); // quiet non-yanking drill offer; groove stays alive
     if (missed >= MAX_MISSED_PASSES) conclude("fail", Math.max(...all));
-    else if (sp) {
-      // the same bar short twice running: it is taken out and worked on, then the piece carries on
-      missRun.current = 0;
-      startSpot(sp, "time");
-    } else if (score < MESSY && missRun.current >= 2 && card.pace) {
+    else if (score < MESSY && missRun.current >= 2 && card.pace) {
       // mostly wrong notes: the band steps back until the notes are there again
       missRun.current = 0;
       stop();
@@ -1184,18 +1347,28 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     else if (phase === "pace") {
       stop();
       enterTime();
-    } else if (phase === "time") conclude("skip");
+    } else if (phase === "time") {
+      if (bankedRef.current) {
+        const b = bankedRef.current;
+        conclude("clean", b.share, undefined, { bpm: b.bpm, conditions: b.conditions });
+      } else conclude("skip");
+    }
     else if (pos + 1 < queue.length) setPos(pos + 1);
     else finish();
   }, [card, phase, nextPhase, stop, conclude, pos, queue.length, finish, enterTime, spot, endSpot]);
 
-  /** On to the next exercise, from wherever this one is. */
+  /** On to the next exercise, from wherever this one is. If a clean pass was already banked in Free Ride, bank it cleanly! */
   const next = useCallback(() => {
     if (!card) return;
     setPaused(false);
     setAway(false);
     hush();
     if (phase !== "result") {
+      if (!selfGuided && bankedRef.current) {
+        const b = bankedRef.current;
+        conclude("clean", b.share, undefined, { bpm: b.bpm, conditions: b.conditions });
+        return;
+      }
       let recordingId: string | undefined;
       if (selfGuided && card.run) {
         const rec = take.current;
@@ -1283,6 +1456,13 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     setSettling(false);
     setLoopLocked(false);
     setTempoLift(null);
+    bankedRef.current = null;
+    rideMisses.current = 0;
+    ceilingHits.current = 0;
+    setBankedBpm(null);
+    setFreeRide(false);
+    setSuggestedSpot(null);
+    setDecay(0);
     passCount.current = 0;
     climbs.current = 0;
     setSilent(0);
@@ -1367,6 +1547,14 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     waiting,
     bpm,
     target,
+    priorBest,
+    bankedBpm,
+    freeRide,
+    suggestedSpot,
+    acceptSpot,
+    dismissSpot,
+    decay,
+    missSerial,
     needClean,
     doListen,
     takes,

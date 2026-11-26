@@ -115,21 +115,21 @@ it("selects a score phrase without autoplay, listens to its range, and launches 
   await mount();
   await press("Score bar 3");
   expect(browser.play).not.toHaveBeenCalled();
-  expect(host.querySelector('[aria-label="Selected phrase"]')?.textContent).toContain("bars 3–4");
-  expect(host.querySelector("[data-score]")?.getAttribute("data-marked")).toBe('{"start":2,"end":3}');
+  expect(host.querySelector('[aria-label="Selected phrase"]')?.textContent).toContain("bars 1–4");
+  expect(host.querySelector("[data-score]")?.getAttribute("data-marked")).toBe('{"start":0,"end":3}');
 
   await press("Listen to phrase");
-  expect(browser.play).toHaveBeenLastCalledWith(2, 3, false);
+  expect(browser.play).toHaveBeenLastCalledWith(0, 3, false);
   await press("Loop");
   await press("Listen to phrase");
-  expect(browser.play).toHaveBeenLastCalledWith(2, 3, true);
+  expect(browser.play).toHaveBeenLastCalledWith(0, 3, true);
 
   await press("Clear phrase selection");
   await press("Listen to piece");
   expect(browser.play).toHaveBeenLastCalledWith(0, undefined, false);
   await press("Score bar 3");
   await press("Practise phrase");
-  expect(browser.startPractice).toHaveBeenLastCalledWith(STARTER_ENTRY.id, "mel:new:2-3");
+  expect(browser.startPractice).toHaveBeenLastCalledWith(STARTER_ENTRY.id, "mel:new:0-3");
 });
 
 it("listens to a bundled demo when the library cannot save it", async () => {

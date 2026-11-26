@@ -237,6 +237,9 @@ describe("session assessment trust", () => {
     await act(async () => session.togglePause());
     await act(async () => session.togglePause());
     await pass();
+    // Free Ride keeps the loop climbing; tapping Next banks the clean pass with its exact measured conditions.
+    expect(session.freeRide).toBe(true);
+    await act(async () => session.next());
     expect(session.store.history![0].conditions).toMatchObject({
       v: 1, source: "measured", confidence: "unknown", support: "adaptive", tempo: "adaptive", uninterrupted: false,
     });
@@ -297,6 +300,9 @@ describe("session assessment trust", () => {
     expect(session.phase).toBe("time");
     expect(session.store.history ?? []).toHaveLength(0);
     await pass(card, { bpm: before + 4, tempoStable: true });
+    expect(session.bankedBpm).toBe(before + 4);
+    expect(session.bpm).toBe(before + 8); // lifts into Free Ride instead of kicking the player out
+    await act(async () => session.next());
     expect(session.outcome).toMatchObject({ result: "clean", bpm: before + 4 });
     expect(session.store.cards[card.id].bestCleanBpm).toBe(before + 4);
   });
@@ -305,7 +311,7 @@ describe("session assessment trust", () => {
     const melody = deck.cards.find((candidate) => candidate.family === "melody" && candidate.listen && candidate.pace && !candidate.fresh && !candidate.memory)!;
     input.status = "listening";
     await act(async () => session.begin([melody.id]));
-    await act(async () => vi.advanceTimersByTime(3500));
+    await act(async () => vi.advanceTimersByTime(1600));
     expect(session.phase).toBe("listen");
     playback.playing = true;
     await render();
@@ -324,11 +330,78 @@ describe("session assessment trust", () => {
     await pass(card, { hit: 4, total: 10 });
     expect(session.settling).toBe(true);
     expect(session.passes).toHaveLength(0);
-    expect(session.passLog).toEqual([{ share: 0.4, settle: true }]);
+    expect(session.passLog).toEqual([{ share: 0.4, settle: true, reason: "settle", bpm: start }]);
     expect(session.bpm).toBe(start);
-    // Pass 2 clean: still concludes "clean" because Pass 1 was forgiven
+    // Pass 2 clean: banks clean at start and climbs into Free Ride; stopping or tapping Next concludes "clean"
     await pass(card);
     expect(session.settling).toBe(false);
+    expect(session.bankedBpm).toBe(start);
+    await act(async () => session.next());
+    expect(session.outcome).toMatchObject({ result: "clean", bpm: start });
+  });
+
+  it("warms in below prior best, climbs through it into Free Ride, and banks peak BPM safely on silence or 2 misses", async () => {
+    const store = loadStore(sheet.id);
+    store.cards[card.id] = { box: 2, due: today(), bpm: 104, bestCleanBpm: 100, seen: 2, clean: 2, last: "clean" };
+    localStorage.setItem(`guitar-song-deck:${sheet.id}`, JSON.stringify(store));
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    await render();
+    input.status = "listening";
+    await act(async () => session.begin([card.id]));
+    expect(session.priorBest).toBe(100);
+    expect(session.bpm).toBe(92); // ~8% warm-in under prior best 100
+    expect(session.target).toBe(104);
+    await act(async () => session.go("time"));
+    await act(async () => vi.advanceTimersByTime(500));
+    // Clean warm-in pass climbs smoothly without kicking out
+    await pass(card, { bpm: 92 });
+    expect(session.phase).toBe("time");
+    expect(session.bankedBpm).toBe(92);
+    expect(session.bpm).toBe(96);
+    // Push past prior best
+    await pass(card, { bpm: 104 });
+    expect(session.bankedBpm).toBe(104);
+    expect(session.freeRide).toBe(true);
+    expect(session.bpm).toBe(108);
+    // Missing twice at the faster 108 bpm banks the 104 bpm peak as clean (zero downside to pushing!)
+    await pass(card, { hit: 4, total: 10, bpm: 108 });
+    expect(session.phase).toBe("time");
+    expect(session.decay).toBeGreaterThan(0);
+    await pass(card, { hit: 4, total: 10, bpm: 108 });
+    expect(session.phase).toBe("result");
+    expect(session.outcome).toMatchObject({ result: "clean", bpm: 104, priorBest: 100, newBest: true });
+  });
+
+  it("banks a Free Ride clean pass immediately on 1 silent pass and lets a fresh note dismiss intro", async () => {
+    let heard: number | null = null;
+    let now = 0;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    vi.spyOn(sharedPitch, "midiOf").mockImplementation(() => heard);
+    input.status = "listening";
+    await act(async () => session.begin([card.id]));
+    expect(session.phase).toBe("intro");
+    // Feed quiet, advance past wake guard, then play a fresh steady note -> immediately leaves intro
+    const send = async (midi: number | null, dt = 40) => {
+      heard = midi;
+      now += dt;
+      await act(async () => {
+        for (const receive of [...listeners]) receive({ buf: new Float32Array(0), sampleRate: 48000, now, rms: midi === null ? 0 : 0.04 });
+      });
+    };
+    await send(null, 300);
+    await send(60, 30);
+    await send(60, 30);
+    await send(60, 30);
+    expect(session.phase).not.toBe("intro");
+    await act(async () => session.go("time"));
+    await act(async () => vi.advanceTimersByTime(500));
+    const start = session.bpm;
+    await pass(card, { bpm: start });
+    expect(session.bankedBpm).toBe(start);
+    // One silent pass after banking concludes cleanly instead of waiting 3 passes
+    await pass(card, { heard: 0 });
+    expect(session.phase).toBe("result");
     expect(session.outcome).toMatchObject({ result: "clean", bpm: start });
   });
 

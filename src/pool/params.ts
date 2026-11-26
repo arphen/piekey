@@ -54,3 +54,38 @@ export function tintFor(tonic: number | null, mode: "major" | "minor" | null): [
   const fifths = tonic === null ? 6 : (tonic * 7) % 12;
   return hsl(base + (fifths / 11 - 0.5) * 30, 0.72, 0.56);
 }
+
+const DRIFT_AMBER: readonly [number, number, number] = [0.80, 0.62, 0.20]; // yellowing amber tension
+const MISS_UMBER: readonly [number, number, number] = [0.54, 0.31, 0.12]; // ochre-rust / warm umber decay
+
+/** Blends a base algae tint toward yellowing amber ("drift") or muted ochre-umber ("miss") as decay rises. */
+export function decayTint(
+  base: readonly [number, number, number],
+  decay: number,
+  tone: "drift" | "miss" = "miss",
+): [number, number, number] {
+  const d = unit(decay);
+  if (d === 0) return [base[0], base[1], base[2]];
+  const target = tone === "drift" ? DRIFT_AMBER : MISS_UMBER;
+  const mix = d * (tone === "miss" ? 0.82 : 0.68);
+  return [
+    unit(base[0] + (target[0] - base[0]) * mix),
+    unit(base[1] + (target[1] - base[1]) * mix),
+    unit(base[2] + (target[2] - base[2]) * mix),
+  ];
+}
+
+/** Pure visual decay overlay on top of groove params: warms sepia and wilts glow without touching fluid motion. */
+export function applyDecay(params: PoolParams, decay: number): PoolParams {
+  const d = unit(decay);
+  if (d === 0) return { ...params };
+  return {
+    ...params,
+    sepia: unit(params.sepia + d * 0.68),
+    saturation: params.saturation * (1 - d * 0.26),
+    brightness: params.brightness * (1 - d * 0.14),
+    emission: params.emission * (1 - d * 0.48),
+    bloom: params.bloom * (1 - d * 0.55),
+    lava: params.lava * (1 - d * 0.45),
+  };
+}

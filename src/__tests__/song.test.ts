@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ReadingBar, ReadingNote } from "../core/contract";
 import { buildTimeline } from "../tunes/order";
+import { buildPlan } from "../tunes/learn";
 import type { LeadSheet } from "../tunes/musicxml";
 import { buildDeck, rhythmSourceId } from "../song/deck";
 import { EAR_TIERS, earPhrase } from "../song/ear";
@@ -280,5 +281,116 @@ describe("a line written out", () => {
     const heads = run.bars.flatMap((b) => b.notes.filter((n) => !n.rest));
     expect(heads[0].vexKey).toBe("a/3"); // sounding A2, written an octave up
     expect(heads.find((n) => n.vexKey.startsWith("g#"))?.accidental).toBe("#"); // not in the signature: written
+  });
+});
+
+describe("phrase-aware melody chunking & 3-stage anchored song curriculum", () => {
+  const rest = (startBeat: number, durationBeats: number): ReadingNote => ({
+    rest: true,
+    midi: 0,
+    vexKey: "b/4",
+    accidental: null,
+    duration: durationBeats >= 2 ? "h" : "q",
+    dotted: false,
+    startBeat,
+    durationBeats,
+    string: 0,
+    fret: 0,
+  });
+
+  it("cuts chunks at 2–3 bars on rests or sustained notes and extends up to 4 bars without boundaries", () => {
+    // 8 bars in section A:
+    // Bars 0–1 end with a 2-beat sustained note on bar 1 -> natural 2-bar phrase [0..1]
+    // Bars 2–4 have a leading 1-beat rest on bar 5 -> natural 3-bar phrase [2..4]
+    // Bars 5–7 are remaining 3 bars -> [5..7]
+    const makeBar = (i: number, notes: ReadingNote[], section?: string): ReadingBar => ({
+      barIndex: i,
+      chordSymbols: [i % 2 === 0 ? "Am" : "Dm7"],
+      chordBeats: [0],
+      notes,
+      beats: 4,
+      section,
+    });
+    const qBar = (i: number, baseMidi: number, section?: string) =>
+      makeBar(i, [0, 1, 2, 3].map((k) => note(baseMidi + k, i * 4 + k)), section);
+
+    const phrased: LeadSheet = {
+      id: "phrased",
+      title: "Phrased",
+      composer: "",
+      keySignature: "Am",
+      timeSignature: "4/4",
+      tempo: 100,
+      barNumbers: Array.from({ length: 8 }, (_, i) => String(i + 1)),
+      comp: [],
+      chordsFromVoicings: false,
+      bars: [
+        qBar(0, 60, "A"),
+        makeBar(1, [note(62, 4), note(64, 5), { ...note(65, 6), duration: "h", durationBeats: 2 }]), // ends on 2-beat note
+        qBar(2, 64),
+        qBar(3, 62),
+        qBar(4, 60),
+        makeBar(5, [rest(20, 1), note(67, 21), note(65, 22), note(64, 23)]), // starts with 1-beat rest
+        qBar(6, 62),
+        qBar(7, 60),
+      ],
+    };
+    const plan = buildPlan(phrased, buildTimeline(phrased));
+    expect(plan[0].kind).toBe("hear"); // kept in buildPlan for optional on-demand listening
+    const newSteps = plan.filter((s) => s.kind === "new");
+    expect(newSteps.map((s) => [s.from, s.to])).toEqual([[0, 1], [2, 4], [5, 7]]);
+
+    // Without phrase boundaries, straight 8-bar section chunks into two 4-bar phrases instead of four 2-bar slices
+    const unbroken: LeadSheet = {
+      ...phrased,
+      id: "unbroken",
+      bars: Array.from({ length: 8 }, (_, i) => qBar(i, 57 + i, i === 0 ? "A" : undefined)),
+    };
+    const unbrokenNew = buildPlan(unbroken, buildTimeline(unbroken)).filter((s) => s.kind === "new");
+    expect(unbrokenNew.map((s) => [s.from, s.to])).toEqual([[0, 3], [4, 7]]);
+  });
+
+  it("anchors Stage 2 harmony & ear cards to section melodies and unlocks Stage 3 improv proposals", () => {
+    const s = sheet();
+    const deck = buildDeck(s, buildTimeline(s));
+    const secMel = deck.cards.find((c) => c.step?.kind === "section")!;
+    expect(secMel.stage).toBe(1);
+
+    // Stage 2 harmony/chords anchored to the section melody
+    for (const suffix of [":arps", ":guides", ":voicings", ":comp24"]) {
+      const card = deck.cards.find((c) => c.id.startsWith("sec:") && c.id.endsWith(suffix))!;
+      expect(card.stage).toBe(2);
+      expect(card.anchor).toBe(secMel.id);
+      expect(card.why.toLowerCase()).toContain("a section");
+    }
+
+    // Stage 2 ear:tune:* unlocks early (after ear:int, not ear:2) and carries actual section chord harmony
+    const earTune = deck.cards.find((c) => c.id.startsWith("ear:tune:"))!;
+    expect(earTune.stage).toBe(2);
+    expect(earTune.needs).toBe("ear:int");
+    expect(earTune.anchor).toBe(secMel.id);
+    expect(earTune.context.some((ctx) => ctx?.chord !== null)).toBe(true);
+    expect(earTune.tl.comp.length).toBeGreaterThan(0);
+
+    // Fresh sight-reading lines stay intact in active position window
+    const readLine = deck.cards.find((c) => c.id.startsWith("read:line:"))!;
+    expect(readLine.fresh).toBe(true);
+    expect(readLine.p).toBe(deck.window.p);
+    expect(deck.cards.some((c) => c.id.startsWith("read:known:"))).toBe(true);
+    expect(deck.cards.some((c) => c.id.startsWith("read:var:"))).toBe(true);
+
+    // Stage 3 improv cards unlock from section melody, plus motif proposal card grounded in the chords
+    const improv = deck.cards.find((c) => c.id.endsWith(":improv"))!;
+    const motif = deck.cards.find((c) => c.id.endsWith(":improv-motif"))!;
+    expect(improv.stage).toBe(3);
+    expect(improv.needs).toBe(secMel.id);
+    expect(improv.anchor).toBe(secMel.id);
+    expect(improv.proposal).toContain("Dm7");
+    expect(motif.stage).toBe(3);
+    expect(motif.kind).toBe("improv");
+    expect(motif.view).toBe("improv");
+    expect(motif.needs).toBe(improv.id);
+    expect(motif.proposal).toContain("Dm7");
+    expect(motif.proposal).toContain("G7");
   });
 });

@@ -185,6 +185,7 @@ describe("coach entry", () => {
       running: true, card, whole: card, active: -1, queue: [card.id], pos: 0, box: 2,
       phase: "time", memoryStage: "hidden", memoryReview: true, toggleMemoryPage: reveal,
       passes: [], passLog: [], settling: false, loopMode: "adaptive", setLoopMode() {}, loopLocked: false, tempoLift: null, breathing: false, reentry: 0,
+      priorBest: null, bankedBpm: null, freeRide: false, suggestedSpot: null, acceptSpot() {}, dismissSpot() {}, decay: 0, missSerial: 0,
       log: [], results: [], shadows: [], takes: { clean: 0, unclean: 0 }, flow: 0.5, run: 0, needClean: 0, pulse: null, beat: IDLE_BEAT,
       bpm: card.bpm, target: card.bpm, click: true,
       playback: { playing: false, counting: 0, breathing: false, reentry: 0, beat: IDLE_BEAT, activeTarget: -1, activeSlot: -1, lastPass: null, drift: null, results: [], wrong: [], async play() {}, stop() {}, beatAt: () => null },
@@ -325,6 +326,7 @@ describe("coach entry", () => {
     Object.assign(mocked.session, {
       running: true, card, whole: card, active: -1, queue: [card.id], pos: 0, box: 2,
       phase: "time", passes: [], passLog: [], settling: false, loopMode: "adaptive", setLoopMode() {}, loopLocked: false, tempoLift: null, breathing: false, reentry: 0,
+      priorBest: null, bankedBpm: null, freeRide: false, suggestedSpot: null, acceptSpot() {}, dismissSpot() {}, decay: 0, missSerial: 0,
       log: [], results: [], shadows: [], takes: { clean: 0, unclean: 0 },
       flow: 0.5, run: 0, needClean: 0, pulse: null, beat: IDLE_BEAT,
       bpm: card.bpm, target: card.bpm, click: true,
@@ -490,5 +492,43 @@ describe("coach entry", () => {
     await act(async () => root.render(<SongCoach key="missing" sheet={sheet} tl={tl} input={inputAt("listening", "guitar")} initialCardId="scale:missing:thirds" autoStart onClose={() => undefined} />));
     expect(mocked.initialQueue).toBeUndefined();
     expect(host.querySelector(".ss-ready")).not.toBeNull();
+  });
+
+  it("starts the full planned queue from a clicked Ready preview card and exposes optional Hear tune & position pill", async () => {
+    mocked.calibrated = true;
+    await act(async () => root.render(<SongCoach sheet={sheet} tl={tl} input={inputAt("listening", "guitar")} onClose={() => undefined} />));
+    const rows = [...host.querySelectorAll<HTMLButtonElement>(".ss-ready-row")];
+    expect(rows.length).toBeGreaterThan(0);
+    const hearBtn = [...host.querySelectorAll("button")].find((b) => b.textContent?.includes("Hear the tune"));
+    expect(hearBtn).toBeDefined();
+    const posBtn = [...host.querySelectorAll("button")].find((b) => b.textContent?.includes("Frets "));
+    expect(posBtn).toBeDefined();
+    await act(async () => rows[rows.length - 1].click());
+    expect(mocked.session.begin).toHaveBeenCalledTimes(1);
+    const started = vi.mocked(mocked.session.begin).mock.calls[0][0] as string[];
+    expect(started.length).toBeGreaterThanOrEqual(rows.length);
+  });
+
+  it("shows amber pulse-unsteady feedback instead of green when notes land but timing is unsteady", async () => {
+    mocked.calibrated = true;
+    const card = buildDeck(sheet, tl).cards.find((candidate) => candidate.family === "scales")!;
+    Object.assign(mocked.session, {
+      running: true, card, whole: card, active: 0, queue: [card.id], pos: 0, box: 2,
+      phase: "time", passes: [0.95], passLog: [{ share: 0.95, clean: false, reason: "timing", bpm: card.bpm }],
+      settling: false, loopMode: "adaptive", setLoopMode() {}, loopLocked: false, tempoLift: null, breathing: false, reentry: 0,
+      priorBest: 96, bankedBpm: null, freeRide: false, suggestedSpot: null, acceptSpot() {}, dismissSpot() {}, decay: 0.42, missSerial: 1,
+      log: [], results: [], shadows: [], takes: { clean: 0, unclean: 0 }, flow: 0.5, run: 0, needClean: 0, pulse: null, beat: IDLE_BEAT,
+      follow: { take: 1, done: false, results: [], wrongAt: [] } as unknown as SessionApi["follow"],
+      bpm: card.bpm, target: 96, click: true,
+      playback: { playing: true, counting: 0, breathing: false, reentry: 0, beat: IDLE_BEAT, activeTarget: 0, activeSlot: 0, lastPass: null, drift: null, results: [], wrong: [], async play() {}, stop() {}, beatAt: () => null },
+      togglePause() {}, hear() {}, go() {}, next() {},
+    } satisfies Partial<SessionApi>);
+    await act(async () => root.render(<SongCoach sheet={sheet} tl={tl} input={inputAt("listening", "guitar")} onClose={() => undefined} />));
+    const say = host.querySelector(".ss-say");
+    expect(say?.textContent).toContain("pulse unsteady");
+    expect(say?.classList.contains("is-drift")).toBe(true);
+    expect(say?.classList.contains("is-good")).toBe(false);
+    expect(host.querySelector(".ss-passes i.is-timing")).not.toBeNull();
+    expect(host.querySelector(".ss-tempo-best")?.textContent).toContain("best ♩96");
   });
 });

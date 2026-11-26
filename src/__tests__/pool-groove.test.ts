@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createGroove, type GrooveContext } from "../pool/groove";
 import { mulberry32 } from "../pool/golden";
-import { ANCHORS, at, GROOVE_ANCHORS, poolParams } from "../pool/params";
+import { ANCHORS, applyDecay, at, decayTint, GROOVE_ANCHORS, poolParams, tintFor } from "../pool/params";
 
 const G_MAJOR = [55, 57, 59, 60, 62, 64, 66, 67, 69, 71, 72, 71, 69, 67, 66, 64, 62, 60, 59, 57];
 const FRAME = 25;
@@ -116,5 +116,59 @@ describe("pool parameters", () => {
   it("leaves glow, bloom and rising blobs for the player to earn", () => {
     expect(poolParams(0)).toMatchObject({ emission: 0, bloom: 0, lava: 0 });
     expect(poolParams(0.25).lava).toBe(0);
+  });
+
+  it("applies decay purely: rises sepia and wilts glow without touching fluid motion", () => {
+    const base = poolParams(0.85);
+    expect(applyDecay(base, 0)).toEqual(base);
+    expect(applyDecay(base, -0.5)).toEqual(base);
+
+    const mid = applyDecay(base, 0.5);
+    const full = applyDecay(base, 1);
+    expect(applyDecay(base, 2)).toEqual(full);
+
+    expect(mid.sepia).toBeGreaterThan(base.sepia);
+    expect(full.sepia).toBeGreaterThan(mid.sepia);
+    expect(mid.emission).toBeLessThan(base.emission);
+    expect(full.emission).toBeLessThan(mid.emission);
+    expect(full.emission).toBeGreaterThanOrEqual(0);
+    expect(full.bloom).toBeLessThan(mid.bloom);
+    expect(full.saturation).toBeLessThan(base.saturation);
+    expect(full.brightness).toBeLessThan(base.brightness);
+    expect(full.lava).toBeLessThan(base.lava);
+
+    // Fluid physics and geometry stay unaffected so decay never jerks the water.
+    expect(full.drift).toBe(base.drift);
+    expect(full.vorticity).toBe(base.vorticity);
+    expect(full.vortices).toBe(base.vortices);
+    expect(full.orbit).toBe(base.orbit);
+    expect(full.velocityHalfLife).toBe(base.velocityHalfLife);
+    expect(full.rippleHalfLife).toBe(base.rippleHalfLife);
+  });
+
+  it("shifts algae tint toward yellowing amber on drift and deeper ochre-umber on miss", () => {
+    const emerald = tintFor(4, "minor");
+    expect(decayTint(emerald, 0, "drift")).toEqual(emerald);
+    expect(decayTint(emerald, 0, "miss")).toEqual(emerald);
+
+    const drifted = decayTint(emerald, 0.8, "drift");
+    const missed = decayTint(emerald, 0.8, "miss");
+
+    // Both warm away from cool cyan-emerald (higher red, lower blue).
+    expect(drifted[0]).toBeGreaterThan(emerald[0]);
+    expect(drifted[2]).toBeLessThan(emerald[2]);
+    expect(missed[0]).toBeGreaterThan(emerald[0]);
+    expect(missed[2]).toBeLessThan(emerald[2]);
+
+    // Drift stays brighter yellowing amber; miss settles into darker brown-umber.
+    const luma = (c: readonly [number, number, number]) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    expect(luma(drifted)).toBeGreaterThan(luma(missed));
+    expect(missed[1]).toBeLessThan(drifted[1]);
+
+    // Clamped to [0, 1] even for out-of-range inputs.
+    for (const c of [...decayTint(emerald, 5, "miss"), ...decayTint(emerald, -2, "drift")]) {
+      expect(c).toBeGreaterThanOrEqual(0);
+      expect(c).toBeLessThanOrEqual(1);
+    }
   });
 });

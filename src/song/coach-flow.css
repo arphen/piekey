@@ -746,4 +746,130 @@
 .ss-tune-strings li.mark-confirmed { border-color: rgba(155, 255, 107, 0.72); background: rgba(86, 232, 112, 0.16); color: var(--algae-bright, #9bff6b); box-shadow: 0 0 14px rgba(86, 232, 112, 0.22); }
 .ss-tune-say { margin: 0; font-size: 13px; color: var(--ink-soft); min-height: 1.3em; }
 .ss-tune-skip { background: none; border: 0; color: var(--ink-soft); font-size: 11px; opacity: 0.6; text-decoration: underline; cursor: pointer; }
+.ss-whole-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+.ss-whole-actions .ss-whole-jump { margin-top: 0; }
+.ss .ss-whole-hear {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 15px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: rgba(5, 14, 28, 0.74);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  font-weight: 500;
+  transition: border-color 0.2s, background 0.2s, color 0.2s;
+}
+.ss .ss-whole-hear:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  background: rgba(10, 26, 44, 0.88);
+  color: var(--ink);
+}
+
+/* Decay vs bloom accents: yellowing/amber = timing drift, ochre/rust = missed notes, emerald = bloom */
+.ss-say.is-drift { color: #e6ba5c; }
+.ss-say.is-decay { color: #c97f4c; }
+
+.ss-passes i.is-timing {
+  background: #d8a648;
+  opacity: 0.86;
+}
+.ss-passes i.is-miss {
+  background: #a96338;
+  opacity: 0.78;
+}
+
+.ss-tempo-best {
+  font: 500 10px/1.1 var(--font-mono);
+  font-style: normal;
+  color: var(--ink-faint);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.ss-tempo-best.is-new {
+  padding: 3px 8px;
+  border: 1px solid color-mix(in srgb, var(--good) 48%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--good) 14%, rgba(5, 14, 28, 0.84));
+  color: var(--good);
+  font-weight: 600;
+  animation: ss-rise 0.3s ease-out both;
+}
+
+.ss .ss-trail-next.is-banked button {
+  border-color: color-mix(in srgb, var(--good) 45%, transparent);
+  background: color-mix(in srgb, var(--good) 14%, transparent);
+  color: var(--good);
+}
+
+.ss-spot-offer {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  padding: 4px 8px 4px 12px;
+  border: 1px solid rgba(216, 166, 72, 0.42);
+  border-radius: 999px;
+  background: rgba(216, 166, 72, 0.1);
+  color: #e6c67c;
+  font-size: 12px;
+  animation: ss-rise 0.3s ease both;
+}
+.ss-spot-offer b { color: var(--ink); font-weight: 500; }
+.ss .ss-spot-offer button {
+  padding: 3px 9px;
+  border: 1px solid rgba(216, 166, 72, 0.4);
+  border-radius: 999px;
+  color: var(--ink);
+  font-size: 11.5px;
+  transition: background 0.18s;
+}
+.ss .ss-spot-offer button:hover { background: rgba(216, 166, 72, 0.22); }
+.ss .ss-spot-offer .ss-spot-offer-x { border: 0; padding: 3px 6px; color: var(--ink-faint); }
+
+.ss-result-delta {
+  margin: 2px 0 0;
+  font: 500 13px/1.3 var(--font-mono);
+  color: var(--ink-soft);
+}
+.ss-result-delta.is-best { color: var(--good); }
+.ss-result-unlock {
+  margin: 4px 0 0;
+  padding: 4px 10px;
+  border: 1px solid rgba(56, 232, 198, 0.35);
+  border-radius: 999px;
+  background: rgba(56, 232, 198, 0.1);
+  color: #a8fff0;
+  font: 500 11.5px/1.3 var(--font-mono);
+}
+.ss-result-hint {
+  margin: 8px 0 0;
+  color: var(--ink-faint);
+  font: 400 10.5px/1.2 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.72;
+}
+
+.ss-improv-proposal {
+  margin: 0 auto 10px;
+  max-width: 56ch;
+  padding: 7px 14px;
+  border: 1px solid rgba(228, 193, 106, 0.32);
+  border-radius: 10px;
+  background: rgba(228, 193, 106, 0.08);
+  color: #f4dfa6;
+  font: 400 13px/1.45 var(--font-ui);
+  text-align: center;
+}
+
 .ss-tune-skip:hover { opacity: 1; }

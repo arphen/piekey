@@ -372,6 +372,7 @@ uniform float uKick;
 uniform float uLava;
 uniform float uRefract;
 uniform float uDyeGain;
+uniform float uDecay;
 uniform vec3 uTint;
 uniform vec2 uWaveTexel;
 uniform float uWaveCell;
@@ -508,27 +509,34 @@ void scene(vec2 uv, out vec3 colour, out vec3 glow, out float lens) {
   float waterNoise = fbm3(here * 1.15);
   vec3 base = WATER * (0.86 + 0.85 * smoothstep(0.10, 0.86, waterNoise))
     + vec3(0.009, 0.044, 0.125) * smoothstep(0.26, 0.86, waterNoise) * 0.75;
-  vec3 darkMat = mix(vec3(0.008, 0.048, 0.105), vec3(0.036, 0.185, 0.155), smoothstep(0.16, 0.72, luma));
-  vec3 photoDetail = pow(grade(raw, uSaturation, uSepia), vec3(uContrast)) * vec3(0.46, 0.78, 0.84);
+  vec3 restDarkMat = mix(vec3(0.008, 0.048, 0.105), vec3(0.036, 0.185, 0.155), smoothstep(0.16, 0.72, luma));
+  vec3 decayDarkMat = mix(vec3(0.036, 0.028, 0.014), vec3(0.145, 0.095, 0.038), smoothstep(0.16, 0.72, luma));
+  vec3 darkMat = mix(restDarkMat, decayDarkMat, uDecay * 0.68);
+  vec3 photoTint = mix(vec3(0.46, 0.78, 0.84), vec3(0.76, 0.56, 0.30), uDecay * 0.72);
+  vec3 photoDetail = pow(grade(raw, uSaturation, uSepia), vec3(uContrast)) * photoTint;
   vec3 pond = mix(darkMat, photoDetail, 0.45 + 0.35 * smoothstep(0.28, 0.88, uBrightness));
   float matVis = clamp(matMask * (0.48 + 0.52 * uBrightness) * mask, 0.0, 0.86);
   colour = mix(base, pond, matVis);
   // what this point looked like at rest: calm lenses lean back toward deep abyssal water so text keeps contrast
-  vec3 rest = mix(base, darkMat, matMask * 0.32 * roomMaskAtRest(uv));
+  vec3 rest = mix(base, restDarkMat, matMask * 0.32 * roomMaskAtRest(uv));
   float quiet = mix(1.0, 0.25, calm);
   calm *= uCalmDepth;
   lens = calm;
 
-  // the algae glow softly in cyan-emerald at rest and blossom into bioluminescent radiance in the zone
+  // the algae glow softly in cyan-emerald at rest and blossom into bioluminescent radiance in the zone,
+  // wilting gently toward yellowing amber and warm ochre-umber on decay
   float algae = smoothstep(0.05, 0.23, greenness) * smoothstep(0.20, 0.58, luma);
+  vec3 decayHue = mix(vec3(0.80, 0.58, 0.18), vec3(0.56, 0.31, 0.12), smoothstep(0.25, 0.9, uDecay));
   vec3 neon = mix(vec3(0.18, 0.90, 0.58), mix(vec3(0.38, 1.0, 0.28), uTint, 0.32), smoothstep(0.05, 0.65, uEmission));
+  neon = mix(neon, decayHue, uDecay * 0.72);
   glow = algae * neon * raw.g * (0.065 + uEmission * 1.28) * (1.0 + uKick * 0.55) * (0.45 + 0.55 * mask) * quiet;
 
-  // ripples catch cool nocturnal moonlight and cyan-emerald sheen
+  // ripples catch cool nocturnal moonlight and cyan-emerald sheen, warming toward ochre on decay
   vec3 n = normalize(vec3(-grad, 1.0));
   float spec = pow(max(dot(n, normalize(vec3(-0.25, 0.35, 1.0))), 0.0), 60.0);
   float sheen = clamp(length(grad) * 0.22, 0.0, 0.1);
-  colour += vec3(0.56, 0.84, 0.90) * (spec * 0.35 + sheen) * mix(1.0, 0.3, calm);
+  vec3 sheenCol = mix(vec3(0.56, 0.84, 0.90), vec3(0.74, 0.56, 0.32), uDecay * 0.55);
+  colour += sheenCol * (spec * 0.35 + sheen) * mix(1.0, 0.3, calm);
 
   // warm blobs rise: translucent, backlit leaf veins glowing through
   float t = texture(uHeat, uv).x;
@@ -603,7 +611,7 @@ void main() {
   }
   // Keep AbyssalWater visible underneath at rest; the living pool's fluid, ripples, tuner rings
   // and earned bioluminescence emerge transparently over the continuous lagoon.
-  float earned = clamp(smoothstep(0.02, 0.72, uEmission) * 0.72 + smoothstep(0.02, 0.55, uLava) * 0.24, 0.0, 0.90) * (1.0 - 0.65 * lens);
+  float earned = clamp(smoothstep(0.02, 0.72, uEmission) * 0.72 + smoothstep(0.02, 0.55, uLava) * 0.24 + uDecay * 0.18, 0.0, 0.90) * (1.0 - 0.65 * lens);
   vec3 light = glow + bloom + tunerGlow;
   vec3 rgb = colour * earned + light;
   // soft knee: dark values pass untouched, bright glow never clips

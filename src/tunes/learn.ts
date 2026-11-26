@@ -4,8 +4,8 @@ import type { LeadSheet } from "./musicxml";
 import type { Timeline } from "./order";
 
 // A plan for learning a tune a little at a time, the way it sticks:
-//   hear: the whole tune once, before any of it is learned
-//   new chunk (about 2 bars): listen → read it slowly → play it in time
+//   hear: the whole tune once (available on demand, not forced as Card 1)
+//   new chunk (2–4 bars, cut at natural phrase boundaries): listen → read it slowly → play it in time
 //   join: the new chunk with the one before, so the seams hold
 //   section: the whole section in time, then from memory (notes hidden, chords showing)
 //   a chunk that repeats earlier music is a quick review; the whole tune closes the plan.
@@ -26,8 +26,41 @@ export interface Step {
   pass: number; // share of notes in time to pass, 0..1
 }
 
-const CHUNK_BARS = 2;
+const MIN_CHUNK = 2;
+const MAX_CHUNK = 4;
 const PASS: Record<StepKind, number> = { hear: 0, new: 0.9, review: 0.9, join: 0.85, section: 0.85, memory: 0.8, tune: 0.85 };
+
+/** True when a musical phrase naturally breathes between `prevBar` and `nextBar`. */
+function isPhraseBoundary(sheet: LeadSheet, prevBarIdx: number, nextBarIdx: number): boolean {
+  const prevBar = sheet.bars[prevBarIdx];
+  const nextBar = sheet.bars[nextBarIdx];
+  if (!prevBar || !nextBar) return false;
+  // 1. Previous bar ends with a rest >= 1 beat (or has no notes).
+  let trailingRest = 0;
+  for (let k = prevBar.notes.length - 1; k >= 0; k--) {
+    if (!prevBar.notes[k].rest) break;
+    trailingRest += prevBar.notes[k].durationBeats;
+  }
+  if (trailingRest >= 1 - 1e-6 || prevBar.notes.length === 0) return true;
+  // 2. Previous bar ends on a long sustained note >= 2 beats (not tied across the barline).
+  const lastNote = prevBar.notes[prevBar.notes.length - 1];
+  if (lastNote && !lastNote.rest && !lastNote.tieToNext) {
+    let sustained = lastNote.durationBeats;
+    for (let k = prevBar.notes.length - 2; k >= 0; k--) {
+      const n = prevBar.notes[k];
+      if (!n.rest && n.tieToNext && n.midi === lastNote.midi) sustained += n.durationBeats;
+      else break;
+    }
+    if (sustained >= 2 - 1e-6) return true;
+  }
+  // 3. Next bar starts with a rest >= 1 beat.
+  let leadingRest = 0;
+  for (let k = 0; k < nextBar.notes.length; k++) {
+    if (!nextBar.notes[k].rest) break;
+    leadingRest += nextBar.notes[k].durationBeats;
+  }
+  return leadingRest >= 1 - 1e-6;
+}
 
 export function buildPlan(sheet: LeadSheet, tl: Timeline): Step[] {
   const label = (bar: number) => sheet.barNumbers[bar] ?? String(bar + 1);
@@ -52,7 +85,8 @@ export function buildPlan(sheet: LeadSheet, tl: Timeline): Step[] {
   };
   const startsPart = (slot: number) => (marked ? Boolean(sheet.bars[tl.slots[slot].bar].section) : found.length > 1 && found.some((s) => s.from === slot));
 
-  // chunks: consecutive slots of bars not met before, cut every 2 bars and at section marks
+  // chunks: consecutive slots of bars not met before, cut at natural phrase boundaries (2–4 bars)
+  // and at section marks so musical phrases are not amputated mid-thought.
   const chunks: { from: number; to: number }[] = [];
   const seen = new Set<number>();
   let cur: number[] = [];
@@ -63,7 +97,11 @@ export function buildPlan(sheet: LeadSheet, tl: Timeline): Step[] {
   tl.slots.forEach((slot, si) => {
     if (seen.has(slot.bar)) return flush();
     const last = cur[cur.length - 1];
-    if (cur.length && (cur.length >= CHUNK_BARS || startsPart(si) || last !== si - 1)) flush();
+    if (cur.length) {
+      const hardBreak = cur.length >= MAX_CHUNK || startsPart(si) || last !== si - 1;
+      const phraseBreak = cur.length >= MIN_CHUNK && isPhraseBoundary(sheet, tl.slots[last].bar, slot.bar);
+      if (hardBreak || phraseBreak) flush();
+    }
     cur.push(si);
     seen.add(slot.bar);
   });
@@ -76,12 +114,18 @@ export function buildPlan(sheet: LeadSheet, tl: Timeline): Step[] {
     const prev = chunks[i - 1];
     const intoSection = next && startsPart(next.from);
     const pickup = marked ? !sheet.bars.slice(0, tl.slots[c.from].bar + 1).some((b) => b.section) : c.from === 0;
-    if (next && next.from === c.to + 1 && next.to - next.from < 2 && (!intoSection || pickup)) {
+    if (next && next.from === c.to + 1 && next.to - next.from + 1 < MAX_CHUNK && (!intoSection || pickup)) {
       next.from = c.from;
       chunks.splice(i--, 1);
-    } else if (prev && prev.to === c.from - 1 && prev.to - prev.from < 2) {
-      prev.to = c.to;
-      chunks.splice(i--, 1);
+    } else if (prev && prev.to === c.from - 1 && !startsPart(c.from)) {
+      if (prev.to - prev.from + 1 < MAX_CHUNK) {
+        prev.to = c.to;
+        chunks.splice(i--, 1);
+      } else if (prev.to - prev.from + 1 >= MAX_CHUNK) {
+        // Rebalance a 4+1 section tail into 3+2 so no lone orphan bar remains.
+        prev.to -= 1;
+        c.from -= 1;
+      }
     }
   }
 

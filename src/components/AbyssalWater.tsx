@@ -30,6 +30,8 @@ export interface WaterDrive {
   beatIndex: number;
   beatActive: boolean;
   beatCounting: boolean;
+  decay?: number;
+  missSerial?: number;
 }
 
 const waterDrives: { current: WaterDrive }[] = [];
@@ -202,6 +204,8 @@ uniform float burstPower;
 uniform float playEnergy;
 uniform float bloom;
 uniform float zone;
+uniform float decay;
+uniform float miss;
 uniform float sway;
 uniform float downbeat;
 uniform vec2 notePos;
@@ -365,14 +369,23 @@ void main() {
   vec3 waterSheen = vec3(0.010, 0.048, 0.135) * smoothstep(0.28, 0.86, f0) * (0.62 + 0.38 * sin(t * 0.25 + p.x * 2.0));
   vec3 baseWater = deepOcean + waterSheen;
 
-  // Sculpt the real algae photograph into dark, nocturnal floating emerald mats over deep blue voids.
-  vec3 darkMat = mix(
+  // Sculpt the real algae photograph into dark, nocturnal floating emerald mats over deep blue voids,
+  // subtly shifting toward warm olive-ochre and umber as decay rises.
+  float decayAmt = clamp(decay + miss * 0.45, 0.0, 1.0);
+  vec3 coolMat = mix(
     vec3(0.008, 0.048, 0.105),
     vec3(0.036, 0.175, 0.145),
     smoothstep(0.16, 0.72, luma)
   );
+  vec3 decayMat = mix(
+    vec3(0.032, 0.024, 0.012),
+    vec3(0.145, 0.092, 0.036),
+    smoothstep(0.16, 0.72, luma)
+  );
+  vec3 darkMat = mix(coolMat, decayMat, clamp(decay * 0.72 + miss * 0.20, 0.0, 0.85));
   // Blend subtle photographic micro-texture into the dark mats; enriches organically as you enter the zone.
-  vec3 photoDetail = pow(max(raw, 0.0), vec3(2.45 - bloom * 0.28 - zone * 0.22)) * vec3(0.36, 0.64, 0.68);
+  vec3 photoTint = mix(vec3(0.36, 0.64, 0.68), vec3(0.72, 0.50, 0.24), clamp(decay * 0.78 + miss * 0.22, 0.0, 0.90));
+  vec3 photoDetail = pow(max(raw, 0.0), vec3(2.45 - bloom * 0.28 - zone * 0.22)) * photoTint;
   vec3 algaeBody = mix(darkMat, photoDetail, 0.48 + bloom * 0.22 + zone * 0.20);
 
   // Calm center keeps text crisp; at rest algae hover gently, then creep inward to embrace the room in the zone.
@@ -381,19 +394,27 @@ void main() {
   float matVis = mix(0.42 * (1.0 - calmCenter * (0.52 - zone * 0.26)) + bloom * 0.12 + zone * 0.18, 0.74 + bloom * 0.10 + zone * 0.12, rim);
   vec3 color = mix(baseWater, algaeBody, clamp(matMask * matVis, 0.0, 0.88));
 
+  // Yellowing amber tension -> ochre-rust / warm umber decay palette, contrasting against emerald-teal bloom.
+  vec3 amberWilt = vec3(0.72, 0.54, 0.18);
+  vec3 umberRust = vec3(0.48, 0.26, 0.10);
+  vec3 decayGlow = mix(amberWilt, umberRust, smoothstep(0.25, 0.90, decayAmt));
+
   // Bioluminescence Layer 1: slow languid ambient pulse on the thickest algae veins.
   float breath = 0.5 + 0.5 * sin(t * 0.36 + f0 * 6.2831 + p.x * 1.4);
   float stenchGlow = veinMask * (0.11 + 0.13 * breath) * (0.48 + 0.66 * rim);
-  color += glowColor * stenchGlow;
+  color += mix(glowColor, decayGlow, decayAmt * 0.68) * stenchGlow * (1.0 - decayAmt * 0.22);
 
   // Bioluminescence Layer 1b: earned zone embrace — distant calling early, lush emerald-gold radiance at peak performance.
   vec3 poisonNeon = mix(vec3(0.16, 0.88, 0.64), vec3(0.54, 1.0, 0.30), noteHue);
+  vec3 liveNeon = mix(poisonNeon, decayGlow, decayAmt * 0.72);
   vec3 birchGold = vec3(0.90, 0.78, 0.42);
   float noteNear = exp(-dot(p - notePos, p - notePos) / 0.24) * noteWarmth;
   float zoneGlow = bloom * 0.24 + zone * 0.96 + swellLight * (0.16 + 0.34 * bloom) + noteNear * (0.10 + 0.26 * zone);
-  color += poisonNeon * veinMask * raw.g * zoneGlow * (0.38 + 0.82 * rim);
+  color += liveNeon * veinMask * raw.g * zoneGlow * (1.0 - decayAmt * 0.35) * (0.38 + 0.82 * rim);
+  // Subtle organic amber-umber rim wash during decay, keeping center calm for foreground notation.
+  color += decayGlow * (decay * 0.11 + miss * 0.09) * (0.14 + 0.86 * rim) * (0.35 + 0.65 * matMask);
   // Subtle golden warmth breathing softly in the deep zone on heard downbeats.
-  vec3 tideColor = mix(poisonNeon, birchGold, downbeat * 0.65);
+  vec3 tideColor = mix(liveNeon, birchGold, downbeat * 0.65);
   color += tideColor * veinMask * sway * zone * 0.26 * (0.35 + 0.65 * rim);
 
   // Bioluminescence Layer 2: subtle, silky pointer wake shimmer along the trailing eddies.
@@ -546,7 +567,7 @@ export function AbyssalWater({ scene, suspended = false }: { scene: WaterScene; 
       "morph", "hasTexA", "hasTexB", "abyssColor", "glowColor", "flareColor",
       "calmCenter", "vortex", "surge", "wake0", "wake1", "wake2", "wake3",
       "wakeSpin", "wakeEnergy", "burstPos", "burstAge", "burstPower",
-      "playEnergy", "bloom", "zone", "sway", "downbeat", "notePos", "noteWarmth", "noteHue", "swells",
+      "playEnergy", "bloom", "zone", "decay", "miss", "sway", "downbeat", "notePos", "noteWarmth", "noteHue", "swells",
       "texA", "texB",
     ];
     const u = Object.fromEntries(names.map((name) => [name, gpu.getUniformLocation(program, name)]));
@@ -586,6 +607,9 @@ export function AbyssalWater({ scene, suspended = false }: { scene: WaterScene; 
     // Heavy old-engine flywheel + delayed far-away propeller swells (decorative only).
     let engineMs = 0;
     let bloom = 0;
+    let smoothDecay = 0;
+    let missPulse = 0;
+    let lastMissSerial = -1;
     let smoothEnergy = 0;
     let beatTarget = 0;
     let beatSway = 0;
@@ -777,6 +801,22 @@ export function AbyssalWater({ scene, suspended = false }: { scene: WaterScene; 
       // Transcendent algae embrace opens non-linearly only in the upper zone.
       const zone = Math.pow(Math.max(0, Math.min(1, bloom)), 2.15);
 
+      // Decay-to-bloom color drift: warms quickly on mistakes/drift, recovers gently as clean playing returns.
+      const targetDecay = drive && drive.playing ? Math.max(0, Math.min(1, drive.decay ?? 0)) : 0;
+      smoothDecay += (targetDecay - smoothDecay) * (1 - Math.exp(-dtMs / (targetDecay > smoothDecay ? 600 : 3500)));
+      if (!drive) {
+        lastMissSerial = -1;
+      } else {
+        const curMissSerial = drive.missSerial ?? 0;
+        if (curMissSerial !== lastMissSerial) {
+          if (lastMissSerial >= 0 && drive.playing && curMissSerial > lastMissSerial) {
+            missPulse = Math.min(1, missPulse * 0.35 + 0.82);
+          }
+          lastMissSerial = curMissSerial;
+        }
+      }
+      missPulse *= Math.exp(-dtMs / 1800);
+
       // Slow, silky luminescence breath on heard beats once deep in the zone (never twists or snaps).
       if (drive && drive.beatActive && drive.beatIndex >= 0 && drive.beatSerial !== lastBeatSerial) {
         lastBeatSerial = drive.beatSerial;
@@ -883,6 +923,8 @@ export function AbyssalWater({ scene, suspended = false }: { scene: WaterScene; 
       gpu.uniform1f(u.playEnergy, moving ? smoothEnergy : 0);
       gpu.uniform1f(u.bloom, bloom);
       gpu.uniform1f(u.zone, zone);
+      gpu.uniform1f(u.decay, smoothDecay);
+      gpu.uniform1f(u.miss, moving ? missPulse : 0);
       gpu.uniform1f(u.sway, moving && drive?.beatActive ? beatSway * bloom * bloom : 0);
       gpu.uniform1f(u.downbeat, beatDownbeat);
       gpu.uniform2f(u.notePos, smoothNoteX, smoothNoteY);
