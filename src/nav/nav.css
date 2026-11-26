@@ -25,7 +25,7 @@
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
 }
 
-body:has(.ss) .gnav { display: none; }
+body:has(.ss:not(.is-parked)) .gnav { display: none; }
 
 .gnav svg {
   flex: 0 0 auto;
@@ -95,6 +95,57 @@ body:has(.ss) .gnav { display: none; }
 .gnav-keys li.is-held,
 .gnav-keys li.is-held b { color: var(--brass); }
 
+.gnav-lead,
+.gnav-keys { transition: opacity 0.18s; }
+.gnav.is-waiting .gnav-lead,
+.gnav.is-waiting .gnav-keys { opacity: 0.38; }
+
+.gnav-quiet {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 16px;
+  border-left: 1px solid var(--line);
+}
+
+.gnav-wait {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  font: 500 9.5px/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+}
+
+.gnav-wait.is-ready::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--algae, #6de64b);
+  opacity: 0.72;
+}
+
+.gnav-quiet-select {
+  appearance: none;
+  border: 0;
+  padding: 2px 12px 2px 2px;
+  background:
+    linear-gradient(45deg, transparent 50%, var(--ink-faint) 50%) right 4px center / 4px 4px no-repeat,
+    linear-gradient(-45deg, transparent 50%, var(--ink-faint) 50%) right 0 center / 4px 4px no-repeat,
+    transparent;
+  color: var(--ink-soft);
+  font: 400 10px/1.3 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.gnav-quiet-select:hover { color: var(--ink); }
+.gnav-quiet-select:focus-visible { outline: 1px solid var(--brass); outline-offset: 3px; border-radius: 4px; }
+.gnav-quiet-select option { background: #070d0a; color: var(--ink); }
+
 .gnav-on {
   display: flex;
   align-items: center;
@@ -119,12 +170,14 @@ body:has(.ss) .gnav { display: none; }
   .gnav-keys li { gap: 5px; }
   .gnav-keys li:nth-child(3),
   .gnav-keys li:nth-child(5) { margin-left: 0; padding-left: 12px; }
+  .gnav-quiet { padding-left: 10px; gap: 4px; }
+  .gnav-quiet-select { font-size: 9px; }
   .gnav svg { width: 13px; height: 13px; }
   .gnav-keys b, .gnav-lead b { font-size: 9px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .gnav-keys li, .gnav-keys b, .gnav-lead, .gnav-lead b { transition: none; }
+  .gnav-keys li, .gnav-keys b, .gnav-lead, .gnav-lead b, .gnav-keys { transition: none; }
 }
 
 /* Leave one line beneath the page's final control. */

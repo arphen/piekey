@@ -1366,8 +1366,13 @@
   color: var(--ink-soft);
 }
 
-.ss .ss-stepper button:hover {
+.ss .ss-stepper button:hover:not(:disabled) {
   background: rgba(255, 240, 220, 0.1);
+}
+
+.ss .ss-stepper button:disabled {
+  opacity: 0.32;
+  cursor: default;
 }
 
 .ss-actions {

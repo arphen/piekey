@@ -3,6 +3,7 @@ import { midiOf } from "../listen/pitch";
 import type { InputApi } from "../listen/useInput";
 import { SUMMON_NOTE } from "../song/notekeys";
 import { createLeadKeys, type LeadState } from "./leadKeys";
+import { readNavSilence } from "./silence";
 
 // The shell is played, not clicked. Notes from the 12th fret up (nothing in an exercise sits that
 // high) move a cursor across everything on screen that can be pressed. The notes are shown in
@@ -68,14 +69,30 @@ export function press(el: HTMLElement) {
   el.click();
 }
 
+const idleState = (silenceMs: number): LeadState => ({
+  armed: false,
+  held: null,
+  ready: silenceMs <= 0,
+  waitMs: Math.max(0, silenceMs),
+});
+
 /**
  * Lead-then-action notes drive the cursor. `tab` moves between modes; `home` is the shell's Back.
- * Returns whether the lead is armed and the action key sounding (an index into `NAV_KEYS`) for the legend.
+ * Returns whether the lead is armed, the action key sounding (an index into `NAV_KEYS`),
+ * and whether the configured silence window before arming has elapsed.
  */
-export function useGuitarNav(input: InputApi, handlers: { home(): void; tab(dir: 1 | -1): void }): LeadState {
+export function useGuitarNav(
+  input: InputApi,
+  handlers: { home(): void; tab(dir: 1 | -1): void },
+  silenceMs = readNavSilence() * 1000,
+): LeadState {
   const cursor = useRef<HTMLElement | null>(null);
   const fns = useRef(handlers);
   fns.current = handlers;
+  const silenceRef = useRef(silenceMs);
+  silenceRef.current = silenceMs;
+  const keysRef = useRef<ReturnType<typeof createLeadKeys> | null>(null);
+  const showRef = useRef<(() => void) | null>(null);
 
   const place = useCallback((el: HTMLElement | null) => {
     cursor.current?.classList.remove(CURSOR);
@@ -112,21 +129,28 @@ export function useGuitarNav(input: InputApi, handlers: { home(): void; tab(dir:
     [place],
   );
 
-  const [shown, setShown] = useState<LeadState>({ armed: false, held: null });
+  const [shown, setShown] = useState<LeadState>(() => idleState(silenceMs));
   const listening = input.status === "listening";
   const { subscribe } = input;
   useEffect(() => {
-    setShown({ armed: false, held: null });
-    if (!listening) return;
-    const keys = createLeadKeys(NAV_LEAD, NAV_KEYS.map((k) => k.midi));
+    setShown(idleState(silenceRef.current));
+    if (!listening) {
+      keysRef.current = null;
+      showRef.current = null;
+      return;
+    }
+    const keys = createLeadKeys(NAV_LEAD, NAV_KEYS.map((k) => k.midi), silenceRef.current);
+    keysRef.current = keys;
     let last = "";
     const show = () => {
-      const now = `${keys.state.armed}:${keys.state.held}`;
+      const waitSec = keys.state.ready ? 0 : Math.ceil(keys.state.waitMs / 1000);
+      const now = `${keys.state.armed}:${keys.state.held}:${keys.state.ready}:${waitSec}`;
       if (now === last) return;
       last = now;
-      setShown({ ...keys.state });
+      setShown({ armed: keys.state.armed, held: keys.state.held, ready: keys.state.ready, waitMs: waitSec * 1000 });
     };
-    return subscribe((f) => {
+    showRef.current = show;
+    const unsub = subscribe((f) => {
       // a session or a sounding screen owns the guitar: nothing armed there carries over
       if (sessionOpen() || muted) {
         keys.reset();
@@ -137,6 +161,21 @@ export function useGuitarNav(input: InputApi, handlers: { home(): void; tab(dir:
       show();
       if (k !== null) fire(k);
     });
+    return () => {
+      unsub();
+      if (keysRef.current === keys) keysRef.current = null;
+      if (showRef.current === show) showRef.current = null;
+    };
   }, [listening, subscribe, fire]);
+
+  useEffect(() => {
+    if (keysRef.current) {
+      keysRef.current.setSilence(silenceMs);
+      showRef.current?.();
+    } else {
+      setShown(idleState(silenceMs));
+    }
+  }, [silenceMs]);
+
   return shown;
 }

@@ -1,4 +1,5 @@
 import type { InputApi } from "../listen/useInput";
+import { NAV_SILENCE_PRESETS, useNavSilence } from "../nav/silence";
 import { NAV_KEYS, NAV_LEAD, useGuitarNav } from "../nav/useGuitarNav";
 import { noteName } from "./GuitarPad";
 import "../nav/nav.css";
@@ -14,13 +15,22 @@ const ACTIONS = {
 
 /** The shell's note keys, shown at the foot of the page; held notes light up. With the guitar off it offers to turn it on. */
 export function GuitarNav({ input, onHome, onTab }: { input: InputApi; onHome(): void; onTab(dir: 1 | -1): void }) {
-  const { armed, held } = useGuitarNav(input, { home: onHome, tab: onTab });
+  const silence = useNavSilence();
+  const { armed, held, ready, waitMs } = useGuitarNav(input, { home: onHome, tab: onTab }, silence.ms);
   const on = input.status === "listening";
+  const waiting = on && silence.seconds > 0 && !ready;
+  const waitSec = Math.ceil(waitMs / 1000);
+  const options = NAV_SILENCE_PRESETS.includes(silence.seconds as (typeof NAV_SILENCE_PRESETS)[number])
+    ? [...NAV_SILENCE_PRESETS]
+    : [...NAV_SILENCE_PRESETS, silence.seconds].sort((a, b) => a - b);
+  const markTitle = silence.seconds > 0
+    ? `Guitar controls · after ${silence.seconds}s of silence, play ${noteName(NAV_LEAD)} then the action's note`
+    : `Guitar controls · play ${noteName(NAV_LEAD)}, then the action's note`;
   return (
-    <div className="gnav" data-nav-skip={on ? "" : undefined} aria-label="guitar navigation">
+    <div className={`gnav ${waiting ? "is-waiting" : ""}`} data-nav-skip={on ? "" : undefined} aria-label="guitar navigation">
       {on ? (
         <>
-          <span className="gnav-mark" title={`Guitar controls · play ${noteName(NAV_LEAD)}, then the action's note`} aria-hidden="true">
+          <span className="gnav-mark" title={markTitle} aria-hidden="true">
             <svg viewBox="0 0 24 24"><path d="M8 3v18m4-18v18m4-18v18M5 7h14M5 13h14M5 19h14" /></svg>
           </span>
           <span className={`gnav-lead ${armed ? "is-armed" : ""}`} aria-hidden="true">
@@ -35,6 +45,25 @@ export function GuitarNav({ input, onHome, onTab }: { input: InputApi; onHome():
               </li>
             ))}
           </ul>
+          <span className="gnav-quiet" title="Silence needed before guitar navigation arms">
+            {silence.seconds > 0 ? (
+              <span className={`gnav-wait ${waiting ? "is-counting" : "is-ready"}`} aria-hidden="true">
+                {waiting ? waitSec : ""}
+              </span>
+            ) : null}
+            <select
+              className="gnav-quiet-select"
+              value={silence.seconds}
+              onChange={(e) => silence.set(Number(e.target.value))}
+              aria-label="Silence before guitar navigation"
+            >
+              {options.map((s) => (
+                <option key={s} value={s}>
+                  {s === 0 ? "always" : `${s}s quiet`}
+                </option>
+              ))}
+            </select>
+          </span>
         </>
       ) : (
         <button type="button" className="gnav-on" onClick={() => void input.start()} disabled={input.status === "starting"} title="Guitar controls · E5–A5">

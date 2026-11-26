@@ -49,7 +49,7 @@ exact phrases in `SongCoach`; do not restore an inline Learn flow. Ear (`src/ear
    mixed in, and changes made during a live session apply to the next one. Foundations
    (`song/technique.ts`) each carry an anchor `hub` and are built in that key by every deck.
    Nothing on Home is labelled "due"; the player chooses.
-7. `src/nav/useGuitarNav.ts` — played navigation for the whole shell (lead D♯5 then an action note E5–A5, `nav/leadKeys.ts`; DOM-driven cursor). The Reading mode itself runs on `src/song/reading.ts` cards; `src/reading/generate.ts` is legacy, kept only as a `Score` test fixture.
+7. `src/nav/useGuitarNav.ts` — played navigation for the whole shell (lead D♯5 then an action note E5–A5, `nav/leadKeys.ts`; DOM-driven cursor; gated behind a device-local silence delay `nav/silence.ts` / `guitar-nav-silence`, default 3 s). The Reading mode itself runs on `src/song/reading.ts` cards; `src/reading/generate.ts` is legacy, kept only as a `Score` test fixture.
 8. `src/components/Fretboard.tsx` — the shared fretboard renderer used across views.
 9. `src/tunes/musicxml.ts` — MusicXML/archive import, the entry point for loaded tunes.
 10. `src/sync/` — immutable transaction journal, deterministic projection, full recording/file
@@ -196,8 +196,9 @@ component tests run under jsdom. No CI configuration is committed; `make check` 
   (`guitar-room-render`, `guitar-pool-tier`, `guitar-score-zoom`); with nothing chosen the room is Living on power
   (water on battery or a weak GPU); the pool uses the shared input and `pitchOf` cache,
   never its own detector, and `[data-pool]` marks rocks, calm lenses and glass on room elements.
-- Outside sessions the shell is played too (`src/nav/`, notes from fret 12 up): keep controls real
-  `button`/`select` elements so the cursor reaches them, and mark decoration `data-nav-skip`.
+- Outside sessions the shell is played too (`src/nav/`, notes from fret 12 up, gated by device-local
+  `guitar-nav-silence` defaulting to 3 s): keep controls real `button`/`select` elements so the
+  cursor reaches them, and mark decoration `data-nav-skip`.
 - TypeScript is strict. Avoid `any`; prefer the contract types. Keep `npm run typecheck` green.
 - CSS lives in `src/styles.css` and per-feature `*.css` files; keep class names scoped by feature.
 

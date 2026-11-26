@@ -55,6 +55,7 @@ import { GuitarToolsRoom } from "../tools/GuitarTools";
 import { TuneCheck, isTuned } from "../tools/TuneCheck";
 import { PoolRoom, usePoolCalm, usePoolEmit } from "../pool/PoolRoom";
 import { ROOM_MODES, useRoomRender, type RoomMode } from "../pool/mode";
+import { MAX_NAV_SILENCE_S, MIN_NAV_SILENCE_S, useNavSilence } from "../nav/silence";
 import { Glyph } from "./Glyph";
 import "../song/song.css";
 import "../song/coach-flow.css";
@@ -2735,6 +2736,7 @@ function Drawer({
   const byId = useMemo(() => new Map(deck.cards.map((c) => [c.id, c])), [deck]);
   const { settings, updateSettings, store } = s;
   const room = useRoomRender();
+  const navSilence = useNavSilence();
   const live = s.running && !s.finished;
   const list = s.running ? s.queue : plan;
   const counts = boxCounts(deck, store);
@@ -2791,6 +2793,28 @@ function Drawer({
           ) : (
             <p className="ss-note">The app's sound follows the system's output: this browser can't send it elsewhere (Chrome and Edge can).</p>
           )}
+          <div className="ss-row">
+            <span title="Require silence before shell guitar navigation (D♯5) can arm">Nav after silence</span>
+            <span className="ss-stepper">
+              <button
+                type="button"
+                onClick={() => navSilence.set(navSilence.seconds - 1)}
+                disabled={navSilence.seconds <= MIN_NAV_SILENCE_S}
+                aria-label="less silence before guitar navigation"
+              >
+                −
+              </button>
+              <b>{navSilence.seconds === 0 ? "off" : `${navSilence.seconds}s`}</b>
+              <button
+                type="button"
+                onClick={() => navSilence.set(navSilence.seconds + 1)}
+                disabled={navSilence.seconds >= MAX_NAV_SILENCE_S}
+                aria-label="more silence before guitar navigation"
+              >
+                +
+              </button>
+            </span>
+          </div>
         </section>
 
         {live ? (

@@ -206,7 +206,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/components/Fretboard.tsx` — `LabelMode:4`, `FretGhost:7`, `FretPulse:15`, `Fretboard:102`
 - `src/components/Glyph.tsx` — `UtilityGlyphName:4`, `Glyph:76`
 - `src/components/GoalChooser.tsx` — `GoalChooser:9`
-- `src/components/GuitarNav.tsx` — `GuitarNav:16`
+- `src/components/GuitarNav.tsx` — `GuitarNav:17`
 - `src/components/GuitarPad.tsx` — `PAD_NOTES:23`, `SUMMON_HINT:99`, `SummonVisual:102`, `useSummon:118`, `toneKeysFor:189`, `drawerToneKeys:201`, `useToneKeys:218`, `noteName:269`, `useNoteKeys:276`, `NoteTag:334`, `ToneTag:344`, `PadRow:354`, `GuitarPad:360`
 - `src/components/HoverDemo.tsx` — `HoverDemo:25`
 - `src/components/InputBar.tsx` — `InputBar:17`
@@ -229,7 +229,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/components/SessionSummary.tsx` — `SessionSummary:86`
 - `src/components/ShapesView.tsx` — `ShapesView:16`
 - `src/components/SkillTree.tsx` — `SkillTree:18`
-- `src/components/SongCoach.tsx` — `RoomSurface:95`, `RoomRequest:97`, `RoomHandle:102`, `openPractice:256`, `SongCoach:326`, `SongCoachRoom:334`
+- `src/components/SongCoach.tsx` — `RoomSurface:96`, `RoomRequest:98`, `RoomHandle:103`, `openPractice:257`, `SongCoach:327`, `SongCoachRoom:335`
 - `src/components/SongMap.tsx` — `SongMap:138`
 - `src/components/Transport.tsx` — `Transport:18`
 - `src/components/TriadWheel.tsx` — `TriadWheel:48`
@@ -265,9 +265,10 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/listen/useInput.ts` — `InputFrame:15`, `InputStatus:22`, `InputApi:24`, `useInput:88`
 - `src/main.tsx`
 - `src/musicTheory.ts` — `ViewMode:1`, `ScaleDefinition:3`, `ParsedScaleQuery:11`, `ChordDefinition:17`, `ParsedChordQuery:26`, `BuiltChord:32`, `SUPPORTED_SCALE_NAMES:311`, `SUPPORTED_CHORD_EXAMPLES:312`, `mod:329`, `noteNameToPitchClass:410`, `pitchClassToName:418`, `parseScaleQuery:422`, `parseChordQuery:449`, `getAnchorIntervals:486`, `buildDiatonicChord:578`, `buildScalePitchClassSet:610` (+2 more)
-- `src/nav/leadKeys.ts` — `CLEAR_MS:8`, `ARM_MS:9`, `LeadState:13`, `createLeadKeys:23`
+- `src/nav/leadKeys.ts` — `CLEAR_MS:8`, `ARM_MS:9`, `LeadState:13`, `createLeadKeys:28`
 - `src/nav/nav.css`
-- `src/nav/useGuitarNav.ts` — `NAV_LEAD:14`, `NAV_KEYS:17`, `setNavMuted:33`, `sessionOpen:39`, `pressables:42`, `step:49`, `press:60`, `useGuitarNav:75`
+- `src/nav/silence.ts` — `DEFAULT_NAV_SILENCE_S:9`, `MIN_NAV_SILENCE_S:10`, `MAX_NAV_SILENCE_S:11`, `NAV_SILENCE_PRESETS:12`, `parseNavSilence:20`, `readNavSilence:26`, `setNavSilence:35`, `useNavSilence:62`, `resetNavSilenceForTests:68`
+- `src/nav/useGuitarNav.ts` — `NAV_LEAD:15`, `NAV_KEYS:18`, `setNavMuted:34`, `sessionOpen:40`, `pressables:43`, `step:50`, `press:61`, `useGuitarNav:84`
 - `src/overview/dashboard.ts` — `DailyPracticeCell:13`, `FamilyMastery:20`, `TempoHighlight:28`, `PracticeDashboard:36`, `WeaknessDiagnosis:59`, `PlannedBlockPreview:72`, `SchedulerExplanation:79`, `buildPracticeDashboard:149`, `explainScheduling:301`
 - `src/overview/focus.css`
 - `src/overview/home.css`
