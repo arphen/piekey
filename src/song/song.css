@@ -2457,10 +2457,101 @@
   opacity: 1;
 }
 
-.ss-trail-next {
+.ss-trail-prev {
   margin-left: 4px;
-  padding-left: 26px;
+  padding-left: 22px;
   border-left: 1px solid var(--line);
+}
+
+.ss-trail-next {
+  margin-left: 0;
+  padding-left: 0;
+  border-left: 0;
+}
+
+.ss-foot-free {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.ss .ss-foot-free button {
+  padding: 5px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  transition: color 0.16s, border-color 0.16s, background 0.16s;
+}
+
+.ss .ss-foot-free button:hover:not(:disabled) {
+  color: var(--ink);
+  border-color: rgba(154, 240, 184, 0.34);
+  background: rgba(86, 232, 112, 0.08);
+}
+
+.ss-resume-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 18px;
+  margin: 12px 0 14px;
+  padding: 11px 14px;
+  border: 1px solid rgba(110, 230, 130, 0.28);
+  border-radius: 12px;
+  background: rgba(16, 42, 34, 0.56);
+}
+
+.ss-resume-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ss-resume-copy strong {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--algae-bright, #9af0b8);
+}
+
+.ss-resume-copy span {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.ss-resume-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ss .ss-resume-go,
+.ss .ss-resume-discard {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  transition: background 0.16s, color 0.16s, border-color 0.16s;
+}
+
+.ss .ss-resume-go {
+  border: 1px solid rgba(110, 230, 130, 0.48);
+  background: rgba(86, 232, 112, 0.16);
+  color: var(--algae-bright, #9af0b8);
+}
+
+.ss .ss-resume-go:hover:not(:disabled) {
+  background: rgba(86, 232, 112, 0.26);
+}
+
+.ss .ss-resume-discard {
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+}
+
+.ss .ss-resume-discard:hover:not(:disabled) {
+  color: var(--ink);
+  border-color: rgba(255, 240, 220, 0.28);
 }
 
 /* the row of things a note does, on the screens between exercises */

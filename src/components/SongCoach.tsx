@@ -31,6 +31,7 @@ import { allAttempts, buildProfile } from "../song/profile";
 import { latencyMeasured } from "../audio/latency";
 import { fingerFor } from "../song/spot";
 import { useSession, type Outcome, type SessionApi } from "../song/useSession";
+import { clearPartialSession, loadPartialSession, partialSessionProgress, resolvePartialSession, savePartialSession, type PartialSession, type SessionSnapshot } from "../song/resume";
 import { ChordBox } from "./ChordBox";
 import { loadProfile } from "../listen/calibration";
 import { Calibrate } from "./Calibrate";
@@ -464,7 +465,9 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
     lastPassLen.current = len;
   }, [session.passLog, emitPool]);
   useEffect(() => {
-    if (pooled.current.pos !== null && pooled.current.pos !== session.pos) emitPool({ kind: "sweep", direction: 1 });
+    if (pooled.current.pos !== null && pooled.current.pos !== session.pos) {
+      emitPool({ kind: "sweep", direction: session.pos > pooled.current.pos ? 1 : -1 });
+    }
     pooled.current.pos = session.pos;
   }, [session.pos, emitPool]);
 
@@ -494,6 +497,53 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
   useEffect(() => guests.forEach((g) => saveMeta(g.tuneId, { title: g.sheet.title, key: g.deck.harmony.home.id })), [guests]);
 
   const { store, running, finished } = session;
+  const [chosenCard, setChosenCard] = useState(() => (direct ? undefined : initialCardId));
+  const [partialRev, setPartialRev] = useState(0);
+  const partial = useMemo<PartialSession | null>(
+    () => (!running && !chosenCard ? resolvePartialSession(loadPartialSession(sheet.id, focus), deck) : null),
+    [running, chosenCard, sheet.id, focus, deck, partialRev],
+  );
+  const persistPartial = useCallback(
+    (snap: SessionSnapshot | null | undefined, clearWhenEmpty = false) => {
+      if (snap) {
+        savePartialSession({
+          v: 1,
+          tuneId: sheet.id,
+          focus,
+          savedAt: Date.now(),
+          day: today(),
+          ...snap,
+          blocks: sessionBlocks,
+          gapIds: [...gapIds],
+        });
+      } else if (clearWhenEmpty) {
+        clearPartialSession(sheet.id, focus);
+      }
+    },
+    [sheet.id, focus, sessionBlocks, gapIds],
+  );
+  const persistRef = useRef({ running, session, persistPartial });
+  persistRef.current = { running, session, persistPartial };
+  useEffect(() => {
+    if (!running) return;
+    const snap = session.snapshot?.();
+    if (snap) persistPartial(snap);
+    else if (finished) clearPartialSession(sheet.id, focus);
+  }, [running, finished, session.pos, session.queue, session.log, session.phase, session.selfGuided, sheet.id, focus, persistPartial]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const onUnload = () => {
+      const p = persistRef.current;
+      if (!p.running) return;
+      const snap = p.session.snapshot?.();
+      if (snap) p.persistPartial(snap);
+    };
+    window.addEventListener("pagehide", onUnload);
+    window.addEventListener("beforeunload", onUnload);
+    return () => {
+      window.removeEventListener("pagehide", onUnload);
+      window.removeEventListener("beforeunload", onUnload);
+    };
+  }, []);
   const inputSetup = currentInputSetup();
   const setupKey = inputSetup ? `${inputSetup.deviceId}:${inputSetup.sampleRate}` : null;
   useEffect(() => {
@@ -507,7 +557,6 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
   }, [running, choosingTune, tools, input.status, input.paused, setupKey]);
   // the player across every box, and the session planned from it: warm-up, focus, review, music
   const length = store.settings.length ?? "normal";
-  const [chosenCard, setChosenCard] = useState(() => (direct ? undefined : initialCardId));
   const unavailablePassage = Boolean(chosenCard?.startsWith("mel:passage:") && !deck.cards.some((card) => card.id === chosenCard));
   const shaped = useMemo<SessionPlan>(() => {
     const chosen = findCard(deck.cards, chosenCard);
@@ -527,11 +576,26 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
   };
 
   const close = () => {
-    session.exit();
+    const wasRunning = running;
+    const saved = session.exit();
+    if (wasRunning) persistPartial(saved, true);
+    setPartialRev((n) => n + 1);
     onClose();
+  };
+  const resumePartial = () => {
+    if (calib || menu || free || choosingTune || tools || !partial) return;
+    setGapIds(new Set(partial.gapIds));
+    setSessionBlocks(partial.blocks);
+    session.resumeFrom(partial);
+    setChosenCard(undefined);
+  };
+  const discardPartial = () => {
+    clearPartialSession(sheet.id, focus);
+    setPartialRev((n) => n + 1);
   };
   const beginNow = (self = false) => {
     if (calib || menu || free || choosingTune || tools || !plan.length) return;
+    clearPartialSession(sheet.id, focus);
     saveArc(shaped.arc);
     const onTime = shaped.arc && ["rushing", "dragging", "unsteady"].includes(shaped.arc.cls);
     setGapIds(new Set(onTime ? shaped.blocks.find((b) => b.role === "focus")?.cards ?? [] : []));
@@ -542,6 +606,7 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
   };
   const beginFromCard = (cardId: string) => {
     if (calib || menu || free || choosingTune || tools) return;
+    clearPartialSession(sheet.id, focus);
     const rest = plan.filter((id) => id !== cardId);
     const ordered = [cardId, ...rest];
     saveArc(shaped.arc);
@@ -553,6 +618,7 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
   };
   const beginCard = (cardId: string) => {
     if (calib || menu || free || choosingTune || tools) return;
+    clearPartialSession(sheet.id, focus);
     setGapIds(new Set());
     setSessionBlocks([{ role: "focus", cards: [cardId], minutes: 2 }]);
     session.begin([cardId]);
@@ -650,7 +716,9 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
     if (!onTune || id === sheet.id || !themeSources.some((source) => source.id === id)) return;
     if (!switchStopped.current) {
       if (free) flushSync(() => setFree(false)); // commit free-play's saved visit before draining practice writes
-      session.exit();
+      const wasRunning = running;
+      const saved = session.exit();
+      if (wasRunning) persistPartial(saved, true);
       switchStopped.current = true;
       pausedByChooser.current = false;
     }
@@ -685,6 +753,7 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
     setFree(false);
     pausedByMenu.current = false;
     if (running && !finished) session.finish();
+    clearPartialSession(sheet.id, focus);
     session.begin([id]);
   };
 
@@ -736,11 +805,12 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
     session.swap(cardNow.id, variantId(cardNow.base, id));
   };
   // A whole-tune run and improvisation reserve every played note for the music.
-  const held = useNoteKeys(input, inExercise && pad === null && !menu && !calib && !choosingTune && !tools && !session.paused && !wholeTune && !improvising, [noteKeys.hear, noteKeys.pace, noteKeys.time, noteKeys.next, keepKey], (key) => {
+  const held = useNoteKeys(input, inExercise && pad === null && !menu && !calib && !choosingTune && !tools && !session.paused && !wholeTune && !improvising, [noteKeys.hear, noteKeys.pace, noteKeys.time, noteKeys.next, keepKey, noteKeys.prev ?? null], (key) => {
     if (key === 0) session.hear();
     else if (key === 1) session.go("pace");
     else if (key === 2) session.go("time");
     else if (key === 4) keepOffer();
+    else if (key === 5) session.prev?.();
     else session.next();
   });
 
@@ -845,13 +915,13 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
     },
     {
       title: "Tune & session",
-      rows: [{ label: "Sound & setup" }, { label: onTune ? "Choose tune" : "" }, { label: "Session controls" }, { label: "Tuner" }, { label: "Metronome" }, flowing ? { label: "Score", value: scoreZoom.name } : { label: "Return to playing" }],
-      fire: [() => setPad(2), openTunePicker, () => setPad(1), () => openTools("tuner"), () => openTools("metronome"), () => (flowing ? scoreZoom.cycle() : closePad())],
+      rows: [{ label: "Sound & setup" }, { label: onTune ? "Choose tune" : "" }, { label: session.pos > 0 ? "Previous exercise" : "Session controls" }, { label: "Tuner" }, { label: "Metronome" }, flowing ? { label: "Score", value: scoreZoom.name } : { label: "Return to playing" }],
+      fire: [() => setPad(2), openTunePicker, () => (session.pos > 0 ? (closePad(false), session.prev?.()) : setPad(1)), () => openTools("tuner"), () => openTools("metronome"), () => (flowing ? scoreZoom.cycle() : closePad())],
     },
   ];
 
   // keys: all optional. Space pauses, arrows (or a page-turner pedal) skip and go again, −/+ tempo, S settings
-  const act = { session, menu, pad, calib, free, freeInstruments, choosingTune, tools, endCalib, close, beginNow, openMenu, closeMenu, openPad, closePad, openFree, closeFree, openTools, closeTools, inExercise, barAlone, flowing, scoreZoom, parked, running, finished };
+  const act = { session, menu, pad, calib, free, freeInstruments, choosingTune, tools, endCalib, close, beginNow, resumePartial, partial, persistPartial, openMenu, closeMenu, openPad, closePad, openFree, closeFree, openTools, closeTools, inExercise, barAlone, flowing, scoreZoom, parked, running, finished };
   const actRef = useRef(act);
   actRef.current = act;
 
@@ -916,7 +986,8 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
       async leave() {
         const a = actRef.current;
         if (a.free) flushSync(() => setFree(false)); // commit free-play's saved visit before draining practice writes
-        a.session.exit();
+        const saved = a.session.exit();
+        if (a.running) a.persistPartial(saved, true);
         await settlePracticeWrites();
       },
     };
@@ -954,16 +1025,21 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
       } else if (a.menu) return;
       else if (k === "f") a.openFree();
       else if (!s.running) {
-        if (k === " " || k === "Enter") a.beginNow();
-        else return;
+        if (k === " " || k === "Enter") {
+          if (a.partial) a.resumePartial();
+          else a.beginNow();
+        } else return;
       } else if (s.finished) {
-        if (k === " " || k === "Enter") s.keepGoing();
-        else return;
+        if (k === " " || k === "Enter") {
+          if ((s.remaining ?? 0) > 0) s.resume?.();
+          else s.keepGoing();
+        } else return;
       } else if (k === " ") s.togglePause();
       else if (k === "ArrowRight" || k === "PageDown") s.skip();
       else if (k === "ArrowLeft" || k === "PageUp") s.again();
       else if (k === "h") s.hear();
       else if (k === "b") a.barAlone();
+      else if (k === "p") s.prev?.();
       else if (k === "n") s.next();
       else if (k === "-" || k === "_") s.tempo(-4);
       else if (k === "+" || k === "=") s.tempo(4);
@@ -1002,6 +1078,9 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
           shaped={shaped}
           length={length}
           onLength={cycleLength}
+          partial={partial}
+          onResume={resumePartial}
+          onDiscardPartial={discardPartial}
           onBegin={() => beginNow()}
           onSelfBegin={() => beginNow(true)}
           onStartFromCard={beginFromCard}
@@ -1111,6 +1190,9 @@ function Ready({
   shaped,
   length,
   onLength,
+  partial,
+  onResume,
+  onDiscardPartial,
   onBegin,
   onSelfBegin,
   onStartFromCard,
@@ -1140,6 +1222,9 @@ function Ready({
   shaped: SessionPlan;
   length: string;
   onLength(): void;
+  partial: PartialSession | null;
+  onResume(): void;
+  onDiscardPartial(): void;
   onBegin(): void;
   onSelfBegin(): void;
   onStartFromCard(cardId: string): void;
@@ -1162,40 +1247,66 @@ function Ready({
   unavailablePassage: boolean;
 }) {
   const byId = useMemo(() => new Map(deck.cards.map((c) => [c.id, c])), [deck]);
+  const partialProgress = partial ? partialSessionProgress(partial) : null;
+  const activeQueue = partial ? partial.queue.slice(partial.pos) : plan;
+  const primaryStart = partial ? onResume : onBegin;
   // a short 3-note fretted phrase begins immediately (open strings remain free for quick tuning)
-  const { ring, notes: phraseNotes } = useStartPhrase(input, plan.length > 0 && keysOn, onBegin);
+  const { ring, notes: phraseNotes } = useStartPhrase(input, activeQueue.length > 0 && keysOn, primaryStart);
   const held = useNoteKeys(input, keysOn, [READY_KEYS[0], READY_KEYS[1], guests.length ? READY_KEYS[2] : null, READY_KEYS[3], READY_KEYS[4], onChooseTune ? READY_KEYS[5] : null, READY_KEYS[6]], (k) => (k === 0 ? onFree() : k === 1 ? onSettings() : k === 2 ? onMix() : k === 3 ? onLength() : k === 4 ? onSelfBegin() : k === 5 ? onChooseTune?.() : onTools("tuner")), true);
-  const from = new Set(plan.map((id) => byId.get(id)?.tune).filter(Boolean));
+  const from = new Set(activeQueue.map((id) => byId.get(id)?.tune).filter(Boolean));
   const listening = input.status === "listening" && !input.paused;
-  const first = byId.get(plan[0]);
+  const first = byId.get(activeQueue[0]);
   const days = streak(session.store);
-  const say = unavailablePassage ? "Choose this passage again in Songs" : !plan.length
+  const say = unavailablePassage ? "Choose this passage again in Songs" : !activeQueue.length
     ? deck.cards.length ? "A little more time for this one" : "No exercise in this score yet"
     : listening
-      ? "Ready when you are"
+      ? partial ? "Pick up where you left off" : "Ready when you are"
       : input.status === "starting"
         ? "Connecting your guitar…"
         : input.paused
           ? "Wake up the sound"
           : "Let’s hear your guitar";
   const inputLabel = listening ? "Guitar listening" : input.status === "starting" ? "Opening input" : input.paused ? "Audio suspended" : "Input off";
-  const startLabel = listening ? "Begin session" : input.status === "starting" ? "Opening input…" : input.paused ? "Resume listening" : input.status === "error" ? "Reconnect input" : "Enable listening";
+  const startLabel = listening ? (partial ? "Resume session" : "Begin session") : input.status === "starting" ? "Opening input…" : input.paused ? "Resume listening" : input.status === "error" ? "Reconnect input" : "Enable listening";
   const isWholeSelected = Boolean(wholeCardId && plan.length === 1 && plan[0] === wholeCardId);
   const cycleWindow = () => {
     const idx = READY_WINDOWS.indexOf(windowP);
     onWindow(READY_WINDOWS[(idx + 1) % READY_WINDOWS.length]);
   };
   const winLabel = windowP === null ? `Frets ${deck.window.p}–${deck.window.p + 3} (auto)` : `Frets ${windowP}–${windowP + 3}`;
+  const playedMins = partial && partial.activeMs >= 30000 ? Math.max(1, Math.round(partial.activeMs / 60000)) : 0;
   return (
     <div className="ss-ready ss-ready-flow">
       <div className="ss-ready-story">
         <div className="ss-ready-eyebrow">
           <span className="ss-ready-key">{sheet.keySignature}</span>
           <p className="ss-kicker">{focus !== "all" ? FOCUS_LABEL[focus] : days > 1 ? `Day ${days}` : "In the room"}</p>
-          {plan.length > 0 ? <span className="ss-ready-meta">{plan.length} · ~{shaped.minutes}m{from.size > 1 ? ` · ${from.size} tunes` : ""}</span> : null}
+          {partialProgress ? (
+            <span className="ss-ready-meta">{partialProgress.done}/{partialProgress.total} done · {partialProgress.remaining} left</span>
+          ) : plan.length > 0 ? (
+            <span className="ss-ready-meta">{plan.length} · ~{shaped.minutes}m{from.size > 1 ? ` · ${from.size} tunes` : ""}</span>
+          ) : null}
         </div>
         <h1 className="ss-display">{sheet.title}</h1>
-        {shaped.why || shaped.sideWhy ? (
+        {partial && partialProgress ? (
+          <div className="ss-resume-banner" role="region" aria-label="Unfinished session">
+            <div className="ss-resume-copy">
+              <strong>Unfinished session</strong>
+              <span>
+                {partialProgress.done} of {partialProgress.total} done · {partialProgress.remaining} left
+                {playedMins ? ` · ${playedMins}m played` : ""}
+              </span>
+            </div>
+            <div className="ss-resume-actions">
+              <button type="button" className="ss-resume-go" disabled={!keysOn} onClick={onResume}>
+                Resume
+              </button>
+              <button type="button" className="ss-resume-discard" disabled={!keysOn} onClick={onDiscardPartial}>
+                Start fresh
+              </button>
+            </div>
+          </div>
+        ) : shaped.why || shaped.sideWhy ? (
           <p className="ss-focus">
             {shaped.why}
             {shaped.why && shaped.sideWhy ? " · " : ""}
@@ -1232,16 +1343,23 @@ function Ready({
         {first ? (
           <div className="ss-ready-preview">
             <ol className="ss-ready-queue">
-              {plan.slice(0, 3).map((id, i) => {
+              {activeQueue.slice(0, 3).map((id, i) => {
                 const card = byId.get(id);
                 if (!card) return null;
-                const role = shaped.blocks.find((b) => b.cards.includes(id))?.role;
+                const blocksSource = partial ? partial.blocks : shaped.blocks;
+                const role = blocksSource.find((b) => b.cards.includes(id))?.role;
                 const cardState = session.store.cards[id];
                 const cardBpm = cardState?.bestCleanBpm ?? cardState?.bpm ?? card.bpm;
+                const num = (partial ? partial.pos : 0) + i + 1;
                 return (
-                  <li key={id} className={`fam-${card.family}`}>
-                    <button type="button" className="ss-ready-row" disabled={!keysOn} onClick={() => onStartFromCard(id)}>
-                      <span className="ss-ready-num">{String(i + 1).padStart(2, "0")}</span>
+                  <li key={`${num}:${id}`} className={`fam-${card.family}`}>
+                    <button
+                      type="button"
+                      className="ss-ready-row"
+                      disabled={!keysOn}
+                      onClick={() => (partial && i === 0 ? onResume() : onStartFromCard(id))}
+                    >
+                      <span className="ss-ready-num">{String(num).padStart(2, "0")}</span>
                       <span className="ss-ready-copy">
                         <strong>{card.title}</strong>
                         <small>
@@ -1257,7 +1375,9 @@ function Ready({
                 );
               })}
             </ol>
-            {plan.length > 3 ? <p className="ss-ready-more">+{plan.length - 3} more in queue</p> : null}
+            {activeQueue.length > 3 ? (
+              <p className="ss-ready-more">+{activeQueue.length - 3} more {partial ? "left in session" : "in queue"}</p>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -1265,7 +1385,7 @@ function Ready({
       <div className="ss-ready-arrival">
         <span className={`ss-connection ${listening ? "is-live" : ""}`}><i />{inputLabel}</span>
         <Ear input={input} size="big" ring={ring} />
-        {listening && plan.length > 0 ? (
+        {listening && activeQueue.length > 0 ? (
           <ol className="ss-phrase-steps" aria-label={`Start phrase progress: ${phraseNotes.length} of ${START_PHRASE_LENGTH} notes`}>
             {Array.from({ length: START_PHRASE_LENGTH }, (_, i) => (
               <li key={i} className={phraseNotes[i] !== undefined ? "is-lit" : ""}>
@@ -1275,18 +1395,18 @@ function Ready({
           </ol>
         ) : null}
         <p className="ss-say" aria-live="polite">{say}</p>
-        {listening && plan.length > 0 && !tuned ? <TuneCheck input={input} onDone={onTuned} onSkip={onTuned} /> : null}
+        {listening && activeQueue.length > 0 && !tuned ? <TuneCheck input={input} onDone={onTuned} onSkip={onTuned} /> : null}
         <p className="ss-ready-instruction">
-          {unavailablePassage ? "Return to Songs to choose a passage with melody notes in this arrangement." : !plan.length
+          {unavailablePassage ? "Return to Songs to choose a passage with melody notes in this arrangement." : !activeQueue.length
             ? deck.cards.length ? "Hold F below for more time, or open free play." : "Free play is always available."
-            : listening ? "Play 3 fretted notes to begin · open strings stay free" : input.paused ? "Tap to wake audio, then play to begin." : "Connect an interface or allow the microphone."}
+            : listening ? (partial ? "Play 3 fretted notes to resume · open strings stay free" : "Play 3 fretted notes to begin · open strings stay free") : input.paused ? "Tap to wake audio, then play to begin." : "Connect an interface or allow the microphone."}
         </p>
         {input.error ? <p className="ss-input-detail" role="status">{input.error}</p> : null}
         <button
           type="button"
           className="ss-begin"
-          disabled={!keysOn || unavailablePassage || input.status === "starting" || (listening && !plan.length)}
-          onClick={listening ? onBegin : () => void input.start()}
+          disabled={!keysOn || unavailablePassage || input.status === "starting" || (listening && !activeQueue.length)}
+          onClick={listening ? primaryStart : () => void input.start()}
         >
           {startLabel}<span aria-hidden="true">↗</span>
         </button>
@@ -1510,11 +1630,17 @@ function Running({
   const hasCoach = Boolean(say.text || pips || hasMeter);
   const showBeatRail = (s.phase === "time" || s.phase === "listen") && !s.paused;
 
+  const latestByPos = useMemo(() => {
+    const map = new Map<number, Outcome>();
+    for (const o of s.log) if (o.at >= 0) map.set(o.at, o);
+    return map;
+  }, [s.log]);
+
   return (
     <div className={`ss-run phase-${s.phase} ${s.paused ? "is-paused" : ""} ${turnaround ? "is-turnaround" : ""}`}>
       <ol className="ss-progress" aria-label={`exercise ${s.pos + 1} of ${s.queue.length}`}>
         {s.queue.map((id, i) => {
-          const o = s.log.find((x) => x.at === i);
+          const o = latestByPos.get(i);
           const role = roleByPos[i];
           const blockStart = i > 0 && role && role !== roleByPos[i - 1];
           return <li key={i} className={`fam-${byId.get(id)?.family ?? "melody"} ${i === s.pos ? "is-now" : ""} ${o ? `is-${o.result}` : ""} ${blockStart ? "is-block-start" : ""}`} title={role ? ROLE_LABEL[role] : undefined} />;
@@ -1698,6 +1824,18 @@ function Running({
                 </button>
               </li>
             ))}
+            <li className="ss-trail-prev">
+              <button
+                type="button"
+                onClick={() => s.prev?.()}
+                disabled={s.paused || s.pos === 0}
+                title={playedShortcuts && s.keys.prev != null ? `Previous exercise · hold ${keyName(s.keys.prev)} (exact octave)` : "Previous exercise"}
+                aria-label={`Previous exercise${playedShortcuts && s.keys.prev != null ? ` · hold ${keyName(s.keys.prev)}` : ""}`}
+              >
+                <NoteTag midi={playedShortcuts ? s.keys.prev : null} held={held === 5} />
+                <span>Prev</span>
+              </button>
+            </li>
             <li className={`ss-trail-next ${s.bankedBpm !== null ? "is-banked" : ""}`}>
               <button
                 type="button"
@@ -1711,7 +1849,19 @@ function Running({
               </button>
             </li>
           </ol>
-        ) : <span className="ss-foot-note">Every note is music</span>}
+        ) : (
+          <div className="ss-foot-free">
+            {s.pos > 0 ? (
+              <button type="button" onClick={() => s.prev?.()} disabled={s.paused} aria-label="Previous exercise">
+                ← Prev
+              </button>
+            ) : null}
+            <span className="ss-foot-note">Every note is music</span>
+            <button type="button" onClick={s.next} disabled={s.paused} aria-label={s.selfGuided ? "Done practising" : "Next exercise"}>
+              {s.selfGuided ? "Done" : "Next →"}
+            </button>
+          </div>
+        )}
         <div className="ss-side" data-pool="calm">
           {s.phase === "time" && aidLevel >= 0.08 ? (
             <span className="ss-aid is-on" style={{ opacity: Math.min(1, aidLevel * 2.1) }} title="Adaptive guide melody blending in where needed and fading out as you carry it">
@@ -2833,6 +2983,9 @@ function Drawer({
               </span>
             </div>
             <div className="ss-actions">
+              <button type="button" disabled={s.pos === 0} onClick={() => (s.prev?.(), onClose())}>
+                Previous exercise
+              </button>
               <button type="button" onClick={() => (s.again(), onClose())}>
                 Start it again
               </button>
@@ -2959,7 +3112,7 @@ function Drawer({
         <section>
           <h3>Keys and pedal</h3>
           <p className="ss-keys">
-            <kbd>Space</kbd> pause <kbd>→</kbd> skip <kbd>←</kbd> again <kbd>H</kbd> hear it <kbd>B</kbd> this bar alone <kbd>N</kbd> next <kbd>−</kbd> <kbd>+</kbd> tempo <kbd>C</kbd> click <kbd>G</kbd> melody <kbd>L</kbd> labels <kbd>F</kbd> free play <kbd>S</kbd> settings <kbd>Esc</kbd> leave
+            <kbd>Space</kbd> pause <kbd>→</kbd> skip <kbd>←</kbd> again <kbd>H</kbd> hear it <kbd>B</kbd> this bar alone <kbd>P</kbd> previous <kbd>N</kbd> next <kbd>−</kbd> <kbd>+</kbd> tempo <kbd>C</kbd> click <kbd>G</kbd> melody <kbd>L</kbd> labels <kbd>F</kbd> free play <kbd>S</kbd> settings <kbd>Esc</kbd> leave
           </p>
         </section>
       </aside>

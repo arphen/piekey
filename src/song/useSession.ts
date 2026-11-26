@@ -25,6 +25,7 @@ import { createTrouble, spotCard, spotOf, type Spot } from "./spot";
 import { meanShare } from "./stats";
 import { useChordFollower } from "./useChordFollower";
 import { isShared, tuneOf } from "./ids";
+import type { SessionSnapshot } from "./resume";
 
 // Runs a practice session without touching the computer. Each card goes
 //   intro → (listen) → (at your own pace) → in time with the band → result
@@ -92,6 +93,7 @@ const GAP_BARS = 2; // bars with the band, then bars without it (twice as many i
 
 const EMPTY: Timeline = { slots: [], targets: [], comp: [], total: 0 };
 const KEY_IDS = ["hear", "pace", "time", "next"];
+const KEY_IDS_WITH_PREV = ["hear", "pace", "time", "next", "prev"];
 const even = (bpm: number) => Math.round(bpm / 2) * 2;
 
 export interface PassEntry {
@@ -216,6 +218,18 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
   const spotFrom = useRef<"pace" | "time">("time"); // where the piece carries on after it
   const logRef = useRef<Outcome[]>([]);
   logRef.current = log;
+  const queueRef = useRef(queue);
+  queueRef.current = queue;
+  const posRef = useRef(pos);
+  posRef.current = pos;
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
+  const outcomeRef = useRef(outcome);
+  outcomeRef.current = outcome;
+  const runningRef = useRef(running);
+  runningRef.current = running;
+  const selfGuidedRef = useRef(selfGuided);
+  selfGuidedRef.current = selfGuided;
   const recorded = useRef({ outcomes: 0, ms: 0 }); // already written to the session history
   const timeStarts = useRef(0); // in-time loops started for this card
   const passCount = useRef(0); // timed passes heard for this card (Pass 0 gets free settle-in grace if rough)
@@ -319,7 +333,8 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
   const heardBefore = Boolean(card && (storeRef.current.cards[card.id]?.seen ?? 0) > 0);
 
   // notes that work the session instead of the exercise: never heard as part of it
-  const keys = useMemo(() => assignNoteKeys(KEY_IDS, card ? commandMidis(card) : []), [card]);
+  const hasPrev = pos > 0;
+  const keys = useMemo(() => assignNoteKeys(hasPrev ? KEY_IDS_WITH_PREV : KEY_IDS, card ? commandMidis(card) : []), [card, hasPrev]);
   const directKeys = Boolean(card && !card.run && card.step?.kind !== "tune" && card.kind !== "improv");
   const ignore = useMemo(() => new Set(directKeys ? Object.values(keys).filter((m): m is number => m !== null) : []), [keys, directKeys]);
 
@@ -467,6 +482,73 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     setStore(n);
   }, [stop, saveStore]);
 
+  const currentConcluded = Boolean(outcome && outcome.at === pos && phase === "result");
+  const resumePos = currentConcluded ? pos + 1 : pos;
+  const remaining = running && queue.length > 0 ? Math.max(0, queue.length - resumePos) : 0;
+
+  /** Snapshot of an unfinished session so it can be resumed across exits or reloads. */
+  const snapshot = useCallback((includeInactive = false): SessionSnapshot | null => {
+    if (!includeInactive && !runningRef.current) return null;
+    const q = queueRef.current;
+    if (!q.length) return null;
+    const p = posRef.current;
+    const doneNow = Boolean(outcomeRef.current && outcomeRef.current.at === p && phaseRef.current === "result");
+    const nextPos = doneNow ? p + 1 : p;
+    if (nextPos >= q.length) return null;
+    if (nextPos === 0 && logRef.current.length === 0) return null;
+    return {
+      queue: [...q],
+      pos: nextPos,
+      log: [...logRef.current],
+      selfGuided: selfGuidedRef.current,
+      activeMs: Math.round(clock.current.active),
+      recordedOutcomes: recorded.current.outcomes,
+      recordedMs: Math.round(recorded.current.ms),
+    };
+  }, []);
+
+  /** Restore a saved partial session right where the player left off. */
+  const resumeFrom = useCallback(
+    (saved: SessionSnapshot) => {
+      if (!saved.queue.length || saved.pos >= saved.queue.length) return;
+      ensureAudio();
+      void Tone.start().catch(() => undefined);
+      setQueue([...saved.queue]);
+      setPos(saved.pos);
+      setFinished(false);
+      setSelfGuided(saved.selfGuided);
+      setEnding(false);
+      setPaused(false);
+      setAway(false);
+      lostInput.current = false;
+      const restoredLog = [...saved.log];
+      logRef.current = restoredLog;
+      setLog(restoredLog);
+      recorded.current = { outcomes: saved.recordedOutcomes, ms: saved.recordedMs };
+      const now = performance.now();
+      clock.current = { active: saved.activeMs, card: 0, heard: now, event: now, nudges: 0 };
+      setRunning(true);
+      if (!saved.selfGuided && (input.status === "idle" || input.status === "error")) void input.start();
+    },
+    [input],
+  );
+
+  /** Resume an ended-early session from the summary screen, picking up at the next unfinished exercise. */
+  const resume = useCallback(() => {
+    if (!running || !finished || remaining <= 0) return false;
+    ensureAudio();
+    void Tone.start().catch(() => undefined);
+    const now = performance.now();
+    clock.current = { ...clock.current, heard: now, event: now };
+    setPos(resumePos);
+    setFinished(false);
+    setEnding(false);
+    setPaused(false);
+    setAway(false);
+    if (!selfGuided && (input.status === "idle" || input.status === "error")) void input.start();
+    return true;
+  }, [running, finished, remaining, resumePos, selfGuided, input]);
+
   const keepGoing = useCallback(() => {
     ensureAudio();
     void Tone.start().catch(() => undefined);
@@ -486,13 +568,15 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     return true;
   }, [deck, queue, pos]);
 
-  const exit = useCallback(() => {
+  const exit = useCallback((): SessionSnapshot | null => {
     if (running && !finished) finish();
+    const saved = running ? snapshot(true) : null;
     stop();
     hush();
     setRunning(false);
     setFinished(false);
-  }, [running, finished, finish, stop]);
+    return saved;
+  }, [running, finished, finish, snapshot, stop]);
 
   // a new card (or the same one again later in the queue): reset and introduce it
   const estimator = useMemo(() => createEstimator(card?.family === "scales" || card?.family === "technique" ? "scale" : "melody"), [cardKey]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1357,6 +1441,19 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     else finish();
   }, [card, phase, nextPhase, stop, conclude, pos, queue.length, finish, enterTime, spot, endSpot]);
 
+  /** Step back to the previous exercise in this session. */
+  const prev = useCallback(() => {
+    if (!running || finished || pos <= 0) return;
+    stop();
+    hush();
+    setPaused(false);
+    setAway(false);
+    setWaiting(false);
+    setEnding(false);
+    setSpot(null);
+    setPos((p) => Math.max(0, p - 1));
+  }, [running, finished, pos, stop]);
+
   /** On to the next exercise, from wherever this one is. If a clean pass was already banked in Free Ride, bank it cleanly! */
   const next = useCallback(() => {
     if (!card) return;
@@ -1597,6 +1694,10 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     setClick,
     start,
     begin,
+    resume,
+    resumeFrom,
+    remaining,
+    snapshot,
     finish,
     finishAfterPass,
     continueWithoutScoring,
@@ -1604,6 +1705,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     exit,
     togglePause,
     skip,
+    prev,
     next,
     go,
     swap,

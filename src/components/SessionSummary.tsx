@@ -205,12 +205,18 @@ export function SessionSummary({
 
   // ---------- what a note does next ----------
 
+  const remaining = s.remaining ?? 0;
+  const canCarry = remaining > 0 || more;
   const carryOn = () => {
+    if (remaining > 0) {
+      s.resume?.();
+      return;
+    }
     if (!s.keepGoing()) setMore(false);
   };
   const shuffle = () => s.updateSettings({ shuffle: !s.settings.shuffle });
   const fire = [carryOn, onFree, onSettings, () => onChooseTune?.(), shuffle];
-  const held = useNoteKeys(input, enabled && armed, [more ? KEYS.more : null, KEYS.free, KEYS.settings, onChooseTune ? KEYS.tune : null, KEYS.shuffle], (k) => fire[k](), true);
+  const held = useNoteKeys(input, enabled && armed, [canCarry ? KEYS.more : null, KEYS.free, KEYS.settings, onChooseTune ? KEYS.tune : null, KEYS.shuffle], (k) => fire[k](), true);
 
   let row = 0;
   return (
@@ -328,9 +334,17 @@ export function SessionSummary({
         {ear}
         <ul className={`ss-acts ${armed && enabled ? "is-armed" : ""}`} aria-label="played on the guitar">
           <li className="is-main">
-            <button type="button" onClick={carryOn} disabled={!more}>
+            <button type="button" onClick={carryOn} disabled={!canCarry}>
               <NoteTag midi={KEYS.more} held={held === 0} octave={false} />
-              <span>{more ? (counts.due ? `carry on · ${counts.due} due` : "a few more") : "nothing more for today"}</span>
+              <span>
+                {remaining > 0
+                  ? `resume session · ${remaining} left`
+                  : more
+                    ? counts.due
+                      ? `carry on · ${counts.due} due`
+                      : "a few more"
+                    : "nothing more for today"}
+              </span>
             </button>
           </li>
           <li>

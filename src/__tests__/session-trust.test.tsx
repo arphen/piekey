@@ -605,4 +605,63 @@ describe("session assessment trust", () => {
       expect(session.store.history).toEqual(history);
     });
   }
+
+  it("steps back between exercises with prev() and resumes partial sessions without double-counting", async () => {
+    input.status = "listening";
+    const cards = deck.cards.filter((c) => !c.memory && !c.run && c.family !== "ear").slice(0, 3);
+    expect(cards).toHaveLength(3);
+    await act(async () => session.begin(cards.map((c) => c.id)));
+    expect(session.pos).toBe(0);
+    expect(session.keys.prev).toBeUndefined();
+    // prev at pos 0 is a no-op
+    await act(async () => session.prev());
+    expect(session.pos).toBe(0);
+
+    // Move to exercise 2 via next() (conclude skip -> advance)
+    await act(async () => session.next());
+    await act(async () => session.next());
+    expect(session.pos).toBe(1);
+    expect(session.card?.id).toBe(cards[1].id);
+    expect(session.keys.prev).toBeTypeOf("number");
+
+    // Step back to exercise 1 cleanly
+    await act(async () => session.prev());
+    expect(session.pos).toBe(0);
+    expect(session.card?.id).toBe(cards[0].id);
+
+    // Complete exercise 1 cleanly (banks in Free Ride), bank & advance to exercise 2
+    await act(async () => session.go("time"));
+    await act(async () => vi.advanceTimersByTime(950));
+    await pass(cards[0]);
+    await act(async () => session.next());
+    await act(async () => session.next());
+    expect(session.pos).toBe(1);
+    expect(session.remaining).toBe(2);
+
+    // Stop early on exercise 2 -> summary shows 2 remaining, resume() picks up at exercise 2
+    await act(async () => session.finish());
+    expect(session.finished).toBe(true);
+    expect(session.remaining).toBe(2);
+    expect(session.store.sessions).toHaveLength(1);
+    await act(async () => { expect(session.resume()).toBe(true); });
+    expect(session.finished).toBe(false);
+    expect(session.pos).toBe(1);
+    expect(session.card?.id).toBe(cards[1].id);
+
+    // Exit mid-session -> returns resumable snapshot with recordedOutcomes=2 (skip + clean)
+    let saved: ReturnType<typeof session.exit> = null;
+    await act(async () => { saved = session.exit(); });
+    expect(saved).not.toBeNull();
+    expect(saved!.pos).toBe(1);
+    expect(saved!.queue).toEqual(cards.map((c) => c.id));
+    expect(saved!.recordedOutcomes).toBe(saved!.log.length);
+
+    // Restoring the snapshot resumes at exercise 2 and finishing without new cards doesn't double-record
+    await act(async () => session.resumeFrom(saved!));
+    expect(session.running).toBe(true);
+    expect(session.pos).toBe(1);
+    expect(session.card?.id).toBe(cards[1].id);
+    await act(async () => session.finish());
+    expect(session.store.sessions).toHaveLength(1);
+  });
 });

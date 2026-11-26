@@ -229,7 +229,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/components/SessionSummary.tsx` — `SessionSummary:86`
 - `src/components/ShapesView.tsx` — `ShapesView:16`
 - `src/components/SkillTree.tsx` — `SkillTree:18`
-- `src/components/SongCoach.tsx` — `RoomSurface:96`, `RoomRequest:98`, `RoomHandle:103`, `openPractice:257`, `SongCoach:327`, `SongCoachRoom:335`
+- `src/components/SongCoach.tsx` — `RoomSurface:97`, `RoomRequest:99`, `RoomHandle:104`, `openPractice:258`, `SongCoach:328`, `SongCoachRoom:336`
 - `src/components/SongMap.tsx` — `SongMap:138`
 - `src/components/Transport.tsx` — `Transport:18`
 - `src/components/TriadWheel.tsx` — `TriadWheel:48`
@@ -327,7 +327,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/song/lines.ts` — `LineNote:10`, `Span:16`, `ScaleDrill:22`, `scaleLine:42`, `Bounds:66`, `boundedLine:81`, `arpLine:124`, `guideLine:137`, `chainLine:167`
 - `src/song/notation.ts` — `KEY_FIFTHS:8`, `signatureOf:21`, `lineSheet:48`, `signatureFor:104`, `playedSheet:110`
 - `src/song/noteBoxes.ts` — `NoteBox:1`, `registerNoteBoxes:11`, `readNoteBoxes:16`
-- `src/song/notekeys.ts` — `OPEN_STRINGS:10`, `SUMMON_NOTE:13`, `KEY_HOMES:19`, `usedMidis:27`, `commandMidis:48`, `assignNoteKeys:74`, `spotOf:92`
+- `src/song/notekeys.ts` — `OPEN_STRINGS:10`, `SUMMON_NOTE:13`, `KEY_HOMES:19`, `usedMidis:28`, `commandMidis:49`, `assignNoteKeys:75`, `spotOf:93`
 - `src/song/planner.ts` — `Length:16`, `LENGTHS:17`, `LENGTH_MINUTES:18`, `Role:20`, `ROLE_LABEL:21`, `Block:29`, `Arc:35`, `SessionPlan:41`, `cardSeconds:97`, `nextArc:114`, `loadArc:124`, `saveArc:132`, `newCards:146`, `PlanOptions:157`, `planBlocks:166`
 - `src/song/practiceHistory.ts` — `PracticeTempoPoint:6`, `ExerciseHistory:17`, `PracticeStoreProjection:29`, `PracticeHistoryResult:31`, `projectPracticeStore:58`, `groupPracticeHistory:106`, `projectPracticeHistory:138`
 - `src/song/profile.ts` — `Axis:11`, `MistakeClass:12`, `AxisLevel:14`, `Weakness:21`, `Ceiling:29`, `SkillProfile:34`, `AXES:40`, `allAttempts:50`, `axesOf:55`, `buildProfile:122`
@@ -335,6 +335,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/song/pulse.ts` — `BeatSignal:2`, `IDLE_BEAT:10`
 - `src/song/rand.ts` — `seeded:2`, `shuffled:14`
 - `src/song/reading.ts` — `Known:17`, `KNOWN:24`, `knownNotes:46`, `knownLine:61`, `pickKnown:86`, `vary:99`, `ReadSpan:135`, `freshLine:147`
+- `src/song/resume.ts` — `PARTIAL_SESSION_KEY:10`, `SessionSnapshot:14`, `PartialSession:24`, `partialSessionKey:34`, `loadPartialSession:99`, `savePartialSession:104`, `clearPartialSession:114`, `resolvePartialSession:126`, `partialSessionProgress:156`
 - `src/song/rhythm.ts` — `isolateRhythm:6`, `rhythmSheet:16`
 - `src/song/scaleShapes.ts` — `ShapeLetter:15`, `OwnShape:18`, `ShapeBook:25`, `ShapeOption:31`, `SHAPES_KEY:38`, `MAX_OWN:39`, `EMPTY_SHAPES:42`, `cagedShapes:53`, `shapeOptions:61`, `findShape:66`, `baseOf:72`, `shapeOf:76`, `variantId:80`, `shapeBounds:92`, `ownBounds:104`, `shapeWindow:109` (+6 more)
 - `src/song/score-flow.css`
@@ -357,7 +358,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/song/useGoals.ts` — `useGoals:4`
 - `src/song/useHeardPass.ts` — `useHeardPass:16`
 - `src/song/usePracticeHistory.ts` — `usePracticeHistory:11`
-- `src/song/useSession.ts` — `Phase:52`, `PassEntry:97`, `Outcome:105`, `SessionOptions:139`, `useSession:150`, `SessionApi:1619`
+- `src/song/useSession.ts` — `Phase:53`, `PassEntry:99`, `Outcome:107`, `SessionOptions:141`, `useSession:152`, `SessionApi:1721`
 - `src/song/useThemePicker.ts` — `useThemePicker:14`
 - `src/song/voicings.ts` — `VoicingNote:10`, `Voicing:17`, `voiceChords:75`
 - `src/storage.ts` — `StorageIssue:4`, `pendingStorageWrites:14`, `getStoredItem:15`, `storedKeys:18`, `retryStorageWrites:32`, `getStorageIssues:38`, `subscribeStorageIssues:39`, `reportStorageError:44`, `clearStorageError:53`, `setStoredItem:59`, `removeStoredItem:74`

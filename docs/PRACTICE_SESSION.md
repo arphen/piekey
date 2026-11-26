@@ -8,14 +8,14 @@ does not tell them what to do.
 
 | Gesture | Where | Does |
 | --- | --- | --- |
-| A note held ~0.4 s (shown on screen next to what it works) | exercises | hear it again · your pace · in time · next exercise |
+| A note held ~0.4 s (shown on screen next to what it works) | exercises | hear it again · your pace · in time · previous exercise (when past the first) · next exercise |
 | The same, by note name in any octave | before and after a session | carry on · free play · settings · other tune · shuffle |
 | D♯5 (high e, fret 11) struck three times quickly, or held 1.3 s, released into quiet, then held again 0.6 s | exercises, free play, instruments | the six-string menu (tempo, click, tuner, sound output, …) |
 | A free note tapped twice | exercises, open drawer | gear, calibration, the drawer's switches |
 | F (any octave) held | ready screen | session length: 10 / 25 / 45 minutes |
 | The shown note held, while "Heard … · Keep as shape" is up | scale runs | keep the pass just played as a shape of its own and switch to it |
 
-Note keys (`song/notekeys.ts`) have home notes outside what exercises play (E5; F2, G2, G♯2). A
+Note keys (`song/notekeys.ts`) have home notes outside what exercises play (E5; F2, F♯2, G2, G♯2). A
 card that sounds a key's home note, itself or through its band, gets the nearest free note
 instead. Allocation reserves every octave of what the player plays: chord tones, improvisation
 choices and, unless the card is exact, melody notes. A note asked for on the neck is searched

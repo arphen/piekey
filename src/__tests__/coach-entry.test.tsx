@@ -13,6 +13,8 @@ import { keepPracticeWrite } from "../platform/practiceWindow";
 import { buildDeck } from "../song/deck";
 import { createGoal, getGoals, GOALS_KEY } from "../song/goals";
 import { loadStore } from "../song/leitner";
+import { loadPartialSession, PARTIAL_SESSION_KEY, resolvePartialSession, savePartialSession, type PartialSession } from "../song/resume";
+import { syncableStorageKey } from "../sync/model";
 import { IDLE_BEAT } from "../song/pulse";
 import * as cues from "../song/cues";
 import type { SessionApi } from "../song/useSession";
@@ -530,5 +532,87 @@ describe("coach entry", () => {
     expect(say?.classList.contains("is-good")).toBe(false);
     expect(host.querySelector(".ss-passes i.is-timing")).not.toBeNull();
     expect(host.querySelector(".ss-tempo-best")?.textContent).toContain("best ♩96");
+  });
+
+  it("exposes a Prev button and P shortcut between exercises during a session", async () => {
+    mocked.calibrated = true;
+    const deck = buildDeck(sheet, tl);
+    const cards = deck.cards.filter((candidate) => candidate.family === "scales" || candidate.family === "melody").slice(0, 2);
+    const prev = vi.fn();
+    Object.assign(mocked.session, {
+      running: true, card: cards[1], whole: cards[1], active: 0, queue: [cards[0].id, cards[1].id], pos: 1, box: 1,
+      phase: "pace", passes: [], passLog: [], settling: false, loopMode: "adaptive", setLoopMode() {}, loopLocked: false, tempoLift: null, breathing: false, reentry: 0,
+      priorBest: null, bankedBpm: null, freeRide: false, suggestedSpot: null, acceptSpot() {}, dismissSpot() {}, decay: 0, missSerial: 0,
+      log: [], results: [], shadows: [], takes: { clean: 0, unclean: 0 }, flow: 0.5, run: 0, needClean: 1, pulse: null, beat: IDLE_BEAT,
+      keys: { hear: 76, pace: 41, time: 43, next: 44, prev: 42 },
+      follow: { take: 1, done: false, results: [], wrongAt: [] } as unknown as SessionApi["follow"],
+      bpm: cards[1].bpm, target: cards[1].bpm, click: true,
+      playback: { playing: false, counting: 0, breathing: false, reentry: 0, beat: IDLE_BEAT, activeTarget: -1, activeSlot: -1, lastPass: null, drift: null, results: [], wrong: [], async play() {}, stop() {}, beatAt: () => null },
+      togglePause() {}, hear() {}, go() {}, next() {}, prev,
+    } satisfies Partial<SessionApi>);
+    await act(async () => root.render(<SongCoach sheet={sheet} tl={tl} input={inputAt("listening", "guitar")} onClose={() => undefined} />));
+    const prevBtn = host.querySelector<HTMLButtonElement>(".ss-trail-prev button")!;
+    expect(prevBtn).not.toBeNull();
+    expect(prevBtn.disabled).toBe(false);
+    await act(async () => prevBtn.click());
+    expect(prev).toHaveBeenCalledTimes(1);
+    await act(async () => { document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "p", bubbles: true })); });
+    expect(prev).toHaveBeenCalledTimes(2);
+  });
+
+  it("offers resuming or discarding a saved partial session on Ready and resuming remaining cards on Summary", async () => {
+    mocked.calibrated = true;
+    const deck = buildDeck(sheet, tl);
+    const cards = deck.cards.slice(0, 3);
+    const resumeFrom = vi.fn();
+    const resume = vi.fn(() => true);
+    Object.assign(mocked.session, { resumeFrom, resume } satisfies Partial<SessionApi>);
+
+    const saved: PartialSession = {
+      v: 1,
+      tuneId: sheet.id,
+      focus: "all",
+      savedAt: Date.now(),
+      day: "2026-11-26",
+      queue: [cards[0].id, "missing:card", cards[1].id, cards[2].id],
+      pos: 2,
+      log: [{ id: cards[0].id, at: 0, result: "clean", from: 0, to: 1, bpm: 80, share: 1, secs: 25, also: [], spots: 0 }],
+      blocks: [{ role: "focus", cards: [cards[0].id, "missing:card", cards[1].id, cards[2].id], minutes: 4 }],
+      gapIds: [],
+      selfGuided: false,
+      activeMs: 120000,
+      recordedOutcomes: 1,
+      recordedMs: 120000,
+    };
+    savePartialSession(saved);
+    expect(syncableStorageKey(PARTIAL_SESSION_KEY)).toBe(false);
+    const reconciled = resolvePartialSession(loadPartialSession(sheet.id, "all"), deck)!;
+    expect(reconciled.queue).toEqual([cards[0].id, cards[1].id, cards[2].id]);
+    expect(reconciled.pos).toBe(1);
+
+    await act(async () => root.render(<SongCoach sheet={sheet} tl={tl} input={inputAt("listening", "guitar")} onClose={() => undefined} />));
+    expect(host.querySelector(".ss-resume-banner")?.textContent).toContain("1 of 3 done · 2 left");
+    expect(host.querySelector(".ss-begin")?.textContent).toContain("Resume session");
+    await act(async () => host.querySelector<HTMLButtonElement>(".ss-resume-go")!.click());
+    expect(resumeFrom).toHaveBeenCalledTimes(1);
+    expect(resumeFrom.mock.calls[0][0]).toMatchObject({ pos: 1, queue: [cards[0].id, cards[1].id, cards[2].id] });
+
+    // Discarding clears storage and restores normal Begin session
+    await act(async () => host.querySelector<HTMLButtonElement>(".ss-resume-discard")!.click());
+    expect(loadPartialSession(sheet.id, "all")).toBeNull();
+    expect(host.querySelector(".ss-resume-banner")).toBeNull();
+    expect(host.querySelector(".ss-begin")?.textContent).toContain("Begin session");
+
+    // Summary with remaining cards offers resume session instead of carry on
+    Object.assign(mocked.session, {
+      running: true, finished: true, remaining: 2,
+      log: [{ id: cards[0].id, at: 0, result: "clean", from: 0, to: 1, bpm: 80, share: 1, secs: 25, also: [], spots: 0 }],
+      keepGoing: vi.fn(() => false),
+    } satisfies Partial<SessionApi>);
+    await act(async () => root.render(<SongCoach key="summary" sheet={sheet} tl={tl} input={inputAt("listening", "guitar")} onClose={() => undefined} />));
+    const mainBtn = host.querySelector<HTMLButtonElement>(".sm-foot .is-main button")!;
+    expect(mainBtn.textContent).toContain("resume session · 2 left");
+    await act(async () => mainBtn.click());
+    expect(resume).toHaveBeenCalledTimes(1);
   });
 });

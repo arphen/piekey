@@ -21,6 +21,7 @@ export const KEY_HOMES: Record<string, number[]> = {
   pace: [41, 78, 77], // F2
   time: [43, 79, 78], // G2
   next: [44, 79, 77], // G♯2
+  prev: [42, 77, 78], // F♯2
 };
 
 /** Every pitch a card sounds, its own notes and the band's: none of them can be a key. */
