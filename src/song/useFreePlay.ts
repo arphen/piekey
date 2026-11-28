@@ -399,15 +399,15 @@ export function useFreePlay(input: InputApi, active: boolean) {
           // the band comes in on a bar line, once the playing has sat on the click for a while
           if (inBar === 0 && !s.band && s.bandOn && s.vamp.length && s.lock.streak >= BAND_AFTER && s.lock.mood === "locked") s.band = true;
           const accent = inBar === 0;
-          shots.play(clickBuffer(accent), out, t, s.band ? (accent ? 0.4 : 0.22) : accent ? 0.9 : 0.55);
+          shots.play(clickBuffer(accent), out, t, s.band ? (accent ? 0.4 : 0.22) : accent ? 0.9 : 0.55, undefined, 0.04, { room: 0.05 });
           if (s.band) {
             const chord = s.vamp[Math.floor(s.n / 4) % s.vamp.length];
             if (inBar === 0) {
-              for (const m of chord.pad) shots.play(keysBuffer(m), out, t, 0.15, spb * 3.8, 0.25);
-              shots.play(kickBuffer(), out, t, 0.3);
+              chord.pad.forEach((m, idx) => shots.play(keysBuffer(m), out, t + idx * 0.016, 0.16, spb * 3.8, 0.28, { room: 0.28 }));
+              shots.play(kickBuffer(), out, t, 0.34, undefined, 0.05, { room: 0.05 });
             }
-            if (inBar === 0 || inBar === 2) shots.play(bassBuffer(inBar === 0 ? chord.bass : chord.fifth), out, t, 0.6, spb * 1.8, 0.1);
-            else shots.play(hatBuffer(), out, t, 0.22);
+            if (inBar === 0 || inBar === 2) shots.play(bassBuffer(inBar === 0 ? chord.bass : chord.fifth), out, t, 0.62, spb * 1.8, 0.12, { room: 0.06 });
+            else shots.play(hatBuffer(), out, t, 0.24, undefined, 0.05, { pan: -0.18, room: 0.14 });
           }
           s.beats.push({ n: s.n, perf: perfOf(t), heard: heardPerf(ctx, t) - PAINT_LEAD_S * 1000, ms: spb * 1000 });
           if (s.beats.length > 48) s.beats.shift();

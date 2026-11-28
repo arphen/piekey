@@ -1,7 +1,7 @@
 import type { Card, Deck, Family } from "./deck";
 import { getStoredItem, removeStoredItem, setStoredItem } from "../storage";
 import { GLUE } from "./ids";
-import { chronologicalAttempts, planSession, unlocked, type Store } from "./leitner";
+import { chronologicalAttempts, isExcluded, planSession, unlocked, type Store } from "./leitner";
 import type { Axis, MistakeClass, SkillProfile, Weakness } from "./profile";
 import { familyOf } from "./stats";
 import { GOAL_LABELS, goalProgress, type Goal } from "./goals";
@@ -93,7 +93,7 @@ function isChunkConfident(card: Card, store: Store): boolean {
   return card.goalBpm > 0 && best >= 0.8 * card.goalBpm;
 }
 
-/** Seconds a card of this family takes this player: the median of their own attempts, else a guess. */
+/** Seconds a card of this family takes this player: bounded median of their own attempts, else a guess. */
 export function cardSeconds(store: Store): Record<Family, number> {
   const out = { ...SECS };
   const by = new Map<Family, number[]>();
@@ -105,7 +105,10 @@ export function cardSeconds(store: Store): Record<Family, number> {
   for (const [f, xs] of by) {
     if (xs.length < 3) continue;
     const s = [...xs].sort((a, b) => a - b);
-    out[f] = s[s.length >> 1];
+    const median = s[s.length >> 1];
+    // Cap per-card planning estimates so marathon Free Ride sessions or tough phrases never
+    // inflate estimates to 10+ minutes and collapse future sessions down to a single exercise.
+    out[f] = Math.max(45, Math.min(Math.round(SECS[f] * 1.4), median));
   }
   return out;
 }
@@ -172,7 +175,8 @@ export function planBlocks(deck: Deck, store: Store, day: string, opts: PlanOpti
     return (baseSec + BETWEEN_S) / 60;
   };
   const used = new Set(opts.exclude ?? []);
-  const known = (id: string) => Boolean(store.cards[id]);
+  const excluded = (id: string) => isExcluded(store.cards[id]);
+  const known = (id: string) => Boolean(store.cards[id]) && !excluded(id);
   const budget = Math.max(0, opts.minutes);
   const goal = opts.goal?.tuneId === opts.tuneId ? opts.goal : null;
   const homeKeyName = deck.harmony.home.name;
@@ -186,7 +190,7 @@ export function planBlocks(deck: Deck, store: Store, day: string, opts: PlanOpti
   const pickReset = (maxMinutes: number, presentFamilies: Set<Family | undefined>, preferReading: boolean): { id: string; reason: string } | null => {
     const ok = (id: string) => {
       const c = byId.get(id);
-      return Boolean(c && !used.has(id) && unlocked(c, store) && cost(id) <= maxMinutes);
+      return Boolean(c && !used.has(id) && !excluded(id) && unlocked(c, store) && cost(id) <= maxMinutes);
     };
     const inWindowFirst = (ids: string[]) =>
       [...ids].sort((a, b) => Number(byId.get(b)!.p === activePos) - Number(byId.get(a)!.p === activePos) || (store.cards[a]?.box ?? 0) - (store.cards[b]?.box ?? 0));
@@ -215,17 +219,17 @@ export function planBlocks(deck: Deck, store: Store, day: string, opts: PlanOpti
 
   // A new tune starts directly on playing Bar 1 (never auto-inserts mel:hear as Card 1).
   // While the opening join/section is still below Box 2, prioritize the tune's own melody chunks
-  // and newly unlocked joins — and if the player already practised opening chunks today, weave in
-  // a crisp in-key, in-position reset card so they aren't trapped looping the same bars forever.
+  // and newly unlocked joins — and weave in a crisp in-key, in-position reset card when only one
+  // melody chunk fits or when returning to opening work so sessions aren't stuck at 1 card.
   const openingCard = (["join", "section", "tune"] as const)
     .map((kind) => deck.cards.find((c) => c.tuneId === opts.tuneId && c.step?.kind === kind))
     .find(Boolean);
-  const hasOwnSide = deck.cards.some((c) => c.family !== "melody" && c.family !== "scales" && c.family !== "technique" && Boolean(store.cards[c.id]));
-  const learningOpening = !goal && !hasOwnSide && Boolean(openingCard && (store.cards[openingCard.id]?.box ?? 0) < 2);
+  const hasOwnSide = deck.cards.some((c) => c.family !== "melody" && c.family !== "scales" && c.family !== "technique" && known(c.id));
+  const learningOpening = !goal && !hasOwnSide && Boolean(openingCard && !excluded(openingCard.id) && (store.cards[openingCard.id]?.box ?? 0) < 2);
   if (learningOpening) {
     const ownMelodies = deck.intro.filter((id) => {
       const c = byId.get(id);
-      return Boolean(c && c.family === "melody" && c.tuneId === opts.tuneId && !c.once && !used.has(id));
+      return Boolean(c && c.family === "melody" && c.tuneId === opts.tuneId && !c.once && !used.has(id) && !excluded(id));
     });
     const practicedOwn = ownMelodies.filter((id) => Boolean(store.cards[id]));
     // Due opening chunks first (lowest box first), then newly unlocked chunks/joins in order.
@@ -261,11 +265,11 @@ export function planBlocks(deck: Deck, store: Store, day: string, opts: PlanOpti
     }
 
     // Returning to opening work after already practising chunks: weave 1 crisp in-key/in-position
-    // reset card when room remains so repeats don't feel like a closed loop.
+    // reset card when room remains so repeats don't feel like a closed loop or 1-card session.
     let resetCard: { id: string; reason: string } | null = null;
     if (practicedOwn.length > 0 && openingIds.length > 0 && budget - m >= 1) {
       const stalled = openingIds.some((id) => store.cards[id]?.last === "fail" || store.cards[id]?.last === "ok");
-      if (revisitingToday || stalled || openingIds.length >= 2) {
+      if (openingIds.length === 1 || revisitingToday || stalled || openingIds.length >= 2) {
         resetCard = pickReset(budget - m, new Set<Family | undefined>(["melody"]), stalled);
         if (resetCard) {
           used.add(resetCard.id);
@@ -274,31 +278,33 @@ export function planBlocks(deck: Deck, store: Store, day: string, opts: PlanOpti
       }
     }
 
-    const spent = (ids: string[]) => ids.reduce((a, id) => a + cost(id), 0);
-    const blocks: Block[] = [];
-    if (resetCard && openingIds.length >= 2) {
-      blocks.push(
-        { role: "focus", cards: [openingIds[0]], minutes: Math.round(spent([openingIds[0]])) },
-        { role: "side", cards: [resetCard.id], minutes: Math.round(spent([resetCard.id])) },
-        { role: "music", cards: openingIds.slice(1), minutes: Math.round(spent(openingIds.slice(1))) },
-      );
-    } else if (resetCard && openingIds.length === 1) {
-      blocks.push(
-        { role: "side", cards: [resetCard.id], minutes: Math.round(spent([resetCard.id])) },
-        { role: "music", cards: openingIds, minutes: Math.round(spent(openingIds)) },
-      );
-    } else if (openingIds.length) {
-      blocks.push({ role: "music", cards: openingIds, minutes: Math.round(spent(openingIds)) });
+    if (openingIds.length > 0) {
+      const spent = (ids: string[]) => ids.reduce((a, id) => a + cost(id), 0);
+      const blocks: Block[] = [];
+      if (resetCard && openingIds.length >= 2) {
+        blocks.push(
+          { role: "focus", cards: [openingIds[0]], minutes: Math.round(spent([openingIds[0]])) },
+          { role: "side", cards: [resetCard.id], minutes: Math.round(spent([resetCard.id])) },
+          { role: "music", cards: openingIds.slice(1), minutes: Math.round(spent(openingIds.slice(1))) },
+        );
+      } else if (resetCard && openingIds.length === 1) {
+        blocks.push(
+          { role: "side", cards: [resetCard.id], minutes: Math.round(spent([resetCard.id])) },
+          { role: "music", cards: openingIds, minutes: Math.round(spent(openingIds)) },
+        );
+      } else {
+        blocks.push({ role: "music", cards: openingIds, minutes: Math.round(spent(openingIds)) });
+      }
+      const ids = blocks.flatMap((b) => b.cards);
+      return {
+        blocks,
+        ids,
+        minutes: ids.length ? Math.min(budget, Math.max(1, Math.round(spent(ids)))) : 0,
+        why: "",
+        ...(resetCard ? { sideWhy: resetCard.reason } : {}),
+        arc: null,
+      };
     }
-    const ids = blocks.flatMap((b) => b.cards);
-    return {
-      blocks,
-      ids,
-      minutes: ids.length ? Math.min(budget, Math.max(1, Math.round(spent(ids)))) : 0,
-      why: "",
-      ...(resetCard ? { sideWhy: resetCard.reason } : {}),
-      arc: null,
-    };
   }
 
   const relevant = new Set<string>();
@@ -337,13 +343,13 @@ export function planBlocks(deck: Deck, store: Store, day: string, opts: PlanOpti
   // use tech:* as a warm-up when the deck has no scale card (e.g., Technique focus mode).
   const hasDeckScales = deck.cards.some((c) => c.family === "scales");
   const findKnown = (pred: (card: Card) => boolean, minBox = 2) =>
-    deck.intro.find((id) => !used.has(id) && byId.has(id) && pred(byId.get(id)!) && (store.cards[id]?.box ?? 0) >= minBox) ??
-    deck.intro.find((id) => !used.has(id) && byId.has(id) && pred(byId.get(id)!) && known(id));
+    deck.intro.find((id) => !used.has(id) && !excluded(id) && byId.has(id) && pred(byId.get(id)!) && (store.cards[id]?.box ?? 0) >= minBox) ??
+    deck.intro.find((id) => !used.has(id) && !excluded(id) && byId.has(id) && pred(byId.get(id)!) && known(id));
   const homeScaleWarm =
     findKnown((c) => isHomeScale(c) && c.p === activePos) ??
     findKnown((c) => isHomeScale(c)) ??
     findKnown((c) => c.family === "scales") ??
-    base.find((id) => !used.has(id) && byId.get(id)?.family === "scales" && known(id));
+    base.find((id) => !used.has(id) && !excluded(id) && byId.get(id)?.family === "scales" && known(id));
   const homeArpWarm = findKnown((c) => isHomeArp(c) && c.p === activePos) ?? findKnown((c) => isHomeArp(c));
   const techWarm = !hasDeckScales ? findKnown((c) => c.family === "technique") : undefined;
   const warm = homeScaleWarm ?? homeArpWarm ?? techWarm;
@@ -358,7 +364,7 @@ export function planBlocks(deck: Deck, store: Store, day: string, opts: PlanOpti
   // the longest), but working on them is playing the tune again: they stay music, never the focus.
   const whole = (id: string) => Boolean(byId.get(id)?.run || byId.get(id)?.once || byId.get(id)?.step?.kind === "tune");
   if (weak) {
-    const candidates = weak.cards.map(local).filter((id) => byId.has(id) && !used.has(id) && !whole(id));
+    const candidates = weak.cards.map(local).filter((id) => byId.has(id) && !used.has(id) && !excluded(id) && !whole(id));
     // Keep weak/slow chunks drillable; only demote short chunks that are already confident when longer passages are also named.
     const sorted = confidentShortIds.size
       ? [...candidates].sort((a, b) => Number(confidentShortIds.has(a)) - Number(confidentShortIds.has(b)))
@@ -377,7 +383,7 @@ export function planBlocks(deck: Deck, store: Store, day: string, opts: PlanOpti
     const picked: string[] = [];
     for (const bar of weakBars) {
       const best = deck.intro
-        .filter((id) => servesGoal(id) && !used.has(id) && !picked.includes(id) && byId.get(id)?.family === "melody" && !byId.get(id)?.run && byId.get(id)?.tuneId === opts.tuneId && barsOf(id).has(bar))
+        .filter((id) => servesGoal(id) && !used.has(id) && !excluded(id) && !picked.includes(id) && byId.get(id)?.family === "melody" && !byId.get(id)?.run && byId.get(id)?.tuneId === opts.tuneId && barsOf(id).has(bar))
         .sort((x, y) => barsOf(x).size - barsOf(y).size)[0];
       if (best && !picked.some((id) => barsOf(id).has(bar))) picked.push(best);
       if (picked.length >= MAX_FOCUS) break;
@@ -389,7 +395,7 @@ export function planBlocks(deck: Deck, store: Store, day: string, opts: PlanOpti
   }
   if (!focus.length && goal) {
     const ready = (id: string, visiting = new Set<string>()): string | undefined => {
-      if (used.has(id) || visiting.has(id) || !byId.has(id)) return;
+      if (used.has(id) || excluded(id) || visiting.has(id) || !byId.has(id)) return;
       visiting.add(id);
       const card = byId.get(id)!;
       return unlocked(card, store) ? id : card.needs ? ready(card.needs, visiting) : id;
@@ -411,7 +417,7 @@ export function planBlocks(deck: Deck, store: Store, day: string, opts: PlanOpti
     if (stale) {
       const fams = AXIS_FAMILIES[stale[0]];
       focus = deck.intro
-        .filter((id) => !used.has(id) && known(id) && fams.includes(byId.get(id)!.family))
+        .filter((id) => !used.has(id) && !excluded(id) && known(id) && fams.includes(byId.get(id)!.family))
         .sort((a, b) => Number(confidentShortIds.has(a)) - Number(confidentShortIds.has(b)) || store.cards[a].box - store.cards[b].box)
         .slice(0, MAX_FOCUS);
       if (focus.length) why = `${stale[0][0].toUpperCase()}${stale[0].slice(1)} · ${daysBetween(stale[1].last!, day)} days`;
@@ -424,7 +430,7 @@ export function planBlocks(deck: Deck, store: Store, day: string, opts: PlanOpti
   const melodies = (goal ? goal.essentialTasks.map((task) => task.cardId) : deck.intro)
     .filter((id) => {
       const c = byId.get(id);
-      if (used.has(id) || !c || c.tuneId !== opts.tuneId || c.once) return false;
+      if (used.has(id) || excluded(id) || !c || c.tuneId !== opts.tuneId || c.once) return false;
       if (goal) return unlocked(c, store);
       if (c.family !== "melody") return false;
       if (known(id) || base.includes(id)) return true;
@@ -495,10 +501,16 @@ export function planBlocks(deck: Deck, store: Store, day: string, opts: PlanOpti
   const review = fit(base, remaining);
   remaining -= spent(review);
 
-  // nothing at all due or named: the box's leftovers, so there is always a session
-  if (!focus.length && !review.length && !side.length && !music.length) {
-    const extra = deck.intro.filter((id) => servesGoal(id) && !used.has(id) && known(id)).sort((a, b) => store.cards[a].box - store.cards[b].box);
-    review.push(...fit(extra, remaining));
+  // nothing at all due or named (or budget still has room after only 1 card): fill from the box's
+  // leftovers or unlocked cards so a planned session doesn't collapse to 1 exercise when more fits.
+  const scheduledCount = warmup.length + focus.length + side.length + review.length + music.length;
+  if ((scheduledCount === 0 || (scheduledCount === 1 && remaining >= 1)) && remaining > 0) {
+    const extraKnown = deck.intro
+      .filter((id) => servesGoal(id) && !used.has(id) && !excluded(id) && known(id) && !byId.get(id)?.once)
+      .sort((a, b) => store.cards[a].box - store.cards[b].box);
+    const extraFresh = deck.intro
+      .filter((id) => servesGoal(id) && !used.has(id) && !excluded(id) && !store.cards[id] && !byId.get(id)?.once && unlocked(byId.get(id), store));
+    review.push(...fit([...extraKnown, ...extraFresh], remaining));
   }
 
   // Place the pattern-breaker / reset right between focus and review (when focus has heavy work),

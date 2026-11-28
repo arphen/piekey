@@ -1,4 +1,4 @@
-# Fretboard Focus Lab
+# Piekey
 
 A local-first guitar practice app built with React, TypeScript and Vite. It pairs a fretboard
 visualizer with a practice suite for scales, arpeggios, chords and real tunes.

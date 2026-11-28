@@ -148,7 +148,9 @@ function practice(current: unknown, before: unknown, after: unknown, tx: SyncTra
     } else if (seen) box = local.last === "fail" ? 1 : local.last === "clean" ? Math.min(5, box + clean) : box;
     else box = Math.max(1, Math.min(5, box + num(local.box) - num(prev.box, 1)));
     state.box = box;
-    if (typeof local.due === "string") {
+    if (state.excluded === true) {
+      state.due = "9999-12-31";
+    } else if (typeof local.due === "string") {
       const day = typeof attempts[attempts.length - 1]?.day === "string" ? attempts[attempts.length - 1].day as string
         : datePlus(local.due, -BOX_DAYS[Math.max(1, Math.min(5, num(local.box, 1)))]);
       state.due = datePlus(day, BOX_DAYS[box]);

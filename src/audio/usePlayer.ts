@@ -4,6 +4,7 @@ import type { Mix, PatternStep, PlayerApi, PlayerState, Tune } from "../core/con
 import { generateBacking } from "./backing";
 import { ensureAudio } from "./context";
 import { BufferPluck } from "./pluck";
+import { attachRoomBus } from "./room";
 import { bassBuffer, clickBuffer, hatBuffer, keysBuffer, kickBuffer, OneShots, rideBuffer } from "./samples";
 
 const clampBpm = (n: number) => Math.max(40, Math.min(200, Math.round(n)));
@@ -30,11 +31,18 @@ function createEngine(mix: Mix): Engine {
   };
   const pluckVol = new Tone.Volume(-8).toDestination();
   const shots = new OneShots();
+  const detaches = [
+    attachRoomBus(vol.comp, 0.26),
+    attachRoomBus(vol.drums, 0.14),
+    attachRoomBus(vol.bass, 0.06),
+    attachRoomBus(pluckVol, 0.22),
+  ];
   const nodes: Tone.ToneAudioNode[] = [...Object.values(vol), pluckVol];
   return {
-    vol, shots, pluck: new BufferPluck(pluckVol), pluckVol,
+    vol, shots, pluck: new BufferPluck(pluckVol, true, 0), pluckVol,
     dispose() {
       shots.stopAll();
+      for (const detach of detaches) detach();
       for (const n of nodes) {
         try {
           n.dispose();
@@ -138,13 +146,13 @@ export function usePlayer(tune: Tune): PlayerApi {
             e.shots.play(bassBuffer(ev.midis[0]), e.vol.bass, tt, ev.vel, dur, 0.15);
             break;
           case "comp":
-            for (const m of ev.midis) e.shots.play(keysBuffer(m), e.vol.comp, tt, ev.vel, dur * 0.8, 0.3);
+            ev.midis.forEach((m, idx) => e.shots.play(keysBuffer(m), e.vol.comp, tt + idx * 0.012, ev.vel, dur * 0.85, 0.3));
             break;
           case "ride":
-            e.shots.play(rideBuffer(), e.vol.drums, tt, ev.vel * 0.5);
+            e.shots.play(rideBuffer(), e.vol.drums, tt, ev.vel * 0.55, undefined, 0.08, { pan: 0.2 });
             break;
           case "hat":
-            e.shots.play(hatBuffer(), e.vol.drums, tt, ev.vel);
+            e.shots.play(hatBuffer(), e.vol.drums, tt, ev.vel, undefined, 0.05, { pan: -0.2 });
             break;
           case "kick":
             e.shots.play(kickBuffer(), e.vol.drums, tt, ev.vel);

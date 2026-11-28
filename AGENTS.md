@@ -1,4 +1,4 @@
-# Agent Notes — Fretboard Focus Lab
+# Agent Notes — Piekey
 
 ## What this is
 

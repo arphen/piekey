@@ -18,7 +18,8 @@ import { RecordingStatus } from "./RecordingStatus";
 
 // by name, in any octave: C carries on, D is free play with the metronome, C♯ the settings
 const KEYS = { more: 48, free: 46, settings: 49, tune: 53, shuffle: 54 }; // C · A♯ · C♯ · F · F♯: off the open strings
-const ARM_MS = 2500; // let the last notes ring out before a note can mean something
+const ARM_MS = 4000; // give the player time to read the summary before guitar note keys arm
+const SUMMARY_HOLD_MS = 950; // require an intentional ~1 s hold so stray notes never navigate away
 const MOVE_MS = 1100; // then the exercises set off for their new boxes
 const FAMILIES: Family[] = ["scales", "technique", "melody", "harmony", "chords", "reading", "ear", "fretboard"];
 const MAX_CARRIED = 4;
@@ -216,7 +217,7 @@ export function SessionSummary({
   };
   const shuffle = () => s.updateSettings({ shuffle: !s.settings.shuffle });
   const fire = [carryOn, onFree, onSettings, () => onChooseTune?.(), shuffle];
-  const held = useNoteKeys(input, enabled && armed, [canCarry ? KEYS.more : null, KEYS.free, KEYS.settings, onChooseTune ? KEYS.tune : null, KEYS.shuffle], (k) => fire[k](), true);
+  const held = useNoteKeys(input, enabled && armed, [canCarry ? KEYS.more : null, KEYS.free, KEYS.settings, onChooseTune ? KEYS.tune : null, KEYS.shuffle], (k) => fire[k](), true, SUMMARY_HOLD_MS);
 
   let row = 0;
   return (

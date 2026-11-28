@@ -1,6 +1,7 @@
 import * as Tone from "tone";
 import { ensureAudio } from "../audio/context";
-import { BufferPluck } from "../audio/pluck";
+import { pluckBuffer } from "../audio/pluck";
+import { bassBuffer, keysBuffer, OneShots } from "../audio/samples";
 import { voiceProgression, type Voicing } from "./theory";
 
 export type Instrument = "keys" | "guitar";
@@ -48,46 +49,38 @@ export function totalDuration(events: PlayEvent[]): number {
   return events.reduce((m, e) => Math.max(m, e.at + e.dur), 0);
 }
 
-const freq = (m: number) => Tone.Frequency(m, "midi").toFrequency();
-
 class Voices {
-  out = new Tone.Volume(-4);
-  // convolution reverb: Freeverb is 8 AudioWorklet comb filters that run nonstop
-  reverb = new Tone.Reverb({ decay: 2.4, wet: 0.18 });
-  bass: Tone.MonoSynth;
-  keys: Tone.PolySynth;
-  pluckVol = new Tone.Volume(-4);
-  pluck: BufferPluck;
+  out = new Tone.Volume(-4).toDestination();
+  shots = new OneShots();
 
-  constructor() {
-    this.out.chain(this.reverb, Tone.getDestination());
-    this.bass = new Tone.MonoSynth({
-      oscillator: { type: "triangle" },
-      filter: { Q: 1, type: "lowpass", rolloff: -24 },
-      envelope: { attack: 0.01, decay: 0.4, sustain: 0.6, release: 0.3 },
-      filterEnvelope: { attack: 0.01, decay: 0.25, sustain: 0.5, release: 0.3, baseFrequency: 180, octaves: 2.2 },
-      volume: -3,
-    }).connect(this.out);
-    this.keys = new Tone.PolySynth(Tone.FMSynth, {
-      harmonicity: 2,
-      modulationIndex: 1.6,
-      oscillator: { type: "sine" },
-      envelope: { attack: 0.008, decay: 1.4, sustain: 0.32, release: 0.9 },
-      modulation: { type: "sine" },
-      modulationEnvelope: { attack: 0.004, decay: 0.5, sustain: 0.15, release: 0.6 },
-      volume: -14,
-    }).connect(this.out);
-    this.keys.maxPolyphony = 24;
-    this.pluckVol.connect(this.out);
-    this.pluck = new BufferPluck(this.pluckVol, false);
+  prepare(events: PlayEvent[], instrument: Instrument) {
+    for (const e of events) {
+      bassBuffer(e.voicing.bass);
+      if (e.bassOnly) continue;
+      if (instrument === "keys") {
+        for (const m of e.voicing.upper) keysBuffer(m);
+      } else {
+        pluckBuffer(e.voicing.bass + 12);
+        for (const m of e.voicing.upper) pluckBuffer(m);
+      }
+    }
   }
 
-  strum(notes: number[], time: number, spread: number, vel: number) {
-    notes.forEach((m, i) => this.pluck.trigger(m, time + i * spread, vel));
+  strum(notes: number[], time: number, spread: number, vel: number, dur: number) {
+    const mid = (notes.length - 1) / 2;
+    notes.forEach((m, i) => {
+      const pan = notes.length > 1 ? ((i - mid) / Math.max(1, mid)) * 0.16 : 0;
+      this.shots.play(pluckBuffer(m), this.out, time + i * spread, vel, dur, 0.28, { pan, room: 0.26 });
+    });
+  }
+
+  stop() {
+    this.shots.stopAll(0.03);
   }
 
   dispose() {
-    for (const n of [this.bass, this.keys, this.pluckVol, this.reverb, this.out]) n.dispose();
+    this.shots.stopAll(0.02);
+    this.out.dispose();
   }
 }
 
@@ -112,6 +105,7 @@ export class EarEngine {
   async play(events: PlayEvent[], onSlot?: (slot: number | null) => void): Promise<void> {
     this.stop();
     const v = await this.ready();
+    v.prepare(events, this.instrument);
     const t0 = Tone.now() + 0.08;
     let i = 0;
     const tick = () => {
@@ -147,16 +141,20 @@ export class EarEngine {
   }
 
   private sound(v: Voices, e: PlayEvent, time: number) {
-    const hold = Math.max(0.2, e.dur - 0.06);
-    v.bass.triggerAttackRelease(freq(e.voicing.bass), hold, time, 0.85);
+    const hold = Math.max(0.24, e.dur - 0.05);
+    v.shots.play(bassBuffer(e.voicing.bass), v.out, time, 0.72, hold, 0.16, { room: 0.08 });
     if (e.bassOnly) return;
     if (this.instrument === "keys") {
-      e.voicing.upper.forEach((m, k) => v.keys.triggerAttackRelease(freq(m), hold, time + k * 0.009, 0.7));
+      const mid = (e.voicing.upper.length - 1) / 2;
+      e.voicing.upper.forEach((m, k) => {
+        const pan = e.voicing.upper.length > 1 ? ((k - mid) / Math.max(1, mid)) * 0.18 : 0;
+        v.shots.play(keysBuffer(m), v.out, time + k * 0.014, 0.34, hold, 0.28, { pan, room: 0.28 });
+      });
     } else {
       // down-strum on the chord, a lighter up-strum halfway through longer chords
       const strings = [e.voicing.bass + 12, ...e.voicing.upper];
-      v.strum(strings, time, 0.022, 0.9);
-      if (e.dur >= 1) v.strum([...e.voicing.upper].reverse(), time + e.dur / 2, 0.014, 0.55);
+      v.strum(strings, time, 0.022, 0.62, hold + 0.1);
+      if (e.dur >= 1) v.strum([...e.voicing.upper].reverse(), time + e.dur / 2, 0.014, 0.38, hold * 0.55);
     }
   }
 
@@ -165,11 +163,7 @@ export class EarEngine {
     this.timer = null;
     for (const t of this.uiTimers) window.clearTimeout(t);
     this.uiTimers = [];
-    if (this.v) {
-      const now = Tone.now();
-      this.v.keys.releaseAll(now);
-      this.v.bass.triggerRelease(now);
-    }
+    this.v?.stop();
     this.done();
   }
 

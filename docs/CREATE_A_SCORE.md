@@ -1,7 +1,7 @@
 # Create a score with your agent
 
 Use your own agent to turn a source you choose into a guitar practice score, or to compose an
-original study. Fretboard Focus Lab imports MusicXML; it does not send your source to an agent,
+original study. Piekey imports MusicXML; it does not send your source to an agent,
 fetch the linked music, or convert PDFs inside the app.
 
 Arrange for standard guitar tuning, E–A–D–G–B–E from low to high; the app's fretboard and

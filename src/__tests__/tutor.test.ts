@@ -3,8 +3,9 @@ import { fitLatency } from "../audio/latency";
 import { toDrop } from "../audio/recorder";
 import type { ReadingBar, ReadingNote } from "../core/contract";
 import { buildDeck, familiesOnly } from "../song/deck";
-import { newCards, nextArc, planBlocks } from "../song/planner";
+import { cardSeconds, newCards, nextArc, planBlocks } from "../song/planner";
 import { tunePath, weeklyMinutes } from "../overview/progress";
+import { nextUnits } from "../overview/summary";
 import { addChord, cardForLoop, findLoop, nameChord } from "../song/progression";
 import { stringPrompts, thirdPrompts, tonePrompts } from "../song/fretboard";
 import { seeded } from "../song/rand";
@@ -14,7 +15,7 @@ import type { LeadSheet } from "../tunes/musicxml";
 import { buildTimeline } from "../tunes/order";
 import type { NoteResult, PatternStep } from "../core/contract";
 import { createEvidence, timingOf, type Evidence } from "../song/evidence";
-import type { Attempt, Store } from "../song/leitner";
+import { boxCounts, excludeCard, NEVER, planSession, restoreCard, unlocked, type Attempt, type Store } from "../song/leitner";
 import { buildProfile } from "../song/profile";
 import { cardTrend } from "../song/stats";
 import { arrangementIdentity, createGoal, getGoals, GOALS_KEY, goalDeck, goalProgress, loadActiveGoal, saveGoal, setActiveGoal } from "../song/goals";
@@ -430,6 +431,41 @@ describe("a session with a shape", () => {
     const weak = { cls: "leaps" as const, strength: 0.6, n: 40, cards: [`t::${shortChunk.id}`], fact: "Leaps · 40 % missed" };
     const pWeak = planBlocks(deck, store(weakCards), day, { minutes: 25, tuneId: "t", profile: profileWith({ weaknesses: [weak] }) });
     expect(pWeak.blocks.find((b) => b.role === "focus")!.cards).toContain(shortChunk.id);
+  });
+
+  it("caps long Free Ride attempt durations so future sessions do not collapse to a single exercise", () => {
+    const cards = Object.fromEntries([[scale, known(3)], ...melodies.map((id) => [id, known(2)])]);
+    const marathonHistory = Array.from({ length: 6 }, (_, i) =>
+      attempt(melodies[i % melodies.length], "2026-11-16", { secs: 900 }),
+    );
+    const st: Store = { ...store(cards), history: marathonHistory };
+    expect(cardSeconds(st).melody).toBeLessThanOrEqual(310);
+    const short = planBlocks(deck, st, day, { minutes: 10, tuneId: "t" });
+    const normal = planBlocks(deck, st, day, { minutes: 25, tuneId: "t" });
+    expect(short.ids.length).toBeGreaterThanOrEqual(2);
+    expect(normal.ids.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("lets excluded cards unlock downstream work and stay out of scheduling until restored", () => {
+    const blocked = deck.cards.find((c) => c.family === "melody" && c.needs)!;
+    const blocker = deck.cards.find((c) => c.id === blocked.needs)!;
+    const before = store({});
+    expect(unlocked(blocked, before)).toBe(false);
+
+    const excludedState = excludeCard(undefined, blocker);
+    expect(excludedState).toMatchObject({ excluded: true, due: NEVER, seen: 0, clean: 0 });
+    expect(excludedState.bestCleanBpm).toBeUndefined();
+
+    const withExcluded = store({ [blocker.id]: excludedState });
+    expect(unlocked(blocked, withExcluded)).toBe(true);
+    expect(planSession(deck, withExcluded, day)).not.toContain(blocker.id);
+    expect(planBlocks(deck, withExcluded, day, { minutes: 25, tuneId: "t" }).ids).not.toContain(blocker.id);
+    expect(nextUnits(deck, withExcluded, 6, day).map((u) => u.id)).not.toContain(blocker.id);
+    expect(boxCounts(deck, withExcluded).due).toBe(0);
+
+    const restored = store({ [blocker.id]: restoreCard(excludedState, day) });
+    expect(restored.cards[blocker.id].excluded).toBeUndefined();
+    expect(planSession(deck, restored, day)).toContain(blocker.id);
   });
 });
 

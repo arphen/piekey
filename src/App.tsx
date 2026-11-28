@@ -472,7 +472,7 @@ export default function App() {
               </button>
               <div className="brand">
                 <span className="brand-mark" aria-hidden="true"><Glyph name="melody" size={20} /></span>
-                <h1>Fretboard Focus Lab</h1>
+                <h1>Piekey</h1>
               </div>
             </div>
             <nav className="tabs" aria-label="views">

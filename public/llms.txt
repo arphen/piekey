@@ -1,4 +1,4 @@
-# Fretboard Focus Lab
+# Piekey
 
 > A guitar-first, local-first practice app. These are public capability notes, not a feed of a user's private practice data.
 

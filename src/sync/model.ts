@@ -136,12 +136,13 @@ function validCard(value: unknown): boolean {
   return isRecord(value) && count(value.box) && value.box >= 1 && value.box <= 5 && count(value.seen) && count(value.clean)
     && value.clean <= value.seen
     && finite(value.bpm) && value.bpm > 0 && typeof value.due === "string"
-    && optional(value.last, (last) => last === null || result(last)) && optional(value.bestCleanBpm, (bpm) => finite(bpm) && bpm > 0);
+    && optional(value.last, (last) => last === null || result(last)) && optional(value.bestCleanBpm, (bpm) => finite(bpm) && bpm > 0)
+    && optional(value.excluded, (flag) => typeof flag === "boolean");
 }
 
 function validSettings(value: unknown): boolean {
   return isRecord(value) && optional(value.newPerSession, count)
-    && [value.guide, value.voice, value.shuffle, value.mix].every((flag) => optional(flag, (entry) => typeof entry === "boolean"))
+    && [value.guide, value.voice, value.shuffle, value.mix, value.gapClick].every((flag) => optional(flag, (entry) => typeof entry === "boolean"))
     && optional(value.window, (fret) => fret === null || count(fret))
     && optional(value.length, (length) => typeof length === "string" && ["short", "normal", "long"].includes(length))
     && optional(value.loop, (mode) => typeof mode === "string" && ["adaptive", "turnaround", "continuous"].includes(mode));

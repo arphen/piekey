@@ -273,10 +273,10 @@ export const noteName = (midi: number) => `${pitchClassToName(midi).replace("#",
  * During an exercise the note is exact (E5 is not E4); on the screens between exercises
  * `anyOctave` takes the note in whatever octave it is played. Returns the key being held.
  */
-export function useNoteKeys(input: InputApi, enabled: boolean, keys: (number | null)[], onFire: (key: number) => void, anyOctave = false): number | null {
+export function useNoteKeys(input: InputApi, enabled: boolean, keys: (number | null)[], onFire: (key: number) => void, anyOctave = false, holdMs = KEY_HOLD_MS): number | null {
   const [held, setHeld] = useState<number | null>(null);
-  const fns = useRef({ keys, onFire, anyOctave });
-  fns.current = { keys, onFire, anyOctave };
+  const fns = useRef({ keys, onFire, anyOctave, holdMs });
+  fns.current = { keys, onFire, anyOctave, holdMs };
   const listening = input.status === "listening";
   const { subscribe } = input;
   useEffect(() => {
@@ -320,7 +320,7 @@ export function useNoteKeys(input: InputApi, enabled: boolean, keys: (number | n
         spent = false;
         setHeld(null);
       }
-      if (cur !== null && !spent && f.now - since >= KEY_HOLD_MS) {
+      if (cur !== null && !spent && f.now - since >= fns.current.holdMs) {
         spent = true;
         setHeld(null);
         fns.current.onFire(cur);

@@ -24,7 +24,7 @@ import { localId } from "../song/ids";
 import { lineSheet } from "../song/notation";
 import { analyzeWrongNote, mistakeDeltaText, type StaffShadowInfo } from "../song/staffShadow";
 import { makeScale, nice, pretty, spellIn } from "../song/harmony";
-import { allStores, BOXES, boxCounts, loadStore, saveMeta, today, type LoopMode, type Store } from "../song/leitner";
+import { allStores, BOXES, boxCounts, isExcluded, loadStore, loadStores, saveMeta, today, type LoopMode, type Store } from "../song/leitner";
 import { cardSeconds, LENGTH_MINUTES, LENGTHS, loadArc, planBlocks, ROLE_LABEL, saveArc, type Role, type SessionPlan } from "../song/planner";
 import { currentInputSetup } from "../audio/setup";
 import { allAttempts, buildProfile } from "../song/profile";
@@ -375,12 +375,38 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
     if (!autoStart || !initialCardId) return null;
     const card = findCard(deck.cards, initialCardId);
     if (!card) return null;
-    const ids = [card.id, ...(card.followedBy ? [card.followedBy] : [])];
-    return {
-      ids,
-      blocks: [{ role: "focus" as const, cards: ids, minutes: 2 }],
-      why: card.followedBy ? "Rhythm, then the phrase" : "",
-    };
+    const soloLaunch = Boolean(card.once || card.run || card.step?.kind === "tune" || card.followedBy || card.id.startsWith("mel:passage:"));
+    if (soloLaunch) {
+      const ids = [card.id, ...(card.followedBy ? [card.followedBy] : [])];
+      return {
+        ids,
+        blocks: [{ role: "focus" as const, cards: ids, minutes: 2 }],
+        why: card.followedBy ? "Rhythm, then the phrase" : "",
+      };
+    }
+    const initialStore = loadStores(tuneIds);
+    const day = today();
+    const profile = buildProfile(allAttempts(allStores()), day, latencyMeasured());
+    const lengthPref = initialStore.settings.length ?? "normal";
+    const planned = planBlocks(deck, initialStore, day, { minutes: LENGTH_MINUTES[lengthPref], tuneId: sheet.id, profile, arc: loadArc(), goal: activeGoal });
+    const rest = planned.ids.filter((id) => id !== card.id);
+    if (!rest.length) {
+      for (const id of deck.intro) {
+        if (id === card.id || isExcluded(initialStore.cards[id])) continue;
+        const c = deck.cards.find((entry) => entry.id === id);
+        if (!c || c.once) continue;
+        rest.push(id);
+        if (rest.length >= 3) break;
+      }
+    }
+    const ids = [card.id, ...rest];
+    const blocks: SessionPlan["blocks"] = rest.length
+      ? [
+          { role: "focus" as const, cards: [card.id], minutes: 2 },
+          ...planned.blocks.map((b) => ({ ...b, cards: b.cards.filter((id) => id !== card.id) })).filter((b) => b.cards.length),
+        ]
+      : [{ role: "focus" as const, cards: [card.id], minutes: 2 }];
+    return { ids, blocks, why: planned.why };
   });
   const [gapIds, setGapIds] = useState<ReadonlySet<string>>(() => new Set()); // a focus on time: these play with gaps in the band
   const [sessionBlocks, setSessionBlocks] = useState<SessionPlan["blocks"]>(() => direct?.blocks ?? []);
@@ -804,15 +830,37 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
     chooseShape(cardNow.base, id);
     session.swap(cardNow.id, variantId(cardNow.base, id));
   };
+  // Guard the Result screen briefly before guitar note keys arm so a trailing note never advances by mistake.
+  const [resultArmed, setResultArmed] = useState(false);
+  useEffect(() => {
+    if (session.phase !== "result") {
+      setResultArmed(false);
+      return;
+    }
+    const id = window.setTimeout(() => setResultArmed(true), 1500);
+    return () => window.clearTimeout(id);
+  }, [session.phase, session.outcome]);
+
   // A whole-tune run and improvisation reserve every played note for the music.
-  const held = useNoteKeys(input, inExercise && pad === null && !menu && !calib && !choosingTune && !tools && !session.paused && !wholeTune && !improvising, [noteKeys.hear, noteKeys.pace, noteKeys.time, noteKeys.next, keepKey, noteKeys.prev ?? null], (key) => {
-    if (key === 0) session.hear();
-    else if (key === 1) session.go("pace");
-    else if (key === 2) session.go("time");
-    else if (key === 4) keepOffer();
-    else if (key === 5) session.prev?.();
-    else session.next();
-  });
+  const onResult = session.phase === "result";
+  const noteKeysEnabled = inExercise && pad === null && !menu && !calib && !choosingTune && !tools && !session.paused && !wholeTune && !improvising && (!onResult || resultArmed);
+  const held = useNoteKeys(
+    input,
+    noteKeysEnabled,
+    onResult
+      ? [null, null, null, noteKeys.next, null, null]
+      : [noteKeys.hear, noteKeys.pace, noteKeys.time, noteKeys.next, keepKey, noteKeys.prev ?? null],
+    (key) => {
+      if (key === 0) session.hear();
+      else if (key === 1) session.go("pace");
+      else if (key === 2) session.go("time");
+      else if (key === 4) keepOffer();
+      else if (key === 5) session.prev?.();
+      else session.next();
+    },
+    false,
+    onResult ? 800 : undefined,
+  );
 
   // tone keys: the gear and the listening circle answer to a double tap of a note this card doesn't play
   const openCalib = () => {
@@ -915,8 +963,8 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
     },
     {
       title: "Tune & session",
-      rows: [{ label: "Sound & setup" }, { label: onTune ? "Choose tune" : "" }, { label: session.pos > 0 ? "Previous exercise" : "Session controls" }, { label: "Tuner" }, { label: "Metronome" }, flowing ? { label: "Score", value: scoreZoom.name } : { label: "Return to playing" }],
-      fire: [() => setPad(2), openTunePicker, () => (session.pos > 0 ? (closePad(false), session.prev?.()) : setPad(1)), () => openTools("tuner"), () => openTools("metronome"), () => (flowing ? scoreZoom.cycle() : closePad())],
+      rows: [{ label: "Sound & setup" }, { label: onTune ? "Choose tune" : "" }, { label: session.pos > 0 ? "Previous exercise" : "Session controls" }, { label: "Tuner" }, { label: "Metronome" }, flowing ? { label: "Score", value: scoreZoom.name } : !session.spot && cardNow && !cardNow.once ? { label: "Accept & exclude" } : { label: "Return to playing" }],
+      fire: [() => setPad(2), openTunePicker, () => (session.pos > 0 ? (closePad(false), session.prev?.()) : setPad(1)), () => openTools("tuner"), () => openTools("metronome"), () => (flowing ? scoreZoom.cycle() : !session.spot && cardNow && !cardNow.once ? (closePad(false), session.accept?.()) : closePad())],
     },
   ];
 
@@ -1034,7 +1082,8 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
           if ((s.remaining ?? 0) > 0) s.resume?.();
           else s.keepGoing();
         } else return;
-      } else if (k === " ") s.togglePause();
+      } else if (s.phase === "result" && (k === " " || k === "Enter")) s.next();
+      else if (k === " ") s.togglePause();
       else if (k === "ArrowRight" || k === "PageDown") s.skip();
       else if (k === "ArrowLeft" || k === "PageUp") s.again();
       else if (k === "h") s.hear();
@@ -1596,8 +1645,13 @@ function Running({
   }, [blocks]);
   // a tempo set by hand shows itself, even while the dial would otherwise show the player's own pulse
   const [setByHand, setSetByHand] = useState<string | null>(null);
+  const [confirmAccept, setConfirmAccept] = useState(false);
+  const [showSymbols, setShowSymbols] = useState(false);
   const lifted = useLately(s.tempoLift?.key ?? 0, 2400);
   const card = s.card;
+  useEffect(() => {
+    setConfirmAccept(false);
+  }, [s.pos, card?.id, s.phase]);
   if (!card) return null;
   const say = coachLine(card, s, s.passes[s.passes.length - 1]);
   const aidLevel = s.phase === "time" ? s.shadow?.level() ?? 0 : 0;
@@ -1648,13 +1702,53 @@ function Running({
       </ol>
 
       <header className="ss-head" key={`${s.pos}:${card.id}`} data-pool="calm">
-        <RoomInstruments onOpen={onTools} />
+        <div className="ss-head-bar">
+          <RoomInstruments onOpen={onTools} />
+          <div className="ss-head-utils">
+            {card.view === "score" || card.view === "fretboard" ? (
+              <button
+                type="button"
+                className={`ss-util-btn ${showSymbols ? "is-on" : ""}`}
+                aria-expanded={showSymbols}
+                onClick={() => setShowSymbols((v) => !v)}
+                title="Quick guide to music notation symbols (rests, 16ths, triplets, ties)"
+              >
+                <span>Symbols ?</span>
+              </button>
+            ) : null}
+            {!s.spot && !card.once && s.phase !== "result" ? (
+              confirmAccept ? (
+                <span className="ss-accept-confirm" role="group" aria-label="Confirm accepting and excluding this piece">
+                  <span>Exclude from future sessions?</span>
+                  <button type="button" className="ss-accept-yes" onClick={() => { setConfirmAccept(false); s.accept?.(); }}>
+                    Accept &amp; exclude
+                  </button>
+                  <button type="button" className="ss-accept-no" onClick={() => setConfirmAccept(false)}>
+                    Cancel
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className="ss-util-btn"
+                  onClick={() => setConfirmAccept(true)}
+                  title="Mark this piece accepted and exclude it from future sessions and scoring (unlocks what comes next)"
+                >
+                  <span>Accept as done</span>
+                </button>
+              )
+            ) : null}
+          </div>
+        </div>
+
+        {showSymbols ? <NotationGuide onClose={() => setShowSymbols(false)} /> : null}
 
         <div className="ss-titlebar">
           <p className="ss-kicker">
             <span className="ss-fam">{FAMILY_LABEL[card.family]}</span>
             {mixed ? ` · ${card.tune}` : ""}
             {s.box === 0 ? " · new" : ""}
+            {s.gapped ? " · band dropout" : ""}
           </p>
           <h1 className="ss-title">{card.title}</h1>
           {shapes.length > 1 && !s.spot ? <ShapePicker card={card} shapes={shapes} onShape={onShape} /> : null}
@@ -1758,7 +1852,17 @@ function Running({
             {s.listeningOff ? <button type="button" onClick={s.continueWithoutScoring}>{input.status === "idle" ? "Practise without scoring" : "Continue without scoring"}</button> : null}
           </span>
         ) : null}
-        {s.phase === "result" && s.outcome ? <ResultMark o={s.outcome} titleOf={(id) => byId.get(id)?.title ?? ""} secret={s.outcome.secret} /> : null}
+        {s.phase === "result" && s.outcome ? (
+          <ResultMark
+            o={s.outcome}
+            titleOf={(id) => byId.get(id)?.title ?? ""}
+            secret={s.outcome.secret}
+            isLast={s.ending || s.pos + 1 >= s.queue.length}
+            nextKey={playedShortcuts ? s.keys.next : null}
+            onNext={s.next}
+            onAgain={s.again}
+          />
+        ) : null}
       </div>
 
       <div className={`ss-coach ${hasCoach ? "has-copy" : ""}`}>
@@ -1901,9 +2005,80 @@ function BoxPips({ box, gained = 0 }: { box: number; gained?: number }) {
   );
 }
 
-function ResultMark({ o, titleOf, secret }: { o: Outcome; titleOf(id: string): string; secret?: string }) {
+function NotationGuide({ onClose }: { onClose(): void }) {
+  return (
+    <div className="ss-symbols" role="region" aria-label="Notation symbols guide">
+      <div className="ss-symbols-head">
+        <strong>Reading symbols</strong>
+        <button type="button" onClick={onClose} aria-label="Close symbols guide">×</button>
+      </div>
+      <div className="ss-symbols-grid">
+        <div>
+          <p className="ss-symbols-cat">Notes (sound)</p>
+          <ul>
+            <li><b>𝅝</b><span>Whole · 4 beats</span></li>
+            <li><b>𝅗𝅥</b><span>Half · 2 beats</span></li>
+            <li><b>♩</b><span>Quarter · 1 beat</span></li>
+            <li><b>♪</b><span>8th (1 beam) · ½ beat</span></li>
+            <li><b>𝅘𝅥𝅯</b><span>16th (2 beams) · ¼ beat</span></li>
+            <li><b>♩.</b><span>Dot · +50% longer</span></li>
+          </ul>
+        </div>
+        <div>
+          <p className="ss-symbols-cat">Rests (silence)</p>
+          <ul>
+            <li><b>𝄻</b><span>Whole rest (hangs) · 4 beats</span></li>
+            <li><b>𝄼</b><span>Half rest (sits) · 2 beats</span></li>
+            <li><b>𝄽</b><span>Quarter rest · 1 beat</span></li>
+            <li><b>𝄾</b><span>8th rest (1 flag) · ½ beat</span></li>
+            <li><b>𝄿</b><span>16th rest (2 flags) · ¼ beat</span></li>
+          </ul>
+        </div>
+        <div>
+          <p className="ss-symbols-cat">Groupings &amp; pitch</p>
+          <ul>
+            <li><b>3</b><span>Triplet · 3 notes in space of 2</span></li>
+            <li><b>‿</b><span>Tie · hold note, don&apos;t re-pick</span></li>
+            <li><b>♯ / ♭</b><span>Sharp (+1 fret) / Flat (−1 fret)</span></li>
+            <li><b>♮</b><span>Natural · cancels ♯ or ♭</span></li>
+            <li><b>‖: :‖</b><span>Repeat section</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ResultMark({
+  o,
+  titleOf,
+  secret,
+  isLast,
+  nextKey,
+  onNext,
+  onAgain,
+}: {
+  o: Outcome;
+  titleOf(id: string): string;
+  secret?: string;
+  isLast: boolean;
+  nextKey: number | null;
+  onNext(): void;
+  onAgain(): void;
+}) {
   const self = o.conditions?.source === "self";
-  const text = self ? "Practice noted · unscored" : o.result === "clean" ? `Box ${o.to}` : o.result === "ok" ? `Stays in box ${o.to}` : o.result === "fail" ? "Back a step" : "";
+  const autoSkip = o.result === "skip" && !o.excluded;
+  const text = o.excluded
+    ? "Accepted · excluded from sessions"
+    : self
+      ? "Practice noted · unscored"
+      : o.result === "clean"
+        ? `Box ${o.to}`
+        : o.result === "ok"
+          ? `Stays in box ${o.to}`
+          : o.result === "fail"
+            ? "Back a step"
+            : "";
   const also = o.also.map((a) => titleOf(a.id)).filter(Boolean);
   const deltaText = !self && o.result === "clean"
     ? o.newBest && o.startBpm && o.bpm > o.startBpm
@@ -1917,10 +2092,10 @@ function ResultMark({ o, titleOf, secret }: { o: Outcome; titleOf(id: string): s
             : null
     : null;
   return (
-    <div className={`ss-result is-${o.result}`}>
+    <div className={`ss-result is-${o.excluded ? "clean" : o.result}`}>
       <svg viewBox="0 0 100 100" aria-hidden="true">
         <circle cx="50" cy="50" r="44" pathLength={1} />
-        {o.result === "clean" || o.result === "ok" ? <path d="M31 52 L45 66 L70 37" pathLength={1} /> : o.result === "fail" ? <path d="M33 50 H67" pathLength={1} /> : <path d="M40 34 L60 50 L40 66" pathLength={1} />}
+        {o.excluded || o.result === "clean" || o.result === "ok" ? <path d="M31 52 L45 66 L70 37" pathLength={1} /> : o.result === "fail" ? <path d="M33 50 H67" pathLength={1} /> : <path d="M40 34 L60 50 L40 66" pathLength={1} />}
       </svg>
       {secret ? <p className="ss-result-secret">{secret}</p> : null}
       {text ? <p>{text}</p> : null}
@@ -1949,7 +2124,23 @@ function ResultMark({ o, titleOf, secret }: { o: Outcome; titleOf(id: string): s
           {also.length > 3 ? ` +${also.length - 3}` : ""}
         </p>
       ) : null}
-      {!self ? <p className="ss-result-hint">Play a note for next</p> : null}
+      {!autoSkip ? (
+        <div className="ss-result-actions">
+          <button type="button" className="ss-result-next" onClick={onNext}>
+            {isLast ? "Session summary →" : "Next exercise →"}
+          </button>
+          {!o.excluded ? (
+            <button type="button" className="ss-result-again" onClick={onAgain}>
+              Play again
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {!autoSkip ? (
+        <p className="ss-result-hint">
+          {nextKey !== null ? `Space / Enter or hold ${keyName(nextKey)} to continue` : "Space / Enter or click to continue"}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -2992,6 +3183,11 @@ function Drawer({
               <button type="button" onClick={() => (s.skip(), onClose())}>
                 {s.phase === "time" || s.phase === "result" ? "Skip it" : "Next step"}
               </button>
+              {!s.spot && s.card && !s.card.once ? (
+                <button type="button" onClick={() => (s.accept?.(), onClose())} title="Mark accepted and exclude from future sessions">
+                  Accept &amp; exclude
+                </button>
+              ) : null}
               <button type="button" onClick={() => (s.finish(), onClose())}>
                 Stop now
               </button>
@@ -3037,6 +3233,9 @@ function Drawer({
           ) : null}
           <Switch on={s.click} onChange={(v) => s.setClick(v)} tone={tones[0]} lit={tapped === 2}>
             Click with the band
+          </Switch>
+          <Switch on={Boolean(settings.gapClick)} onChange={(v) => updateSettings({ gapClick: v })}>
+            Band dropouts on scales
           </Switch>
           <Switch on={settings.guide} onChange={(v) => updateSettings({ guide: v })} tone={tones[1]} lit={tapped === 3}>
             Always play the melody under me
@@ -3085,6 +3284,24 @@ function Drawer({
           </div>
           <p className="ss-note">Clean: climbs tempo and moves up a box (graduating to 7–21 day spacing near goal tempo). Missed: steps back gently.</p>
         </section>
+
+        {Object.entries(store.cards).some(([id, st]) => isExcluded(st) && byId.has(id)) ? (
+          <section>
+            <h3>Accepted &amp; excluded</h3>
+            <ul className="ss-excluded-list">
+              {Object.entries(store.cards)
+                .filter(([id, st]) => isExcluded(st) && byId.has(id))
+                .map(([id]) => (
+                  <li key={id}>
+                    <span>{byId.get(id)?.title ?? id}</span>
+                    <button type="button" onClick={() => s.restoreExcluded?.(id)}>
+                      Restore
+                    </button>
+                  </li>
+                ))}
+            </ul>
+          </section>
+        ) : null}
 
         <section>
           <h3>The tune</h3>

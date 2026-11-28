@@ -19,7 +19,7 @@ import { noteName } from "./deck";
 import { finishTake, record } from "../audio/recorder";
 import { keepPracticeWrite } from "../platform/practiceWindow";
 import { createEvidence, type EvidenceLog } from "./evidence";
-import { applyResult, carryOver, headStart, loadStores, logAttempt, planExtra, planSession, saveStores, today, type AttemptConditions, type LoopMode, type Result, type Settings, type Store } from "./leitner";
+import { applyResult, carryOver, excludeCard, headStart, isExcluded, loadStores, logAttempt, planExtra, planSession, restoreCard, saveStores, today, type AttemptConditions, type LoopMode, type Result, type Settings, type Store } from "./leitner";
 import { assignNoteKeys, commandMidis } from "./notekeys";
 import { createTrouble, spotCard, spotOf, type Spot } from "./spot";
 import { meanShare } from "./stats";
@@ -57,9 +57,9 @@ const INTRO_NEW_MS = 1400;
 const INTRO_MS = 800;
 const NEXT_TAKE_MS = 650;
 const START_TIME_MS = 450;
-const RESULT_MS = 1500;
+const RESULT_MS = 1500; // used only when ending ("Finish after this pass")
 const SKIPPED_MS = 500;
-const WAKE_GUARD_MS = 280; // brief ringout guard before a played note dismisses intro/result
+const WAKE_GUARD_MS = 280; // brief ringout guard before a played note dismisses intro
 const MAX_UNCLEAN = 4; // finished takes that weren't clean before the band takes over anyway
 const PULSE_NOTES = 4; // notes in a row that must come evenly for the player to have a tempo
 const PULSE_SPREAD = 0.35; // how far apart the slowest and fastest of them may be (share of the beat)
@@ -88,8 +88,7 @@ const SPOT_NUDGE_MS = 3000; // in a spot, the next note sounds this soon: it is 
 const PROMPT_SECS = [4, 3.5, 3, 2.4, 1.8, 1.4]; // by box: seconds a note on the neck may take to be found
 const WEAK_BAR = 0.7; // a run-through's bar with fewer of its notes than this is worked on next time
 const RUN_CLEAN = 0.9;
-const GAP_BOX = 4; // a scale this far along is played in time with gaps in the band: the time is the player's
-const GAP_BARS = 2; // bars with the band, then bars without it (twice as many in the top box)
+const GAP_BARS = 2; // bars with the band, then bars without it (when opt-in gap click is enabled)
 
 const EMPTY: Timeline = { slots: [], targets: [], comp: [], total: 0 };
 const KEY_IDS = ["hear", "pace", "time", "next"];
@@ -122,7 +121,8 @@ export interface Outcome {
   priorBest?: number | null; // demonstrated clean peak BPM before this visit
   startBpm?: number; // BPM this visit started at
   newBest?: boolean; // true when this visit beat priorBest (or set the first clean peak)
-  unlocked?: string[]; // titles of exercises newly unlocked by reaching Box 2
+  unlocked?: string[]; // titles of exercises newly unlocked by reaching Box 2 (or accepting a blocker)
+  excluded?: boolean; // true when the player accepted and excluded this piece from future sessions
 }
 
 /** Notes landed per printed bar over a card's range. */
@@ -391,9 +391,9 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     bass: true,
     guide: !memoryExercise || phase === "listen",
   };
-  // a gap: the band drops out of a scale/technique drill for a couple of bars and comes back; the notes in
-  // between are still judged. A tune always keeps its band: playing it is playing with them.
-  const gapped = Boolean(card && !spot && isDrill && (options.gap?.has(card.id) || box >= GAP_BOX));
+  // Opt-in gap click: only drop out the band on scale/technique drills when the player explicitly
+  // turns on "Band dropouts on scales" in Settings. By default the full band and beat stay on.
+  const gapped = Boolean(card && !spot && isDrill && settings.gapClick === true);
   const barBeats = card?.tl.slots[card.from]?.beats ?? 4;
   const gap = gapped ? { on: GAP_BARS * barBeats, off: (box >= 5 ? 2 : 1) * GAP_BARS * barBeats } : null;
   const playback = usePlayback(card?.tl ?? EMPTY, { ...mix, gap }, sessionInput, phase === "time" && listening && !selfGuided && !suspended, !card?.exact, ignore);
@@ -555,18 +555,35 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     const done = new Set(logRef.current.filter((o) => o.result !== "skip").map((o) => o.id));
     const lastId = queue[pos];
     if (lastId) done.add(lastId);
-    let more = planSession(deck, storeRef.current, today(), done, Math.max(2, storeRef.current.settings.newPerSession));
-    if (!more.length) more = planExtra(deck, storeRef.current, 4).filter((id) => !done.has(id));
+    const curStore = storeRef.current;
+    const count = Math.max(2, curStore.settings.newPerSession);
+    const seen = new Set(done);
+    let more: string[] = [];
+    const take = (ids: string[]) => {
+      for (const id of ids) {
+        if (more.length >= 4 || seen.has(id)) continue;
+        seen.add(id);
+        more.push(id);
+      }
+    };
+    take(planSession(deck, curStore, today(), seen, count));
+    // If the tune's opening isn't Box 2 yet, ignore `after` gating so the player can keep going with scales/harmony/reading
+    if (more.length < 2) take(planSession(deck, curStore, today(), seen, count, true));
+    if (more.length < 2) take(planExtra(deck, curStore, 4));
+    if (more.length < 2) take(deck.intro.filter((id) => !seen.has(id) && !isExcluded(curStore.cards[id]) && !byId.get(id)?.once));
+    // Last resort on a tiny deck where every card was just played: replay lowest-box active cards instead of dead-ending
+    if (!more.length) more = planExtra(deck, curStore, 4);
+    if (!more.length) more = deck.intro.filter((id) => !isExcluded(curStore.cards[id]) && !byId.get(id)?.once).slice(0, 4);
     if (!more.length) return false;
     const now = performance.now();
     clock.current = { ...clock.current, heard: now, event: now };
     setQueue((q) => [...q, ...more]);
-    setPos((p) => p + 1);
+    setPos(queue.length);
     setFinished(false);
     setPaused(false);
     setAway(false);
     return true;
-  }, [deck, queue, pos]);
+  }, [deck, queue, pos, byId]);
 
   const exit = useCallback((): SessionSnapshot | null => {
     if (running && !finished) finish();
@@ -805,7 +822,8 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
 
   const dismissSpot = useCallback(() => setSuggestedSpot(null), []);
 
-  // intro → first phase (auto timer, or immediately woken by a fresh played note after a brief ringout guard)
+  // intro → first phase (auto timer, or immediately woken by a fresh played note after a brief ringout guard).
+  // Never dismiss `result` on a stray played note: the player needs to read what happened first.
   useEffect(() => {
     if (phase !== "intro" || !card || inactive) return;
     const id = window.setTimeout(() => nextPhase("intro"), box === 0 ? INTRO_NEW_MS : INTRO_MS);
@@ -813,7 +831,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
   }, [phase, card, inactive, box, nextPhase]);
 
   useEffect(() => {
-    if ((phase !== "intro" && phase !== "result") || !card || inactive || selfGuided) return;
+    if (phase !== "intro" || !card || inactive || selfGuided) return;
     const entered = performance.now();
     let seenQuiet = false;
     let steady = 0;
@@ -833,12 +851,9 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
       lastMidi = m;
       if (steady < 3) return;
       fired = true;
-      if (phase === "intro") nextPhase("intro");
-      else if (ending) finish();
-      else if (pos + 1 < queue.length) setPos(pos + 1);
-      else finish();
+      nextPhase("intro");
     });
-  }, [phase, card, inactive, selfGuided, sessionSubscribe, nextPhase, ending, finish, pos, queue.length]);
+  }, [phase, card, inactive, selfGuided, sessionSubscribe, nextPhase]);
 
   // listen: hear it once
   const heard = useRef(false);
@@ -1276,16 +1291,19 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     });
   }, [waiting, inactive, subscribe]);
 
-  // result → next card
+  // result → next card: only auto-advance on an explicit skip or when finishing after this pass.
+  // Real exercise outcomes wait until the player chooses to move on so they can actually read them.
   useEffect(() => {
     if (phase !== "result" || inactive) return;
+    const autoSkip = outcome?.result === "skip" && !outcome.excluded;
+    if (!autoSkip && !ending) return;
     const id = window.setTimeout(
       () => {
         if (ending) finish();
         else if (pos + 1 < queue.length) setPos(pos + 1);
         else finish();
       },
-      outcome?.result === "skip" ? SKIPPED_MS : RESULT_MS,
+      autoSkip ? SKIPPED_MS : RESULT_MS,
     );
     return () => window.clearTimeout(id);
   }, [phase, inactive, pos, queue.length, finish, outcome, ending]);
@@ -1478,6 +1496,67 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     else if (pos + 1 < queue.length) setPos(pos + 1);
     else finish();
   }, [card, phase, conclude, pos, queue.length, finish, selfGuided, bpm, options.arrangementFingerprint, options.arrangementFingerprints, tuneIds, guideMelody, nudge, follow.take, mix.shadow]);
+
+  /**
+   * Explicitly accept this piece as done and exclude it from future sessions/scoring.
+   * Unlocks any downstream cards that depended on it without fabricating measured attempts or clean tempos.
+   */
+  const accept = useCallback(() => {
+    if (!whole) return;
+    stop();
+    hush();
+    setPaused(false);
+    setAway(false);
+    setWaiting(false);
+    setSpot(null);
+    const before = storeRef.current;
+    const prev = before.cards[whole.id];
+    const from = prev?.box ?? 0;
+    const nextState = excludeCard(prev, whole);
+    const unlocked = deck.cards
+      .filter((c) => c.needs === whole.id && !before.cards[c.id])
+      .slice(0, 2)
+      .map((c) => c.title);
+    const n: Store = { ...before, cards: { ...before.cards, [whole.id]: nextState } };
+    storeRef.current = n;
+    saveStore(n);
+    setStore(n);
+    const o: Outcome = {
+      id: whole.id,
+      at: pos,
+      result: "skip",
+      excluded: true,
+      from,
+      to: from,
+      bpm,
+      share: null,
+      secs: Math.round(clock.current.card / 1000),
+      also: [],
+      spots: spotted,
+      ...(unlocked.length ? { unlocked } : {}),
+    };
+    bankedRef.current = null;
+    setBankedBpm(null);
+    setFreeRide(false);
+    setSuggestedSpot(null);
+    setLog((l) => [...l, o]);
+    setOutcome(o);
+    setPhase("result");
+  }, [whole, stop, deck, pos, bpm, spotted, saveStore]);
+
+  /** Return an excluded exercise back to active scheduling. */
+  const restoreExcluded = useCallback(
+    (id: string) => {
+      const before = storeRef.current;
+      const prev = before.cards[id];
+      if (!prev?.excluded) return;
+      const n: Store = { ...before, cards: { ...before.cards, [id]: restoreCard(prev, today()) } };
+      storeRef.current = n;
+      saveStore(n);
+      setStore(n);
+    },
+    [saveStore],
+  );
 
   const finishAfterPass = useCallback(() => {
     if (phase === "result" || phase === "intro" || phase === "listen" || selfGuided || waiting || !listening) finish();
@@ -1692,6 +1771,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     active,
     click,
     setClick,
+    gapped,
     start,
     begin,
     resume,
@@ -1707,6 +1787,8 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     skip,
     prev,
     next,
+    accept,
+    restoreExcluded,
     go,
     swap,
     hear: askHear,

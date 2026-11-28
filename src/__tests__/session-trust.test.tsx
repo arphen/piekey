@@ -403,6 +403,74 @@ describe("session assessment trust", () => {
     await pass(card, { heard: 0 });
     expect(session.phase).toBe("result");
     expect(session.outcome).toMatchObject({ result: "clean", bpm: start });
+    // Real exercise results stay visible (no 1.5 s auto-vanish or stray-note dismissal) until the player advances.
+    await act(async () => vi.advanceTimersByTime(10000));
+    await send(null, 400);
+    await send(64, 30);
+    await send(64, 30);
+    await send(64, 30);
+    expect(session.phase).toBe("result");
+    expect(session.finished).toBe(false);
+    await act(async () => session.next());
+    expect(session.finished).toBe(true);
+  });
+
+  it("keeps the full band on for scale drills by default and only enables band dropouts when opted in", async () => {
+    const store = loadStore(sheet.id);
+    store.cards[card.id] = { box: 5, due: today(), bpm: card.goalBpm, bestCleanBpm: card.goalBpm, seen: 6, clean: 6, last: "clean" };
+    localStorage.setItem(`guitar-song-deck:${sheet.id}`, JSON.stringify(store));
+    options = { ...options, gap: new Set([card.id]) };
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    await render();
+    input.status = "listening";
+    await act(async () => session.begin([card.id]));
+    await act(async () => session.go("time"));
+    expect(session.gapped).toBe(false);
+    expect(playbackMix.current.gap).toBeNull();
+
+    await act(async () => session.updateSettings({ gapClick: true }));
+    expect(session.gapped).toBe(true);
+    expect(playbackMix.current.gap).toMatchObject({ on: 8, off: 16 });
+  });
+
+  it("accepts and excludes a blocking piece without fabricating measured attempts, and restores it cleanly", async () => {
+    const blocked = deck.cards.find((c) => c.family === "melody" && c.needs)!;
+    const blocker = deck.cards.find((c) => c.id === blocked.needs)!;
+    input.status = "listening";
+    await act(async () => session.begin([blocker.id, card.id]));
+    await act(async () => session.accept());
+    expect(session.phase).toBe("result");
+    expect(session.outcome?.excluded).toBe(true);
+    expect(session.outcome?.unlocked).toContain(blocked.title);
+    expect(session.store.cards[blocker.id]).toMatchObject({ excluded: true, due: "9999-12-31", seen: 0, clean: 0 });
+    expect(session.store.history ?? []).toHaveLength(0);
+    // Stays on Result so the player sees what was accepted and unlocked
+    await act(async () => vi.advanceTimersByTime(5000));
+    expect(session.phase).toBe("result");
+    await act(async () => session.next());
+    expect(session.card?.id).toBe(card.id);
+
+    await act(async () => session.restoreExcluded(blocker.id));
+    expect(session.store.cards[blocker.id].excluded).toBeUndefined();
+    expect(session.store.cards[blocker.id].due).toBe(today());
+  });
+
+  it("finds more exercises on keepGoing instead of saying nothing more for today when the opening is still below Box 2", async () => {
+    const opening = deck.cards.find((c) => c.family === "melody" && !c.once && !c.needs)!;
+    input.status = "listening";
+    await act(async () => session.begin([opening.id]));
+    await act(async () => session.go("time"));
+    await pass(opening);
+    await act(async () => session.next());
+    await act(async () => session.next());
+    expect(session.finished).toBe(true);
+    let kept = false;
+    await act(async () => { kept = session.keepGoing(); });
+    expect(kept).toBe(true);
+    expect(session.finished).toBe(false);
+    expect(session.queue.length).toBeGreaterThan(2);
+    expect(session.card?.id).not.toBe(opening.id);
   });
 
   it("tightens adaptive loop turnaround to continuous once a clean pass lands and supports loop override", async () => {

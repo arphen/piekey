@@ -1,6 +1,6 @@
 import { tunePath, type TunePath } from "./progress";
 import type { Card, Deck, Family } from "../song/deck";
-import { BOXES, boxCounts, today, unlocked, waiting, type Store } from "../song/leitner";
+import { BOXES, boxCounts, isExcluded, today, unlocked, waiting, type Store } from "../song/leitner";
 import type { LeadSheet } from "../tunes/musicxml";
 import type { ReadingExercise } from "../core/contract";
 import { goalDeck, goalProgress, type Goal } from "../song/goals";
@@ -80,7 +80,7 @@ export function nextUnits(deck: Deck, store: Store, count = 3, day = today()): U
   };
 
   const due = deck.intro
-    .filter((id) => store.cards[id] && store.cards[id].due <= day && !byId.get(id)?.once)
+    .filter((id) => store.cards[id] && !isExcluded(store.cards[id]) && store.cards[id].due <= day && !byId.get(id)?.once)
     .sort(
       (a, b) =>
         store.cards[a].box - store.cards[b].box ||
@@ -95,11 +95,11 @@ export function nextUnits(deck: Deck, store: Store, count = 3, day = today()): U
   for (const id of deck.intro) {
     if (picked.length >= count) break;
     const state = store.cards[id];
-    if ((!state || state.box < BOXES) && unlocked(byId.get(id), store)) add(id);
+    if (!isExcluded(state) && (!state || state.box < BOXES) && unlocked(byId.get(id), store)) add(id);
   }
 
   // Everything is mastered: offer reviews from the start of the curriculum.
-  if (picked.length < count) for (const id of deck.intro) if (unlocked(byId.get(id), store)) add(id);
+  if (picked.length < count) for (const id of deck.intro) if (!isExcluded(store.cards[id]) && unlocked(byId.get(id), store)) add(id);
 
   return picked.slice(0, count).map((id) => preview(byId.get(id)!, store, day));
 }

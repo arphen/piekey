@@ -103,7 +103,7 @@ kept; × or simply playing on leaves it.
 
 ## One exercise
 
-`intro → (listen) → (your pace) → in time → result`, by itself (`song/useSession.ts`). Transitions are snappy (`intro` 0.8 s / 1.4 s new, `result` 1.5 s) and guitar-woken: after a brief 280 ms ringout guard, a fresh played note immediately dismisses `intro` or `result`. Once the music has been heard, just now or on an earlier visit, it goes straight to in time; your pace comes first only for music never heard, new-every-time cards and a part taken out, asks for **one** clean take before handing off to the band, and stays one note key away. Asking for in time while a pass is already playing changes nothing: the pass carries on.
+`intro → (listen) → (your pace) → in time → result`, by itself (`song/useSession.ts`). Transitions are snappy (`intro` 0.8 s / 1.4 s new, guitar-woken after a 280 ms ringout guard), while real `result` outcomes stay on screen until the player clicks Continue, presses Space/Enter, or holds the `Next` note key after a 1.5 s settle guard (stray trailing notes never dismiss results; explicit skips still advance in 0.5 s). Once the music has been heard, just now or on an earlier visit, it goes straight to in time; your pace comes first only for music never heard, new-every-time cards and a part taken out, asks for **one** clean take before handing off to the band, and stays one note key away. Asking for in time while a pass is already playing changes nothing: the pass carries on.
 
 - **Your pace.** The cursor waits for each note. Going back is followed, not punished. A take
   starts on a fresh attack, so a string still ringing is not its first note. A take is clean when
@@ -156,10 +156,18 @@ kept; × or simply playing on leaves it.
   turnaround bar while learning (Box 0–2, before a clean pass lands) with a gentle 2-beat pickup
   click and a top-edge return pill, then tighten seamlessly into a continuous loop once a clean pass
   lands (or from Box 3 up).
-- **Gaps.** Once a scale drill is well known (box 4) the band drops out for two bars in four (four
-  in eight in the top box) while it plays in time; the notes are still judged, so the time is the
-  player's. During a focus on time every scale card in the focus plays this way. A tune always
-  keeps its band: playing it is playing with them.
+- **Gaps (opt-in).** By default, the full band, bass, kick/hat pulse and click stay on throughout
+  every scale and technique drill. Players who want gap-click internal-time training can opt in via
+  **Settings → Band dropouts on scales** (`settings.gapClick`), which drops out the band for two
+  bars in four (four in eight in box 5) with a visible `"band dropout"` tag while notes are still
+  judged. A tune always keeps its band.
+- **Accept & exclude.** Any blocking exercise (e.g. an unplayable 16th/tuplet phrase in an imported
+  score) can be explicitly accepted and excluded (**Accept as done** in the exercise header,
+  Settings drawer, or Guitar menu's Tune & session page). This marks `CardState.excluded = true`
+  with `due = NEVER`, immediately unlocking downstream phrases/sections and removing it from future
+  sessions without fabricating measured accuracy or clean-tempo history; excluded pieces remain
+  restorable from Settings. A collapsible **Symbols ?** guide sits beside score exercises for quick
+  rhythm/rest reference.
 - **Timing.** After each pass in time a strip shows every note against its beat and how scattered
   they were (ms), with raw reference alignment separate from scatter. A pass accommodates constant
   phase within the smallest of 200 ms, 30% of a beat and 45% of nearby attack spacing; scatter and

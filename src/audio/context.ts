@@ -18,7 +18,7 @@ export function ensureAudio(): void {
     Tone.setContext(new Tone.Context({ latencyHint: "playback", lookAhead: 0.2 }));
     const dest = Tone.getDestination();
     dest.volume.value = -3;
-    dest.chain(new Tone.Compressor({ threshold: -18, ratio: 3, attack: 0.005, release: 0.15 }), new Tone.Limiter(-1));
+    dest.chain(new Tone.Compressor({ threshold: -16, ratio: 2.5, attack: 0.012, release: 0.18 }), new Tone.Limiter(-1));
     watchOutputs();
   } catch {
     /* no Web Audio (tests) */

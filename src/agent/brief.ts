@@ -72,7 +72,7 @@ interface CleanTempo {
 export interface PracticeBrief {
   schema: "fretboard-focus-lab/practice-brief";
   schemaVersion: 2;
-  app: { name: "Fretboard Focus Lab"; version: string };
+  app: { name: "Piekey"; version: string };
   generatedAt: string;
   window: { days: BriefDays; startDay: string; endDay: string; basis: string };
   scope: { music: BriefScope; tuneId: string | null };
@@ -218,7 +218,7 @@ export function buildPracticeBrief(input: PracticeBriefInput): PracticeBrief {
   return {
     schema: "fretboard-focus-lab/practice-brief",
     schemaVersion: 2,
-    app: { name: "Fretboard Focus Lab", version: input.appVersion },
+    app: { name: "Piekey", version: input.appVersion },
     generatedAt: input.generatedAt,
     window: { days, startDay: start, endDay: input.day, basis: "Recorded local practice dates, inclusive; timestamps are not converted into another time zone." },
     scope: { music: scope, tuneId: scope === "selected-tune" ? input.selectedTuneId : null },

@@ -1,12 +1,12 @@
 import * as Tone from "tone";
 import { ensureAudio } from "../audio/context";
 import { pluckBuffer } from "../audio/pluck";
-import { bassBuffer, clickBuffer, keysBuffer, OneShots } from "../audio/samples";
+import { bassBuffer, clickBuffer, harmonicBuffer, OneShots, padBuffer } from "../audio/samples";
 import { mod } from "../musicTheory";
 
 // Small sounds around the exercises: a soft chord under your own-pace playing, a bass note for the
-// chord you're looking for, the next note when the player has gone quiet, a chime for a pass, a few
-// bars of air between sessions, and (opt-in) a spoken cue for the next card.
+// chord you're looking for, the next note when the player has gone quiet, a harmonic chime for a
+// pass, a few bars of air between sessions, and (opt-in) a spoken cue for the next card.
 
 let shots: OneShots | null = null;
 let pads: OneShots | null = null; // the harmony pad, on its own so one chord can make way for the next
@@ -29,19 +29,24 @@ function ready(): { shots: OneShots; pads: OneShots; out: Tone.Volume; now: numb
 export function padChord(midis: number[]) {
   const a = ready();
   if (!a) return;
-  a.pads.stopAll(0.06);
-  midis.forEach((m) => a.pads.play(keysBuffer(m), a.out, a.now + 0.05, 0.18));
+  a.pads.stopAll(0.08);
+  const sorted = [...midis].sort((x, y) => x - y);
+  const mid = (sorted.length - 1) / 2;
+  sorted.forEach((m, i) => {
+    const pan = sorted.length > 1 ? ((i - mid) / Math.max(1, mid)) * 0.22 : 0;
+    a.pads.play(padBuffer(m), a.out, a.now + 0.05 + i * 0.022, 0.22, undefined, 0.25, { pan, room: 0.32 });
+  });
 }
 
 export function bassHint(midi: number) {
   const a = ready();
-  if (a) a.shots.play(bassBuffer(midi), a.out, a.now, 0.6, 1.6, 0.2);
+  if (a) a.shots.play(bassBuffer(midi), a.out, a.now, 0.62, 1.7, 0.22, { room: 0.1 });
 }
 
 /** The note that is waited for, quietly: for a player who has stopped. */
 export function hintNote(midi: number) {
   const a = ready();
-  if (a) a.shots.play(pluckBuffer(midi), a.out, a.now, 0.45, 1.4, 0.3);
+  if (a) a.shots.play(pluckBuffer(midi), a.out, a.now, 0.5, 1.6, 0.35, { room: 0.28 });
 }
 
 /** A soft click to be heard `ms` from now (the output's own delay is taken off). False when that is too soon. */
@@ -51,7 +56,7 @@ export function tickIn(ms: number): boolean {
   const ctx = Tone.getContext().rawContext as AudioContext;
   const lead = ms / 1000 - (ctx.outputLatency ?? 0.02);
   if (lead < 0.01) return false;
-  a.shots.play(clickBuffer(false), a.out, ctx.currentTime + lead, 0.5);
+  a.shots.play(clickBuffer(false), a.out, ctx.currentTime + lead, 0.52, undefined, 0.04, { room: 0.05 });
   return true;
 }
 
@@ -59,19 +64,22 @@ export function chime(good: boolean) {
   const a = ready();
   if (!a) return;
   const notes = good ? [76, 79, 84] : [64, 60];
-  notes.forEach((m, i) => a.shots.play(pluckBuffer(m), a.out, a.now + i * 0.09, good ? 0.5 : 0.3, 1.2, 0.3));
+  notes.forEach((m, i) => {
+    const pan = good ? (i - 1) * 0.18 : (i - 0.5) * 0.12;
+    a.shots.play(harmonicBuffer(m), a.out, a.now + i * 0.095, good ? 0.48 : 0.28, 1.5, 0.4, { pan, room: 0.38 });
+  });
 }
 
 /** Two high notes, barely there: a take that came out clean. */
 export function glint() {
   const a = ready();
-  if (a) [84, 91].forEach((m, i) => a.shots.play(pluckBuffer(m), a.out, a.now + i * 0.07, 0.22, 0.9, 0.3));
+  if (a) [84, 91].forEach((m, i) => a.shots.play(harmonicBuffer(m), a.out, a.now + i * 0.075, 0.24, 1.1, 0.35, { pan: i ? 0.16 : -0.16, room: 0.44 }));
 }
 
 /** A quiet rising fifth when a clean pass lifts the tempo a notch. */
 export function lift() {
   const a = ready();
-  if (a) [79, 86].forEach((m, i) => a.shots.play(pluckBuffer(m), a.out, a.now + i * 0.065, 0.2, 0.7, 0.25));
+  if (a) [79, 86].forEach((m, i) => a.shots.play(harmonicBuffer(m), a.out, a.now + i * 0.07, 0.24, 1.0, 0.32, { pan: i ? 0.14 : -0.14, room: 0.38 }));
 }
 
 /**
@@ -88,13 +96,17 @@ export function interlude(tonic: number, minor: boolean): number {
   const step = 0.16;
   let t = a.now + 0.2;
   const strum = (ivs: number[], gain: number) => {
-    ivs.forEach((iv, i) => a.shots.play(pluckBuffer(root + iv), a.out, t + i * step, gain, 3.2, 0.9));
-    a.shots.play(keysBuffer(root + ivs[0]), a.out, t, 0.1, 2.6, 0.8);
+    const mid = (ivs.length - 1) / 2;
+    ivs.forEach((iv, i) => {
+      const pan = ((i - mid) / Math.max(1, mid)) * 0.18;
+      a.shots.play(pluckBuffer(root + iv), a.out, t + i * step, gain, 3.0, 0.9, { pan, room: 0.34 });
+    });
+    a.shots.play(padBuffer(root + ivs[0]), a.out, t, 0.16, 2.8, 0.85, { room: 0.36 });
     t += ivs.length * step + 0.35;
   };
-  strum(home, 0.34);
-  strum(away, 0.26);
-  strum([0, 7, 12 + third, 19, 24], 0.3);
+  strum(home, 0.36);
+  strum(away, 0.28);
+  strum([0, 7, 12 + third, 19, 24], 0.32);
   return Math.round((t - a.now) * 1000 + 900);
 }
 

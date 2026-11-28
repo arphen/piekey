@@ -64,6 +64,12 @@ const CHORD_GATE_RMS = 0.002;
 const STRIKE_RATIO = 1.7; // louder than the quietest of the last few frames by this much: a new attack
 const HOLD_MS = 650; // a finished pass keeps its colours this long into the next one
 const SLOW_SPB = 60 / 84; // beats slower than this get a quiet eighth between them: long silences lose the time
+const ROOM_PLUCK = { room: 0.22 };
+const ROOM_KEYS = { room: 0.26 };
+const ROOM_BASS = { room: 0.06 };
+const ROOM_KICK = { room: 0.05 };
+const ROOM_HAT = { pan: -0.18, room: 0.14 };
+const ROOM_CLICK = { room: 0.05 };
 
 interface Seg {
   r: number; // from this beat past t0 on,
@@ -264,8 +270,8 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
       for (let k = 0; k < countBeats; k++) {
         const beatTime = t0 - (countBeats - k) * spb0;
         if (mixRef.current.pulse) {
-          shots.play(hatBuffer(), out, beatTime, k === 0 ? 0.65 : 0.45);
-          if (k === 0) shots.play(kickBuffer(), out, beatTime, 0.42);
+          shots.play(hatBuffer(), out, beatTime, k === 0 ? 0.65 : 0.45, undefined, 0.05, ROOM_HAT);
+          if (k === 0) shots.play(kickBuffer(), out, beatTime, 0.42, undefined, 0.05, ROOM_KICK);
         }
         // When the phrase enters after an 8th/16th/triplet rest, subdivide the lead-in beats of the
         // count-in so the player feels the exact grid right into beat 1 (e.g. 1, 2, 3-&, 4-e-&-a).
@@ -278,10 +284,10 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
         for (let part = 0; part < beatDiv; part++) {
           const when = t0 - (countBeats - k - part / beatDiv) * spb0;
           if (part === 0) {
-            shots.play(clickBuffer(k === 0), out, when, mixRef.current.pulse ? 0.44 : 0.6);
+            shots.play(clickBuffer(k === 0), out, when, mixRef.current.pulse ? 0.44 : 0.6, undefined, 0.04, ROOM_CLICK);
           } else {
-            if (mixRef.current.pulse) shots.play(hatBuffer(), out, when, beatDiv === 4 && part % 2 === 1 ? 0.24 : 0.34);
-            shots.play(clickBuffer(false), out, when, beatDiv === 4 && part % 2 === 1 ? 0.16 : 0.22);
+            if (mixRef.current.pulse) shots.play(hatBuffer(), out, when, beatDiv === 4 && part % 2 === 1 ? 0.24 : 0.34, undefined, 0.05, ROOM_HAT);
+            shots.play(clickBuffer(false), out, when, beatDiv === 4 && part % 2 === 1 ? 0.16 : 0.22, undefined, 0.04, ROOM_CLICK);
           }
         }
       }
@@ -383,12 +389,12 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
         if (span.breath > 0 && hi > end + 1e-9) {
           const tLo = Math.max(lo, end);
           if (m.chords && turnaroundComp && inRange(end, tLo, hi)) {
-            for (const midi of turnaroundComp.midis) shots.play(keysBuffer(midi), out, at(end), 0.14, span.breath * spb * 0.92, 0.18);
+            turnaroundComp.midis.forEach((midi, idx) => shots.play(keysBuffer(midi), out, at(end) + idx * 0.014, 0.15, span.breath * spb * 0.92, 0.2, ROOM_KEYS));
           }
           if (m.bass !== false && turnaroundBass) {
             for (let k = 0; k < span.breath; k += 2) {
               const when = end + k;
-              if (inRange(when, tLo, hi)) shots.play(bassBuffer(turnaroundBass.midi), out, at(when), k === 0 ? 0.56 : 0.42, Math.min(2, span.breath - k) * spb * 0.85, 0.1);
+              if (inRange(when, tLo, hi)) shots.play(bassBuffer(turnaroundBass.midi), out, at(when), k === 0 ? 0.56 : 0.42, Math.min(2, span.breath - k) * spb * 0.85, 0.12, ROOM_BASS);
             }
           }
           const division = m.clickSubdivision ?? 1;
@@ -397,11 +403,11 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
             const when = end + k;
             if (inRange(when, tLo, hi)) {
               if (m.pulse) {
-                shots.play(kickBuffer(), out, at(when), k === 0 ? 0.48 : 0.28);
-                shots.play(hatBuffer(), out, at(when), k === 0 ? 0.72 : 0.54);
+                shots.play(kickBuffer(), out, at(when), k === 0 ? 0.48 : 0.28, undefined, 0.05, ROOM_KICK);
+                shots.play(hatBuffer(), out, at(when), k === 0 ? 0.72 : 0.54, undefined, 0.05, ROOM_HAT);
               }
               if (m.click || k >= pickupFrom) {
-                shots.play(clickBuffer(k === 0 && m.click), out, at(when), k >= pickupFrom ? 0.42 : 0.26);
+                shots.play(clickBuffer(k === 0 && m.click), out, at(when), k >= pickupFrom ? 0.42 : 0.26, undefined, 0.04, ROOM_CLICK);
               }
             }
             const off = when + 0.5;
@@ -414,11 +420,11 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
               for (let part = 1; part < leadDiv; part++) {
                 const sub = when + part / leadDiv;
                 if (!inRange(sub, tLo, hi)) continue;
-                if (m.pulse && (entrySub > 1 || (leadDiv === 2 && spb >= SLOW_SPB))) shots.play(hatBuffer(), out, at(sub), leadDiv === 4 && part % 2 === 1 ? 0.22 : 0.3);
-                if (m.click || k >= pickupFrom) shots.play(clickBuffer(false), out, at(sub), leadDiv === 4 && part % 2 === 1 ? 0.14 : 0.18);
+                if (m.pulse && (entrySub > 1 || (leadDiv === 2 && spb >= SLOW_SPB))) shots.play(hatBuffer(), out, at(sub), leadDiv === 4 && part % 2 === 1 ? 0.22 : 0.3, undefined, 0.05, ROOM_HAT);
+                if (m.click || k >= pickupFrom) shots.play(clickBuffer(false), out, at(sub), leadDiv === 4 && part % 2 === 1 ? 0.14 : 0.18, undefined, 0.04, ROOM_CLICK);
               }
             } else if (m.pulse && spb >= SLOW_SPB && inRange(off, tLo, hi)) {
-              shots.play(hatBuffer(), out, at(off), 0.28);
+              shots.play(hatBuffer(), out, at(off), 0.28, undefined, 0.05, ROOM_HAT);
             }
           }
         }
@@ -435,22 +441,22 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
           const time = at(n.t);
           const vol = quiet(n.t) ? 0 : m.melody ? 1 : m.shadow ? m.shadow.gain(i) : 0;
           if (vol > 0 && n.chord)
-            [...n.chord.voicing].sort((x, y) => x - y).forEach((midi, k) => shots.play(pluckBuffer(midi), out, time + k * 0.03, 0.55 * vol, n.dur * spb * 0.95, 0.12));
-          else if (vol > 0) shots.play(pluckBuffer(n.midi), out, time, 0.9 * vol, n.dur * spb * 0.95 + 0.04, 0.08);
+            [...n.chord.voicing].sort((x, y) => x - y).forEach((midi, k) => shots.play(pluckBuffer(midi), out, time + k * 0.028, 0.55 * vol, n.dur * spb * 0.95, 0.14, ROOM_PLUCK));
+          else if (vol > 0) shots.play(pluckBuffer(n.midi), out, time, 0.9 * vol, n.dur * spb * 0.95 + 0.04, 0.1, ROOM_PLUCK);
           const before = i === s.first ? (s.loop ? t.targets[s.last] : null) : t.targets[i - 1];
           const previousStart = before ? perfOf(timeOf(iterStart + before.t - s.from - (i === s.first ? prevPeriod : 0))) : null;
           const after = i === s.last ? (s.loop ? t.targets[s.first] : null) : t.targets[i + 1];
           const nextStart = after ? perfOf(timeOf(iterStart + after.t - s.from + (i === s.last ? curPeriod : 0))) : null;
           s.pending.push({ target: i, start: perfOf(time), end: perfOf(time + n.dur * spb), iter: pass, previousStart, nextStart });
         });
-        if (m.chords) for (const c of t.comp) if (inRange(c.t, lo, hi) && !quiet(c.t)) for (const midi of c.midis) shots.play(keysBuffer(midi), out, at(c.t), 0.2, c.dur * spb, 0.15);
+        if (m.chords) for (const c of t.comp) if (inRange(c.t, lo, hi) && !quiet(c.t)) c.midis.forEach((midi, idx) => shots.play(keysBuffer(midi), out, at(c.t) + idx * 0.012, 0.21, c.dur * spb, 0.18, ROOM_KEYS));
         // the pulse: felt on every beat, and between them when they are far apart; in a gap only the hat stays.
         // Even when the click is on (scales/drills), keep a supportive felt kick + hat groove and slow 8th-note
         // subdivision underneath so the player always feels beat 1 and the pocket rather than a dry bare tick.
         const pulse = (c: (typeof clicks)[number], underClick = false) => {
-          if (quiet(c.t)) return shots.play(hatBuffer(), out, at(c.t), c.accent ? 0.45 : 0.28);
-          shots.play(kickBuffer(), out, at(c.t), underClick ? (c.accent ? 0.56 : 0.24) : (c.accent ? 0.6 : 0.4));
-          shots.play(hatBuffer(), out, at(c.t), underClick ? (c.accent ? 0.52 : 0.36) : (c.accent ? 0.9 : 0.65));
+          if (quiet(c.t)) return shots.play(hatBuffer(), out, at(c.t), c.accent ? 0.45 : 0.28, undefined, 0.05, ROOM_HAT);
+          shots.play(kickBuffer(), out, at(c.t), underClick ? (c.accent ? 0.56 : 0.24) : (c.accent ? 0.6 : 0.4), undefined, 0.05, ROOM_KICK);
+          shots.play(hatBuffer(), out, at(c.t), underClick ? (c.accent ? 0.52 : 0.36) : (c.accent ? 0.9 : 0.65), undefined, 0.05, ROOM_HAT);
         };
         const tailPickupFrom = s.loop && span.breath === 0 && s.length - tailStart >= 1.25 ? s.from + Math.max(tailStart, s.length - 2) : Infinity;
         if (m.click) {
@@ -459,13 +465,13 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
             if (m.pulse && inRange(c.t, lo, hi)) {
               pulse(c, true);
               const off = c.t + 0.5;
-              if (division === 1 && spb >= SLOW_SPB && inRange(off, lo, hi) && !quiet(off)) shots.play(hatBuffer(), out, at(off), 0.28);
+              if (division === 1 && spb >= SLOW_SPB && inRange(off, lo, hi) && !quiet(off)) shots.play(hatBuffer(), out, at(off), 0.28, undefined, 0.05, ROOM_HAT);
             }
             for (let part = 0; part < division; part++) {
               const when = c.t + part / division;
               if (!inRange(when, lo, hi)) continue;
               const isPickup = part === 0 && when >= tailPickupFrom - 1e-9;
-              if (!quiet(when)) shots.play(clickBuffer(part === 0 && (c.accent || isPickup)), out, at(when), part ? 0.18 : c.accent ? 0.56 : isPickup ? 0.48 : 0.36);
+              if (!quiet(when)) shots.play(clickBuffer(part === 0 && (c.accent || isPickup)), out, at(when), part ? 0.18 : c.accent ? 0.56 : isPickup ? 0.48 : 0.36, undefined, 0.04, ROOM_CLICK);
               else if (m.pulse && part === 0) pulse(c);
             }
           }
@@ -473,16 +479,16 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
           for (const c of clicks) {
             if (inRange(c.t, lo, hi)) {
               pulse(c);
-              if (c.t >= tailPickupFrom - 1e-9 && !quiet(c.t)) shots.play(clickBuffer(false), out, at(c.t), 0.38);
+              if (c.t >= tailPickupFrom - 1e-9 && !quiet(c.t)) shots.play(clickBuffer(false), out, at(c.t), 0.38, undefined, 0.04, ROOM_CLICK);
             }
             const off = c.t + 0.5;
-            if (spb >= SLOW_SPB && inRange(off, lo, hi) && !quiet(off)) shots.play(hatBuffer(), out, at(off), 0.35);
+            if (spb >= SLOW_SPB && inRange(off, lo, hi) && !quiet(off)) shots.play(hatBuffer(), out, at(off), 0.35, undefined, 0.05, ROOM_HAT);
           }
         } else if (m.fill) {
           for (const c of clicks)
-            if (inRange(c.t, lo, hi) && !quiet(c.t) && ![...t.comp, ...(t.bass ?? [])].some((x) => x.t <= c.t + 1e-9 && c.t < x.t + x.dur - 1e-9)) shots.play(clickBuffer(c.accent), out, at(c.t), c.accent ? 0.4 : 0.26);
+            if (inRange(c.t, lo, hi) && !quiet(c.t) && ![...t.comp, ...(t.bass ?? [])].some((x) => x.t <= c.t + 1e-9 && c.t < x.t + x.dur - 1e-9)) shots.play(clickBuffer(c.accent), out, at(c.t), c.accent ? 0.4 : 0.26, undefined, 0.04, ROOM_CLICK);
         }
-        if (m.bass !== false) for (const v of t.bass ?? []) if (inRange(v.t, lo, hi) && !quiet(v.t)) shots.play(bassBuffer(v.midi), out, at(v.t), 0.75, v.dur * spb * 0.9, 0.08);
+        if (m.bass !== false) for (const v of t.bass ?? []) if (inRange(v.t, lo, hi) && !quiet(v.t)) shots.play(bassBuffer(v.midi), out, at(v.t), 0.75, v.dur * spb * 0.9, 0.1, ROOM_BASS);
         // For off-beat phrase entries (e.g. 8th or 16th rest on beat 1), tick the matching
         // subdivision gently across the opening rest and on the final beat before a continuous loop wrap.
         if (entrySub > 1 && (m.pulse || m.click)) {
@@ -494,14 +500,14 @@ export function usePlayback(tl: Timeline, mix: PlaybackMix, input: InputApi, sco
               if (sub >= limit - 1e-6 || !inRange(sub, lo, hi) || quiet(sub)) continue;
               if (baseDiv >= entrySub && Math.abs(part * baseDiv / entrySub - Math.round(part * baseDiv / entrySub)) < 1e-6) continue;
               const isHalf = Math.abs(part / entrySub - 0.5) < 1e-6;
-              if (m.pulse && !(isHalf && hasSlowOff)) shots.play(hatBuffer(), out, at(sub), isHalf ? 0.34 : 0.24);
-              if (m.click || !isHalf) shots.play(clickBuffer(false), out, at(sub), isHalf ? 0.2 : 0.16);
+              if (m.pulse && !(isHalf && hasSlowOff)) shots.play(hatBuffer(), out, at(sub), isHalf ? 0.34 : 0.24, undefined, 0.05, ROOM_HAT);
+              if (m.click || !isHalf) shots.play(clickBuffer(false), out, at(sub), isHalf ? 0.2 : 0.16, undefined, 0.04, ROOM_CLICK);
             }
           };
           for (let b = 0; b < Math.ceil(entryOffset); b++) tickEntrySub(s.from + b, s.from + entryOffset);
           if (s.loop && span.breath === 0 && s.length >= 1) tickEntrySub(end - 1, end);
         }
-        if (m.guide !== false) for (const g of t.guide ?? []) if (inRange(g.t, lo, hi) && !quiet(g.t)) shots.play(pluckBuffer(g.midi), out, at(g.t), 0.7, g.dur * spb * 0.95 + 0.04, 0.08);
+        if (m.guide !== false) for (const g of t.guide ?? []) if (inRange(g.t, lo, hi) && !quiet(g.t)) shots.play(pluckBuffer(g.midi), out, at(g.t), 0.7, g.dur * spb * 0.95 + 0.04, 0.1, ROOM_PLUCK);
       };
 
       const show = () => {

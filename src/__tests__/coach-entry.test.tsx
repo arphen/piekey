@@ -308,12 +308,17 @@ describe("coach entry", () => {
     await act(async () => vi.advanceTimersByTime(700));
     expect(interlude).not.toHaveBeenCalled();
     await act(async () => [...host.querySelectorAll("button")].find((item) => item.textContent?.includes("Return to practice"))!.click());
-    await act(async () => vi.advanceTimersByTime(3000));
+    await act(async () => vi.advanceTimersByTime(4500));
     expect(interlude).not.toHaveBeenCalled();
     await act(async () => {
       for (const now of [0, 30, 60, 90, 120, 150, 180]) [...listeners].forEach((listener) => listener({ now, rms: 0, buf: new Float32Array(16), sampleRate: 48000 }));
       midi = 53;
-      for (const now of [200, 800]) [...listeners].forEach((listener) => listener({ now, rms: 0.05, buf: new Float32Array(16), sampleRate: 48000 }));
+      // Short stray tap must not trigger summary navigation
+      for (const now of [200, 650]) [...listeners].forEach((listener) => listener({ now, rms: 0.05, buf: new Float32Array(16), sampleRate: 48000 }));
+    });
+    expect(host.querySelector('[aria-label="Choose tune"]')).toBeNull();
+    await act(async () => {
+      for (const now of [1250]) [...listeners].forEach((listener) => listener({ now, rms: 0.05, buf: new Float32Array(16), sampleRate: 48000 }));
     });
     expect(host.querySelector('[aria-label="Choose tune"]')).not.toBeNull();
     expect(onTune).not.toHaveBeenCalled();
@@ -483,17 +488,63 @@ describe("coach entry", () => {
     expect(mocked.session.begin).toHaveBeenCalledWith([whole.id]);
   });
 
-  it("starts directly into the requested exercise when autoStart is set and falls back cleanly when missing", async () => {
+  it("starts directly into the requested exercise followed by a planned session when autoStart is set, keeps whole-tune solo, and falls back when missing", async () => {
     mocked.calibrated = true;
     const deck = buildDeck(sheet, tl);
     const selected = deck.cards.find((card) => card.family === "scales")!;
     await act(async () => root.render(<SongCoach key="direct" sheet={sheet} tl={tl} input={inputAt("listening", "guitar")} initialCardId={selected.id} autoStart onClose={() => undefined} />));
-    expect(mocked.initialQueue).toEqual([selected.id]);
+    expect(mocked.initialQueue?.[0]).toBe(selected.id);
+    expect(mocked.initialQueue!.length).toBeGreaterThan(1);
+
+    const whole = deck.cards.find((card) => card.step?.kind === "tune")!;
+    mocked.initialQueue = undefined;
+    await act(async () => root.render(<SongCoach key="whole" sheet={sheet} tl={tl} input={inputAt("listening", "guitar")} initialCardId={whole.id} autoStart onClose={() => undefined} />));
+    expect(mocked.initialQueue).toEqual([whole.id]);
 
     mocked.initialQueue = undefined;
     await act(async () => root.render(<SongCoach key="missing" sheet={sheet} tl={tl} input={inputAt("listening", "guitar")} initialCardId="scale:missing:thirds" autoStart onClose={() => undefined} />));
     expect(mocked.initialQueue).toBeUndefined();
     expect(host.querySelector(".ss-ready")).not.toBeNull();
+  });
+
+  it("offers inline Accept as done confirmation, Symbols guide, and explicit Next exercise button on Result", async () => {
+    mocked.calibrated = true;
+    const deck = buildDeck(sheet, tl);
+    const melody = deck.cards.find((c) => c.family === "melody" && !c.once && !c.run)!;
+    const accept = vi.fn();
+    const next = vi.fn();
+    Object.assign(mocked.session, {
+      running: true, card: melody, whole: melody, active: 0, queue: [melody.id, deck.cards[0].id], pos: 0, box: 1,
+      phase: "time", passes: [], passLog: [], settling: false, loopMode: "adaptive", setLoopMode() {}, loopLocked: false, tempoLift: null, breathing: false, reentry: 0,
+      priorBest: null, bankedBpm: null, freeRide: false, suggestedSpot: null, acceptSpot() {}, dismissSpot() {}, decay: 0, missSerial: 0,
+      log: [], results: [], shadows: [], takes: { clean: 0, unclean: 0 }, flow: 0.5, run: 0, needClean: 0, pulse: null, beat: IDLE_BEAT,
+      keys: { hear: 76, pace: 41, time: 43, next: 44 },
+      follow: { take: 1, done: false, results: [], wrongAt: [] } as unknown as SessionApi["follow"],
+      bpm: melody.bpm, target: melody.bpm, click: true, gapped: false,
+      playback: { playing: true, counting: 0, breathing: false, reentry: 0, beat: IDLE_BEAT, activeTarget: 0, activeSlot: 0, lastPass: null, drift: null, results: [], wrong: [], async play() {}, stop() {}, beatAt: () => null },
+      togglePause() {}, hear() {}, go() {}, next, accept,
+    } satisfies Partial<SessionApi>);
+    await act(async () => root.render(<SongCoach key="utils" sheet={sheet} tl={tl} input={inputAt("listening", "guitar")} onClose={() => undefined} />));
+    const symBtn = [...host.querySelectorAll("button")].find((b) => b.textContent?.includes("Symbols ?"))!;
+    expect(symBtn).toBeDefined();
+    await act(async () => symBtn.click());
+    expect(host.querySelector(".ss-symbols")?.textContent).toContain("16th rest");
+
+    const accBtn = [...host.querySelectorAll("button")].find((b) => b.textContent?.includes("Accept as done"))!;
+    await act(async () => accBtn.click());
+    expect(accept).not.toHaveBeenCalled();
+    await act(async () => host.querySelector<HTMLButtonElement>(".ss-accept-yes")!.click());
+    expect(accept).toHaveBeenCalledTimes(1);
+
+    Object.assign(mocked.session, {
+      phase: "result",
+      outcome: { id: melody.id, at: 0, result: "clean", from: 1, to: 2, bpm: melody.bpm, share: 0.95, secs: 30, also: [], spots: 0 },
+    } satisfies Partial<SessionApi>);
+    await act(async () => root.render(<SongCoach key="result" sheet={sheet} tl={tl} input={inputAt("listening", "guitar")} onClose={() => undefined} />));
+    const nextBtn = host.querySelector<HTMLButtonElement>(".ss-result-next")!;
+    expect(nextBtn.textContent).toContain("Next exercise");
+    await act(async () => nextBtn.click());
+    expect(next).toHaveBeenCalledTimes(1);
   });
 
   it("starts the full planned queue from a clicked Ready preview card and exposes optional Hear tune & position pill", async () => {

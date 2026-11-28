@@ -1,5 +1,5 @@
 /** User-copyable instructions; the app never sends this prompt or a score to an agent. */
-export const MUSICXML_AGENT_PROMPT = `Create a guitar practice score that I can import into Fretboard Focus Lab.
+export const MUSICXML_AGENT_PROMPT = `Create a guitar practice score that I can import into Piekey.
 
 Source: [paste a source URL, attach a file, or ask for an original study]
 What I want: [piece/excerpt and melody or simplified melody with chord symbols]

@@ -44,10 +44,10 @@ function releaseNotices(): Plugin {
       const links = [...files.keys()].sort().map((name) => `<li><a href="${name.split("/").map(encodeURIComponent).join("/")}">${escape(name)}</a></li>`).join("\n");
       this.emitFile({ type: "asset", fileName: "licenses/index.html", source: `<!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Licenses · Fretboard Focus Lab</title>
+<title>Licenses · Piekey</title>
 <style>body{max-width:72ch;margin:3rem auto;padding:0 1.25rem;font:16px/1.6 system-ui;background:#141714;color:#e9e8df}a{color:#cbd2b7}li{margin:.4rem 0;overflow-wrap:anywhere}</style>
 <h1>Licenses</h1>
-<p>Copyright © 2026 Fretboard Focus Lab contributors.</p>
+<p>Copyright © 2026 Piekey contributors.</p>
 <p>This program is free software under GNU Affero GPL version 3 only. You may redistribute and modify it under those terms. It comes with no warranty, including merchantability or fitness for a particular purpose. See the <a href="LICENSE.txt">full license</a>.</p>
 <p><a href="${escape(sourceUrl)}">Corresponding source code</a>. Third-party libraries and fonts keep their own copyright notices and licenses, preserved below. Imported scores remain the user's material and are not relicensed by the app.</p>
 <ul>${links}</ul></html>` });

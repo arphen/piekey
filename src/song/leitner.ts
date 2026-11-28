@@ -25,6 +25,8 @@ export interface CardState {
   seen: number;
   clean: number;
   last: Result | null;
+  /** Explicitly accepted/retired by the player: unlocks downstream cards and excludes from future sessions/scoring. */
+  excluded?: boolean;
 }
 
 export type LoopMode = "adaptive" | "turnaround" | "continuous";
@@ -38,6 +40,7 @@ export interface Settings {
   mix?: boolean; // exercises from the other tunes in the library too (on unless turned off)
   length?: "short" | "normal" | "long"; // how long a session is planned for
   loop?: LoopMode; // how looped exercises wrap back to bar 1
+  gapClick?: boolean; // opt-in band dropouts on scale/technique drills to test internal time (off by default)
 }
 
 /** One time through an exercise, for the numbers over time. */
@@ -261,15 +264,35 @@ export function addDays(date: string, n: number): string {
   return today(new Date(y, m - 1, d + n));
 }
 
-/** An exercise that builds on another waits until that one has been played clean (or its relatives have carried it there). */
-export function unlocked(card: Card | undefined, store: Store): boolean {
-  if (!card?.needs) return true;
-  return (store.cards[card.needs]?.box ?? 0) >= UNLOCK_BOX || (store.credit?.[card.id] ?? 0) >= 1;
+/** True when the player explicitly accepted/retired this exercise so it stays out of sessions and never blocks later material. */
+export function isExcluded(state: CardState | undefined): boolean {
+  return Boolean(state?.excluded);
 }
 
-/** A side exercise of a tune still being met: it is introduced once the tune's opening is clean. */
+/** Accept and exclude an exercise without fabricating measured accuracy, clean counts, or clean tempos. */
+export function excludeCard(prev: CardState | undefined, card: Pick<Card, "bpm">): CardState {
+  const base: CardState = prev ?? { box: 1, due: NEVER, bpm: card.bpm, seen: 0, clean: 0, last: "skip" };
+  return { ...base, due: NEVER, excluded: true };
+}
+
+/** Return an excluded exercise to normal scheduling. */
+export function restoreCard(prev: CardState, day: string): CardState {
+  const { excluded: _removed, ...rest } = prev;
+  return { ...rest, due: day };
+}
+
+/** An exercise that builds on another waits until that one has been played clean (or accepted/excluded, or carried there by relatives). */
+export function unlocked(card: Card | undefined, store: Store): boolean {
+  if (!card?.needs) return true;
+  const dep = store.cards[card.needs];
+  return Boolean(dep?.excluded) || (dep?.box ?? 0) >= UNLOCK_BOX || (store.credit?.[card.id] ?? 0) >= 1;
+}
+
+/** A side exercise of a tune still being met: it is introduced once the tune's opening is clean (or accepted/excluded). */
 export function waiting(card: Card | undefined, store: Store): boolean {
-  return Boolean(card?.after && (store.cards[card.after]?.box ?? 0) < UNLOCK_BOX);
+  if (!card?.after) return false;
+  const dep = store.cards[card.after];
+  return !dep?.excluded && (dep?.box ?? 0) < UNLOCK_BOX;
 }
 
 /** The due date of an exercise met once (hearing a tune through): never due again. */
@@ -280,7 +303,7 @@ export function planSession(deck: Deck, store: Store, day: string, exclude: Set<
   const order = new Map(deck.intro.map((id, i) => [id, i]));
   const byId = new Map(deck.cards.map((c) => [c.id, c]));
   const due = deck.intro
-    .filter((id) => !exclude.has(id) && store.cards[id] && store.cards[id].due <= day && !byId.get(id)?.once)
+    .filter((id) => !exclude.has(id) && store.cards[id] && !isExcluded(store.cards[id]) && store.cards[id].due <= day && !byId.get(id)?.once)
     .sort((a, b) => store.cards[a].box - store.cards[b].box || store.cards[a].due.localeCompare(store.cards[b].due) || order.get(a)! - order.get(b)!)
     .slice(0, MAX_REVIEWS);
   // a tune is heard through only by the planner, before its first part is learned
@@ -309,7 +332,7 @@ export function planExtra(deck: Deck, store: Store, n = 6): string[] {
   const order = new Map(deck.intro.map((id, i) => [id, i]));
   const once = new Set(deck.cards.filter((c) => c.once).map((c) => c.id));
   return deck.intro
-    .filter((id) => store.cards[id] && !once.has(id))
+    .filter((id) => store.cards[id] && !isExcluded(store.cards[id]) && !once.has(id))
     .sort((a, b) => store.cards[a].box - store.cards[b].box || store.cards[a].due.localeCompare(store.cards[b].due) || order.get(a)! - order.get(b)!)
     .slice(0, n);
 }
@@ -374,8 +397,9 @@ export function carryOver(store: Store, deck: Deck, card: Card, day: string): { 
   for (const other of deck.cards) {
     const k = kinship(card.id, other.id);
     if (k < 0.15) continue;
-    let c = Math.min(MAX_CREDIT, (credit[other.id] ?? 0) + k);
     const st = cards[other.id];
+    if (isExcluded(st)) continue;
+    let c = Math.min(MAX_CREDIT, (credit[other.id] ?? 0) + k);
     if (st && c >= 1 && st.box < BOXES) {
       const box = st.box + 1;
       cards[other.id] = { ...st, box, due: addDays(day, BOX_DAYS[box]) };
@@ -400,6 +424,7 @@ export function boxCounts(deck: Deck, store: Store): { boxes: number[]; fresh: n
   for (const id of deck.intro) {
     if (once.has(id)) continue;
     const s = store.cards[id];
+    if (isExcluded(s)) continue;
     if (!s) fresh++;
     else {
       boxes[s.box - 1]++;

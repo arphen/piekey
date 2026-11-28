@@ -1,6 +1,6 @@
 # Third-party notices
 
-Fretboard Focus Lab includes the following third-party software and font data. Their original licenses and copyright notices remain in effect; the project’s AGPL-3.0-only license does not replace these terms. Keep this index and the linked full texts with redistributed builds and source.
+Piekey includes the following third-party software and font data. Their original licenses and copyright notices remain in effect; the project’s AGPL-3.0-only license does not replace these terms. Keep this index and the linked full texts with redistributed builds and source.
 
 This inventory covers every one of the 21 runtime package entries in `package-lock.json`, their identified embedded attributions, Vite’s build-generated browser helpers, VexFlow font data, and the locally bundled Google Fonts. It is not an inventory of all development tools installed by npm.
 
