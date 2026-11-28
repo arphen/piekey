@@ -1,5 +1,9 @@
 // @vitest-environment jsdom
+import { act, createElement } from "react";
+import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ExerciseRecorder } from "../components/ExerciseRecorder";
+import type { InputApi, InputFrame } from "../listen/useInput";
 import {
   alternatePositions,
   CUSTOM_EXERCISES_KEY,
@@ -299,5 +303,72 @@ describe("unified curriculum, sync, backup, and planning", () => {
 
     removeCurriculumCustom(ex.id);
     expect(loadCurriculum().customIds).toEqual([]);
+  });
+
+  it("records each held guitar note once instead of repeating it while ringing", async () => {
+    (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
+    const subscribers = new Set<(f: InputFrame) => void>();
+    const input: InputApi = {
+      status: "listening",
+      error: null,
+      paused: false,
+      devices: [],
+      deviceId: "mock",
+      level: { current: 0 },
+      setDeviceId: vi.fn(),
+      start: vi.fn(async () => undefined),
+      autoStart: vi.fn(),
+      stop: vi.fn(),
+      subscribe: (fn) => {
+        subscribers.add(fn);
+        return () => { subscribers.delete(fn); };
+      },
+    };
+
+    const sineFrame = (midi: number, now: number): InputFrame => {
+      const sampleRate = 48000;
+      const freq = 440 * Math.pow(2, (midi - 69) / 12);
+      const buf = new Float32Array(4096);
+      for (let i = 0; i < buf.length; i++) buf[i] = 0.2 * Math.sin((2 * Math.PI * freq * i) / sampleRate);
+      return { buf, sampleRate, now, rms: 0.14 };
+    };
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const onSave = vi.fn();
+
+    await act(async () => {
+      root.render(createElement(ExerciseRecorder, { input, onSave, onCancel: () => undefined }));
+    });
+
+    const recordBtn = [...host.querySelectorAll("button")].find((b) => b.textContent?.includes("Record from guitar"));
+    expect(recordBtn).toBeTruthy();
+    await act(async () => {
+      recordBtn!.click();
+    });
+
+    // Feed 15 frames (~375ms) of one held C3 (48) flushing React between every frame (just like real 25ms ticks),
+    // then 15 frames of one held E3 (52). Each held note must record exactly once, never repeating.
+    let t = 1000;
+    for (let i = 0; i < 15; i++) {
+      t += 25;
+      const f = sineFrame(48, t);
+      await act(async () => { subscribers.forEach((fn) => fn(f)); });
+    }
+    for (let i = 0; i < 15; i++) {
+      t += 25;
+      const f = sineFrame(52, t);
+      await act(async () => { subscribers.forEach((fn) => fn(f)); });
+    }
+
+    const pills = [...host.querySelectorAll(".rec-note-pill:not(.is-add)")];
+    expect(pills).toHaveLength(2);
+    expect(pills[0].textContent).toContain("C3");
+    expect(pills[1].textContent).toContain("E3");
+
+    await act(async () => { root.unmount(); });
+    host.remove();
   });
 });

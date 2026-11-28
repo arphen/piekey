@@ -6,6 +6,7 @@ import { createAttacks } from "../listen/attacks";
 import { midiOf } from "../listen/pitch";
 import type { InputApi } from "../listen/useInput";
 import { mod } from "../musicTheory";
+import { setNavMuted } from "../nav/useGuitarNav";
 import {
   alternatePositions,
   customExerciseToCard,
@@ -268,8 +269,36 @@ export function ExerciseRecorder({
   }, [hub, shape, family, titleTouched]);
 
   // Shared-input subscription for Recording (own pace OR timed) AND single-note "Replace from guitar".
+  // Keep mutable UI state in a ref so `createOnsets()` / `createAttacks()` are NEVER torn down and
+  // reset while a string is still ringing (which would re-fire the held note every 50 ms).
   const { subscribe } = input;
   const activeListening = recording || replacingFromGuitar;
+  const listenRef = useRef({
+    captureMode,
+    grid,
+    hub,
+    p,
+    selected,
+    replacingFromGuitar,
+    counting: clickPlayer.counting,
+    pushNotes,
+  });
+  listenRef.current = {
+    captureMode,
+    grid,
+    hub,
+    p,
+    selected,
+    replacingFromGuitar,
+    counting: clickPlayer.counting,
+    pushNotes,
+  };
+
+  useEffect(() => {
+    setNavMuted(activeListening);
+    return () => { setNavMuted(false); };
+  }, [activeListening]);
+
   useEffect(() => {
     if (!activeListening) {
       setLivePitch(null);
@@ -277,39 +306,40 @@ export function ExerciseRecorder({
     }
     const onsets = createOnsets();
     const attacks = createAttacks();
+    let lastShownPitch: string | null = null;
     return subscribe((frame) => {
+      const cfg = listenRef.current;
       const midi = midiOf(frame);
-      if (midi !== null) setLivePitch(formatCustomPitch(midi, hub));
+      const label = midi !== null ? formatCustomPitch(midi, cfg.hub) : null;
+      if (label !== lastShownPitch) {
+        lastShownPitch = label;
+        setLivePitch(label);
+      }
       const hitAttacks = attacks(frame);
       const onset = onsets({ midi, rms: frame.rms, now: frame.now, attacks: hitAttacks });
       if (!onset) return;
 
-      if (replacingFromGuitar) {
-        if (selected >= 0) {
-          const spots = alternatePositions(onset.midi, p);
-          pushNotes((prev) =>
-            prev.map((n, i) =>
-              i === selected
-                ? { ...n, midi: onset.midi, string: spots[0]?.string, fret: spots[0]?.fret }
-                : n,
-            ),
+      if (cfg.replacingFromGuitar) {
+        if (cfg.selected >= 0) {
+          const idx = cfg.selected;
+          cfg.pushNotes((prev) =>
+            prev.map((n, i) => (i === idx ? { midi: onset.midi, beats: n.beats } : n)),
           );
         }
         setReplacingFromGuitar(false);
         return;
       }
 
-      if (captureMode === "grid") {
-        const spots = alternatePositions(onset.midi, p);
+      if (cfg.captureMode === "grid") {
         setNotes((prev) => {
           if (prev.length >= MAX_CUSTOM_NOTES) return prev;
-          const next = [...prev, { midi: onset.midi, beats: grid, string: spots[0]?.string, fret: spots[0]?.fret }];
+          const next = [...prev, { midi: onset.midi, beats: cfg.grid }];
           setSelected(next.length - 1);
           return next;
         });
       } else {
         // Timed click recording: wait until count-in completes (or start clock on first note if click started).
-        if (clickPlayer.counting > 0) return;
+        if (cfg.counting > 0) return;
         const zero = timedZeroRef.current ?? onset.at;
         if (timedZeroRef.current === null) timedZeroRef.current = onset.at;
         const relMs = Math.max(0, onset.at - inputLag() - zero);
@@ -317,7 +347,7 @@ export function ExerciseRecorder({
         setCapturedTimedCount(timedEventsRef.current.length);
       }
     });
-  }, [activeListening, captureMode, grid, hub, p, pushNotes, replacingFromGuitar, selected, subscribe, clickPlayer.counting]);
+  }, [activeListening, subscribe]);
 
   const startRecording = async () => {
     setErrorMsg(null);

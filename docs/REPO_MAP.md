@@ -205,7 +205,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/components/Ear.tsx` — `Ear:9`
 - `src/components/EarHub.tsx` — `EarHub:11`
 - `src/components/EarView.tsx` — `EarView:25`
-- `src/components/ExerciseRecorder.tsx` — `ExerciseRecorderProps:119`, `ExerciseRecorder:127`
+- `src/components/ExerciseRecorder.tsx` — `ExerciseRecorderProps:120`, `ExerciseRecorder:128`
 - `src/components/FocusView.tsx` — `FocusView:30`
 - `src/components/FreePlay.tsx` — `FreePlay:108`
 - `src/components/FreePlayView.tsx` — `FreePlayView:16`
