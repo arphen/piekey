@@ -1019,9 +1019,9 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
       const hit = follow.results[i] === "hit";
       estimator.note(hit);
       feel();
-      if (hit) setDecay((d) => Math.max(0, d - 0.08));
+      if (hit) setDecay((d) => Math.max(0, d - 0.11));
       else {
-        setDecay((d) => Math.min(0.85, d + 0.14));
+        setDecay((d) => Math.min(0.75, d + 0.10));
         setMissSerial((n) => n + 1);
       }
     }
@@ -1077,10 +1077,10 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     if (fed) {
       feel();
       if (misses > 0) {
-        setDecay((d) => Math.min(0.85, d + 0.12 * misses));
+        setDecay((d) => Math.min(0.75, d + 0.10 * misses));
         setMissSerial((n) => n + misses);
       } else if (hits > 0) {
-        setDecay((d) => Math.max(0, d - 0.07 * hits));
+        setDecay((d) => Math.max(0, d - 0.10 * hits));
       }
     }
   }, [playback.results]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1160,7 +1160,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     if (isFirstSettle && !(score >= card.pass && onTime)) {
       setPassLog((prev) => [...prev, { share: score, settle: true, reason: "settle", bpm: assessedBpm.current }]);
       setSettling(true);
-      setDecay(0.25);
+      setDecay(0.15);
       return;
     }
     setSettling(false);
@@ -1223,7 +1223,7 @@ export function useSession(deck: Deck, tuneIds: string[], input: InputApi, optio
     // Non-clean pass: distinguish timing drift (amber/yellowing) from missed notes (ochre/browning).
     const timingOnly = score >= card.pass && !onTime;
     setPassLog((prev) => [...prev, { share: score, clean: false, reason: timingOnly ? "timing" : "notes", bpm: assessedBpm.current }]);
-    setDecay((d) => (timingOnly ? Math.max(d, 0.42) : Math.min(1, Math.max(0.55, d + 0.28))));
+    setDecay((d) => (timingOnly ? Math.max(d, 0.28) : Math.min(0.85, Math.max(0.36, d + 0.20))));
     setMissSerial((n) => n + 1);
 
     // Already reached/passed target in Free Ride: allow 1 retry at the faster tempo, then bank peak cleanly!

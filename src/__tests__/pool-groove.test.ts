@@ -85,14 +85,17 @@ describe("pool groove", () => {
     expect(on.state.steadiness).toBeGreaterThan(off.state.steadiness);
   });
 
-  it("wakes slowly like a cold engine in the first seconds before swelling into the zone", () => {
+  it("starts calm in the first seconds before swelling dynamically into the zone", () => {
     const g = createGroove();
     perform(g, 0, 5000, steady(0, 5000, 300));
-    expect(g.state.groove).toBeLessThan(0.12);
-    expect(poolParams(g.state.groove).emission).toBeLessThan(0.02);
-    // Mid-zone holds back peak radiance so the full algae embrace is earned at the top.
-    expect(poolParams(0.5).emission).toBeLessThan(0.2);
+    expect(g.state.groove).toBeLessThan(0.2);
+    expect(poolParams(g.state.groove).emission).toBeLessThan(0.08);
+    // Clear dynamic contrast: dark rest (0) -> alive mid-zone -> full transcendent peak (1).
+    expect(poolParams(0).emission).toBe(0);
+    expect(poolParams(0.5).emission).toBeGreaterThan(0.2);
+    expect(poolParams(0.5).emission).toBeLessThan(0.5);
     expect(poolParams(1).emission).toBe(1);
+    expect(poolParams(1).bloom).toBe(1);
   });
 
   it("is deterministic", () => {
@@ -136,6 +139,9 @@ describe("pool parameters", () => {
     expect(full.saturation).toBeLessThan(base.saturation);
     expect(full.brightness).toBeLessThan(base.brightness);
     expect(full.lava).toBeLessThan(base.lava);
+    // Global decay stays subtle so earned excitement stays alive while localized wounds show mistakes.
+    expect(full.emission).toBeGreaterThanOrEqual(base.emission * 0.85);
+    expect(full.sepia).toBeLessThanOrEqual(0.25);
 
     // Fluid physics and geometry stay unaffected so decay never jerks the water.
     expect(full.drift).toBe(base.drift);

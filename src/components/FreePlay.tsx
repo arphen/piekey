@@ -164,7 +164,7 @@ export function FreePlay({ input, deck, onClose, onPractise, active = true, onCh
   const minutes = Math.floor(v.secs / 60);
   const arrived = v.count > 2 || v.on;
   const listening = input.status === "listening" && !input.paused;
-  const flow = v.onGrid ?? 0;
+  const flow = v.onGrid ?? undefined;
   const arc = v.on && v.mode === "follows" ? Math.min(1, v.rise.have / v.rise.need) : 0; // how close the next step up is
   if (tool !== null) return <div className="ss-free fp-room has-tools"><div className="fp-tools-overlay"><GuitarToolsRoom input={input} onClose={() => setTool(null)} initialTool={tool} initialBpm={v.bpm} /></div></div>;
   return (

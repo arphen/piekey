@@ -12,7 +12,7 @@ import { readPower } from "./power";
 import { createGroove } from "./groove";
 import { goldenSpread, GOLDEN_ANGLE, mulberry32, phyllotaxis, spiral, wander } from "./golden";
 import { applyDecay, decayTint, poolParams, tintFor } from "./params";
-import { CALM, GLASS, Renderer, ROCK, TIERS, type Flash, type FrameState, type PoolRect, type Ring, type Stone, type Swirl, type Vec3, type Vortex } from "./engine/renderer";
+import { CALM, GLASS, Renderer, ROCK, TIERS, type Flash, type FrameState, type Heal, type PoolRect, type Ring, type Stone, type Swirl, type Vec3, type Vortex, type Wound } from "./engine/renderer";
 
 // Owns the renderer's life: when it draws, how often, at what quality, and what it hears. The
 // pool is decoration: nothing here is read by scoring, tempo, scheduling, evidence or goals.
@@ -84,8 +84,10 @@ export class PoolHost {
   private push: [number, number] = [0, 0];
   private beatSerial = -1;
   private beatAt: number | undefined;
-  private beatKick = 0; // gentle groove-gated tide breath from heard beats
-  private breath = 0; // heavily smoothed visual breathing modulation (never strobes)
+  private beatKick = 0; // heard beat kicks the vortices and breathes the glow
+  private beatSway = 1; // alternates direction on each beat so eddies sway on the pulse
+  private beatDance = 0; // pending rhythmic sway impulse
+  private breath = 0; // smooth musical breathing modulation
   private tune: Tune = { cents: null, frequency: null, at: -Infinity };
   private tunerPhase = 0;
   private tunerAmount = 0;
@@ -94,6 +96,8 @@ export class PoolHost {
   private decayImpulse = 0;
   private decayTone: "drift" | "miss" = "miss";
   private decayCount = 0;
+  private wounds: Wound[] = [];
+  private healWave: Heal | null = null;
   private pond = { next: 0, phase: 0, turning: false, loading: false, image: null as ImageBitmap | null, seed: [0, 0] as [number, number] };
   private glassy = 0;
   private turn = 0;
@@ -381,7 +385,7 @@ export class PoolHost {
     const bpm = props?.bpm;
     const onset = this.groove.step(
       { now: frame.now, rms: frame.rms, midi, clarity, playing },
-      { ...(beat?.active && bpm && this.beatAt !== undefined ? { beatAt: this.beatAt, beatMs: 60000 / bpm } : {}), ...(props && props.flow > 0 ? { flow: props.flow } : {}) },
+      { ...(beat?.active && bpm && this.beatAt !== undefined ? { beatAt: this.beatAt, beatMs: 60000 / bpm } : {}), ...(props && props.flow !== undefined && props.flow > 0 ? { flow: props.flow } : {}) },
     );
     if (onset) this.note(onset.midi, onset.velocity, frame.now);
     if (playing || this.groove.state.groove > 0.01) this.wake();
@@ -395,7 +399,7 @@ export class PoolHost {
     return this.rects.some((r) => r.flags & (CALM | ROCK) && Math.abs(x - r.x) < r.hx + 0.02 && Math.abs(y - r.y) < r.hy + 0.02);
   }
 
-  /** A note queues a soft, broad swell that arrives from afar — longer delay when cold, closer and richer in the zone. */
+  /** A note queues a responsive luminous swell and gentle melodic swirl — immediate attunement when cold, lush ribbons in the zone. */
   private note(midi: number, velocity: number, now: number): void {
     const aspect = this.aspect();
     const p = this.phrase;
@@ -417,31 +421,54 @@ export class PoolHost {
     }
     const g = this.level();
     const state = this.groove.state;
-    // Far-away propeller feel: cold notes arrive ~1s later as a faint wide swell; in the zone they arrive sooner and deeper.
-    const delayMs = 1050 - 780 * g;
-    const tone: "drift" | "miss" = this.decayImpulse > 0.05 ? this.decayTone : this.decay >= 0.45 ? "miss" : "drift";
+    // Tactile liquid response: short ripple travel when cold (~240ms), nearly immediate (~60ms) in the zone.
+    const delayMs = 240 - 180 * g;
+    const baseTint = tintFor(state.tonic, state.mode);
     const swell: Stone = {
       x: point.x, y: point.y,
-      radius: Math.max(0.016, 0.05 * Math.pow(2, -(midi - 40) / 28)),
-      amp: velocity * (0.14 + 0.68 * g * g) * (0.65 + 0.35 * state.energy),
-      tint: decayTint(tintFor(state.tonic, state.mode), this.decay * 0.65, tone),
+      radius: Math.max(0.018, 0.052 * Math.pow(2, -(midi - 40) / 28)),
+      amp: velocity * (0.34 + 0.76 * g) * (0.72 + 0.38 * state.energy),
+      tint: baseTint,
     };
     this.pendingStones.push({ due: now + delayMs, stone: swell });
     if (this.pendingStones.length > 16) this.pendingStones.shift();
+    // Melodic swirl: each pitched note gently curls the nearby algae currents in proportion to dynamics and groove.
+    const dir = (midi % 2 ? 1 : -1) * (0.010 + 0.022 * g) * velocity;
+    this.swirls.push({ x: point.x, y: point.y, impulse: dir, radius: 0.14 + 0.08 * g });
+    if (this.swirls.length > 4) this.swirls.shift();
+    this.lastEvent = now;
+  }
+
+  /** Actively knits the oldest/strongest localized wound, bursting fresh emerald-gold life over the scar. */
+  private healWound(amount: number, now: number): void {
+    if (!this.wounds.length) return;
+    const target = this.wounds[0];
+    target.severity = Math.max(0, target.severity - amount);
+    const healed = target.severity <= 0.05;
+    const state = this.groove.state;
+    const freshTint = tintFor(state.tonic, state.mode);
+    this.healWave = { x: target.x, y: target.y, age: 0, strength: healed ? 1.0 : Math.min(0.85, 0.45 + amount) };
+    this.stones.push({ x: target.x, y: target.y, radius: 0.032, amp: healed ? 0.78 : 0.48, tint: [Math.min(1, freshTint[0] * 1.1 + 0.15), Math.min(1, freshTint[1] * 1.15 + 0.15), freshTint[2]] });
+    if (healed) {
+      this.rings.push({ x: target.x, y: target.y, age: 0, strength: 0.75 });
+      if (this.rings.length > 4) this.rings.shift();
+      this.wounds.shift();
+    }
+    this.decayImpulse = Math.max(0, this.decayImpulse - amount * 0.65);
     this.lastEvent = now;
   }
 
   private level(): number { return this.override ?? this.groove.state.groove; }
 
   private flash(at: Anchor, strength: number): void {
-    this.flashes.push({ x: at.x, y: at.y, radius: at.r * 0.92, amount: strength * 0.16, age: 0, strength });
+    this.flashes.push({ x: at.x, y: at.y, radius: at.r * 0.92, amount: strength * 0.34, age: 0, strength });
     if (this.flashes.length > 2) this.flashes.shift();
   }
 
   private events(now: number): void {
     const aspect = this.aspect();
     const g = this.level();
-    // Release delayed propeller swells whose ripples have now reached the surface.
+    // Release queued swells whose ripples have now reached the surface.
     if (this.pendingStones.length) {
       const keep: { due: number; stone: Stone }[] = [];
       for (const item of this.pendingStones) {
@@ -454,15 +481,20 @@ export class PoolHost {
       if (event.kind === "tune") this.tune = { cents: event.cents, frequency: event.frequency, at: now };
       else if (event.kind === "bloom") {
         const at = this.anchors.get(event.at ?? "focus") ?? this.anchors.get("cursor") ?? { x: aspect / 2, y: 0.5, r: 0 };
-        this.rings.push({ x: at.x, y: at.y, age: 0, strength: event.strength * (0.25 + 0.75 * g) });
+        this.rings.push({ x: at.x, y: at.y, age: 0, strength: event.strength * (0.45 + 0.85 * g) });
         if (this.rings.length > 4) this.rings.shift();
+        // A clean pass or streak bloom restores all remaining wounds with a lush wave.
+        if (this.wounds.length) this.healWound(event.strength >= 0.7 ? 1.2 : 0.45, now);
+        if (event.strength >= 0.7) this.wounds = [];
         this.lastEvent = now;
+      } else if (event.kind === "heal") {
+        this.healWound(Math.max(0.18, event.strength * 0.55), now);
       } else if (event.kind === "decay") {
         const strength = Math.max(0, Math.min(1, event.strength));
         const tone: "drift" | "miss" = event.tone ?? "miss";
         this.decayTone = tone;
-        this.decayImpulse = Math.min(1, Math.max(this.decayImpulse, strength * (tone === "miss" ? 0.85 : 0.6)));
-        // A quiet, localized settling ripple and warm-ochre dye puff outside calm lenses.
+        this.decayImpulse = Math.min(0.65, Math.max(this.decayImpulse, strength * (tone === "miss" ? 0.55 : 0.38)));
+        // Spawn a localized dying/wilting algae wound outside calm lenses while keeping the surrounding pool alive.
         let spot = { x: aspect * 0.5, y: 0.5 };
         for (let k = 0; k < 8; k++) {
           this.decayCount++;
@@ -472,36 +504,47 @@ export class PoolHost {
           };
           if (!this.inLens(spot.x, spot.y)) break;
         }
+        const radius = (tone === "miss" ? 0.17 : 0.13) + 0.08 * strength;
+        const severity = Math.min(1, (tone === "miss" ? 0.62 : 0.45) + 0.35 * strength);
+        if (this.wounds.length < 4) {
+          this.wounds.push({ x: spot.x, y: spot.y, radius, severity });
+        } else {
+          // Deepen the oldest wound rather than flooding the whole lagoon brown
+          const oldest = this.wounds.shift()!;
+          this.wounds.push({ x: spot.x, y: spot.y, radius: Math.max(oldest.radius, radius), severity: Math.min(1, Math.max(oldest.severity, severity) + 0.12) });
+        }
         const state = this.groove.state;
         this.stones.push({
           x: spot.x,
           y: spot.y,
-          radius: 0.024 + 0.014 * strength,
-          amp: strength * (tone === "miss" ? 0.34 : 0.24),
+          radius: 0.026 + 0.014 * strength,
+          amp: strength * (tone === "miss" ? 0.36 : 0.24),
           tint: decayTint(tintFor(state.tonic, state.mode), 0.92, tone),
         });
         this.lastEvent = now;
       } else if (event.kind === "sweep") {
-        this.push = [event.direction * 0.032, 0.006];
+        this.push = [event.direction * 0.036, 0.008];
         this.lastEvent = now;
       }
     }
-    // A heard beat, never a timer: a quiet ripple at the dial, and a soft tide breath that only deepens as you warm up.
+    // A heard beat, never a timer: crisp dial ripple, golden downbeat flash, tangential swirl, and whole-pool eddy dance.
     const beat = this.bus.top()?.props.beat;
     if (beat?.active && beat.index >= 0 && beat.serial !== this.beatSerial) {
       this.beatSerial = beat.serial;
       const dial = this.anchors.get("metronome");
-      const amp = beat.counting ? 0.25 : beat.index === 0 ? 0.75 : 0.4;
-      const tint: Vec3 = beat.counting ? [0.45, 0.7, 0.75] : beat.index === 0 ? [0.95, 0.78, 0.45] : [0.7, 0.82, 0.62];
-      const warmth = 0.14 + 0.5 * g;
+      const amp = beat.counting ? 0.35 : beat.index === 0 ? 1.0 : 0.56;
+      const tint: Vec3 = beat.counting ? [0.45, 0.78, 0.82] : beat.index === 0 ? [0.98, 0.82, 0.46] : [0.58, 0.92, 0.66];
       if (dial) {
-        this.stones.push({ x: dial.x, y: dial.y, radius: 0.018, amp: amp * warmth * 0.45, tint, ring: dial.r * 0.92 });
-        this.flash(dial, amp * (0.25 + 0.5 * g));
-      } else if (g > 0.1) {
-        this.stones.push({ x: aspect / 2, y: 0.02, radius: 0.08, amp: amp * warmth * 0.25, tint });
+        this.stones.push({ x: dial.x, y: dial.y, radius: 0.018, amp: amp * (0.48 + 0.52 * g), tint, ring: dial.r * 0.92 });
+        this.flash(dial, amp * (0.55 + 0.65 * g));
+        this.swirls.push({ x: dial.x, y: dial.y, impulse: (beat.serial % 2 ? 1 : -1) * 0.022 * amp * (0.38 + 0.62 * g), radius: dial.r * 1.75 });
+      } else {
+        this.stones.push({ x: aspect / 2, y: 0.03, radius: 0.07, amp: amp * (0.28 + 0.52 * g), tint });
       }
-      if (!beat.counting && g > 0.12) {
-        this.beatKick = Math.max(this.beatKick, amp * g);
+      if (!beat.counting) {
+        this.beatKick = Math.max(this.beatKick, amp * (0.30 + 0.70 * g));
+        this.beatDance = amp;
+        this.beatSway = beat.serial % 2 ? 1 : -1;
       }
       this.lastEvent = now;
     } else if (!beat?.active) this.beatSerial = beat?.serial ?? -1;
@@ -568,9 +611,23 @@ export class PoolHost {
     const tone: "drift" | "miss" = this.decayImpulse > 0.05 ? this.decayTone : this.decay >= 0.45 ? "miss" : "drift";
     const params = applyDecay(poolParams(g), this.decay);
     const state = this.groove.state;
-    const tint = decayTint(tintFor(state.tonic, state.mode), this.decay, tone);
+    // Keep global tint vibrant; decay lives mostly in localized dying wound patches rather than washing the whole pool brown.
+    const tint = decayTint(tintFor(state.tonic, state.mode), this.decay * 0.22, tone);
     this.time += dt;
     const t = this.time;
+    // Slowly fade any lingering wounds if left alone, and advance active healing waves
+    if (dt > 0) {
+      for (const w of this.wounds) {
+        w.x += this.driftVelocity[0] * dt * 0.35;
+        w.y += this.driftVelocity[1] * dt * 0.35;
+        w.severity *= Math.exp(-dt / 26);
+      }
+      this.wounds = this.wounds.filter((w) => w.severity > 0.04);
+      if (this.healWave) {
+        this.healWave.age += dt;
+        if (this.healWave.age > 3.6) this.healWave = null;
+      }
+    }
     const calmTarget = this.bus.calmed ? 1 : 0;
     this.calm += (calmTarget - this.calm) * (1 - Math.exp(-dt / 0.7));
 
@@ -585,12 +642,12 @@ export class PoolHost {
     this.glassy += ((inTune ? 1 : 0) - this.glassy) * (1 - Math.exp(-dt / 0.8));
     const still = Math.max(this.calm, this.glassy * 0.8);
 
-    // Ambient vortices on a slowly turning golden spiral: heavily damped inertia so the water swells smoothly, never snaps.
-    this.beatKick *= Math.exp(-dt / 0.58);
-    const rawBreath = Math.min(0.6, state.kick * 0.45 + this.beatKick * 0.35) * g * (1 - this.calm);
-    this.breath += (rawBreath - this.breath) * (1 - Math.exp(-dt / 0.65));
+    // Ambient vortices on a turning golden spiral: onsets and heard beats dance them dynamically!
+    this.beatKick *= Math.exp(-dt / 0.32);
+    const rawBreath = Math.min(1.45, state.kick * (0.42 + 0.58 * g) + this.beatKick * (0.35 + 0.65 * g)) * (1 - this.calm);
+    this.breath += (rawBreath - this.breath) * (1 - Math.exp(-dt / (rawBreath > this.breath ? 0.22 : 0.48)));
     const kick = this.breath;
-    this.turn += params.orbit * (1 + kick * 0.6) * dt;
+    this.turn += params.orbit * (1 + kick * 0.95) * dt;
     const count = params.vortices * (1 - still);
     const vortices: Vortex[] = [];
     for (let i = 0; i < Math.ceil(count) && i < 8; i++) {
@@ -606,7 +663,15 @@ export class PoolHost {
         const oy = r.hy + 0.04 - Math.abs(dy);
         if (ox > 0 && oy > 0) { if (ox < oy) x += Math.sign(dx || 1) * ox; else y += Math.sign(dy || 1) * oy; }
       }
-      vortices.push({ x, y, spin: (i % 2 ? -1 : 1) * weight * (0.14 + 0.52 * g) * (1 + kick * 0.45), radius: 0.12 + 0.025 * i });
+      vortices.push({ x, y, spin: (i % 2 ? -1 : 1) * weight * (0.22 + 0.68 * g) * (1 + kick * 0.65), radius: 0.11 + 0.025 * i });
+    }
+    // Heard beats throw the leading eddies gently one way and swing them back on the next beat: the algae dance on the pulse.
+    if (this.beatDance > 0) {
+      const strength = this.beatDance * (0.22 + 0.78 * g) * (1 - still);
+      if (strength > 0.01) {
+        vortices.slice(0, 3).forEach((v, i) => this.swirls.push({ x: v.x, y: v.y, impulse: this.beatSway * (i % 2 ? -1 : 1) * 0.028 * strength, radius: v.radius * 1.5 }));
+      }
+      this.beatDance = 0;
     }
 
     // the constellation drifts, wandering on golden-ratio periods
@@ -615,18 +680,19 @@ export class PoolHost {
     this.driftVelocity = [Math.cos(heading) * speed, Math.sin(heading) * speed * 0.6];
     this.drift = [this.drift[0] + this.driftVelocity[0] * dt, this.drift[1] + this.driftVelocity[1] * dt];
 
-    const heat = Math.max(0, g - 0.42) * (0.45 + state.energy) * params.lava;
-    const emitters = heat > 0.001 ? Array.from({ length: 5 }, (_, k) => ({ x: aspect * goldenSpread(k + 1), y: 0.015, rate: heat * 1.5 * (0.6 + 0.4 * wander(t, 23 * (k + 1) * 0.37, k)), radius: 0.05 })) : [];
+    const heat = Math.max(0, g - 0.30) * (0.48 + state.energy) * params.lava;
+    const emitters = heat > 0.001 ? Array.from({ length: 5 }, (_, k) => ({ x: aspect * goldenSpread(k + 1), y: 0.015, rate: heat * 1.85 * (0.6 + 0.4 * wander(t, 23 * (k + 1) * 0.37, k)), radius: 0.052 })) : [];
     this.rings = this.rings.map((r) => ({ ...r, age: r.age + dt })).filter((r) => r.age < 7);
-    // Soft dial glow on the beat (no sharp strobe).
-    const flashes = this.flashes.map((f) => ({ ...f, amount: f.strength * 0.16 * Math.exp(-f.age / 0.24) }));
-    this.flashes = this.flashes.map((f) => ({ ...f, age: f.age + dt })).filter((f) => f.age < 0.8);
+    // Warm golden/jade dial rim glow on the heard beat.
+    const flashes = this.flashes.map((f) => ({ ...f, amount: f.strength * 0.34 * Math.exp(-f.age / 0.26) }));
+    this.flashes = this.flashes.map((f) => ({ ...f, age: f.age + dt })).filter((f) => f.age < 0.85);
 
     return {
       morph: this.turnPond(dt, g),
-      dt, params, velocityHalfLife: params.velocityHalfLife * (1 - 0.7 * still), kick: kick * 0.5, tint, decay: this.decay,
-      dawn: 0.06 + 0.48 * g, drift: [this.drift[0] - aspect * 0.62, this.drift[1] - 0.5], driftVelocity: this.driftVelocity,
-      vortices, stones: this.stones, swirls: this.swirls, push: this.push, emitters, buoyancy: 0.026, rings: this.rings, flashes, rects: this.rects,
+      dt, params, velocityHalfLife: params.velocityHalfLife * (1 - 0.7 * still), kick: kick * 0.72, tint, decay: this.decay,
+      wounds: this.wounds, heal: this.healWave,
+      dawn: 0.08 + 0.54 * g, drift: [this.drift[0] - aspect * 0.62, this.drift[1] - 0.5], driftVelocity: this.driftVelocity,
+      vortices, stones: this.stones, swirls: this.swirls, push: this.push, emitters, buoyancy: 0.032, rings: this.rings, flashes, rects: this.rects,
       tuner: tuner && this.tunerAmount > 0.01 ? { x: tuner.x, y: tuner.y, radius: Math.max(0.12, tuner.r * 4), amount: this.tunerAmount, phase: this.tunerPhase, ratio: inTune ? 1 : 1 + 0.004 * cents } : null,
     };
   }

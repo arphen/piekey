@@ -8,6 +8,9 @@ import { chronologicalAttempts, type Attempt, type SessionEntry, type Store } fr
 /** An exercise's kind from its id alone, so a tune's box can be read without its deck. */
 export function familyOf(id: string): Family {
   const own = localId(id);
+  if (own.startsWith("custom:melody:")) return "melody";
+  if (own.startsWith("custom:technique:")) return "technique";
+  if (own.startsWith("custom:")) return "scales";
   if (own.startsWith("scale:")) return "scales";
   if (own.startsWith("tech:")) return "technique";
   if (own.startsWith("mel:")) return "melody";

@@ -374,6 +374,9 @@ uniform float uRefract;
 uniform float uDyeGain;
 uniform float uDecay;
 uniform vec3 uTint;
+uniform vec4 uWounds[4]; // xy centre, z radius, w severity: localized dying algae patches
+uniform int uWoundCount;
+uniform vec4 uHeal; // xy centre, z age (s), w strength: bioluminescent restoration surge over a healed wound
 uniform vec2 uWaveTexel;
 uniform float uWaveCell;
 uniform vec4 uRings[4]; // xy, z age (s), w strength
@@ -481,7 +484,7 @@ void lenses(vec2 p, out float calm, out float glass, out vec2 centre, out float 
   }
 }
 
-void scene(vec2 uv, out vec3 colour, out vec3 glow, out float lens) {
+void scene(vec2 uv, out vec3 colour, out vec3 glow, out float lens, out float localWound) {
   vec2 p = uv * vec2(uAspect, 1.0);
   float calm; float glass; vec2 centre; float rim;
   lenses(p, calm, glass, centre, rim);
@@ -507,65 +510,101 @@ void scene(vec2 uv, out vec3 colour, out vec3 glow, out float lens) {
   float greenness = max(0.0, raw.g - max(raw.r * 0.90, raw.b * 0.95));
   float matMask = smoothstep(0.035, 0.20, greenness) * smoothstep(0.16, 0.56, luma);
   float waterNoise = fbm3(here * 1.15);
+
+  // Organic localized dying patches ("wounds") left by mistakes: only those few spots wilt while the rest stays electric.
+  float woundMask = 0.0;
+  float woundRim = 0.0;
+  for (int i = 0; i < 4; i++) {
+    if (i >= uWoundCount) break;
+    vec4 wd = uWounds[i];
+    if (wd.w <= 0.005) continue;
+    float d = length(p - wd.xy);
+    float organic = (waterNoise - 0.5) * wd.z * 0.65;
+    float core = (1.0 - smoothstep(wd.z * 0.25, wd.z * 1.18, d + organic)) * wd.w;
+    woundMask = max(woundMask, core);
+    woundRim = max(woundRim, exp(-pow((d + organic - wd.z * 0.85) / max(wd.z * 0.35, 0.02), 2.0)) * wd.w);
+  }
+  localWound = woundMask;
+  float globalVeil = uDecay * 0.14;
+  float wilt = clamp(woundMask * 0.95 + globalVeil, 0.0, 1.0);
+
   vec3 base = WATER * (0.86 + 0.85 * smoothstep(0.10, 0.86, waterNoise))
     + vec3(0.009, 0.044, 0.125) * smoothstep(0.26, 0.86, waterNoise) * 0.75;
   vec3 restDarkMat = mix(vec3(0.008, 0.048, 0.105), vec3(0.036, 0.185, 0.155), smoothstep(0.16, 0.72, luma));
-  vec3 decayDarkMat = mix(vec3(0.036, 0.028, 0.014), vec3(0.145, 0.095, 0.038), smoothstep(0.16, 0.72, luma));
-  vec3 darkMat = mix(restDarkMat, decayDarkMat, uDecay * 0.68);
-  vec3 photoTint = mix(vec3(0.46, 0.78, 0.84), vec3(0.76, 0.56, 0.30), uDecay * 0.72);
-  vec3 photoDetail = pow(grade(raw, uSaturation, uSepia), vec3(uContrast)) * photoTint;
-  vec3 pond = mix(darkMat, photoDetail, 0.45 + 0.35 * smoothstep(0.28, 0.88, uBrightness));
-  float matVis = clamp(matMask * (0.48 + 0.52 * uBrightness) * mask, 0.0, 0.86);
+  vec3 decayDarkMat = mix(vec3(0.024, 0.015, 0.008), vec3(0.135, 0.072, 0.026), smoothstep(0.16, 0.72, luma));
+  vec3 darkMat = mix(restDarkMat, decayDarkMat, wilt * 0.88);
+  vec3 photoTint = mix(vec3(0.46, 0.82, 0.86), vec3(0.74, 0.44, 0.18), wilt * 0.85);
+  vec3 photoDetail = pow(grade(raw, uSaturation * (1.0 - woundMask * 0.55), clamp(uSepia + woundMask * 0.75, 0.0, 1.0)), vec3(uContrast)) * photoTint;
+  vec3 pond = mix(darkMat, photoDetail, 0.46 + 0.38 * smoothstep(0.28, 0.96, uBrightness));
+  float matVis = clamp(matMask * (0.48 + 0.52 * uBrightness) * mask, 0.0, 0.88);
   colour = mix(base, pond, matVis);
+  // Darken dead wound cores slightly so a few dying patches genuinely read against the living glow
+  colour *= (1.0 - woundMask * 0.36);
   // what this point looked like at rest: calm lenses lean back toward deep abyssal water so text keeps contrast
   vec3 rest = mix(base, restDarkMat, matMask * 0.32 * roomMaskAtRest(uv));
-  float quiet = mix(1.0, 0.25, calm);
+  float quiet = mix(1.0, 0.24, calm);
   calm *= uCalmDepth;
   lens = calm;
 
-  // the algae glow softly in cyan-emerald at rest and blossom into bioluminescent radiance in the zone,
-  // wilting gently toward yellowing amber and warm ochre-umber on decay
-  float algae = smoothstep(0.05, 0.23, greenness) * smoothstep(0.20, 0.58, luma);
-  vec3 decayHue = mix(vec3(0.80, 0.58, 0.18), vec3(0.56, 0.31, 0.12), smoothstep(0.25, 0.9, uDecay));
-  vec3 neon = mix(vec3(0.18, 0.90, 0.58), mix(vec3(0.38, 1.0, 0.28), uTint, 0.32), smoothstep(0.05, 0.65, uEmission));
-  neon = mix(neon, decayHue, uDecay * 0.72);
-  glow = algae * neon * raw.g * (0.065 + uEmission * 1.28) * (1.0 + uKick * 0.55) * (0.45 + 0.55 * mask) * quiet;
+  // Bioluminescent algae: lush cyan-emerald -> iridescent chartreuse-gold at peak, while only localized wound cores dim/ember
+  float algae = smoothstep(0.045, 0.22, greenness) * smoothstep(0.18, 0.56, luma);
+  vec3 peakIridescence = mix(vec3(0.20, 0.96, 0.64), vec3(0.64, 1.0, 0.32), smoothstep(0.25, 0.85, waterNoise + uEmission * 0.35));
+  vec3 neon = mix(vec3(0.18, 0.92, 0.62), mix(peakIridescence, uTint, 0.35), smoothstep(0.04, 0.62, uEmission));
+  vec3 emberHue = mix(vec3(0.76, 0.48, 0.14), vec3(0.42, 0.18, 0.06), woundMask);
+  neon = mix(neon, emberHue, woundMask * 0.82);
+  float alive = 1.0 - woundMask * 0.72;
+  glow = algae * neon * raw.g * (0.075 + uEmission * 1.78) * (1.0 + uKick * 0.85) * alive * (0.46 + 0.54 * mask) * quiet;
+  // Dying wound bruise halo: faint bruised amber rim where living algae meet a dying patch
+  glow += vec3(0.68, 0.36, 0.10) * woundRim * (0.16 + 0.24 * matMask) * quiet;
 
-  // ripples catch cool nocturnal moonlight and cyan-emerald sheen, warming toward ochre on decay
+  // Active healing wave: when clean playing knits a wound, fresh luminous emerald-gold life surges outward from the scar
+  if (uHeal.w > 0.005 && uHeal.z < 3.6) {
+    float hd = length(p - uHeal.xy);
+    float hRadius = uHeal.z * 0.28;
+    float hRing = exp(-pow((hd - hRadius) / 0.055, 2.0)) * exp(-uHeal.z * 1.05);
+    float hCore = exp(-(hd * hd) / 0.045) * exp(-uHeal.z * 1.6);
+    vec3 healCol = mix(vec3(0.32, 1.0, 0.58), vec3(0.88, 1.0, 0.42), hCore);
+    glow += healCol * (hRing * 0.95 + hCore * 0.70) * uHeal.w * (0.45 + 0.85 * algae) * quiet;
+  }
+
+  // ripples catch moonlight and cyan-emerald sheen (added into glow as well so ripples shimmer even at rest/metronome!)
   vec3 n = normalize(vec3(-grad, 1.0));
-  float spec = pow(max(dot(n, normalize(vec3(-0.25, 0.35, 1.0))), 0.0), 60.0);
-  float sheen = clamp(length(grad) * 0.22, 0.0, 0.1);
-  vec3 sheenCol = mix(vec3(0.56, 0.84, 0.90), vec3(0.74, 0.56, 0.32), uDecay * 0.55);
-  colour += sheenCol * (spec * 0.35 + sheen) * mix(1.0, 0.3, calm);
+  float spec = pow(max(dot(n, normalize(vec3(-0.25, 0.35, 1.0))), 0.0), 48.0);
+  float sheen = clamp(length(grad) * 0.32, 0.0, 0.18);
+  vec3 sheenCol = mix(vec3(0.56, 0.90, 0.94), vec3(0.88, 0.82, 0.48), uEmission * 0.38);
+  sheenCol = mix(sheenCol, vec3(0.72, 0.46, 0.20), woundMask * 0.65);
+  vec3 rippleLight = sheenCol * (spec * 0.48 + sheen) * mix(1.0, 0.32, calm);
+  colour += rippleLight;
+  glow += rippleLight * 0.58;
 
-  // warm blobs rise: translucent, backlit leaf veins glowing through
+  // warm blobs rise: translucent, backlit leaf veins glowing through like an ecstatic lava lamp
   float t = texture(uHeat, uv).x;
-  float blob = smoothstep(0.42, 0.58, t) * uLava;
-  float halo = exp(-abs(t - 0.5) * 12.0) * smoothstep(0.05, 0.2, t) * uLava;
+  float blob = smoothstep(0.38, 0.56, t) * uLava;
+  float halo = exp(-abs(t - 0.48) * 10.0) * smoothstep(0.05, 0.2, t) * uLava;
   vec3 leaf = texture(uLeaf, vec2(local.x, -local.y) * 0.55 + uDrift * 0.4).rgb;
-  vec3 backlit = leaf * vec3(1.2, 1.05, 0.62) + uTint * 0.12;
-  colour = mix(colour, backlit * 0.7, blob * 0.55 * mix(1.0, 0.5, calm));
-  glow += (backlit * blob * 0.3 + uTint * halo * 0.25) * quiet;
+  vec3 backlit = leaf * vec3(1.28, 1.12, 0.64) + uTint * 0.18;
+  colour = mix(colour, backlit * 0.78, blob * 0.60 * mix(1.0, 0.5, calm) * alive);
+  glow += (backlit * blob * 0.48 + uTint * halo * 0.40) * alive * quiet;
 
-  // notes leave luminous trails
+  // notes leave luminous liquid trails
   glow += texture(uDye, uv).rgb * uDyeGain * quiet;
 
   for (int i = 0; i < 4; i++) {
     if (i >= uRingCount) break;
     float age = uRings[i].z;
-    float d = length(p - uRings[i].xy) - age * 0.32;
-    glow += uTint * uRings[i].w * exp(-d * d / 0.0015) * exp(-age / 2.2) * quiet;
+    float d = length(p - uRings[i].xy) - age * 0.34;
+    glow += uTint * uRings[i].w * 1.25 * exp(-d * d / 0.0018) * exp(-age / 2.4) * quiet;
   }
-  glow += vec3(0.75, 0.85, 0.7) * rim * 0.06;
+  glow += vec3(0.75, 0.88, 0.74) * rim * 0.07;
   for (int i = 0; i < 2; i++) {
     if (i >= uFlashCount) break;
     float d = length(p - uFlash[i].xy) - uFlash[i].z;
-    glow += mix(vec3(0.8, 0.9, 0.72), uTint, 0.3) * uFlash[i].w * exp(-d * d / 0.00035);
+    glow += mix(vec3(0.95, 0.86, 0.54), uTint, 0.25) * uFlash[i].w * exp(-d * d / 0.00055);
   }
 
   vec4 f = texture(uFloaters, uv);
-  vec3 leafColour = grade(f.rgb / max(f.a, 1e-3), mix(0.3, 1.0, uSaturation / 1.35), uSepia);
-  colour = mix(colour, leafColour, f.a * (0.05 + 0.6 * smoothstep(0.15, 0.5, uBrightness)));
+  vec3 leafColour = grade(f.rgb / max(f.a, 1e-3), mix(0.35, 1.15, uSaturation / 1.4), uSepia);
+  colour = mix(colour, leafColour, f.a * (0.06 + 0.65 * smoothstep(0.15, 0.5, uBrightness)));
 
   // calm lenses keep text readable: back toward the quiet room, darker and greyer
   colour = mix(colour, rest, calm * 0.85);
@@ -574,9 +613,9 @@ void scene(vec2 uv, out vec3 colour, out vec3 glow, out float lens) {
 
 export const BRIGHT = `${HEAD}${SCENE}
 void main() {
-  vec3 colour; vec3 glow; float lens;
-  scene(vUv, colour, glow, lens);
-  o = vec4((glow + max(colour - 0.55, 0.0) * 0.5) * (1.0 - 0.8 * lens), 1.0);
+  vec3 colour; vec3 glow; float lens; float localWound;
+  scene(vUv, colour, glow, lens, localWound);
+  o = vec4((glow + max(colour - 0.50, 0.0) * 0.6) * (1.0 - 0.8 * lens), 1.0);
 }
 `;
 
@@ -597,9 +636,9 @@ uniform vec4 uTuner; // xy, z radius, w amount
 uniform vec2 uTunerWave; // x phase, y wavelength ratio
 uniform vec2 uResolution;
 void main() {
-  vec3 colour; vec3 glow; float lens;
-  scene(vUv, colour, glow, lens);
-  vec3 bloom = texture(uBloom, vUv).rgb * uBloomGain * (1.0 - 0.75 * lens);
+  vec3 colour; vec3 glow; float lens; float localWound;
+  scene(vUv, colour, glow, lens, localWound);
+  vec3 bloom = texture(uBloom, vUv).rgb * uBloomGain * 1.18 * (1.0 - 0.75 * lens);
   vec3 tunerGlow = vec3(0.0);
   if (uTuner.w > 0.001) {
     // Two ring sets, the second detuned; their moiré moves at the string's real beat frequency.
@@ -607,17 +646,17 @@ void main() {
     float lambda = 0.016;
     float a = 0.5 + 0.5 * cos(6.2832 * r / lambda);
     float b = 0.5 + 0.5 * cos(6.2832 * r / (lambda * uTunerWave.y) + uTunerWave.x);
-    tunerGlow = vec3(0.54, 0.96, 0.68) * a * b * exp(-r * r / (uTuner.z * uTuner.z)) * uTuner.w * 0.14;
+    tunerGlow = vec3(0.54, 0.96, 0.68) * a * b * exp(-r * r / (uTuner.z * uTuner.z)) * uTuner.w * 0.16;
   }
-  // Keep AbyssalWater visible underneath at rest; the living pool's fluid, ripples, tuner rings
-  // and earned bioluminescence emerge transparently over the continuous lagoon.
-  float earned = clamp(smoothstep(0.02, 0.72, uEmission) * 0.72 + smoothstep(0.02, 0.55, uLava) * 0.24 + uDecay * 0.18, 0.0, 0.90) * (1.0 - 0.65 * lens);
+  // Keep AbyssalWater visible underneath at rest; fluid, ripples, localized wounds and earned bioluminescence emerge richly over the lagoon.
+  float earned = clamp(smoothstep(0.01, 0.52, uEmission) * 0.82 + smoothstep(0.02, 0.45, uLava) * 0.28 + localWound * 0.58, 0.0, 0.94) * (1.0 - 0.65 * lens);
   vec3 light = glow + bloom + tunerGlow;
   vec3 rgb = colour * earned + light;
-  // soft knee: dark values pass untouched, bright glow never clips
-  vec3 over = max(rgb - 0.6, 0.0);
-  rgb = min(rgb, 0.6) + over / (1.0 + over / 0.4);
-  float alpha = clamp(max(earned, max(rgb.r, max(rgb.g, rgb.b))), 0.0, 0.94);
+  // dynamic soft knee: dark values pass untouched, ecstatic peaks shine richly without harsh clipping
+  float knee = mix(0.58, 0.84, uEmission);
+  vec3 over = max(rgb - knee, 0.0);
+  rgb = min(rgb, knee) + over / (1.0 + over / 0.48);
+  float alpha = clamp(max(earned, max(rgb.r, max(rgb.g, rgb.b))), 0.0, 0.96);
   // dither the dark gradients against banding
   float noise = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
   vec3 outRgb = min(max(rgb + (noise - 0.5) / 255.0 * alpha, 0.0), vec3(alpha));

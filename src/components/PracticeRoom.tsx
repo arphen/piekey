@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, type MutableRefObject } from "react";
 import type { InputApi } from "../listen/useInput";
+import { CURRICULUM_STUDY_ID, curriculumCount, curriculumSheet, isCurriculumStudyId, loadCurriculum } from "../song/curriculum";
+import { getCustomExercise, isCustomExerciseId, loadCustomExercises } from "../song/customExercises";
 import { hubIdFromStudyId, isKeyStudyId, keyStudySheet } from "../song/keyStudy";
 import { loadSessionSet, resolveSessionSet } from "../song/sessionSet";
 import { DEMO_TUNES } from "../tunes/demos";
@@ -15,25 +17,28 @@ import type { PracticeLaunchOptions } from "./TuneView";
 // (`parked`), so a session waits where it was; a new launch replaces it only after the room has
 // finished and saved what was played (`RoomHandle.leave`).
 
-/** What the Play tab opens: a tune (null = the next session's lead), an exact card, a mix. */
+/** What the Play tab opens: a tune (null = the active curriculum), an exact card, a mix. */
 export interface RoomLaunch extends PracticeLaunchOptions {
   serial: number;
   tuneId: string | null;
   cardId?: string;
 }
 
-/** The next session's lead: the current tune if the session includes it, else the set's first. */
+/** The curriculum's lead tune: the current song if it is in the curriculum, else the first active song, else the non-song curriculum host. */
 export function sessionLead(library: readonly TuneEntry[]): string | null {
   const ids = library.map((tune) => tune.id);
   const set = resolveSessionSet(loadSessionSet(), ids);
   const current = loadCurrentTuneId();
   if (current && set.includes(current)) return current;
-  return set[0] ?? ids[0] ?? null;
+  if (set[0]) return set[0];
+  const nonSongs = curriculumCount([], loadCurriculum(), loadCustomExercises()).total;
+  if (nonSongs > 0) return CURRICULUM_STUDY_ID;
+  return ids[0] ?? null;
 }
 
 const trySaveTune = (id: string) => { try { saveCurrentTuneId(id); } catch { /* the save notice reports it */ } };
 
-export function PracticeRoom({ input, launch, parked, request, handle, onClose, onLive, onSurface, onOpenLibrary }: {
+export function PracticeRoom({ input, launch, parked, request, handle, onClose, onLive, onSurface, onOpenLibrary, onOpenCurriculum }: {
   input: InputApi;
   launch: RoomLaunch;
   parked: boolean;
@@ -43,13 +48,14 @@ export function PracticeRoom({ input, launch, parked, request, handle, onClose, 
   onLive(live: boolean): void;
   onSurface?(surface: RoomSurface): void;
   onOpenLibrary(): void;
+  onOpenCurriculum?(): void;
 }) {
   const [library, setLibrary] = useState<TuneEntry[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   // a tune chosen inside the room replaces the launch's tune and drops its card and mix
   const [chosen, setChosen] = useState<string | null>(null);
 
-  const hasLibrary = Boolean(library?.length);
+  const hasLibrary = library !== null;
   useEffect(() => {
     if (parked || hasLibrary) return;
     let gone = false;
@@ -65,6 +71,10 @@ export function PracticeRoom({ input, launch, parked, request, handle, onClose, 
 
   const resolved = useMemo((): { sheet: LeadSheet | null; error: string | null } => {
     if (!tuneId) return { sheet: null, error: null };
+    if (isCurriculumStudyId(tuneId)) {
+      const custom = isCustomExerciseId(cardId) ? getCustomExercise(cardId!) : undefined;
+      return { sheet: curriculumSheet(custom ? custom.title : "My Curriculum"), error: null };
+    }
     if (isKeyStudyId(tuneId)) {
       const hub = hubIdFromStudyId(tuneId);
       const built = hub ? keyStudySheet(hub) : null;
@@ -79,7 +89,7 @@ export function PracticeRoom({ input, launch, parked, request, handle, onClose, 
     } catch (error) {
       return { sheet: null, error: error instanceof Error ? error.message : "Couldn't read this tune." };
     }
-  }, [tuneId, library]);
+  }, [tuneId, cardId, library]);
   const sheet = resolved.sheet;
   const tl = useMemo(() => (sheet ? buildTimeline(sheet) : null), [sheet]);
 
@@ -135,9 +145,12 @@ export function PracticeRoom({ input, launch, parked, request, handle, onClose, 
   return (
     <main className="room-empty" aria-live="polite">
       <p className="room-empty-kicker">Play</p>
-      <h2>{error ? "This room could not open" : "No songs yet"}</h2>
-      <p>{error ?? "Add a song to the library and it opens here, ready to play."}</p>
-      <button type="button" onClick={onOpenLibrary}><Glyph name="library" size={16} />Open library</button>
+      <h2>{error ? "This room could not open" : "Nothing in your curriculum yet"}</h2>
+      <p>{error ?? "Record an exercise, add scales or foundations in Curriculum, or add a song in Library."}</p>
+      <div style={{ display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap" }}>
+        {onOpenCurriculum ? <button type="button" onClick={onOpenCurriculum}><Glyph name="curriculum" size={16} />Open curriculum</button> : null}
+        <button type="button" onClick={onOpenLibrary}><Glyph name="library" size={16} />Open library</button>
+      </div>
     </main>
   );
 }

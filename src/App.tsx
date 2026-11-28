@@ -8,9 +8,11 @@ import { TriadsView } from "./components/TriadsView";
 import { FocusView } from "./components/FocusView";
 import { KeyContext, RomanContext } from "./components/keyContext";
 import { OverviewView } from "./components/OverviewView";
+import { CurriculumView } from "./components/CurriculumView";
 import { ProgressView } from "./components/ProgressView";
 import { ScalesView } from "./components/ScalesView";
 import { TuneView, type PracticeLaunchOptions } from "./components/TuneView";
+import { isCurriculumStudyId } from "./song/curriculum";
 import { isKeyStudyId } from "./song/keyStudy";
 import { FreePlayView } from "./components/FreePlayView";
 import { SaveNotice } from "./components/SaveNotice";
@@ -28,7 +30,7 @@ import { GuitarTools } from "./tools/GuitarTools";
 import "./practice.css";
 import "./shell.css";
 
-type Tab = "tutor" | "progress" | "play" | TutorTargetTab;
+type Tab = "tutor" | "curriculum" | "progress" | "play" | TutorTargetTab;
 type PracticeLaunch = PracticeLaunchOptions & { kind: "song" | "listen"; tuneId?: string };
 /** Where the shell is. Mirrored into the browser history, so Back (button, key, swipe) walks it. */
 interface Route { tab: Tab; song: string | null; depth: number }
@@ -37,12 +39,13 @@ const KEY_STORAGE = "guitar-key";
 const HOME: Route = { tab: "tutor", song: null, depth: 0 };
 const TABS: { id: Tab; label: string; glyph: GlyphName | UtilityGlyphName }[] = [
   { id: "tutor", label: "Home", glyph: "home" },
+  { id: "curriculum", label: "Curriculum", glyph: "curriculum" },
   { id: "tunes", label: "Library", glyph: "library" },
   { id: "progress", label: "Progress", glyph: "progress" },
 ];
-/** The guitar walks the three tabs and then Play, the room they lead to. */
-const TAB_CYCLE: Tab[] = ["tutor", "tunes", "progress", "play"];
-const primaryTab = (tab: Tab) => tab === "tunes" || tab === "progress" ? tab : tab === "play" ? "play" : tab === "free" ? "free" : "tutor";
+/** The guitar walks the primary tabs and then Play, the room they lead to. */
+const TAB_CYCLE: Tab[] = ["tutor", "curriculum", "tunes", "progress", "play"];
+const primaryTab = (tab: Tab) => tab === "curriculum" || tab === "tunes" || tab === "progress" ? tab : tab === "play" ? "play" : tab === "free" ? "free" : "tutor";
 const tabRank = (route: Route, tool: "tuner" | "metronome" | null = null, surface: RoomSurface = "practice") => {
   if (tool === "tuner") return 4;
   if (tool === "metronome") return 4.5;
@@ -53,8 +56,9 @@ const tabRank = (route: Route, tool: "tuner" | "metronome" | null = null, surfac
     return 3;
   }
   const p = primaryTab(route.tab);
-  if (p === "tutor") return route.tab === "tutor" ? 0 : 0.5;
-  if (p === "tunes") return route.song ? 1.5 : 1;
+  if (p === "tutor") return route.tab === "tutor" ? 0 : 0.4;
+  if (p === "curriculum") return 0.8;
+  if (p === "tunes") return route.song ? 1.5 : 1.1;
   if (p === "free") return 3.5;
   return 2;
 };
@@ -283,7 +287,7 @@ export default function App() {
   // ---------- the Play tab's room ----------
   /** Replace what the room plays, after a session under way there has finished and saved. */
   const startPractice = useCallback(async (tuneId: string | null, cardId?: string, prepared = false, options?: PracticeLaunchOptions) => {
-    if (tuneId && !isKeyStudyId(tuneId)) trySaveTune(tuneId);
+    if (tuneId && !isKeyStudyId(tuneId) && !isCurriculumStudyId(tuneId)) trySaveTune(tuneId);
     if (!prepared) openPractice(input);
     setLaunch(undefined);
     await roomHandle.current?.leave();
@@ -294,7 +298,8 @@ export default function App() {
       setRoom(nextRoom);
     });
   }, [input, go]);
-  const startTune = useCallback((tuneId: string, cardId?: string, prepared = false, options?: PracticeLaunchOptions) => { void startPractice(tuneId, cardId, prepared, options); }, [startPractice]);
+  const startTune = useCallback((tuneId: string | null, cardId?: string, prepared = false, options?: PracticeLaunchOptions) => { void startPractice(tuneId, cardId, prepared, options); }, [startPractice]);
+  const startCurriculum = useCallback(() => { void startPractice(null); }, [startPractice]);
   /** The Play tab: back to the room as it was left, or the next session when none is open. */
   const openPlay = useCallback(() => {
     setLaunch(undefined);
@@ -354,6 +359,7 @@ export default function App() {
   }, [go, openPlay]);
 
   const openLibrary = useCallback(() => { setLaunch(undefined); go("tunes", null); }, [go]);
+  const openCurriculum = useCallback(() => { setLaunch(undefined); go("curriculum", null); }, [go]);
   const openTunes = openLibrary;
   const openSong = useCallback((tuneId: string) => {
     trySaveTune(tuneId);
@@ -510,7 +516,9 @@ export default function App() {
           <PlatformStatus />
 
           {devicesOpen ? <main className="device-sync-placeholder" aria-hidden="true" /> : toolsTool ? <GuitarTools input={input} initialTool={toolsTool} onToolChange={(next) => { toolsRef.current = next; setToolsTool(next); }} onClose={closeTools} /> : tab === "play" ? null : tab === "tutor" ? (
-            <OverviewView key={stateRevision} input={input} onOpenMode={openMode} onOpenSong={openSong} onOpenLibrary={openLibrary} onListenSong={listenSong} onStartPractice={startTune} />
+            <OverviewView key={stateRevision} input={input} onOpenMode={openMode} onOpenSong={openSong} onOpenLibrary={openLibrary} onOpenCurriculum={openCurriculum} onListenSong={listenSong} onStartPractice={startTune} />
+          ) : tab === "curriculum" ? (
+            <CurriculumView key={stateRevision} input={input} onPracticeCurriculum={startCurriculum} onStartPractice={startTune} onOpenSong={openSong} onOpenLibrary={openLibrary} onOpenMode={openMode} />
           ) : tab === "progress" ? (
             <ProgressView key={stateRevision} onOpenSong={openSong} onStartPractice={startTune} />
           ) : tab === "tunes" ? (
@@ -530,7 +538,7 @@ export default function App() {
           )}
           {room && !devicesOpen ? (
             <div className="room-host" hidden={roomParked}>
-              <PracticeRoom key={room.serial} input={input} launch={room} parked={roomParked} request={roomRequest} handle={roomHandle} onClose={closeRoom} onLive={setRoomLive} onSurface={handleRoomSurface} onOpenLibrary={openLibrary} />
+              <PracticeRoom key={room.serial} input={input} launch={room} parked={roomParked} request={roomRequest} handle={roomHandle} onClose={closeRoom} onLive={setRoomLive} onSurface={handleRoomSurface} onOpenLibrary={openLibrary} onOpenCurriculum={openCurriculum} />
             </div>
           ) : null}
           <footer className="app-legal" data-nav-skip>

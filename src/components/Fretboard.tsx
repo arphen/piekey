@@ -28,6 +28,7 @@ interface FretboardProps {
   activeStep?: number; // index into pattern, -1 for none
   compact?: boolean; // mini diagram: window frets only, no labels
   onFretClick?: (fret: number) => void; // makes the fret numbers clickable
+  onCellClick?: (string: number, fret: number) => void; // makes every string/fret spot clickable
   ghosts?: FretGhost[];
   pulse?: FretPulse | null;
 }
@@ -108,12 +109,13 @@ export function Fretboard({
   activeStep = -1,
   compact = false,
   onFretClick,
+  onCellClick,
   ghosts,
   pulse = null,
 }: FretboardProps) {
   const g = useMemo(() => buildGeometry(fretCount, compact, position), [fretCount, compact, position]);
   const board = (
-    <Board g={g} notes={notes} position={position} labels={labels} pattern={pattern} compact={compact} onFretClick={onFretClick} />
+    <Board g={g} notes={notes} position={position} labels={labels} pattern={pattern} compact={compact} onFretClick={onFretClick} onCellClick={onCellClick} />
   );
   if (compact || !pattern || pattern.length === 0) return board;
   // The playhead lives on its own small SVG layer: a moving ring inside the board would repaint the
@@ -206,6 +208,7 @@ const Board = memo(function Board({
   pattern,
   compact,
   onFretClick,
+  onCellClick,
 }: {
   g: Geometry;
   notes: FretNote[];
@@ -214,6 +217,7 @@ const Board = memo(function Board({
   pattern: PatternStep[] | null;
   compact: boolean;
   onFretClick?: (fret: number) => void;
+  onCellClick?: (string: number, fret: number) => void;
 }) {
   const visibleNotes = useMemo(
     () =>
@@ -382,6 +386,39 @@ const Board = memo(function Board({
           </g>
         );
       })}
+
+      {!compact && onCellClick ? (
+        <g className="fb-cell-hits">
+          {STRING_NAMES.map((sName, s) =>
+            frets.map((f) => {
+              const left = f === 0 ? g.noteX(0) - 18 : g.wireX(f - 1);
+              const right = f === 0 ? g.wireX(0) : g.wireX(f);
+              const y = g.stringY(s) - 16;
+              return (
+                <rect
+                  key={`cell-${s}-${f}`}
+                  className="fb-cell-hit"
+                  x={left}
+                  y={y}
+                  width={Math.max(12, right - left)}
+                  height={32}
+                  rx={4}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${sName} string, ${f === 0 ? "open" : `fret ${f}`}`}
+                  onClick={() => onCellClick(s, f)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onCellClick(s, f);
+                    }
+                  }}
+                />
+              );
+            }),
+          )}
+        </g>
+      ) : null}
     </svg>
   );
 });

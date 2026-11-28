@@ -18,10 +18,12 @@ import { useScoreZoom } from "../song/scoreZoom";
 import { buildDeck, FAMILY_LABEL, familiesOnly, findCard, FOCUS_FAMILIES, FOCUS_LABEL, mixDecks, noteName as spelled, rhythmSourceId, wholeTuneCard, type Card, type Context, type Deck, type Focus } from "../song/deck";
 import { rhythmSheet } from "../song/rhythm";
 import { arrangementIdentity, goalDeck, loadActiveGoal } from "../song/goals";
+import { buildCurriculumCards, isCurriculumStudyId, mergeCurriculumIntoDeck, useCurriculum } from "../song/curriculum";
+import { isCustomExerciseId, useCustomExercises } from "../song/customExercises";
 import { useGoals } from "../song/useGoals";
 import { fitTiming, timingTolerance } from "../tunes/scoring";
 import { localId } from "../song/ids";
-import { lineSheet } from "../song/notation";
+import { lineSheet, signatureFor } from "../song/notation";
 import { analyzeWrongNote, mistakeDeltaText, type StaffShadowInfo } from "../song/staffShadow";
 import { makeScale, nice, pretty, spellIn } from "../song/harmony";
 import { allStores, BOXES, boxCounts, isExcluded, loadStore, loadStores, saveMeta, today, type LoopMode, type Store } from "../song/leitner";
@@ -340,9 +342,12 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
   // reading exercises bring new notes whenever this changes: every day, and after every session
   const [round, setRound] = useState(() => `${today()}:${loadStore(sheet.id).sessions.length}`);
   const shapeBook = useShapeBook();
+  const curriculum = useCurriculum();
+  const customExercises = useCustomExercises();
+  const isCurriculumHost = isCurriculumStudyId(sheet.id);
   const rawOwn = useMemo(() => buildDeck(sheet, tl, { window: windowP ?? undefined, round, seen: seenIn(sheet.id), rhythmFrom: rhythmSourceId(initialCardId), passageFrom: initialCardId, shapes: shapeBook }), [sheet, tl, windowP, round, initialCardId, shapeBook]);
   const goals = useGoals();
-  const activeGoal = useMemo(() => loadActiveGoal(sheet, rawOwn), [sheet, rawOwn, goals]);
+  const activeGoal = useMemo(() => (isCurriculumHost ? null : loadActiveGoal(sheet, rawOwn)), [isCurriculumHost, sheet, rawOwn, goals]);
   const own = useMemo(() => goalDeck(rawOwn, activeGoal), [rawOwn, activeGoal]);
   const arrangementFingerprint = useMemo(() => arrangementIdentity(sheet).fingerprint, [sheet]);
   const focused = useMemo(() => (focus === "all" ? own : familiesOnly(own, FOCUS_FAMILIES[focus])), [focus, own]);
@@ -357,7 +362,7 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
   }, [others, mixKey]);
   const guests = useMemo(
     () =>
-      !explicitMix && focus !== "all"
+      isCurriculumHost || (!explicitMix && focus !== "all")
         ? []
         : mix
           ? mixable.map((o) => {
@@ -365,9 +370,21 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
               return { tuneId: o.sheet.id, sheet: o.sheet, deck: focus === "all" ? built : familiesOnly(built, FOCUS_FAMILIES[focus]) };
             })
           : [],
-    [explicitMix, focus, mix, mixable, round, shapeBook],
+    [isCurriculumHost, explicitMix, focus, mix, mixable, round, shapeBook],
   );
-  const deck = useMemo(() => mixDecks(focused, guests), [focused, guests]);
+  const mixedDeck = useMemo(() => mixDecks(focused, guests), [focused, guests]);
+  const includeCurriculum = isCurriculumHost || (!explicitMix && focus === "all" && mix);
+  const curriculumCards = useMemo(
+    () =>
+      includeCurriculum
+        ? buildCurriculumCards(curriculum, customExercises, shapeBook, isCustomExerciseId(initialCardId) ? initialCardId : undefined)
+        : [],
+    [includeCurriculum, curriculum, customExercises, shapeBook, initialCardId],
+  );
+  const deck = useMemo(
+    () => (curriculumCards.length ? mergeCurriculumIntoDeck(mixedDeck, curriculumCards, isCurriculumHost) : mixedDeck),
+    [mixedDeck, curriculumCards, isCurriculumHost],
+  );
   const tuneIds = useMemo(() => [sheet.id, ...guests.map((g) => g.tuneId)], [sheet.id, guests]);
   const sheets = useMemo(() => new Map<string, LeadSheet>([[sheet.id, sheet], ...guests.map((g) => [g.tuneId, g.sheet] as [string, LeadSheet])]), [sheet, guests]);
   const arrangementFingerprints = useMemo(() => new Map([...sheets].map(([id, score]) => [id, arrangementIdentity(score).fingerprint])), [sheets]);
@@ -456,9 +473,23 @@ export function SongCoachRoom({ sheet, tl, input, onClose, onTune, others = NO_T
     if (session.outcome?.result === "clean") pooled.current.serial++;
   }
   const hitSerial = pooled.current.serial;
+  const lastHealHit = useRef(hitSerial);
+  useEffect(() => {
+    if (hitSerial > lastHealHit.current) {
+      if (session.decay > 0) emitPool({ kind: "heal", strength: 0.55 });
+    }
+    lastHealHit.current = hitSerial;
+  }, [hitSerial, session.decay, emitPool]);
+  const lastMissPooled = useRef(session.missSerial);
+  useEffect(() => {
+    if (session.missSerial > lastMissPooled.current) {
+      emitPool({ kind: "decay", strength: 0.42, tone: "miss" });
+    }
+    lastMissPooled.current = session.missSerial;
+  }, [session.missSerial, emitPool]);
   useEffect(() => {
     if (session.run > pooled.current.notifiedRun && session.run >= 12 && session.run % 12 === 0) {
-      emitPool({ kind: "bloom", strength: 0.35, at: "focus" });
+      emitPool({ kind: "bloom", strength: 0.42, at: "focus" });
     }
     pooled.current.notifiedRun = session.run;
   }, [session.run, emitPool]);
@@ -2478,7 +2509,7 @@ function LineStage({ card, session: s, sheet, labels }: { card: Card; session: S
   // is called for, where the one note is that is being looked for.
   const called = useLately(s.nudge, NECK_MS);
   const astray = [active, active - 1, active - 2].some((i) => i >= card.first && s.results[i] === "miss");
-  const neck = card.spot || card.family === "scales" || card.family === "technique" || (!card.fresh && s.box < 2) ? "all" : called || astray ? (card.fresh ? "note" : "all") : "away";
+  const neck = card.spot || card.family === "scales" || card.family === "technique" || isCustomExerciseId(card.id) || (!card.fresh && s.box < 2) ? "all" : called || astray ? (card.fresh ? "note" : "all") : "away";
   const whole = shapeOf(card, active);
   const here = card.steps[active];
   const shape = neck === "note" ? { key: `${card.id}:${active}`, spots: new Set(here ? [`${here.string}-${here.fret}`] : []) } : whole;
@@ -2492,7 +2523,12 @@ function LineStage({ card, session: s, sheet, labels }: { card: Card; session: S
   );
 
   // the line as notation: printed note k is target card.first + k
-  const written = useMemo(() => lineSheet(card, sheet.keySignature), [card, sheet.keySignature]);
+  const cardKeySig = useMemo(() => {
+    const scale = card.context[card.first]?.scale;
+    if (scale && (isCustomExerciseId(card.id) || isCurriculumStudyId(sheet.id))) return signatureFor(scale);
+    return sheet.keySignature;
+  }, [card, sheet.id, sheet.keySignature]);
+  const written = useMemo(() => lineSheet(card, cardKeySig), [card, cardKeySig]);
   const heads = useMemo(() => written.bars.flatMap((b) => b.notes.filter((n) => !n.rest)), [written]);
   const results = useMemo(() => s.results.slice(card.first, card.last + 1), [s.results, card]);
   // under the notes: finger numbers on spiders, names in a spot, degrees when asked for

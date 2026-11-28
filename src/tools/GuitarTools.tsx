@@ -199,7 +199,7 @@ export function GuitarToolsRoom({ input, onClose, initialTool = "tuner", initial
   const inputText = input.status === "starting" ? "Opening input…" : input.paused ? "Input paused" : listening ? "Guitar listening" : input.status === "error" ? "Reconnect guitar" : "Input off";
 
   return <main ref={room} tabIndex={-1} className={`ss guitar-tools instrument-room is-${tool} ${reading ? "is-reading" : ""} ${settled ? "is-in-tune" : ""}`} role="dialog" aria-modal="true" aria-label={tool === "tuner" ? "Tuner" : "Metronome"}>
-    <PracticeAtmosphere input={input} warmth={settled ? 0.85 : reading ? 0.35 : 0} flow={settled ? 0.92 : reading ? 0.45 : 0} playing={listening && pad === null} beat={tool === "metronome" ? beat : undefined} bpm={bpm} />
+    <PracticeAtmosphere input={input} warmth={tool === "metronome" ? 1 : settled ? 0.85 : reading ? 0.35 : 0} flow={tool === "metronome" ? undefined : settled ? 0.92 : reading ? 0.45 : undefined} playing={listening && pad === null} beat={tool === "metronome" ? beat : undefined} bpm={bpm} />
     <div className="guitar-tools-flow" aria-hidden={pad !== null || undefined} style={{ visibility: pad !== null ? "hidden" : undefined }}>
       {tool === "tuner" ? <section className="guitar-tools-tuner" aria-label="chromatic tuner">
         <div className="guitar-tools-tuner-stage" data-pool="calm" data-pool-anchor="tuner" style={{ "--tuner-angle": `${needleAngle.toFixed(2)}deg`, "--tuner-position": `${50 + clampedCents}%` } as CSSProperties}>

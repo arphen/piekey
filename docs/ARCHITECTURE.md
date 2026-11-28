@@ -16,11 +16,13 @@ room (`PracticeRoom` → `SongCoach`), Changes/Reading included. Free play is al
 ```
 main.tsx
   └─ App.tsx
-       ├─ header: Back + brand + Home/Library/Progress tabs | Play + Tools + DeviceSync → DeviceSyncPanel
-       ├─ Play      ── PracticeRoom (kept mounted, parked behind other tabs) → SongCoach → buildDeck → useSession → SessionSummary
+       ├─ header: Back + brand + Home/Curriculum/Library/Progress tabs | Play + Tools + DeviceSync → DeviceSyncPanel
+       ├─ Play      ── PracticeRoom (kept mounted, parked behind other tabs) → SongCoach → buildDeck + mergeCurriculumIntoDeck → useSession → SessionSummary
        ├─ Home      ── OverviewView → useSongSummaries + overview/map (song/tree)
        │                 └─ SongMap → overview/homeTree (spec + progress) → tree/layout → PassiveTree
        │                     (selection cards beside nodes; song ✓/+ edit song/sessionSet)
+       ├─ Curriculum ── CurriculumView → ExerciseRecorder (guitar capture + interactive Score/Fretboard editor)
+       │                  └─ song/customExercises (`guitar-custom-exercises-v1`) + song/curriculum (`guitar-curriculum-v1`) + song/sessionSet
        ├─ Library   ── TuneView(songId=null) → LibraryGrid (cards, import, demos, backup tools)
        │             ── TuneView(songId) → parseMusicXml → LeadSheet → buildTimeline
        │                 └─ Score + listening transport + phrase strip/passage selection + exercise rows → Play

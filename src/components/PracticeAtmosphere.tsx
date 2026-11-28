@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, type CSSProperties } from "react";
 import { midiOf } from "../listen/pitch";
 import type { InputApi } from "../listen/useInput";
+import { createOnsets } from "../song/freeplay";
 import type { BeatSignal } from "../song/pulse";
 import { useRoomRender } from "../pool/mode";
 import { usePoolPublisher } from "../pool/PoolRoom";
@@ -10,8 +11,8 @@ import "../song/atmosphere.css";
 
 const unit = (n: number) => Math.max(0, Math.min(1, n));
 
-/** A quiet harbor room that opens with the player. Loudness, live pitch and landed notes awaken its poison-green algae; mistakes and drift warm it toward amber-umber decay. */
-export function PracticeAtmosphere({ input, warmth, flow, playing, hitSerial = 0, beat, bpm, decay = 0, missSerial = 0 }: { input: InputApi; warmth: number; flow: number; playing: boolean; hitSerial?: number; beat?: BeatSignal; bpm?: number; decay?: number; missSerial?: number }) {
+/** A quiet harbor room that opens with the player. Loudness, live pitch and landed notes awaken its poison-green algae; mistakes scar localized spots that clean playing heals back into bloom. */
+export function PracticeAtmosphere({ input, warmth, flow, playing, hitSerial = 0, beat, bpm, decay = 0, missSerial = 0 }: { input: InputApi; warmth: number; flow?: number; playing: boolean; hitSerial?: number; beat?: BeatSignal; bpm?: number; decay?: number; missSerial?: number }) {
   const room = useRef<HTMLDivElement>(null);
   const state = useRef({ warmth, flow, playing, hitSerial, decay, missSerial });
   state.current = { warmth, flow, playing, hitSerial, decay, missSerial };
@@ -22,7 +23,7 @@ export function PracticeAtmosphere({ input, warmth, flow, playing, hitSerial = 0
   const living = render.effective === "living";
   const sharedWater = useLiveAbyssalWater();
   const drive = useRef<WaterDrive>({
-    playing: playing && render.mode !== "still", level: 0, heardAt: -Infinity, flow, hitSerial, noteX: 0, noteY: 0, noteHue: 0.5, noteAt: -Infinity,
+    playing: playing && render.mode !== "still", level: 0, heardAt: -Infinity, flow, hitSerial, onsetSerial: 0, noteX: 0, noteY: 0, noteHue: 0.5, noteAt: -Infinity,
     beatSerial: beat?.serial ?? -1, beatIndex: beat?.index ?? -1, beatActive: Boolean(beat?.active), beatCounting: Boolean(beat?.counting),
     decay, missSerial,
   });
@@ -67,33 +68,36 @@ export function PracticeAtmosphere({ input, warmth, flow, playing, hitSerial = 0
       drive.current.heardAt = -Infinity;
       return;
     }
+    const detectOnset = createOnsets();
     return input.subscribe((frame) => {
       // Reuse the shared analyser & per-frame pitch cache; no extra detector runs here.
       const lvl = unit(Math.sqrt(frame.rms) * 2.5);
       energy.current.level = lvl;
       drive.current.level = lvl;
-      if (frame.rms > 0.008) {
+      const midi = frame.rms > 0.008 ? midiOf(frame) : null;
+      const found = detectOnset({ midi, rms: frame.rms, now: frame.now });
+      if (midi !== null) {
         const now = performance.now();
-        const midi = midiOf(frame);
-        if (midi !== null) {
-          energy.current.heard = now;
-          drive.current.heardAt = now;
-          const norm = unit((midi - 40) / 36); // E2 (0) .. E5 (1)
-          const fifths = ((midi * 7) % 12) / 11; // harmonic position 0..1
-          const nx = (fifths - 0.5) * 1.15;
-          const ny = (norm - 0.5) * 0.72;
-          energy.current.noteX = nx;
-          energy.current.noteY = ny;
-          energy.current.noteHue = norm;
-          energy.current.noteAt = now;
-          drive.current.noteX = nx;
-          drive.current.noteY = ny;
-          drive.current.noteHue = norm;
-          drive.current.noteAt = now;
-          if (state.current.playing) {
-            energy.current.wake?.();
-            wakeWaterDrive();
-          }
+        energy.current.heard = now;
+        drive.current.heardAt = now;
+        const norm = unit((midi - 40) / 36); // E2 (0) .. E5 (1)
+        const fifths = ((midi * 7) % 12) / 11; // harmonic position 0..1
+        const nx = (fifths - 0.5) * 1.15;
+        const ny = (norm - 0.5) * 0.72;
+        energy.current.noteX = nx;
+        energy.current.noteY = ny;
+        energy.current.noteHue = norm;
+        energy.current.noteAt = now;
+        drive.current.noteX = nx;
+        drive.current.noteY = ny;
+        drive.current.noteHue = norm;
+        drive.current.noteAt = now;
+        if (found && state.current.playing) {
+          drive.current.onsetSerial = (drive.current.onsetSerial ?? 0) + 1;
+        }
+        if (state.current.playing) {
+          energy.current.wake?.();
+          wakeWaterDrive();
         }
       }
     });
@@ -124,16 +128,16 @@ export function PracticeAtmosphere({ input, warmth, flow, playing, hitSerial = 0
       else energy.current.played = Math.max(0, energy.current.played - dt * 0.25);
       energy.current.hit *= Math.exp(-dt / 2400);
       energy.current.miss *= Math.exp(-dt / 1800);
-      // Slow old-engine warm-up: convex start, rising into the zone only with sustained clean playing.
-      const warm = Math.pow(unit(energy.current.played / 36000), 1.65);
-      const quality = 0.28 + 0.72 * unit((s.flow - 0.35) / 0.58);
+      // Responsive warm-up: calm start, soaring bloom in the zone; unscored rooms (flow === undefined) reach full peak.
+      const warm = Math.pow(unit(energy.current.played / 22000), 1.18);
+      const quality = s.flow === undefined ? 1 : 0.52 + 0.48 * unit((s.flow - 0.25) / 0.65);
       const target = heard ? Math.min(1, warm * quality) : 0;
-      bloom += (target - bloom) * (1 - Math.exp(-dt / (target > bloom ? 6800 : 11500)));
-      breath += ((heard ? energy.current.level : 0) - breath) * (1 - Math.exp(-dt / 750));
+      bloom += (target - bloom) * (1 - Math.exp(-dt / (target > bloom ? 3400 : 11500)));
+      breath += ((heard ? energy.current.level : 0) - breath) * (1 - Math.exp(-dt / 550));
       const decayTarget = unit(s.decay);
-      decayLevel += (decayTarget - decayLevel) * (1 - Math.exp(-dt / (decayTarget > decayLevel ? 600 : 3500)));
-      if (!media?.matches) drift += (dt / 1000) * (s.playing ? 0.4 + bloom * 0.9 : 0.25);
-      const zone = Math.pow(unit(bloom), 1.9);
+      decayLevel += (decayTarget - decayLevel) * (1 - Math.exp(-dt / (decayTarget > decayLevel ? 550 : 2800)));
+      if (!media?.matches) drift += (dt / 1000) * (s.playing ? 0.45 + bloom * 1.15 : 0.25);
+      const zone = Math.pow(unit(bloom), 1.55);
       el.style.setProperty("--bloom", zone.toFixed(3));
       el.style.setProperty("--breath", (media?.matches ? 0 : breath * (0.25 + 0.75 * bloom)).toFixed(3));
       el.style.setProperty("--hit", (media?.matches ? 0 : energy.current.hit * bloom).toFixed(3));

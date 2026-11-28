@@ -22,6 +22,8 @@ export interface Vortex { x: number; y: number; spin: number; radius: number }
 export interface Swirl { x: number; y: number; impulse: number; radius: number }
 export interface Emitter { x: number; y: number; rate: number; radius: number }
 export interface Ring { x: number; y: number; age: number; strength: number }
+export interface Wound { x: number; y: number; radius: number; severity: number }
+export interface Heal { x: number; y: number; age: number; strength: number }
 export interface PoolRect { x: number; y: number; hx: number; hy: number; radius: number; flags: number }
 export const ROCK = 1;
 export const CALM = 2;
@@ -35,6 +37,8 @@ export interface FrameState {
   kick: number;
   tint: Vec3;
   decay?: number;
+  wounds?: readonly Wound[];
+  heal?: Heal | null;
   dawn: number;
   drift: Vec2;
   driftVelocity: Vec2;
@@ -91,7 +95,7 @@ export class Renderer {
   private heatIdle = 20; // skip heat passes completely until lava actually wakes in deep flow
   private flowPhase = 0.25; // both flow fields start part-way, so neither restarts at once
   private flowMix = 0.5;
-  private readonly arrays = { rects: new Float32Array(64), meta: new Float32Array(64), a8: new Float32Array(32), b8: new Float32Array(32), c4: new Float32Array(16), t8: new Float32Array(24), r8: new Float32Array(8), f2: new Float32Array(8), sprites: new Float32Array(SPRITES.flat()) };
+  private readonly arrays = { rects: new Float32Array(64), meta: new Float32Array(64), a8: new Float32Array(32), b8: new Float32Array(32), c4: new Float32Array(16), w4: new Float32Array(16), t8: new Float32Array(24), r8: new Float32Array(8), f2: new Float32Array(8), sprites: new Float32Array(SPRITES.flat()) };
   private readonly timer: { ext: { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number } | null; free: WebGLQuery[]; busy: WebGLQuery[]; ms: number | null };
 
   constructor(gl: WebGL2RenderingContext, readonly floats: boolean) {
@@ -440,11 +444,22 @@ export class Renderer {
       this.f1(u, "uKick", s.kick);
       this.f1(u, "uLava", Math.min(1, params.lava * 1.5));
       const decay = Math.max(0, Math.min(1, s.decay ?? 0));
-      this.f1(u, "uRefract", 0.05);
-      this.f1(u, "uDyeGain", 0.04 + params.emission * 0.28 + decay * 0.14);
+      this.f1(u, "uRefract", 0.055);
+      this.f1(u, "uDyeGain", 0.08 + params.emission * 0.44);
       this.f1(u, "uDecay", decay);
       this.f1(u, "uCalmDepth", Math.min(1, params.spread * 1.4));
       gl.uniform3f(this.uniform(u, "uTint"), s.tint[0], s.tint[1], s.tint[2]);
+      const { w4 } = this.arrays;
+      w4.fill(0);
+      const nw = Math.min(4, s.wounds?.length ?? 0);
+      for (let i = 0; i < nw; i++) {
+        const w = s.wounds![i];
+        w4.set([w.x, w.y, w.radius, w.severity], i * 4);
+      }
+      gl.uniform4fv(this.uniform(u, "uWounds"), w4);
+      gl.uniform1i(this.uniform(u, "uWoundCount"), nw);
+      const h = s.heal;
+      gl.uniform4f(this.uniform(u, "uHeal"), h?.x ?? 0, h?.y ?? 0, h?.age ?? 10, h?.strength ?? 0);
       this.f2(u, "uWaveTexel", 1 / waves.read.width, 1 / waves.read.height);
       this.f1(u, "uWaveCell", 1 / waves.read.height);
       const { c4 } = this.arrays;

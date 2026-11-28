@@ -20,8 +20,9 @@ export interface WaterDrive {
   playing: boolean;
   level: number;
   heardAt: number;
-  flow: number;
+  flow?: number;
   hitSerial: number;
+  onsetSerial?: number;
   noteX: number;
   noteY: number;
   noteHue: number;
@@ -208,10 +209,14 @@ uniform float decay;
 uniform float miss;
 uniform float sway;
 uniform float downbeat;
+uniform float beatRingAge;
+uniform float beatRingPower;
 uniform vec2 notePos;
 uniform float noteWarmth;
 uniform float noteHue;
-uniform vec4 swells[3]; // xy origin, z age (s), w strength: delayed far-away propeller swells
+uniform vec4 swells[3]; // xy origin, z age (s), w strength: responsive liquid note swells
+uniform vec4 wounds[4]; // xy pos, z radius, w severity: localized dying algae patches
+uniform vec4 healWave; // xy pos, z age (s), w strength: bioluminescent restoration wave
 uniform sampler2D texA;
 uniform sampler2D texB;
 
@@ -290,17 +295,16 @@ void main() {
 
   float shear = panVel * 0.11 * sin(p.y * 2.8 + t * 0.5);
   vec2 swirl = vec2(shear, scrollVel * 0.05 * cos(p.x * 2.6));
-  float vigor = 1.0 + agitation * 0.28 + bloom * 0.52 + zone * 0.46 + playEnergy * 0.08;
-  // Concentric central vortex wrapping the Home circle-of-fifths tree in flowing algae tendrils.
-  // Beats never twist or jerk the eddies; currents only deepen smoothly as the engine warms up.
-  swirl += spiralEddy(p, vec2(0.0, 0.0), 0.82, (0.68 + 0.16 * sin(t * 0.11)) * vortex * (1.0 + agitation * 0.16));
+  float vigor = 1.0 + agitation * 0.36 + bloom * 0.82 + zone * 0.92 + playEnergy * 0.28 + sway * (0.16 + 0.34 * bloom);
+  // Concentric central vortex wrapping the Home tree and breathing rhythmically with the groove.
+  swirl += spiralEddy(p, vec2(0.0, 0.0), 0.82, (0.68 + 0.16 * sin(t * 0.11)) * vortex * (1.0 + agitation * 0.18 + sway * 0.24));
   swirl += spiralEddy(p, c1, 0.62, (0.34 + 0.18 * sin(t * 0.09)) * vigor);
   swirl += spiralEddy(p, c2, 0.54, (-0.30 + 0.16 * cos(t * 0.07)) * vigor);
   swirl += spiralEddy(p, c3, 0.44, (0.24 * sin(t * 0.11 + 1.5)) * vigor);
-  // Softly drifting harmonic eddy that glides smoothly without sign flips.
-  swirl += spiralEddy(p, notePos, 0.48, (noteHue * 2.0 - 1.0) * noteWarmth * (0.10 + 0.28 * bloom));
+  // Expressive harmonic note eddy that follows the player's pitch smoothly across the lagoon.
+  swirl += spiralEddy(p, notePos, 0.50, (noteHue * 2.0 - 1.0) * noteWarmth * (0.18 + 0.46 * bloom));
 
-  // Delayed far-away propeller swells gliding slowly across the harbor as notes land cleanly.
+  // Responsive liquid swells gliding across the harbor as notes land.
   vec2 waveShift = vec2(0.0);
   float swellLight = 0.0;
   for (int i = 0; i < 3; i++) {
@@ -308,12 +312,23 @@ void main() {
     if (sw.w <= 0.001) continue;
     vec2 d = p - sw.xy;
     float dist = length(d) + 1e-4;
-    float radius = sw.z * 0.24; // slow deep-water propagation
+    float radius = sw.z * 0.29; // organic deep-water propagation
     float band = dist - radius;
-    float env = exp(-band * band / 0.022) * exp(-sw.z * 0.42) * sw.w;
-    float wave = sin(band * 24.0) * env;
-    waveShift += (d / dist) * wave * 0.028;
-    swellLight += env * (0.5 + 0.5 * cos(band * 18.0));
+    float env = exp(-band * band / 0.026) * exp(-sw.z * 0.48) * sw.w;
+    float wave = sin(band * 22.0) * env;
+    waveShift += (d / dist) * wave * 0.036;
+    swellLight += env * (0.5 + 0.5 * cos(band * 16.0));
+  }
+
+  // Rhythmic concentric tide wave expanding gently from center on heard beats (metronome & timed play).
+  float beatWaveLight = 0.0;
+  if (beatRingPower > 0.005 && beatRingAge < 3.2) {
+    float bd = length(p);
+    float bRadius = 0.12 + beatRingAge * 0.36;
+    float bBand = bd - bRadius;
+    float bEnv = exp(-bBand * bBand / 0.020) * exp(-beatRingAge * 1.15) * beatRingPower;
+    waveShift += normalize(p + vec2(1e-4)) * sin(bBand * 20.0) * bEnv * 0.018;
+    beatWaveLight = bEnv;
   }
 
   // 4-node viscous pointer wake: silky, weighted swirl trailing smoothly behind the cursor.
@@ -336,7 +351,7 @@ void main() {
   float f0 = fbm(q + vec2(t * 0.017, -t * 0.013));
   float fx = fbm(q + vec2(0.06 + t * 0.017, -t * 0.013));
   float fy = fbm(q + vec2(t * 0.017, 0.06 - t * 0.013));
-  vec2 curl = vec2(fy - f0, -(fx - f0)) * (0.42 + agitation * 0.22 + bloom * 0.28 + zone * 0.22);
+  vec2 curl = vec2(fy - f0, -(fx - f0)) * (0.42 + agitation * 0.26 + bloom * 0.44 + zone * 0.48 + playEnergy * 0.14);
 
   vec2 coord = p + drift + swirl * 0.44 + curl * 0.16 + waveShift;
 
@@ -362,60 +377,93 @@ void main() {
   float luma = dot(raw, vec3(0.2126, 0.7152, 0.0722));
   float greenness = max(0.0, raw.g - max(raw.r * 0.90, raw.b * 0.95));
   float matMask = smoothstep(0.04, 0.19, greenness) * smoothstep(0.18, 0.55, luma);
-  float veinMask = smoothstep(0.11, 0.27, greenness) * smoothstep(0.32, 0.68, luma);
+  float veinMask = smoothstep(0.10, 0.26, greenness) * smoothstep(0.30, 0.66, luma);
 
   // Nocturnal abyssal dark-blue water: deep Prussian/midnight-blue currents with dark-teal submerged mats.
   vec3 deepOcean = abyssColor * (0.85 + 0.95 * smoothstep(0.08, 0.84, f0));
   vec3 waterSheen = vec3(0.010, 0.048, 0.135) * smoothstep(0.28, 0.86, f0) * (0.62 + 0.38 * sin(t * 0.25 + p.x * 2.0));
   vec3 baseWater = deepOcean + waterSheen;
 
-  // Sculpt the real algae photograph into dark, nocturnal floating emerald mats over deep blue voids,
-  // subtly shifting toward warm olive-ochre and umber as decay rises.
-  float decayAmt = clamp(decay + miss * 0.45, 0.0, 1.0);
+  // Localized dying patches ("wounds") left by mistakes: only those few patches wither while the rest of the lagoon keeps shining.
+  float woundMask = 0.0;
+  float woundRim = 0.0;
+  for (int i = 0; i < 4; i++) {
+    vec4 wd = wounds[i];
+    if (wd.w <= 0.005) continue;
+    float d = length(p - wd.xy);
+    float organic = (f0 - 0.5) * wd.z * 0.68;
+    float core = (1.0 - smoothstep(wd.z * 0.22, wd.z * 1.15, d + organic)) * wd.w;
+    woundMask = max(woundMask, core);
+    woundRim = max(woundRim, exp(-pow((d + organic - wd.z * 0.85) / max(wd.z * 0.32, 0.025), 2.0)) * wd.w);
+  }
+  float globalVeil = clamp(decay * 0.10 + miss * 0.06, 0.0, 0.18);
+  float wilt = clamp(woundMask * 0.95 + globalVeil, 0.0, 1.0);
+  float alive = 1.0 - woundMask * 0.72;
+
+  // Sculpt the real algae photograph into dark nocturnal emerald mats over deep blue voids,
+  // withering locally inside wound patches without turning the whole lagoon brown.
   vec3 coolMat = mix(
     vec3(0.008, 0.048, 0.105),
-    vec3(0.036, 0.175, 0.145),
+    vec3(0.036, 0.185, 0.155),
     smoothstep(0.16, 0.72, luma)
   );
   vec3 decayMat = mix(
-    vec3(0.032, 0.024, 0.012),
-    vec3(0.145, 0.092, 0.036),
+    vec3(0.024, 0.015, 0.008),
+    vec3(0.135, 0.072, 0.026),
     smoothstep(0.16, 0.72, luma)
   );
-  vec3 darkMat = mix(coolMat, decayMat, clamp(decay * 0.72 + miss * 0.20, 0.0, 0.85));
+  vec3 darkMat = mix(coolMat, decayMat, wilt * 0.88);
   // Blend subtle photographic micro-texture into the dark mats; enriches organically as you enter the zone.
-  vec3 photoTint = mix(vec3(0.36, 0.64, 0.68), vec3(0.72, 0.50, 0.24), clamp(decay * 0.78 + miss * 0.22, 0.0, 0.90));
-  vec3 photoDetail = pow(max(raw, 0.0), vec3(2.45 - bloom * 0.28 - zone * 0.22)) * photoTint;
-  vec3 algaeBody = mix(darkMat, photoDetail, 0.48 + bloom * 0.22 + zone * 0.20);
+  vec3 photoTint = mix(vec3(0.38, 0.68, 0.72), vec3(0.70, 0.42, 0.18), wilt * 0.82);
+  vec3 photoDetail = pow(max(raw, 0.0), vec3(2.40 - bloom * 0.34 - zone * 0.28)) * photoTint;
+  vec3 algaeBody = mix(darkMat, photoDetail, 0.48 + bloom * 0.24 + zone * 0.24);
 
-  // Calm center keeps text crisp; at rest algae hover gently, then creep inward to embrace the room in the zone.
+  // Calm center keeps text crisp; at rest algae hover gently, then embrace the whole room at peak.
   float centerDist = length((uv - vec2(0.5, 0.48)) * vec2(1.06, 0.96));
   float rim = smoothstep(mix(0.10, 0.02, zone), 0.86, centerDist);
-  float matVis = mix(0.42 * (1.0 - calmCenter * (0.52 - zone * 0.26)) + bloom * 0.12 + zone * 0.18, 0.74 + bloom * 0.10 + zone * 0.12, rim);
-  vec3 color = mix(baseWater, algaeBody, clamp(matMask * matVis, 0.0, 0.88));
+  float matVis = mix(0.42 * (1.0 - calmCenter * (0.50 - zone * 0.28)) + bloom * 0.14 + zone * 0.20, 0.76 + bloom * 0.12 + zone * 0.12, rim);
+  vec3 color = mix(baseWater, algaeBody, clamp(matMask * matVis, 0.0, 0.90));
+  color *= (1.0 - woundMask * 0.35);
 
-  // Yellowing amber tension -> ochre-rust / warm umber decay palette, contrasting against emerald-teal bloom.
-  vec3 amberWilt = vec3(0.72, 0.54, 0.18);
-  vec3 umberRust = vec3(0.48, 0.26, 0.10);
-  vec3 decayGlow = mix(amberWilt, umberRust, smoothstep(0.25, 0.90, decayAmt));
+  // Localized withered ember palette for dying wound edges/cores.
+  vec3 amberWilt = vec3(0.76, 0.52, 0.16);
+  vec3 umberRust = vec3(0.46, 0.22, 0.08);
+  vec3 woundGlow = mix(amberWilt, umberRust, woundMask);
 
-  // Bioluminescence Layer 1: slow languid ambient pulse on the thickest algae veins.
+  // Bioluminescence Layer 1: languid ambient pulse on the thickest algae veins.
   float breath = 0.5 + 0.5 * sin(t * 0.36 + f0 * 6.2831 + p.x * 1.4);
-  float stenchGlow = veinMask * (0.11 + 0.13 * breath) * (0.48 + 0.66 * rim);
-  color += mix(glowColor, decayGlow, decayAmt * 0.68) * stenchGlow * (1.0 - decayAmt * 0.22);
+  float stenchGlow = veinMask * (0.11 + 0.14 * breath) * (0.48 + 0.66 * rim);
+  color += mix(glowColor, woundGlow, woundMask * 0.78) * stenchGlow * alive;
 
-  // Bioluminescence Layer 1b: earned zone embrace — distant calling early, lush emerald-gold radiance at peak performance.
-  vec3 poisonNeon = mix(vec3(0.16, 0.88, 0.64), vec3(0.54, 1.0, 0.30), noteHue);
-  vec3 liveNeon = mix(poisonNeon, decayGlow, decayAmt * 0.72);
-  vec3 birchGold = vec3(0.90, 0.78, 0.42);
-  float noteNear = exp(-dot(p - notePos, p - notePos) / 0.24) * noteWarmth;
-  float zoneGlow = bloom * 0.24 + zone * 0.96 + swellLight * (0.16 + 0.34 * bloom) + noteNear * (0.10 + 0.26 * zone);
-  color += liveNeon * veinMask * raw.g * zoneGlow * (1.0 - decayAmt * 0.35) * (0.38 + 0.82 * rim);
-  // Subtle organic amber-umber rim wash during decay, keeping center calm for foreground notation.
-  color += decayGlow * (decay * 0.11 + miss * 0.09) * (0.14 + 0.86 * rim) * (0.35 + 0.65 * matMask);
-  // Subtle golden warmth breathing softly in the deep zone on heard downbeats.
-  vec3 tideColor = mix(liveNeon, birchGold, downbeat * 0.65);
-  color += tideColor * veinMask * sway * zone * 0.26 * (0.35 + 0.65 * rim);
+  // Bioluminescence Layer 1b: dynamic attunement -> ecstatic iridescent emerald-cyan-gold peak!
+  vec3 electricCyan = vec3(0.14, 0.92, 0.76);
+  vec3 chlorophyll = vec3(0.28, 1.0, 0.44);
+  vec3 moltenLime = vec3(0.74, 1.0, 0.28);
+  vec3 poisonNeon = mix(mix(electricCyan, chlorophyll, noteHue), moltenLime, clamp(zone * 0.55 + f0 * 0.35 * bloom, 0.0, 0.82));
+  vec3 liveNeon = mix(poisonNeon, woundGlow, woundMask * 0.80);
+  vec3 birchGold = vec3(0.96, 0.82, 0.42);
+  float noteNear = exp(-dot(p - notePos, p - notePos) / 0.28) * noteWarmth;
+  float zoneGlow = bloom * 0.46 + zone * 1.48 + swellLight * (0.28 + 0.58 * bloom) + noteNear * (0.20 + 0.44 * bloom + 0.34 * zone) + playEnergy * bloom * 0.34;
+  color += liveNeon * veinMask * raw.g * zoneGlow * alive * (0.40 + 0.82 * rim);
+  // Subtle translucent peak aurora wash over floating mats when deep in the zone (calm center stays legible).
+  color += mix(glowColor, flareColor, 0.45) * matMask * zone * (0.14 + 0.18 * playEnergy + 0.16 * sway) * alive * (0.22 + 0.78 * rim);
+  // Bruised amber rim strictly around localized dying wounds.
+  color += vec3(0.72, 0.38, 0.12) * woundRim * (0.14 + 0.28 * matMask) * (0.25 + 0.75 * rim);
+
+  // Active healing wave: fresh ecstatic emerald-gold life surging out as clean playing knits a wound.
+  if (healWave.w > 0.005 && healWave.z < 3.6) {
+    float hd = length(p - healWave.xy);
+    float hRadius = healWave.z * 0.30;
+    float hRing = exp(-pow((hd - hRadius) / 0.065, 2.0)) * exp(-healWave.z * 1.0);
+    float hCore = exp(-(hd * hd) / 0.055) * exp(-healWave.z * 1.5);
+    vec3 healCol = mix(vec3(0.28, 1.0, 0.60), vec3(0.90, 1.0, 0.40), hCore);
+    color += healCol * (hRing * 0.52 + hCore * 0.38) * healWave.w * (0.45 + 0.85 * matMask);
+  }
+
+  // Rhythmic heard-beat tide: silky golden-emerald pulse in Metronome and timed play, blooming dynamically with groove.
+  vec3 tideColor = mix(mix(glowColor, liveNeon, bloom), birchGold, downbeat * 0.72);
+  color += tideColor * veinMask * sway * (0.28 + 0.62 * bloom + 0.68 * zone) * alive * (0.35 + 0.65 * rim);
+  color += tideColor * beatWaveLight * (0.22 + 0.65 * matMask + 0.55 * veinMask) * (0.26 + 0.42 * bloom);
 
   // Bioluminescence Layer 2: subtle, silky pointer wake shimmer along the trailing eddies.
   float wakeLight =
@@ -434,12 +482,12 @@ void main() {
   float sweepGlow = (surge * 0.18 + speed * 0.14 + abs(scrollVel) * 0.06) * (0.14 + 1.05 * matMask);
   color += mix(glowColor, flareColor, clamp(surge, 0.0, 1.0) * 0.38) * sweepGlow * (0.40 + 0.60 * rim);
 
-  // Subtle dark-blue vignette + filmic highlight knee so earned peak glow feels lush without clipping.
+  // Subtle dark-blue vignette + dynamic filmic highlight knee so ecstatic peaks truly shine without clipping.
   float vig = smoothstep(1.32, 0.22, centerDist);
-  color *= mix(0.62, 1.02, vig);
-  float knee = mix(0.48, 0.60, zone);
+  color *= mix(0.64, 1.04, vig);
+  float knee = mix(0.50, 0.82, zone);
   vec3 over = max(color - knee, 0.0);
-  color = min(color, knee) + over / (1.0 + over / 0.36);
+  color = min(color, knee) + over / (1.0 + over / 0.46);
 
   // Subtle dither against dark-blue banding.
   float dither = (hash12(gl_FragCoord.xy) - 0.5) / 255.0;
@@ -567,11 +615,12 @@ export function AbyssalWater({ scene, suspended = false }: { scene: WaterScene; 
       "morph", "hasTexA", "hasTexB", "abyssColor", "glowColor", "flareColor",
       "calmCenter", "vortex", "surge", "wake0", "wake1", "wake2", "wake3",
       "wakeSpin", "wakeEnergy", "burstPos", "burstAge", "burstPower",
-      "playEnergy", "bloom", "zone", "decay", "miss", "sway", "downbeat", "notePos", "noteWarmth", "noteHue", "swells",
+      "playEnergy", "bloom", "zone", "decay", "miss", "sway", "downbeat", "beatRingAge", "beatRingPower", "notePos", "noteWarmth", "noteHue", "swells", "wounds", "healWave",
       "texA", "texB",
     ];
     const u = Object.fromEntries(names.map((name) => [name, gpu.getUniformLocation(program, name)]));
     if (!u.swells) u.swells = gpu.getUniformLocation(program, "swells[0]");
+    if (!u.wounds) u.wounds = gpu.getUniformLocation(program, "wounds[0]");
     gpu.uniform1i(u.texA, 0);
     gpu.uniform1i(u.texB, 1);
 
@@ -604,18 +653,27 @@ export function AbyssalWater({ scene, suspended = false }: { scene: WaterScene; 
     let lastPtr = { x: 0, y: 0, at: 0 };
     let burst = { x: 0, y: 0, age: 10, power: 0 };
 
-    // Heavy old-engine flywheel + delayed far-away propeller swells (decorative only).
+    // Responsive flywheel + localized dying wounds + active healing waves + rhythmic beat tide (decorative only).
     let engineMs = 0;
     let bloom = 0;
     let smoothDecay = 0;
+    let prevTargetDecay = 0;
     let missPulse = 0;
     let lastMissSerial = -1;
+    let woundCounter = 0;
+    const wounds: { x: number; y: number; radius: number; severity: number }[] = [];
+    const woundBuf = new Float32Array(16);
+    let healWave = { x: 0, y: 0, age: 10, strength: 0 };
     let smoothEnergy = 0;
     let beatTarget = 0;
     let beatSway = 0;
     let beatDownbeat = 0;
+    let beatRingAge = 10;
+    let beatRingPower = 0;
     let lastBeatSerial = -1;
     let lastHitSerial = -1;
+    let lastOnsetSerial = -1;
+    let lastSwellQueuedAt = -Infinity;
     let smoothNoteX = 0;
     let smoothNoteY = 0;
     let smoothNoteHue = 0.5;
@@ -787,61 +845,109 @@ export function AbyssalWater({ scene, suspended = false }: { scene: WaterScene; 
       burst.age += dt;
       morph = lerp(morph, targetMorph + Math.sin(elapsed * 0.08) * 0.18, 1 - Math.exp(-dt * 0.55));
 
-      // Heavy old-engine flywheel: spins up slowly with sustained clean playing, ebbs gracefully on silence or mistakes.
+      // Dynamic marine flywheel: calm dark low at rest, responsive climb, sustained excitement through minor slips, ecstatic peak!
       const drive = activeWaterDrive();
       const heard = Boolean(drive && drive.playing && now - drive.heardAt < 2200);
-      if (heard) engineMs = Math.min(45000, engineMs + dtMs);
-      else engineMs = Math.max(0, engineMs - dtMs * 0.28);
+      if (heard) engineMs = Math.min(30000, engineMs + dtMs);
+      else engineMs = Math.max(0, engineMs - dtMs * 0.25);
 
-      smoothEnergy += ((heard ? drive?.level ?? 0 : 0) - smoothEnergy) * (1 - Math.exp(-dtMs / 1200));
-      const spunUp = Math.pow(Math.max(0, Math.min(1, engineMs / 36000)), 1.65); // convex: whisper-quiet first 6s, strong after 30-36s
-      const quality = drive ? 0.28 + 0.72 * Math.max(0, Math.min(1, (drive.flow - 0.35) / 0.58)) : 0.28;
+      smoothEnergy += ((heard ? drive?.level ?? 0 : 0) - smoothEnergy) * (1 - Math.exp(-dtMs / 550));
+      const spunUp = Math.pow(Math.max(0, Math.min(1, engineMs / 22000)), 1.18);
+      // Unscored rooms (Metronome, un-gridded Free Play: flow === undefined) can reach full peak; scored rooms keep momentum across minor slips.
+      const quality = drive
+        ? drive.flow === undefined
+          ? 1
+          : 0.52 + 0.48 * Math.max(0, Math.min(1, (drive.flow - 0.25) / 0.65))
+        : 0.52;
       const targetBloom = heard ? Math.max(0, Math.min(1, spunUp * quality)) : 0;
-      bloom += (targetBloom - bloom) * (1 - Math.exp(-dtMs / (targetBloom > bloom ? 6800 : 11500)));
-      // Transcendent algae embrace opens non-linearly only in the upper zone.
-      const zone = Math.pow(Math.max(0, Math.min(1, bloom)), 2.15);
+      bloom += (targetBloom - bloom) * (1 - Math.exp(-dtMs / (targetBloom > bloom ? 3400 : 11500)));
+      // Transcendent algae embrace builds naturally from mid-groove and soars dynamically at the top.
+      const zone = Math.pow(Math.max(0, Math.min(1, bloom)), 1.55);
 
-      // Decay-to-bloom color drift: warms quickly on mistakes/drift, recovers gently as clean playing returns.
+      // Localized dying wounds + active healing waves (mistakes scar discrete spots instead of browning the whole lagoon).
       const targetDecay = drive && drive.playing ? Math.max(0, Math.min(1, drive.decay ?? 0)) : 0;
-      smoothDecay += (targetDecay - smoothDecay) * (1 - Math.exp(-dtMs / (targetDecay > smoothDecay ? 600 : 3500)));
+      if (prevTargetDecay > 0.12 && targetDecay === 0 && wounds.length) {
+        const w = wounds[0];
+        healWave = { x: w.x, y: w.y, age: 0, strength: 1.0 };
+        wounds.length = 0;
+      }
+      prevTargetDecay = targetDecay;
+      smoothDecay += (targetDecay - smoothDecay) * (1 - Math.exp(-dtMs / (targetDecay > smoothDecay ? 550 : 2800)));
       if (!drive) {
         lastMissSerial = -1;
       } else {
         const curMissSerial = drive.missSerial ?? 0;
         if (curMissSerial !== lastMissSerial) {
           if (lastMissSerial >= 0 && drive.playing && curMissSerial > lastMissSerial) {
-            missPulse = Math.min(1, missPulse * 0.35 + 0.82);
+            missPulse = Math.min(1, missPulse * 0.35 + 0.72);
+            // Spawn a localized dying algae wound outside the calm center.
+            const angle = (++woundCounter * 2.39996 + 0.7) % (Math.PI * 2);
+            const dist = 0.38 + 0.24 * ((woundCounter * 0.6180339) % 1);
+            const wx = Math.cos(angle) * dist * 1.15;
+            const wy = Math.sin(angle) * dist * 0.72;
+            const radius = 0.20 + 0.08 * ((woundCounter * 0.381966) % 1);
+            if (wounds.length < 4) {
+              wounds.push({ x: wx, y: wy, radius, severity: 0.85 });
+            } else {
+              const oldest = wounds.shift()!;
+              wounds.push({ x: wx, y: wy, radius: Math.max(oldest.radius, radius), severity: 1.0 });
+            }
           }
           lastMissSerial = curMissSerial;
         }
       }
-      missPulse *= Math.exp(-dtMs / 1800);
+      missPulse *= Math.exp(-dtMs / 1500);
+      for (let i = wounds.length - 1; i >= 0; i--) {
+        wounds[i].severity *= Math.exp(-dt / 26);
+        if (wounds[i].severity <= 0.04) wounds.splice(i, 1);
+      }
+      healWave.age += dt;
 
-      // Slow, silky luminescence breath on heard beats once deep in the zone (never twists or snaps).
+      // Rhythmic luminescence tide + subtle concentric pulse on heard beats (alive in Metronome and timed play!).
       if (drive && drive.beatActive && drive.beatIndex >= 0 && drive.beatSerial !== lastBeatSerial) {
         lastBeatSerial = drive.beatSerial;
-        beatTarget = Math.max(beatTarget, drive.beatIndex === 0 ? 0.85 : 0.42);
+        const amp = drive.beatCounting ? 0.42 : drive.beatIndex === 0 ? 1.0 : 0.58;
+        beatTarget = Math.max(beatTarget, amp);
+        beatRingAge = 0;
+        beatRingPower = amp;
       }
-      beatTarget *= Math.exp(-dt / 0.95);
-      beatSway += (beatTarget - beatSway) * (1 - Math.exp(-dt / 0.55));
+      beatRingAge += dt;
+      beatTarget *= Math.exp(-dt / 0.72);
+      beatSway += (beatTarget - beatSway) * (1 - Math.exp(-dt / 0.24));
       const wantDownbeat = drive && drive.beatActive && drive.beatIndex === 0 ? 1 : 0;
-      beatDownbeat += (wantDownbeat - beatDownbeat) * (1 - Math.exp(-dt / 0.45));
+      beatDownbeat += (wantDownbeat - beatDownbeat) * (1 - Math.exp(-dt / 0.32));
 
-      // Queue a delayed far-away propeller swell when a note lands cleanly (never an instant violent flash).
+      const queueSwell = (x: number, y: number, strength: number, delayMs: number) => {
+        pendingSwells.push({ due: now + delayMs, x, y, strength });
+        if (pendingSwells.length > 6) pendingSwells.shift();
+        lastSwellQueuedAt = now;
+      };
+
+      // Clean hits actively HEAL localized wounds and send responsive luminous swells across the lagoon.
       if (drive && drive.hitSerial !== lastHitSerial) {
         if (lastHitSerial >= 0 && drive.playing) {
-          const delayMs = 950 - 650 * bloom;
+          if (wounds.length) {
+            const target = wounds[0];
+            target.severity = Math.max(0, target.severity - 0.30);
+            const healed = target.severity <= 0.05;
+            healWave = { x: target.x, y: target.y, age: 0, strength: healed ? 1.0 : 0.68 };
+            if (healed) wounds.shift();
+            bloom = Math.min(1, bloom + (healed ? 0.04 : 0.02));
+          }
+          const delayMs = 180 - 130 * bloom;
           const angle = (++swellCounter * 2.39996) % (Math.PI * 2);
-          const dist = 0.52 - 0.22 * bloom; // arrives from farther out when cold, closer as you warm up
-          pendingSwells.push({
-            due: now + delayMs,
-            x: Math.cos(angle) * dist,
-            y: Math.sin(angle) * dist * 0.65,
-            strength: 0.24 + 0.76 * bloom,
-          });
-          if (pendingSwells.length > 6) pendingSwells.shift();
+          const dist = 0.46 - 0.18 * bloom;
+          queueSwell(Math.cos(angle) * dist, Math.sin(angle) * dist * 0.65, 0.36 + 0.74 * bloom, delayMs);
         }
         lastHitSerial = drive.hitSerial;
+      }
+      // Pitched guitar note attacks also ripple the water in Metronome, Free Play, and improvised phrases!
+      if (drive && drive.onsetSerial !== undefined && drive.onsetSerial !== lastOnsetSerial) {
+        if (lastOnsetSerial >= 0 && drive.playing && now - lastSwellQueuedAt > 110) {
+          const delayMs = 200 - 140 * bloom;
+          queueSwell(drive.noteX * 0.72, drive.noteY * 0.72, 0.32 + 0.68 * bloom, delayMs);
+        }
+        lastOnsetSerial = drive.onsetSerial;
       }
       while (pendingSwells.length && pendingSwells[0].due <= now) {
         const next = pendingSwells.shift()!;
@@ -850,19 +956,19 @@ export function AbyssalWater({ scene, suspended = false }: { scene: WaterScene; 
       }
       for (let i = activeSwells.length - 1; i >= 0; i--) {
         activeSwells[i].age += dt;
-        if (activeSwells[i].age > 6.5) activeSwells.splice(i, 1);
+        if (activeSwells[i].age > 6.0) activeSwells.splice(i, 1);
       }
 
       // Smoothly drift harmonic centre instead of snapping on every note.
-      const noteEase = 1 - Math.exp(-dtMs / 1600);
+      const noteEase = 1 - Math.exp(-dtMs / 950);
       if (drive) {
         smoothNoteX = lerp(smoothNoteX, drive.noteX, noteEase);
         smoothNoteY = lerp(smoothNoteY, drive.noteY, noteEase);
         smoothNoteHue = lerp(smoothNoteHue, drive.noteHue, noteEase);
       }
       const noteAge = drive ? Math.max(0, (now - drive.noteAt) / 1000) : 99;
-      const wantWarmth = !moving || !heard ? 0 : Math.exp(-noteAge / 2.6) * (0.2 + 0.8 * bloom);
-      smoothNoteWarmth += (wantWarmth - smoothNoteWarmth) * (1 - Math.exp(-dtMs / 700));
+      const wantWarmth = !moving || !heard ? 0 : Math.exp(-noteAge / 2.6) * (0.35 + 0.65 * bloom);
+      smoothNoteWarmth += (wantWarmth - smoothNoteWarmth) * (1 - Math.exp(-dtMs / 420));
 
       swellBuf.fill(0);
       for (let i = 0; i < 3 && i < activeSwells.length; i++) {
@@ -871,6 +977,14 @@ export function AbyssalWater({ scene, suspended = false }: { scene: WaterScene; 
         swellBuf[i * 4 + 1] = sw.y;
         swellBuf[i * 4 + 2] = sw.age;
         swellBuf[i * 4 + 3] = moving ? sw.strength : 0;
+      }
+      woundBuf.fill(0);
+      for (let i = 0; i < 4 && i < wounds.length; i++) {
+        const wd = wounds[i];
+        woundBuf[i * 4] = wd.x;
+        woundBuf[i * 4 + 1] = wd.y;
+        woundBuf[i * 4 + 2] = wd.radius;
+        woundBuf[i * 4 + 3] = wd.severity;
       }
 
       // Viscous spring-integrated pointer wake chain (zero jumps, silky drag)
@@ -925,12 +1039,16 @@ export function AbyssalWater({ scene, suspended = false }: { scene: WaterScene; 
       gpu.uniform1f(u.zone, zone);
       gpu.uniform1f(u.decay, smoothDecay);
       gpu.uniform1f(u.miss, moving ? missPulse : 0);
-      gpu.uniform1f(u.sway, moving && drive?.beatActive ? beatSway * bloom * bloom : 0);
+      gpu.uniform1f(u.sway, moving && drive?.beatActive ? beatSway * (0.26 + 0.74 * bloom) : 0);
       gpu.uniform1f(u.downbeat, beatDownbeat);
+      gpu.uniform1f(u.beatRingAge, beatRingAge);
+      gpu.uniform1f(u.beatRingPower, moving && drive?.beatActive ? beatRingPower : 0);
       gpu.uniform2f(u.notePos, smoothNoteX, smoothNoteY);
       gpu.uniform1f(u.noteWarmth, moving ? smoothNoteWarmth : 0);
       gpu.uniform1f(u.noteHue, smoothNoteHue);
       gpu.uniform4fv(u.swells, swellBuf);
+      gpu.uniform4fv(u.wounds, woundBuf);
+      gpu.uniform4f(u.healWave, healWave.x, healWave.y, healWave.age, moving ? healWave.strength : 0);
       gpu.drawArrays(gpu.TRIANGLES, 0, 6);
       painted = true;
 

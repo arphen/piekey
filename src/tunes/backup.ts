@@ -2,6 +2,8 @@ import { clearStorageError, getStoredItem, pendingStorageWrites, removeStoredIte
 import { loadCompleteLibraryAsync, loadLibraryAsync, parseTuneEntry, saveLibrary, withLibraryOperation, type TuneEntry } from "./library";
 import { recordLibraryChange, recordStorageChange } from "../sync/journal";
 import { syncableStorageKey, validAttemptConditions, validGoalData } from "../sync/model";
+import { CURRICULUM_KEY, validCurriculumConfig } from "../song/curriculum";
+import { CUSTOM_EXERCISES_KEY, validCustomExerciseBook } from "../song/customExercises";
 import { whilePracticeIdle } from "../platform/practiceWindow";
 
 const LIBRARY = "guitar-tunes-v2";
@@ -124,6 +126,16 @@ export function parseBackup(raw: string): PracticeBackup {
       let goals: unknown;
       try { goals = JSON.parse(entry); } catch { throw new Error("The musical goals in the backup are not readable."); }
       if (!validGoalData(goals)) throw new Error("The musical goals in the backup are invalid.");
+    }
+    if (key === CUSTOM_EXERCISES_KEY) {
+      let book: unknown;
+      try { book = JSON.parse(entry); } catch { throw new Error("The custom exercises in the backup are not readable."); }
+      if (!validCustomExerciseBook(book)) throw new Error("The custom exercises in the backup are invalid.");
+    }
+    if (key === CURRICULUM_KEY) {
+      let curriculum: unknown;
+      try { curriculum = JSON.parse(entry); } catch { throw new Error("The curriculum settings in the backup are not readable."); }
+      if (!validCurriculumConfig(curriculum)) throw new Error("The curriculum settings in the backup are invalid.");
     }
   }
   return { format: FORMAT, version: 1, createdAt: typeof backup.createdAt === "string" ? backup.createdAt : "", recordings: "excluded", tunes: backup.tunes, storage: portable };

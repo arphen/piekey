@@ -5,22 +5,22 @@
 export const GROOVE_ANCHORS = [0, 0.25, 0.5, 0.75, 1] as const;
 
 export const ANCHORS = {
-  drift: [0.014, 0.026, 0.048, 0.082, 0.12], // screen widths per minute: serene at rest, hypnotic in the zone
-  vorticity: [1.0, 2.5, 6.0, 12.5, 21], // confinement ε: velvet filaments, never violent turbulence
-  vortices: [1, 2, 3, 5, 8], // ambient vortices, Fibonacci count
-  orbit: [0.008, 0.018, 0.042, 0.082, 0.135], // slow marine inertia, rad/s
-  velocityHalfLife: [2.6, 3.6, 5.2, 7.2, 9.5], // s: long lingering wakes as the engine warms
-  flowPeriod: [24, 20, 15, 11, 8], // s for each flow phase before it restarts unseen
-  saturation: [0.76, 0.92, 1.14, 1.44, 1.78], // deep dark harbor at rest, vivid bioluminescence at peak
+  drift: [0.018, 0.042, 0.078, 0.125, 0.175], // screen widths per minute: serene at rest, sweeping hypnotic currents at peak
+  vorticity: [1.5, 5.5, 13.0, 24.0, 36.0], // confinement ε: velvet calm at rest, electric whirling filaments at peak
+  vortices: [1, 3, 5, 6, 8], // ambient vortices, rising smoothly into a rich dance
+  orbit: [0.012, 0.036, 0.085, 0.155, 0.23], // slow marine inertia at rest, living orbital dance at peak, rad/s
+  velocityHalfLife: [2.8, 4.0, 5.8, 8.0, 10.5], // s: long lingering wakes as the engine warms
+  flowPeriod: [22, 16, 11, 8, 5.5], // s for each flow phase before it restarts unseen
+  saturation: [0.78, 1.04, 1.32, 1.62, 1.95], // deep dark harbor at rest, electric bioluminescence at peak
   sepia: [0, 0, 0, 0, 0],
-  brightness: [0.28, 0.36, 0.48, 0.66, 0.88], // emerges out of abyssal water as you earn it
-  contrast: [1.54, 1.56, 1.60, 1.66, 1.72], // keeps water voids ink-black while algae ridges glow
-  spread: [0.32, 0.48, 0.72, 0.92, 1.0], // starts far off at the rim and slowly embraces the whole room
-  emission: [0, 0.025, 0.13, 0.44, 1.0], // non-linear: distant whisper early, transcendent glow at peak
-  bloom: [0, 0.01, 0.07, 0.32, 0.90], // radiant halo reserved for truly entering the zone
-  rippleHalfLife: [1.3, 1.6, 2.0, 2.5, 3.2], // long, slow propeller waves that glide across the pool
-  lava: [0, 0, 0.08, 0.42, 1.0], // warm backlit upwelling only when deep in flow
-  floaters: [3, 6, 13, 21, 34], // Fibonacci
+  brightness: [0.30, 0.44, 0.60, 0.78, 0.96], // emerges out of abyssal water as you earn it
+  contrast: [1.50, 1.54, 1.60, 1.68, 1.76], // keeps water voids ink-black while algae ridges shine
+  spread: [0.36, 0.60, 0.84, 0.96, 1.0], // starts at the rim and embraces the whole room as you connect
+  emission: [0, 0.08, 0.32, 0.68, 1.0], // calm dark rest -> alive mid-groove -> transcendent radiance at peak
+  bloom: [0, 0.05, 0.22, 0.56, 1.0], // radiant halo that blossoms into ecstatic glow in the zone
+  rippleHalfLife: [1.1, 1.5, 2.0, 2.6, 3.4], // lingering liquid waves that glide across the pool
+  lava: [0, 0, 0.24, 0.64, 1.0], // warm backlit lava-lamp upwelling rising from mid-groove onward
+  floaters: [3, 8, 16, 26, 34], // Fibonacci
 } as const satisfies Record<string, readonly number[]>;
 
 export type PoolParams = { -readonly [K in keyof typeof ANCHORS]: number };
@@ -75,17 +75,17 @@ export function decayTint(
   ];
 }
 
-/** Pure visual decay overlay on top of groove params: warms sepia and wilts glow without touching fluid motion. */
+/** Subtle global decay veil on top of groove params: mistakes primarily leave localized dying wounds rather than turning the whole pool brown or killing excitement. */
 export function applyDecay(params: PoolParams, decay: number): PoolParams {
   const d = unit(decay);
   if (d === 0) return { ...params };
   return {
     ...params,
-    sepia: unit(params.sepia + d * 0.68),
-    saturation: params.saturation * (1 - d * 0.26),
-    brightness: params.brightness * (1 - d * 0.14),
-    emission: params.emission * (1 - d * 0.48),
-    bloom: params.bloom * (1 - d * 0.55),
-    lava: params.lava * (1 - d * 0.45),
+    sepia: unit(params.sepia + d * 0.16),
+    saturation: params.saturation * (1 - d * 0.07),
+    brightness: params.brightness * (1 - d * 0.04),
+    emission: params.emission * (1 - d * 0.10),
+    bloom: params.bloom * (1 - d * 0.12),
+    lava: params.lava * (1 - d * 0.10),
   };
 }

@@ -134,7 +134,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 
 ## src
 
-- `src/App.tsx` — `App:132`
+- `src/App.tsx` — `App:136`
 - `src/__tests__/attacks.test.ts`
 - `src/__tests__/audio-scoring.test.ts`
 - `src/__tests__/audio-synth.test.ts`
@@ -142,6 +142,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/__tests__/campfire.test.ts`
 - `src/__tests__/coach-entry.test.tsx`
 - `src/__tests__/core.test.ts`
+- `src/__tests__/curriculum.test.ts`
 - `src/__tests__/dashboard.test.ts`
 - `src/__tests__/demos.test.ts`
 - `src/__tests__/ear.test.ts`
@@ -194,20 +195,22 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/audio/setup.ts` — `InputSetup:2`, `AudioSetup:7`, `currentInputSetup:14`, `currentAudioSetup:15`, `setInputSetup:16`, `setOutputSetup:17`, `sameInputSetup:18`, `sameAudioSetup:20`
 - `src/audio/usePlayer.ts` — `usePlayer:57`
 - `src/audio/useTakePlayback.ts` — `useTakePlayback:23`
-- `src/components/AbyssalWater.tsx` — `WaterScene:8`, `WaterDrive:19`, `publishWaterDrive:43`, `wakeWaterDrive:54`, `hasLiveAbyssalWater:59`, `useLiveAbyssalWater:69`, `AbyssalWater:476`
+- `src/components/AbyssalWater.tsx` — `WaterScene:8`, `WaterDrive:19`, `publishWaterDrive:44`, `wakeWaterDrive:55`, `hasLiveAbyssalWater:60`, `useLiveAbyssalWater:70`, `AbyssalWater:524`
 - `src/components/Calibrate.tsx` — `Calibrate:34`
 - `src/components/CampfireView.tsx` — `CampfireView:21`
 - `src/components/ChordBox.tsx` — `ChordBox:15`
+- `src/components/CurriculumView.tsx` — `CurriculumViewProps:51`, `CurriculumView:60`
 - `src/components/DeviceSync.tsx` — `DeviceSync:13`
 - `src/components/DeviceSyncPanel.tsx` — `DeviceSyncPanel:15`
 - `src/components/Ear.tsx` — `Ear:9`
 - `src/components/EarHub.tsx` — `EarHub:11`
 - `src/components/EarView.tsx` — `EarView:25`
+- `src/components/ExerciseRecorder.tsx` — `ExerciseRecorderProps:119`, `ExerciseRecorder:127`
 - `src/components/FocusView.tsx` — `FocusView:30`
 - `src/components/FreePlay.tsx` — `FreePlay:108`
 - `src/components/FreePlayView.tsx` — `FreePlayView:16`
-- `src/components/Fretboard.tsx` — `LabelMode:4`, `FretGhost:7`, `FretPulse:15`, `Fretboard:102`
-- `src/components/Glyph.tsx` — `UtilityGlyphName:4`, `Glyph:76`
+- `src/components/Fretboard.tsx` — `LabelMode:4`, `FretGhost:7`, `FretPulse:15`, `Fretboard:103`
+- `src/components/Glyph.tsx` — `UtilityGlyphName:4`, `Glyph:78`
 - `src/components/GoalChooser.tsx` — `GoalChooser:9`
 - `src/components/GuitarNav.tsx` — `GuitarNav:17`
 - `src/components/GuitarPad.tsx` — `PAD_NOTES:23`, `SUMMON_HINT:99`, `SummonVisual:102`, `useSummon:118`, `toneKeysFor:189`, `drawerToneKeys:201`, `useToneKeys:218`, `noteName:269`, `useNoteKeys:276`, `NoteTag:334`, `ToneTag:344`, `PadRow:354`, `GuitarPad:360`
@@ -216,23 +219,23 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/components/LeadSheet.tsx` — `LeadSheet:35`, `ChordSymbol:210`
 - `src/components/LearnView.tsx` — `LearnView:34`
 - `src/components/LibraryGrid.tsx` — `LibraryGrid:21`
-- `src/components/OverviewView.tsx` — `OverviewView:73`
+- `src/components/OverviewView.tsx` — `OverviewView:75`
 - `src/components/PassiveTree.tsx` — `TreeView:9`, `NodeSkinProps:16`, `NodeSkin:25`, `TreeSkins:32`, `stagePoint:39`, `progressClasses:44`, `PassiveTree:49`
-- `src/components/PracticeAtmosphere.tsx` — `PracticeAtmosphere:14`, `BeatPulse:184`
+- `src/components/PracticeAtmosphere.tsx` — `PracticeAtmosphere:15`, `BeatPulse:188`
 - `src/components/PracticeBriefPanel.tsx` — `PracticeBriefPanel:6`
 - `src/components/PracticeHistory.tsx` — `PracticeHistory:59`
-- `src/components/PracticeRoom.tsx` — `RoomLaunch:19`, `sessionLead:26`, `PracticeRoom:36`
+- `src/components/PracticeRoom.tsx` — `RoomLaunch:21`, `sessionLead:28`, `PracticeRoom:41`
 - `src/components/ProgressView.tsx` — `ProgressView:598`
 - `src/components/RecordingStatus.tsx` — `RecordingStatus:13`, `downloadTake:21`, `RecordingRecovery:32`
 - `src/components/RenderedWater.tsx` — `RenderedWaterProps:207`, `RenderedWater:241`
 - `src/components/SaveNotice.tsx` — `SaveNotice:7`
 - `src/components/ScalesView.tsx` — `ScalesView:12`
-- `src/components/Score.tsx` — `drawChord:98`, `Score:212`
+- `src/components/Score.tsx` — `drawChord:99`, `Score:213`
 - `src/components/ScoreFlow.tsx` — `ScoreFlow:341`
 - `src/components/SessionSummary.tsx` — `SessionSummary:87`
 - `src/components/ShapesView.tsx` — `ShapesView:16`
 - `src/components/SkillTree.tsx` — `SkillTree:18`
-- `src/components/SongCoach.tsx` — `RoomSurface:97`, `RoomRequest:99`, `RoomHandle:104`, `openPractice:258`, `SongCoach:328`, `SongCoachRoom:336`
+- `src/components/SongCoach.tsx` — `RoomSurface:99`, `RoomRequest:101`, `RoomHandle:106`, `openPractice:260`, `SongCoach:330`, `SongCoachRoom:338`
 - `src/components/SongMap.tsx` — `SongMap:138`
 - `src/components/Transport.tsx` — `Transport:18`
 - `src/components/TriadWheel.tsx` — `TriadWheel:48`
@@ -291,10 +294,10 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/platform/platform.css`
 - `src/platform/practiceWindow.ts` — `PRACTICE_LOCK:5`, `PracticeWindowState:8`, `PracticeWindowSnapshot:9`, `PracticeWindowOptions:15`, `getLocalPracticeActive:29`, `subscribeLocalPractice:30`, `keepPracticeWrite:40`, `settlePracticeWrites:45`, `subscribePracticeRecovery:52`, `createPracticeWindow:65`, `practiceMessenger:183`, `whilePracticeIdle:203`
 - `src/pool/PoolRoom.tsx` — `PoolRoom:16`, `usePoolPublisher:52`, `usePoolCalm:66`, `usePoolEmit:72`
-- `src/pool/bus.ts` — `PoolAnchor:8`, `PoolEvent:9`, `PublisherProps:15`, `Publisher:16`, `PoolSink:18`, `PoolBus:23`
+- `src/pool/bus.ts` — `PoolAnchor:8`, `PoolEvent:9`, `PublisherProps:16`, `Publisher:17`, `PoolSink:19`, `PoolBus:24`
 - `src/pool/engine/gl.ts` — `Program:3`, `Target:5`, `Pair:12`, `Format:14`, `formats:16`, `compile:28`, `target:67`, `pair:85`, `complete:91`, `release:96`, `releasePair:102`, `image:109`
-- `src/pool/engine/renderer.ts` — `Tier:9`, `TIERS:10`, `Vec2:17`, `Vec3:18`, `Stone:19`, `Flash:20`, `Vortex:21`, `Swirl:22`, `Emitter:23`, `Ring:24`, `PoolRect:25`, `ROCK:26`, `CALM:27`, `GLASS:28`, `FrameState:31`, `PHOTO_SCALE:59` (+1 more)
-- `src/pool/engine/shaders.ts` — `VERTEX:14`, `CURL:58`, `FORCES:71`, `DIVERGENCE:131`, `PRESSURE:144`, `GRADIENT:160`, `ADVECT:176`, `HEAT:189`, `MARBLE:214`, `WAVES:228`, `DYE:255`, `PARTICLES:279`, `FLOATER_VERTEX:302`, `FLOATER_FRAGMENT:332`, `BRIGHT:575`, `BLUR:583` (+2 more)
+- `src/pool/engine/renderer.ts` — `Tier:9`, `TIERS:10`, `Vec2:17`, `Vec3:18`, `Stone:19`, `Flash:20`, `Vortex:21`, `Swirl:22`, `Emitter:23`, `Ring:24`, `Wound:25`, `Heal:26`, `PoolRect:27`, `ROCK:28`, `CALM:29`, `GLASS:30` (+3 more)
+- `src/pool/engine/shaders.ts` — `VERTEX:14`, `CURL:58`, `FORCES:71`, `DIVERGENCE:131`, `PRESSURE:144`, `GRADIENT:160`, `ADVECT:176`, `HEAT:189`, `MARBLE:214`, `WAVES:228`, `DYE:255`, `PARTICLES:279`, `FLOATER_VERTEX:302`, `FLOATER_FRAGMENT:332`, `BRIGHT:614`, `BLUR:622` (+2 more)
 - `src/pool/golden.ts` — `PHI:3`, `GOLDEN_ANGLE:4`, `FIBONACCI:5`, `PHRASE_WRAP:6`, `phyllotaxis:11`, `spiral:19`, `goldenSpread:26`, `wander:29`, `mulberry32:36`
 - `src/pool/groove.ts` — `GrooveFrame:11`, `GrooveContext:12`, `GrooveOnset:17`, `GrooveState:19`, `createGroove:62`
 - `src/pool/host.ts` — `createHost:51`, `PoolHost:55`
@@ -311,6 +314,9 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/song/atmosphere.css`
 - `src/song/coach-flow.css`
 - `src/song/cues.ts` — `padChord:29`, `bassHint:41`, `hintNote:47`, `tickIn:53`, `chime:63`, `glint:74`, `lift:80`, `interlude:89`, `hush:113`, `say:119`
+- `src/song/curriculum.css`
+- `src/song/curriculum.ts` — `CURRICULUM_KEY:16`, `CURRICULUM_STUDY_ID:17`, `CurriculumConfig:19`, `EMPTY_CURRICULUM:29`, `validCurriculumConfig:40`, `loadCurriculum:75`, `saveCurriculum:79`, `subscribeCurriculum:83`, `useCurriculum:88`, `addCurriculumCustom:92`, `removeCurriculumCustom:97`, `toggleCurriculumCustom:102`, `toggleCurriculumScale:108`, `addCurriculumScale:114`, `toggleCurriculumFoundation:119`, `isCurriculumStudyId:125` (+8 more)
+- `src/song/customExercises.ts` — `CUSTOM_EXERCISES_KEY:18`, `MAX_CUSTOM_EXERCISES:19`, `MAX_CUSTOM_NOTES:20`, `CustomFamily:22`, `CustomMeter:23`, `CaptureGrid:24`, `CustomNote:26`, `CustomExercise:36`, `CustomExerciseBook:55`, `EMPTY_CUSTOM_BOOK:60`, `HUB_OPTIONS:72`, `SHAPE_TAGS:83`, `DURATION_CHOICES:85`, `isCustomExerciseId:96`, `newCustomExerciseId:100`, `scaleForHub:107` (+22 more)
 - `src/song/deck.ts` — `Family:30`, `Kind:31`, `Rhythm:32`, `Context:34`, `Card:41`, `Deck:90`, `FAMILY_LABEL:97`, `KIND_LABEL:98`, `buildDeck:331`, `rhythmSourceId:1318`, `rhythmStudy:1324`, `noteName:1393`, `mixDecks:1404`, `findCard:1433`, `Focus:1439`, `FOCUS_FAMILIES:1440` (+3 more)
 - `src/song/ear.ts` — `EarTier:8`, `EAR_TIERS:16`, `scaleNotes:24`, `earPhrase:36`, `echoOfTune:89`
 - `src/song/estimator.ts` — `Estimator:6`, `createEstimator:20`
@@ -328,7 +334,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/song/kin.ts` — `ScaleTopic:9`, `parseScaleId:19`, `kinship:33`
 - `src/song/leitner.ts` — `Result:18`, `CardState:20`, `LoopMode:32`, `Settings:34`, `AttemptConditions:47`, `Attempt:58`, `SessionEntry:76`, `Store:85`, `BOX_DAYS:95`, `BOXES:96`, `loadSharedSkills:124`, `loadStore:146`, `saveStore:165`, `loadStores:187`, `chronologicalAttempts:204`, `saveStores:217` (+17 more)
 - `src/song/lines.ts` — `LineNote:10`, `Span:16`, `ScaleDrill:22`, `scaleLine:42`, `Bounds:66`, `boundedLine:81`, `arpLine:124`, `guideLine:137`, `chainLine:167`
-- `src/song/notation.ts` — `KEY_FIFTHS:8`, `signatureOf:21`, `lineSheet:48`, `signatureFor:104`, `playedSheet:110`
+- `src/song/notation.ts` — `KEY_FIFTHS:8`, `signatureOf:21`, `lineSheet:48`, `signatureFor:105`, `playedSheet:111`
 - `src/song/noteBoxes.ts` — `NoteBox:1`, `registerNoteBoxes:11`, `readNoteBoxes:16`
 - `src/song/notekeys.ts` — `OPEN_STRINGS:10`, `SUMMON_NOTE:13`, `KEY_HOMES:19`, `usedMidis:28`, `commandMidis:49`, `assignNoteKeys:75`, `spotOf:93`
 - `src/song/planner.ts` — `Length:16`, `LENGTHS:17`, `LENGTH_MINUTES:18`, `Role:20`, `ROLE_LABEL:21`, `Block:29`, `Arc:35`, `SessionPlan:41`, `cardSeconds:97`, `nextArc:117`, `loadArc:127`, `saveArc:135`, `newCards:149`, `PlanOptions:160`, `planBlocks:169`
@@ -349,7 +355,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/song/spot.ts` — `Spot:11`, `Trouble:26`, `spotOf:35`, `createTrouble:47`, `spotCard:98`, `fingerFor:116`
 - `src/song/staffShadow.ts` — `StaffShadowInfo:16`, `foldNearTarget:41`, `writtenStaffPos:49`, `analyzeWrongNote:61`, `mistakeDeltaText:99`
 - `src/song/startPhrase.ts` — `START_PHRASE_LENGTH:9`, `StartPhraseState:15`, `StartPhraseTracker:21`, `createStartPhrase:26`
-- `src/song/stats.ts` — `familyOf:9`, `attemptsOf:20`, `CardTrend:24`, `cardTrend:32`, `SessionPoint:48`, `sessionTrend:52`, `totals:56`, `meanShare:68`
+- `src/song/stats.ts` — `familyOf:9`, `attemptsOf:23`, `CardTrend:27`, `cardTrend:35`, `SessionPoint:51`, `sessionTrend:55`, `totals:59`, `meanShare:71`
 - `src/song/support.ts` — `Support:25`, `SupportOptions:36`, `createSupport:41`
 - `src/song/technique.ts` — `SpiderPattern:12`, `SkipPattern:13`, `TechniqueKind:14`, `FoundationGroup:16`, `FOUNDATION_GROUPS:18`, `TechniqueNote:25`, `TechniqueMeta:33`, `TECHNIQUE_TRACKS:54`, `spiderLine:186`, `skipLine:203`, `foundationKey:237`, `cadenceChords:245`, `cadenceRomans:252`, `pyramidLine:272`, `shiftLine:294`, `enclosureLine:322` (+2 more)
 - `src/song/theme.ts` — `THEME_MIN_NOTES:4`, `THEME_MAX_NOTES:5`, `THEME_MAX_TUNES:6`, `ThemeSource:8`, `OpeningTheme:14`, `ThemeCatalog:20`, `ThemeCandidate:25`, `buildThemeCatalog:34`, `rankThemeMatches:56`, `ThemeCapture:72`, `initThemeCapture:84`, `stepThemeCapture:92`
@@ -369,8 +375,8 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/sync/devices.ts` — `RememberedDevice:3`, `DevicePreferences:4`, `loadDevicePreferences:7`, `saveDevicePreferences:20`
 - `src/sync/exchange.ts` — `RecordingDescriptor:12`, `ExchangeProgress:25`, `ExchangeResult:26`, `parseRecordingManifest:36`, `recordingHash:57`, `exchangeState:96`, `createTransferFile:155`, `importTransferFile:168`
 - `src/sync/journal.ts` — `SyncTransaction:4`, `syncableStorageKey:5`, `SyncState:17`, `getSyncState:27`, `subscribeSyncState:28`, `recordStorageChange:169`, `recordLibraryChange:175`, `recordLibraryRemoval:190`, `bootstrapStorage:195`, `bootstrapLibrary:198`, `withSyncSuppressed:202`, `flushSyncJournal:212`, `readSyncJournal:218`, `PracticeTransactionRead:237`, `readPracticeTransactions:242`, `importSyncTransactions:272`
-- `src/sync/merge.ts` — `Projection:280`, `projectTransactions:283`
-- `src/sync/model.ts` — `SyncTransaction:5`, `SyncSnapshot:23`, `SyncConflict:31`, `MergeResult:38`, `syncableStorageKey:48`, `isRecord:52`, `canonical:57`, `parseValue:63`, `validTune:68`, `validAttemptConditions:87`, `validGoalData:164`, `parseSyncSnapshot:216`, `addedRows:248`, `compactValues:260`, `unionTransactions:291`
+- `src/sync/merge.ts` — `Projection:281`, `projectTransactions:284`
+- `src/sync/model.ts` — `SyncTransaction:7`, `SyncSnapshot:25`, `SyncConflict:33`, `MergeResult:40`, `syncableStorageKey:50`, `isRecord:54`, `canonical:59`, `parseValue:65`, `validTune:70`, `validAttemptConditions:89`, `validGoalData:166`, `parseSyncSnapshot:220`, `addedRows:252`, `compactValues:264`, `unionTransactions:295`
 - `src/sync/state.ts` — `MergeResult:7`, `SyncConflict:7`, `SyncSnapshot:7`, `SyncTransaction:7`, `parseSyncSnapshot:8`, `flushSyncJournal:9`, `getSyncState:9`, `subscribeSyncState:9`, `initializeSyncJournal:15`, `captureSnapshot:29`, `mergeSnapshot:94`
 - `src/sync/sync.css`
 - `src/sync/transport.ts` — `PairedDevice:3`, `PairInvite:10`, `SyncConnection:18`, `SyncTransportOptions:29`, `SyncTransport:42`, `syncNetworkConfig:51`, `encodePairInvite:149`, `decodePairInvite:153`, `createSyncTransport:458`
@@ -387,7 +393,7 @@ local secrets never appear. `--check` exits 1 when the committed map is stale.
 - `src/triads/triads.ts` — `Quality:14`, `Mode:15`, `Ask:16`, `Inversion:17`, `TriadKey:19`, `TRIAD_KEYS:29`, `MINOR_KEYS:35`, `RINGS:40`, `FIGURE:47`, `LAYERS:50`, `Triad:59`, `TriadCard:67`, `Choice:78`, `pcOf:89`, `invert:105`, `degreeTriad:114` (+15 more)
 - `src/triads/useTriads.ts` — `PLAY_BOX:26`, `TriadAnswer:29`, `useTriads:38`
 - `src/tunes/agentPrompt.ts` — `MUSICXML_AGENT_PROMPT:2`
-- `src/tunes/backup.ts` — `PracticeBackup:10`, `createBackup:80`, `parseBackup:96`, `restoreBackup:133`
+- `src/tunes/backup.ts` — `PracticeBackup:12`, `createBackup:82`, `parseBackup:98`, `restoreBackup:145`
 - `src/tunes/campfire.css`
 - `src/tunes/campfire.ts` — `CampfireBar:7`, `CampfireSection:16`, `CampfireChord:22`, `CampfireSheet:27`, `transposeKey:49`, `transposeChord:62`, `buildCampfireSheet:78`
 - `src/tunes/catalog.ts` — `LibraryFilter:8`, `LibrarySort:9`, `CatalogSong:11`, `buildCatalog:45`, `filterCatalog:84`

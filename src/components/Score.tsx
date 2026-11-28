@@ -29,6 +29,7 @@ interface ScoreProps {
   showFingering: boolean;
   autoScroll?: boolean; // keep the active note in view (long tunes)
   onBarClick?: (bar: number, extend: boolean) => void;
+  onNoteClick?: (noteIndex: number) => void; // index among non-rest notes
   marked?: { start: number; end: number } | null; // printed bars to highlight, e.g. a loop
   playingBar?: number; // printed bar under the playhead
   focusBars?: number[] | null; // notes outside these bars fade back
@@ -217,6 +218,7 @@ export const Score = memo(function Score({
   showFingering,
   autoScroll = false,
   onBarClick,
+  onNoteClick,
   marked = null,
   playingBar = -1,
   focusBars = null,
@@ -803,6 +805,30 @@ export const Score = memo(function Score({
   }, [activeStep, autoScroll]);
 
   const onClick = (e: React.MouseEvent) => {
+    if (onNoteClick && noteBoxes.current.length && hostRef.current) {
+      const hostRect = hostRef.current.getBoundingClientRect();
+      const scale = svgScale.current || 1;
+      const sx = (e.clientX - hostRect.left) / scale;
+      const sy = (e.clientY - hostRect.top) / scale;
+      let best = -1;
+      let bestDist = Infinity;
+      for (let i = 0; i < noteBoxes.current.length; i++) {
+        const box = noteBoxes.current[i];
+        const span = noteSpans.current[i];
+        if (span && (sy < span.top - 16 || sy > span.top + span.height + 24)) continue;
+        const dx = Math.abs(sx - (box.x + box.w / 2));
+        const dy = Math.abs(sy - (box.y + box.h / 2));
+        const d = dx + dy * 0.35;
+        if (dx <= 26 && d < bestDist) {
+          bestDist = d;
+          best = i;
+        }
+      }
+      if (best >= 0) {
+        onNoteClick(best);
+        return;
+      }
+    }
     if (!onBarClick) return;
     const hit = barEls.current.find((r) => {
       const b = r.getBoundingClientRect();
@@ -813,7 +839,7 @@ export const Score = memo(function Score({
 
   return (
     <div
-      className={`score ${onBarClick ? "is-clickable" : ""}`}
+      className={`score ${onBarClick || onNoteClick ? "is-clickable" : ""}`}
       ref={wrapRef}
       aria-label="sight reading score"
       onClick={onClick}

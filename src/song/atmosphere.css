@@ -24,11 +24,11 @@
 .pa-dawn {
   inset: -12%;
   background:
-    radial-gradient(ellipse at 14% 78%, rgba(28, 124, 154, 0.22), transparent 50%),
-    radial-gradient(ellipse at 82% 20%, rgba(56, 232, 198, 0.16), transparent 50%),
-    radial-gradient(ellipse at 74% 88%, rgba(42, 168, 96, 0.18), transparent 52%);
-  opacity: calc((var(--bloom) * 0.55 + var(--hit) * 0.28) * (1 - var(--decay) * 0.35));
-  transform: translate(var(--drift-x), var(--drift-y)) scale(calc(1 + var(--breath) * 0.03));
+    radial-gradient(ellipse at 14% 78%, rgba(28, 124, 154, 0.26), transparent 50%),
+    radial-gradient(ellipse at 82% 20%, rgba(56, 232, 198, 0.22), transparent 50%),
+    radial-gradient(ellipse at 74% 88%, rgba(42, 196, 108, 0.24), transparent 52%);
+  opacity: calc((var(--bloom) * 0.68 + var(--hit) * 0.32) * (1 - var(--decay) * 0.12));
+  transform: translate(var(--drift-x), var(--drift-y)) scale(calc(1 + var(--breath) * 0.04));
 }
 
 .pa-water {
@@ -40,26 +40,24 @@
   inset: -12%;
   background: url("../assets/pond-neon.webp") center 48% / cover no-repeat;
   filter:
-    saturate(calc(1.75 - var(--decay) * 0.65))
-    contrast(1.42)
-    brightness(calc(0.86 - var(--decay) * 0.14))
-    hue-rotate(calc(14deg - var(--decay) * 48deg))
-    sepia(calc(var(--decay) * 0.42 + var(--miss) * 0.14)); /* bioluminescent emerald-cyan algae wilting toward warm olive-ochre on decay */
-  opacity: calc((var(--bloom) * 0.48 + var(--hit) * 0.22) * (1 - var(--decay) * 0.28));
+    saturate(calc(1.90 - var(--decay) * 0.16))
+    contrast(1.44)
+    brightness(calc(0.94 - var(--decay) * 0.05))
+    hue-rotate(calc(14deg - var(--decay) * 12deg))
+    sepia(calc(var(--decay) * 0.10)); /* stays vivid emerald-cyan; localized spots carry decay instead of browning the whole room */
+  opacity: calc((var(--bloom) * 0.62 + var(--hit) * 0.26) * (1 - var(--decay) * 0.10));
   mix-blend-mode: screen;
-  mask-image: radial-gradient(ellipse at 54% 52%, rgba(0, 0, 0, 0.28) 12%, rgba(0, 0, 0, 0.84) 60%, #000 100%);
-  transform: translate(calc(var(--drift-y) * -1), var(--drift-x)) scale(calc(1.08 + var(--hit) * 0.03));
+  mask-image: radial-gradient(ellipse at 54% 52%, rgba(0, 0, 0, 0.30) 12%, rgba(0, 0, 0, 0.88) 58%, #000 100%);
+  transform: translate(calc(var(--drift-y) * -1), var(--drift-x)) scale(calc(1.08 + var(--hit) * 0.04));
 }
 
-/* Yellowing amber to warm umber-brown decay layer: blooms softly along the rim, preserving center readability. */
+/* Localized wilted rust-amber spots on mistakes rather than a full-room brown wash. */
 .pa-decay {
   inset: -12%;
   background:
-    radial-gradient(ellipse at 18% 24%, rgba(184, 137, 46, 0.24), transparent 54%),
-    radial-gradient(ellipse at 82% 76%, rgba(143, 91, 34, 0.26), transparent 56%),
-    radial-gradient(ellipse at 52% 92%, rgba(92, 51, 24, 0.30), transparent 58%);
-  opacity: clamp(0, calc(var(--decay) * 0.58 + var(--miss) * 0.26), 0.72);
-  mask-image: radial-gradient(ellipse at 50% 48%, rgba(0, 0, 0, 0.16) 14%, rgba(0, 0, 0, 0.78) 62%, #000 100%);
+    radial-gradient(circle at 18% 24%, rgba(168, 104, 34, 0.32), transparent 22%),
+    radial-gradient(circle at 82% 76%, rgba(128, 72, 24, 0.30), transparent 24%);
+  opacity: clamp(0, calc(var(--decay) * 0.52 + var(--miss) * 0.24), 0.62);
   transform: translate(calc(var(--drift-x) * -0.6), calc(var(--drift-y) * -0.6));
 }
 
@@ -94,19 +92,19 @@
    compositor, and the page would be sorted into layers again on every frame of every beat */
 .pa-beat-resonance > b {
   position: absolute; inset: 0;
-  background: radial-gradient(ellipse at 50% 112%, color-mix(in srgb, var(--beat-wash) 11%, transparent), transparent 68%);
-  box-shadow: inset 0 0 12vmin 0.5vmin color-mix(in srgb, var(--beat-ink) 9%, transparent);
+  background: radial-gradient(ellipse at 50% 110%, color-mix(in srgb, var(--beat-wash) 16%, transparent), transparent 68%);
+  box-shadow: inset 0 0 14vmin 0.6vmin color-mix(in srgb, var(--beat-ink) 13%, transparent);
   will-change: opacity;
   animation: room-resonance var(--beat-decay) cubic-bezier(.2, .7, .3, 1) both;
 }
 .pa-beat-resonance.is-downbeat > b {
-  background: radial-gradient(ellipse at 50% 108%, color-mix(in srgb, var(--beat-wash) 16%, transparent), transparent 74%);
-  box-shadow: inset 0 0 14vmin 1vmin color-mix(in srgb, var(--beat-ink) 14%, transparent);
+  background: radial-gradient(ellipse at 50% 106%, color-mix(in srgb, var(--beat-wash) 24%, transparent), transparent 76%);
+  box-shadow: inset 0 0 18vmin 1.2vmin color-mix(in srgb, var(--beat-ink) 20%, transparent);
 }
-.pa-beat-resonance > i { position: absolute; width: 130%; height: 80%; left: -15%; bottom: -74%; border: 1px solid color-mix(in srgb, var(--beat-ink) 22%, transparent); border-radius: 50%; animation: room-ripple var(--beat-decay) ease-out both; }
-.pa-beat-resonance > i + i { width: 160%; left: -30%; bottom: -76%; opacity: .35; }
-@keyframes room-resonance { from { opacity: .45; } to { opacity: 0; } }
-@keyframes room-ripple { from { transform: translateY(0) scale(.97); opacity: .36; } to { transform: translateY(-5%) scale(1.06); opacity: 0; } }
+.pa-beat-resonance > i { position: absolute; width: 130%; height: 80%; left: -15%; bottom: -74%; border: 1px solid color-mix(in srgb, var(--beat-ink) 32%, transparent); border-radius: 50%; animation: room-ripple var(--beat-decay) ease-out both; }
+.pa-beat-resonance > i + i { width: 160%; left: -30%; bottom: -76%; opacity: .45; }
+@keyframes room-resonance { from { opacity: .62; } to { opacity: 0; } }
+@keyframes room-ripple { from { transform: translateY(0) scale(.97); opacity: .50; } to { transform: translateY(-5%) scale(1.06); opacity: 0; } }
 
 /* A clocked instrument: engraved index, weighted sweep, one resonance for each heard tick. */
 .beat-pulse { --pulse-ink: #8ce4d0; --pulse-accent: #e4c16a; display: grid; justify-items: center; gap: 14px; color: var(--ink, #e9f6f2); font-variant-numeric: tabular-nums; }

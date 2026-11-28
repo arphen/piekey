@@ -5,8 +5,8 @@
 
 export const GLUE = "::";
 
-/** Scale and foundational technique exercises are the same skill whatever tune asks for them. */
-export const isShared = (id: string) => id.startsWith("scale:") || id.startsWith("tech:");
+/** Scale, foundational technique, and custom recorded exercises belong to the player across tunes. */
+export const isShared = (id: string) => id.startsWith("scale:") || id.startsWith("tech:") || id.startsWith("custom:");
 
 export const glue = (tuneId: string, id: string) => (isShared(id) ? id : `${tuneId}${GLUE}${id}`);
 

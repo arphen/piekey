@@ -225,7 +225,8 @@ export function planBlocks(deck: Deck, store: Store, day: string, opts: PlanOpti
     .map((kind) => deck.cards.find((c) => c.tuneId === opts.tuneId && c.step?.kind === kind))
     .find(Boolean);
   const hasOwnSide = deck.cards.some((c) => c.family !== "melody" && c.family !== "scales" && c.family !== "technique" && known(c.id));
-  const learningOpening = !goal && !hasOwnSide && Boolean(openingCard && !excluded(openingCard.id) && (store.cards[openingCard.id]?.box ?? 0) < 2);
+  const hasCustomCurriculum = deck.cards.some((c) => c.id.startsWith("custom:") && !used.has(c.id) && !excluded(c.id));
+  const learningOpening = !goal && !hasOwnSide && !hasCustomCurriculum && Boolean(openingCard && !excluded(openingCard.id) && (store.cards[openingCard.id]?.box ?? 0) < 2);
   if (learningOpening) {
     const ownMelodies = deck.intro.filter((id) => {
       const c = byId.get(id);

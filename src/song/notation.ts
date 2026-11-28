@@ -97,7 +97,8 @@ export function lineSheet(card: Card, keySignature: string): Pick<ReadingExercis
     notes.push(...rests(at, end));
     bars.push({ barIndex: s - card.from, chordSymbols, chordBeats, notes, beats: slot.beats });
   }
-  return { bars, keySignature, timeSignature: "4/4" };
+  const barBeats = card.tl.slots[card.from]?.beats ?? 4;
+  return { bars, keySignature, timeSignature: barBeats === 3 ? "3/4" : "4/4" };
 }
 
 /** "Bb", "F#m": the key signature a scale is written in ("C" when it has none of its own). */

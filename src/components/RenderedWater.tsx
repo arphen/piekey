@@ -207,7 +207,7 @@ void main() {
 export interface RenderedWaterProps {
   playing: boolean;
   warmth: number;
-  flow: number;
+  flow?: number;
   hitSerial?: number;
   beat?: BeatSignal;
   level: MutableRefObject<{ level: number; heard: number; played: number; noteX?: number; noteY?: number; noteHue?: number; noteAt?: number; wake?: () => void }>;
@@ -366,23 +366,23 @@ export function RenderedWater({ playing, warmth, flow, hitSerial = 0, beat, leve
 
       if (s.beat?.active && s.beat.serial !== serial) {
         serial = s.beat.serial;
-        beatTarget = Math.max(beatTarget, s.beat.index === 0 ? 0.85 : 0.42);
+        beatTarget = Math.max(beatTarget, s.beat.counting ? 0.42 : s.beat.index === 0 ? 1.0 : 0.58);
       }
-      beatTarget *= Math.exp(-dt / 0.95);
-      beatSway += (beatTarget - beatSway) * (1 - Math.exp(-dt / 0.55));
-      beatDownbeat += ((s.beat?.active && s.beat.index === 0 ? 1 : 0) - beatDownbeat) * (1 - Math.exp(-dt / 0.45));
+      beatTarget *= Math.exp(-dt / 0.72);
+      beatSway += (beatTarget - beatSway) * (1 - Math.exp(-dt / 0.24));
+      beatDownbeat += ((s.beat?.active && s.beat.index === 0 ? 1 : 0) - beatDownbeat) * (1 - Math.exp(-dt / 0.32));
 
-      // Queue a delayed far-away swell when a note lands cleanly (never an instant violent flash).
+      // Queue a responsive luminous swell when a note lands cleanly.
       if (s.hitSerial !== lastHitSerial) {
         lastHitSerial = s.hitSerial;
-        const delayMs = 950 - 650 * bloom;
+        const delayMs = 180 - 130 * bloom;
         const angle = (++swellCounter * 2.39996) % (Math.PI * 2);
-        const dist = 0.52 - 0.22 * bloom; // arrives from farther out when cold, closer as you warm up
+        const dist = 0.46 - 0.18 * bloom;
         pendingSwells.push({
           due: now + delayMs,
           x: Math.cos(angle) * dist,
           y: Math.sin(angle) * dist * 0.65,
-          strength: 0.24 + 0.76 * bloom,
+          strength: 0.36 + 0.74 * bloom,
         });
         if (pendingSwells.length > 6) pendingSwells.shift();
       }
@@ -405,18 +405,17 @@ export function RenderedWater({ playing, warmth, flow, hitSerial = 0, beat, leve
         changedSize = false;
       }
 
-      // Heavy old-engine flywheel: spins up slowly with sustained clean playing, ebbs gracefully on silence or mistakes.
+      // Dynamic marine flywheel: calm start, soaring bloom in the zone.
       const heard = s.playing && now - level.current.heard < 2200;
-      if (heard) engineMs = Math.min(45000, engineMs + dtMs);
-      else engineMs = Math.max(0, engineMs - dtMs * 0.28);
+      if (heard) engineMs = Math.min(30000, engineMs + dtMs);
+      else engineMs = Math.max(0, engineMs - dtMs * 0.25);
 
-      smoothEnergy += ((heard ? level.current.level : 0) - smoothEnergy) * (1 - Math.exp(-dtMs / 1200));
-      const spunUp = Math.pow(unit(engineMs / 36000), 1.65); // convex: whisper-quiet first 6s, strong after 30-36s
-      const quality = 0.28 + 0.72 * unit((s.flow - 0.35) / 0.58);
+      smoothEnergy += ((heard ? level.current.level : 0) - smoothEnergy) * (1 - Math.exp(-dtMs / 550));
+      const spunUp = Math.pow(unit(engineMs / 22000), 1.18);
+      const quality = s.flow === undefined ? 1 : 0.52 + 0.48 * unit((s.flow - 0.25) / 0.65);
       const targetBloom = heard ? unit(spunUp * quality) : 0;
-      bloom += (targetBloom - bloom) * (1 - Math.exp(-dtMs / (targetBloom > bloom ? 6800 : 11500)));
-      // Transcendent algae embrace opens non-linearly only in the upper zone.
-      const zone = Math.pow(unit(bloom), 2.15);
+      bloom += (targetBloom - bloom) * (1 - Math.exp(-dtMs / (targetBloom > bloom ? 3400 : 11500)));
+      const zone = Math.pow(unit(bloom), 1.55);
 
       let morphAmount = 0;
       if (moving && hasTexA) {
@@ -480,7 +479,7 @@ export function RenderedWater({ playing, warmth, flow, hitSerial = 0, beat, leve
       gpu.uniform1f(u.energy, motion?.matches ? 0 : smoothEnergy);
       gpu.uniform1f(u.bloom, bloom);
       gpu.uniform1f(u.zone, zone);
-      gpu.uniform1f(u.sway, motion?.matches || !s.beat?.active ? 0 : beatSway * bloom * bloom);
+      gpu.uniform1f(u.sway, motion?.matches || !s.beat?.active ? 0 : beatSway * (0.26 + 0.74 * bloom));
       gpu.uniform1f(u.downbeat, beatDownbeat);
       gpu.uniform1f(u.morph, morphAmount);
       gpu.uniform1f(u.hasTexA, hasTexA ? 1 : 0);

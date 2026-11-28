@@ -1,4 +1,5 @@
 import type { TuneEntry } from "../tunes/library";
+import { isShared } from "../song/ids";
 import { addedRows, canonical, isRecord, parseValue, unionTransactions, validGoalData, validTune, type SyncConflict, type SyncTransaction } from "./model";
 
 type Obj = Record<string, unknown>;
@@ -124,8 +125,8 @@ function practice(current: unknown, before: unknown, after: unknown, tx: SyncTra
   const additions = addedRows(rows(b.history), rows(a.history));
   const selfOnly = !tx.baseline && !tx.reset && additions.length > 0 && additions.every((row) => obj(obj(row).conditions).source === "self");
   for (const id of selfOnly ? [] : new Set([...Object.keys(obj(b.cards)), ...Object.keys(obj(a.cards))])) {
-    // The same scale snapshot is written into many tune stores. Only guitar-skills owns it.
-    if (tx.key !== "guitar-skills" && id.startsWith("scale:")) continue;
+    // The same shared card snapshot (scales, foundations, custom) is mirrored across tune stores; only guitar-skills owns it.
+    if (tx.key !== "guitar-skills" && isShared(id)) continue;
     const path = ["cards", id];
     if (blocked(tx, path, resets)) continue;
     if (!owns(obj(a.cards), id)) { delete cards[id]; continue; }
@@ -158,7 +159,7 @@ function practice(current: unknown, before: unknown, after: unknown, tx: SyncTra
     cards[id] = state;
   }
   for (const id of selfOnly ? [] : new Set([...Object.keys(obj(b.credit)), ...Object.keys(obj(a.credit))])) {
-    if (tx.key !== "guitar-skills" && id.startsWith("scale:")) continue;
+    if (tx.key !== "guitar-skills" && isShared(id)) continue;
     if (blocked(tx, ["cards", id], resets)) continue;
     if (!owns(obj(a.credit), id)) { delete credit[id]; continue; }
     let amount = Math.max(0, Math.min(2, num(credit[id]) + num(obj(a.credit)[id]) - num(obj(b.credit)[id])));

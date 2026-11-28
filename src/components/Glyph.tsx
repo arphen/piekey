@@ -1,12 +1,14 @@
 import type { ReactNode } from "react";
 import type { GlyphName } from "../overview/modes";
 
-export type UtilityGlyphName = "home" | "play" | "library" | "arrow" | "clock" | "check" | "devices" | "sync" | "close" | "copy" | "plus" | "download" | "progress" | "tools" | "gear" | "search" | "spark";
+export type UtilityGlyphName = "home" | "play" | "library" | "curriculum" | "record" | "arrow" | "clock" | "check" | "devices" | "sync" | "close" | "copy" | "plus" | "download" | "progress" | "tools" | "gear" | "search" | "spark";
 
 const PATHS: Record<GlyphName | UtilityGlyphName, ReactNode> = {
   home: <><path d="m3 11 9-7 9 7" /><path d="M5 10v10h5v-6h4v6h5V10" /></>,
   play: <path d="m9 5 10 7-10 7z" />,
   library: <><path d="M5 4v16M10 4v16M15 5l5 14" /><path d="M4 8h2M9 16h2M15.8 8l2-.7" /></>,
+  curriculum: <><rect x="4" y="4" width="16" height="16" rx="2.5" /><path d="M8 9h8M8 13h5M8 17h6" /><circle cx="16.5" cy="14.5" r="1.4" fill="currentColor" stroke="none" /></>,
+  record: <><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="3.6" fill="currentColor" stroke="none" /></>,
   arrow: <path d="M4 12h16m-6-6 6 6-6 6" />,
   clock: <><circle cx="12" cy="12" r="8.5" /><path d="M12 7v5l3 2" /></>,
   check: <path d="m5 12 4 4L19 6" />,

@@ -10,6 +10,8 @@ import { keyStudyId, parseHubId, resolveTreeSelection, skillCardId, type CenterP
 import { FOUNDATION_GROUPS, TECHNIQUE_TRACKS, type FoundationGroup, type TechniqueMeta } from "../song/technique";
 import { loadLibraryAsync, saveCurrentTuneId, saveLibrary } from "../tunes/library";
 import { DEMO_TUNES, type DemoTune } from "../tunes/demos";
+import { curriculumCount, curriculumSummaryLabel, useCurriculum } from "../song/curriculum";
+import { useCustomExercises } from "../song/customExercises";
 import { useSessionSet } from "../song/sessionSet";
 import type { InputApi } from "../listen/useInput";
 import type { PracticeLaunchOptions } from "./TuneView";
@@ -75,6 +77,7 @@ export function OverviewView({
   onOpenMode,
   onOpenSong,
   onOpenLibrary,
+  onOpenCurriculum,
   onListenSong,
   onStartPractice,
 }: {
@@ -82,13 +85,17 @@ export function OverviewView({
   onOpenMode: (target: TutorTargetTab) => void;
   onOpenSong: (tuneId: string) => void;
   onOpenLibrary?: () => void;
+  onOpenCurriculum?: () => void;
   onListenSong?: (tuneId: string) => void;
-  onStartPractice: (tuneId: string, cardId?: string, prepared?: boolean, options?: PracticeLaunchOptions) => void;
+  onStartPractice: (tuneId: string | null, cardId?: string, prepared?: boolean, options?: PracticeLaunchOptions) => void;
 }) {
   const [revision, setRevision] = useState(0);
   const { songs, currentTuneId, loading, error, issues = [] } = useSongSummaries(revision);
   const libraryIds = useMemo(() => songs.map((song) => song.tuneId), [songs]);
   const session = useSessionSet(libraryIds);
+  const curriculum = useCurriculum();
+  const customExercises = useCustomExercises();
+  const curCounts = useMemo(() => curriculumCount(session.ids, curriculum, customExercises), [session.ids, curriculum, customExercises]);
   const [lead, setLead] = useState<string | null>(null);
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [selectedSongs, setSelectedSongs] = useState<string[]>([]);
@@ -151,7 +158,8 @@ export function OverviewView({
     return { track, box, bpm: st?.bpm ?? track.bpm, needs, locked, key: parseHubId(track.hub)!, status: box >= 4 ? ("mastered" as const) : box > 0 ? ("growing" as const) : ("unexplored" as const) };
   }, [selectedFoundation, shared]);
 
-  // a selected foundation takes over the core: it plays that exercise, in its key
+  // a selected foundation takes over the core: it plays that exercise, in its key;
+  // when nothing is selected, the core reflects the entire active curriculum (songs + custom exercises + scales + foundations)
   const plan: CenterPlan = foundation
     ? {
         kind: "focus",
@@ -168,7 +176,15 @@ export function OverviewView({
         activeHubIds: [foundation.track.hub],
         activeSongIds: [],
       }
-    : centerPlan;
+    : centerPlan.kind === "full-mix" && curCounts.total > 0
+      ? {
+          ...centerPlan,
+          orbLabel: "PLAY",
+          orbSub: curriculumSummaryLabel(curCounts),
+          headline: "Curriculum",
+          summary: `Practice everything in your curriculum (${curriculumSummaryLabel(curCounts)}).`,
+        }
+      : centerPlan;
 
   // single-item inspection targets (exactly one key or one song, nothing blended)
   const singleKeyId = selectedKeys.length === 1 && selectedSongs.length === 0 && !selectedFocus ? selectedKeys[0] : null;
@@ -215,6 +231,10 @@ export function OverviewView({
       const [first, ...restTunes] = p.tuneIds;
       if (p.kind === "full-mix") play(first);
       else play(first, undefined, { focus: p.focus, mixIds: [...restTunes, ...p.studyHubIds.map(keyStudyId)], studyHubIds: p.studyHubIds });
+      return;
+    }
+    if (p.kind === "full-mix" && curCounts.total > 0) {
+      onStartPractice(null);
       return;
     }
     if (p.studyHubIds.length > 0) {
@@ -284,7 +304,7 @@ export function OverviewView({
     play(keyStudyId(hubId), cardId ?? undefined, { focus: "scales", mixIds: [], studyHubIds: [hubId], autoStart: Boolean(cardId) });
   };
 
-  const empty = !loading && !songs.length;
+  const empty = !loading && !songs.length && curCounts.total === 0;
   const close = <button type="button" className="hm-card-close" aria-label="Close" onClick={clearSelection}><Glyph name="close" size={15} /></button>;
 
   const exerciseList = (title: string, list: CenterPlan["exercises"]) =>
@@ -611,6 +631,7 @@ export function OverviewView({
                 </button>
               ))}
             </div>
+            {onOpenCurriculum ? <button type="button" className="hm-add" onClick={onOpenCurriculum}><Glyph name="record" size={18} />Record an exercise or build curriculum</button> : null}
             {onOpenLibrary ? <button type="button" className="hm-add" onClick={onOpenLibrary}><Glyph name="library" size={18} />Import your own score</button> : null}
           </section>
         ) : null}
